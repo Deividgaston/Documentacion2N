@@ -16,6 +16,8 @@ const auth = firebase.auth();
 const db = firebase.firestore();
 const storage = firebase.storage();
 
+const googleProvider = new firebase.auth.GoogleAuthProvider();
+
 const TARIFA_CACHE_KEY = "tarifa_2n_v1";
 
 
@@ -41,7 +43,7 @@ function el(tag, className, html) {
 
 
 // ======================================
-// 3) LOGIN
+// 3) LOGIN CON GOOGLE
 // ======================================
 function renderLogin() {
   clearApp();
@@ -49,61 +51,42 @@ function renderLogin() {
   const box = el("div", "login-container");
   const title = el("div", "login-title", "Acceso 2N Presupuestos");
 
-  const form = el("div", "grid");
-  form.style.gap = "12px";
-
-  const g1 = el("div");
-  g1.appendChild(el("label", null, "Email"));
-  const email = el("input");
-  email.type = "email";
-  g1.appendChild(email);
-
-  const g2 = el("div");
-  g2.appendChild(el("label", null, "Contraseña"));
-  const pass = el("input");
-  pass.type = "password";
-  g2.appendChild(pass);
+  const content = el("div", null, `
+    <p style="font-size:0.9rem; margin-bottom:16px; text-align:center;">
+      Inicia sesión con tu cuenta de Google 2N.
+    </p>
+  `);
 
   const err = el(
     "div",
     null,
     appState.loginError
-      ? `<p style="color:#e74c3c; font-size:0.85rem;">${appState.loginError}</p>`
+      ? `<p style="color:#e74c3c; font-size:0.85rem; margin-bottom:10px; text-align:center;">${appState.loginError}</p>`
       : ""
   );
 
-  const btn = el("button", "btn btn-blue", "Entrar");
+  const btn = el("button", "btn btn-blue", "Entrar con Google");
   btn.style.width = "100%";
   btn.onclick = async () => {
-    const e = email.value.trim();
-    const p = pass.value.trim();
-
-    if (!e || !p) {
-      appState.loginError = "Introduce email y contraseña";
-      renderLogin();
-      return;
-    }
-
+    appState.loginError = "";
+    renderLogin();
     try {
-      appState.loginError = "";
-      await auth.signInWithEmailAndPassword(e, p);
+      await auth.signInWithPopup(googleProvider);
+      // onAuthStateChanged se encarga del resto
     } catch (error) {
-      let msg = "Error al iniciar sesión";
-      if (error.code === "auth/user-not-found") msg = "Usuario no encontrado";
-      if (error.code === "auth/wrong-password") msg = "Contraseña incorrecta";
-      if (error.code === "auth/invalid-email") msg = "Email no válido";
+      console.error(error);
+      let msg = "No se pudo iniciar sesión con Google";
+      if (error.code === "auth/popup-closed-by-user") msg = "Ventana de Google cerrada";
       appState.loginError = msg;
       renderLogin();
     }
   };
 
-  form.appendChild(g1);
-  form.appendChild(g2);
-  form.appendChild(err);
-  form.appendChild(btn);
+  content.appendChild(err);
+  content.appendChild(btn);
 
   box.appendChild(title);
-  box.appendChild(form);
+  box.appendChild(content);
 
   appRoot.appendChild(box);
 }
@@ -133,6 +116,9 @@ function renderPanel() {
   card.innerHTML = `
     <div class="card-header">
       Panel principal
+      <span style="font-size:0.85rem; font-weight:400; color:#667;">
+        Flujo: Tarifas → Proyecto → Presupuesto → Documentación → BC3
+      </span>
     </div>
 
     <div class="grid grid-2">
@@ -177,7 +163,7 @@ function renderPanel() {
 
 
 // ======================================
-// 5) MÓDULO TARIFAS (COMPLETO)
+// 5) MÓDULO TARIFAS
 // ======================================
 function renderTarifas() {
   clearApp();
@@ -237,7 +223,6 @@ async function procesarTarifaExcel() {
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json(sheet);
 
-    // --- CONVERTIR AL FORMATO INTERNO ---
     const productos = {};
 
     rows.forEach((r) => {
@@ -260,7 +245,6 @@ async function procesarTarifaExcel() {
       };
     });
 
-    // --- GUARDAR EN FIRESTORE ---
     out.innerHTML = "Guardando en Firestore...";
 
     await db.collection("tarifas").doc("v1").set({
@@ -268,7 +252,6 @@ async function procesarTarifaExcel() {
       productos: productos
     });
 
-    // --- CACHE LOCAL ---
     localStorage.setItem(TARIFA_CACHE_KEY, JSON.stringify(productos));
 
     out.innerHTML = `<span style="color:green;">Tarifa importada correctamente.</span>`;
@@ -279,7 +262,7 @@ async function procesarTarifaExcel() {
 
 
 // ======================================
-// 7) PLACEHOLDERS OTROS MÓDULOS
+// 7) OTROS MÓDULOS (PLACEHOLDER)
 // ======================================
 function renderProyecto() {
   clearApp();
