@@ -1,10 +1,26 @@
-// app.js – Versión sin Firebase, estructura completa de la app
+// ======================================
+// 1) CONFIGURACIÓN FIREBASE
+// ======================================
+const firebaseConfig = {
+  apiKey: "TU_API_KEY",
+  authDomain: "TU_PROYECTO.firebaseapp.com",
+  projectId: "TU_PROYECTO",
+  storageBucket: "TU_PROYECTO.appspot.com",
+  messagingSenderId: "TU_SENDER_ID",
+  appId: "TU_APP_ID"
+};
 
-// ==============================
-// ESTADO SIMPLE
-// ==============================
+firebase.initializeApp(firebaseConfig);
+
+const auth = firebase.auth();
+
+
+// ======================================
+// 2) ESTADO GLOBAL
+// ======================================
 const appState = {
-  user: null
+  user: null,
+  loginError: ""
 };
 
 const appRoot = document.getElementById("app");
@@ -13,274 +29,212 @@ function clearApp() {
   appRoot.innerHTML = "";
 }
 
-function createElement(tag, className, html) {
-  const el = document.createElement(tag);
-  if (className) el.className = className;
-  if (html) el.innerHTML = html;
-  return el;
+function el(tag, className, html) {
+  const x = document.createElement(tag);
+  if (className) x.className = className;
+  if (html) x.innerHTML = html;
+  return x;
 }
 
-// ==============================
-// LOGIN / LOGOUT (sin Firebase aún)
-// ==============================
-function handleLogout() {
-  appState.user = null;
-  renderApp();
-}
 
-function renderLoginView() {
+// ======================================
+// 3) LOGIN
+// ======================================
+function renderLogin() {
   clearApp();
 
-  const container = createElement("div", "login-container");
-  const title = createElement("div", "login-title", "Acceso 2N Presupuestos");
+  const box = el("div", "login-container");
+  const title = el("div", "login-title", "Acceso 2N Presupuestos");
 
-  const form = createElement("div", "grid");
+  const form = el("div", "grid");
   form.style.gap = "12px";
 
-  const emailGroup = createElement("div");
-  const emailLabel = createElement("label", null, "Email");
-  const emailInput = createElement("input");
-  emailInput.type = "email";
-  emailInput.id = "loginEmail";
-  emailGroup.appendChild(emailLabel);
-  emailGroup.appendChild(emailInput);
+  const g1 = el("div");
+  g1.appendChild(el("label", null, "Email"));
+  const email = el("input");
+  email.type = "email";
+  g1.appendChild(email);
 
-  const passGroup = createElement("div");
-  const passLabel = createElement("label", null, "Contraseña");
-  const passInput = createElement("input");
-  passInput.type = "password";
-  passInput.id = "loginPassword";
-  passGroup.appendChild(passLabel);
-  passGroup.appendChild(passInput);
+  const g2 = el("div");
+  g2.appendChild(el("label", null, "Contraseña"));
+  const pass = el("input");
+  pass.type = "password";
+  g2.appendChild(pass);
 
-  const btnLogin = createElement("button", "btn btn-blue", "Entrar");
-  btnLogin.style.width = "100%";
-  btnLogin.addEventListener("click", () => {
-    const email = emailInput.value || "demo@2n.com";
-    appState.user = { email };
-    renderApp();
-  });
-
-  form.appendChild(emailGroup);
-  form.appendChild(passGroup);
-  form.appendChild(btnLogin);
-
-  container.appendChild(title);
-  container.appendChild(form);
-
-  appRoot.appendChild(container);
-}
-
-// ==============================
-// LAYOUT PRINCIPAL
-// ==============================
-function renderMainLayout() {
-  clearApp();
-
-  // TOPBAR
-  const topbar = createElement("div", "topbar");
-  const left = createElement("div", "topbar-title", "2N · Presupuestos y Documentación");
-  const right = createElement("div");
-
-  const userEmail = appState.user?.email || "";
-  const userLabel = createElement("span", null, userEmail ? userEmail + " &nbsp;&nbsp;" : "");
-
-  const btnLogout = createElement("button", "btn-logout", "Logout");
-  btnLogout.addEventListener("click", handleLogout);
-
-  right.appendChild(userLabel);
-  right.appendChild(btnLogout);
-
-  topbar.appendChild(left);
-  topbar.appendChild(right);
-
-  // CONTENIDO
-  const main = createElement("div");
-  main.style.marginTop = "20px";
-
-  const cardDashboard = createElement("div", "card");
-  const headerDash = createElement(
+  const err = el(
     "div",
-    "card-header",
-    `
-    Panel principal
-    <span style="font-size:0.85rem; font-weight:400; color:#667;">
-      Flujo: Tarifas → Proyecto → Presupuesto → Documentación → BC3
-    </span>
-  `
+    null,
+    appState.loginError
+      ? `<p style="color:#e74c3c; font-size:0.85rem;">${appState.loginError}</p>`
+      : ""
   );
 
-  const modulesGrid = createElement("div", "grid grid-2");
+  const btn = el("button", "btn btn-blue", "Entrar");
+  btn.style.width = "100%";
+  btn.onclick = async () => {
+    const e = email.value.trim();
+    const p = pass.value.trim();
 
-  const mod1 = createElement("div", "card");
-  mod1.innerHTML = `
-    <div class="card-header">1. Tarifas 2N (Excel → Tarifa interna)</div>
-    <p>Importa la lista de precios oficial desde un Excel. La app la usará para todos los presupuestos.</p>
-    <button class="btn btn-blue" id="btnIrTarifas" style="margin-top:10px;">Ir a tarifas</button>
+    if (!e || !p) {
+      appState.loginError = "Introduce email y contraseña";
+      renderLogin();
+      return;
+    }
+
+    try {
+      appState.loginError = "";
+      await auth.signInWithEmailAndPassword(e, p);
+    } catch (error) {
+      console.error(error);
+      let msg = "Error al iniciar sesión";
+      if (error.code === "auth/user-not-found") msg = "Usuario no encontrado";
+      if (error.code === "auth/wrong-password") msg = "Contraseña incorrecta";
+      if (error.code === "auth/invalid-email") msg = "Email no válido";
+      appState.loginError = msg;
+      renderLogin();
+    }
+  };
+
+  form.appendChild(g1);
+  form.appendChild(g2);
+  form.appendChild(err);
+  form.appendChild(btn);
+
+  box.appendChild(title);
+  box.appendChild(form);
+
+  appRoot.appendChild(box);
+}
+
+
+// ======================================
+// 4) PANEL PRINCIPAL
+// ======================================
+function renderPanel() {
+  clearApp();
+
+  const top = el("div", "topbar");
+  top.innerHTML = `
+    <div class="topbar-title">2N · Presupuestos y Documentación</div>
+    <div>
+      ${appState.user.email}
+      &nbsp;&nbsp;
+      <button class="btn-logout" id="logoutBtn">Logout</button>
+    </div>
+  `;
+  top.querySelector("#logoutBtn").onclick = () => auth.signOut();
+
+  const main = el("div");
+  main.style.marginTop = "20px";
+
+  const card = el("div", "card");
+  card.innerHTML = `
+    <div class="card-header">
+      Panel principal
+      <span style="font-size:0.85rem; font-weight:400; color:#667;">
+      Flujo: Tarifas → Proyecto → Presupuesto → Documentación → BC3
+      </span>
+    </div>
+    <div class="grid grid-2">
+      <div class="card">
+        <div class="card-header">1. Tarifas 2N</div>
+        <p>Importar Excel de tarifas.</p>
+        <button class="btn btn-blue" id="goTarifas">Ir a tarifas</button>
+      </div>
+
+      <div class="card">
+        <div class="card-header">2. Proyecto</div>
+        <p>Importar Excel del proyecto.</p>
+        <button class="btn btn-blue" id="goProyecto">Ir a proyectos</button>
+      </div>
+
+      <div class="card">
+        <div class="card-header">3. Presupuesto</div>
+        <p>Generar presupuesto y exportar PDF/Excel.</p>
+        <button class="btn btn-blue" id="goPresupuesto">Ir a presupuestos</button>
+      </div>
+
+      <div class="card">
+        <div class="card-header">4. Documentación & BC3</div>
+        <p>Hojas técnicas, memoria y BC3.</p>
+        <button class="btn btn-blue" id="goDoc">Ir a documentación</button>
+      </div>
+    </div>
   `;
 
-  const mod2 = createElement("div", "card");
-  mod2.innerHTML = `
-    <div class="card-header">2. Proyecto (Excel → Líneas)</div>
-    <p>Importa el Excel del proyecto (cantidades, referencias) y genera las líneas de presupuesto automáticamente.</p>
-    <button class="btn btn-blue" id="btnIrProyecto" style="margin-top:10px;">Ir a proyectos</button>
-  `;
+  main.appendChild(card);
 
-  const mod3 = createElement("div", "card");
-  mod3.innerHTML = `
-    <div class="card-header">3. Presupuesto</div>
-    <p>Selecciona rol (distribuidor, instalador, constructora, promotora), aplica descuentos y exporta a PDF / Excel.</p>
-    <button class="btn btn-blue" id="btnIrPresupuesto" style="margin-top:10px;">Ir a presupuestos</button>
-  `;
-
-  const mod4 = createElement("div", "card");
-  mod4.innerHTML = `
-    <div class="card-header">4. Documentación & BC3</div>
-    <p>Adjunta hojas técnicas, declaraciones, memoria descriptiva y exporta BC3 para Presto.</p>
-    <button class="btn btn-blue" id="btnIrDoc" style="margin-top:10px;">Ir a documentación / BC3</button>
-  `;
-
-  modulesGrid.appendChild(mod1);
-  modulesGrid.appendChild(mod2);
-  modulesGrid.appendChild(mod3);
-  modulesGrid.appendChild(mod4);
-
-  cardDashboard.appendChild(headerDash);
-  cardDashboard.appendChild(modulesGrid);
-
-  main.appendChild(cardDashboard);
-
-  appRoot.appendChild(topbar);
+  appRoot.appendChild(top);
   appRoot.appendChild(main);
 
-  // Navegación
-  document.getElementById("btnIrTarifas").addEventListener("click", renderTarifasModule);
-  document.getElementById("btnIrProyecto").addEventListener("click", renderProyectoModule);
-  document.getElementById("btnIrPresupuesto").addEventListener("click", renderPresupuestoModule);
-  document.getElementById("btnIrDoc").addEventListener("click", renderDocumentacionModule);
+  document.getElementById("goTarifas").onclick = renderTarifas;
+  document.getElementById("goProyecto").onclick = renderProyecto;
+  document.getElementById("goPresupuesto").onclick = renderPresupuesto;
+  document.getElementById("goDoc").onclick = renderDoc;
 }
 
-// ==============================
-// MÓDULOS (placeholders)
-// ==============================
-function renderTarifasModule() {
+
+// ======================================
+// 5) MÓDULOS
+// ======================================
+function moduleFrame(title, html) {
   clearApp();
-
-  const topbar = createElement("div", "topbar");
-  topbar.innerHTML = `
-    <div class="topbar-title">Tarifas 2N</div>
-    <button class="btn-logout" id="btnLogout">Logout</button>
+  const top = el("div", "topbar");
+  top.innerHTML = `
+    <div class="topbar-title">${title}</div>
+    <button class="btn-logout" id="logoutBtn">Logout</button>
   `;
-  topbar.querySelector("#btnLogout").addEventListener("click", handleLogout);
+  top.querySelector("#logoutBtn").onclick = () => auth.signOut();
 
-  const card = createElement("div", "card");
-  const header = createElement("div", "card-header", "Importar tarifas desde Excel");
-  const body = createElement("div");
-  body.innerHTML = `
-    <p>Aquí importaremos tu Excel oficial de tarifas y lo prepararemos para usarlo en todos los cálculos.</p>
-    <button class="btn btn-grey" id="btnVolver" style="margin-top:10px;">Volver al panel</button>
-  `;
+  const card = el("div", "card");
+  card.innerHTML = html;
 
-  card.appendChild(header);
-  card.appendChild(body);
-
-  appRoot.appendChild(topbar);
+  appRoot.appendChild(top);
   appRoot.appendChild(card);
-
-  document.getElementById("btnVolver").addEventListener("click", renderApp);
 }
 
-function renderProyectoModule() {
-  clearApp();
-
-  const topbar = createElement("div", "topbar");
-  topbar.innerHTML = `
-    <div class="topbar-title">Proyecto (Excel → Líneas)</div>
-    <button class="btn-logout" id="btnLogout">Logout</button>
-  `;
-  topbar.querySelector("#btnLogout").addEventListener("click", handleLogout);
-
-  const card = createElement("div", "card");
-  const header = createElement("div", "card-header", "Importar Excel de proyecto");
-  const body = createElement("div");
-  body.innerHTML = `
-    <p>Aquí cruzaremos las referencias del proyecto con las tarifas para generar todas las líneas.</p>
-    <button class="btn btn-grey" id="btnVolver" style="margin-top:10px;">Volver al panel</button>
-  `;
-
-  card.appendChild(header);
-  card.appendChild(body);
-
-  appRoot.appendChild(topbar);
-  appRoot.appendChild(card);
-
-  document.getElementById("btnVolver").addEventListener("click", renderApp);
+function renderTarifas() {
+  moduleFrame(
+    "Tarifas 2N",
+    `<p>Módulo de tarifas.</p>
+     <button class="btn btn-grey" onclick="renderPanel()">Volver</button>`
+  );
 }
 
-function renderPresupuestoModule() {
-  clearApp();
-
-  const topbar = createElement("div", "topbar");
-  topbar.innerHTML = `
-    <div class="topbar-title">Presupuesto</div>
-    <button class="btn-logout" id="btnLogout">Logout</button>
-  `;
-  topbar.querySelector("#btnLogout").addEventListener("click", handleLogout);
-
-  const card = createElement("div", "card");
-  const header = createElement("div", "card-header", "Generar presupuesto por rol");
-  const body = createElement("div");
-  body.innerHTML = `
-    <p>Aquí podrás elegir rol, aplicar descuentos y exportar el presupuesto.</p>
-    <button class="btn btn-grey" id="btnVolver" style="margin-top:10px;">Volver al panel</button>
-  `;
-
-  card.appendChild(header);
-  card.appendChild(body);
-
-  appRoot.appendChild(topbar);
-  appRoot.appendChild(card);
-
-  document.getElementById("btnVolver").addEventListener("click", renderApp);
+function renderProyecto() {
+  moduleFrame(
+    "Proyecto (Excel → Líneas)",
+    `<p>Módulo de proyectos.</p>
+     <button class="btn btn-grey" onclick="renderPanel()">Volver</button>`
+  );
 }
 
-function renderDocumentacionModule() {
-  clearApp();
-
-  const topbar = createElement("div", "topbar");
-  topbar.innerHTML = `
-    <div class="topbar-title">Documentación & BC3</div>
-    <button class="btn-logout" id="btnLogout">Logout</button>
-  `;
-  topbar.querySelector("#btnLogout").addEventListener("click", handleLogout);
-
-  const card = createElement("div", "card");
-  const header = createElement("div", "card-header", "Hojas técnicas, memoria y BC3");
-  const body = createElement("div");
-  body.innerHTML = `
-    <p>Aquí añadiremos la selección de PDFs, la memoria descriptiva y la exportación BC3.</p>
-    <button class="btn btn-grey" id="btnVolver" style="margin-top:10px;">Volver al panel</button>
-  `;
-
-  card.appendChild(header);
-  card.appendChild(body);
-
-  appRoot.appendChild(topbar);
-  appRoot.appendChild(card);
-
-  document.getElementById("btnVolver").addEventListener("click", renderApp);
+function renderPresupuesto() {
+  moduleFrame(
+    "Presupuesto",
+    `<p>Módulo de presupuesto.</p>
+     <button class="btn btn-grey" onclick="renderPanel()">Volver</button>`
+  );
 }
 
-// ==============================
-// RENDER PRINCIPAL
-// ==============================
-function renderApp() {
-  if (!appState.user) {
-    renderLoginView();
+function renderDoc() {
+  moduleFrame(
+    "Documentación & BC3",
+    `<p>Módulo de documentación.</p>
+     <button class="btn btn-grey" onclick="renderPanel()">Volver</button>`
+  );
+}
+
+
+// ======================================
+// 6) OBSERVADOR DE AUTH
+// ======================================
+auth.onAuthStateChanged(user => {
+  if (user) {
+    appState.user = { email: user.email };
+    renderPanel();
   } else {
-    renderMainLayout();
+    appState.user = null;
+    renderLogin();
   }
-}
-
-// Inicio
-renderApp();
+});
