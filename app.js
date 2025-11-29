@@ -1,15 +1,16 @@
 // ======================================
-// 1) CONFIGURACIÓN FIREBASE
+// 1) CONFIGURACIÓN FIREBASE (REAL TUYA)
 // ======================================
 const firebaseConfig = {
-  apiKey: "TU_API_KEY",
-  authDomain: "TU_PROYECTO.firebaseapp.com",
-  projectId: "TU_PROYECTO",
-  storageBucket: "TU_PROYECTO.appspot.com",
-  messagingSenderId: "TU_SENDER_ID",
-  appId: "TU_APP_ID"
+  apiKey: "AIzaSyDzVSSaP2wNJenJov-5S9PsYWWUp-HITz0",
+  authDomain: "n-presupuestos.firebaseapp.com",
+  projectId: "n-presupuestos",
+  storageBucket: "n-presupuestos.firebasestorage.app",
+  messagingSenderId: "380694582040",
+  appId: "1:380694582040:web:d88b2298eecf4f15eec46d"
 };
 
+// Inicializar Firebase v8
 firebase.initializeApp(firebaseConfig);
 
 const auth = firebase.auth();
@@ -43,7 +44,7 @@ function el(tag, className, html) {
 
 
 // ======================================
-// 3) LOGIN CON GOOGLE
+// 3) LOGIN GOOGLE
 // ======================================
 function renderLogin() {
   clearApp();
@@ -72,9 +73,8 @@ function renderLogin() {
     renderLogin();
     try {
       await auth.signInWithPopup(googleProvider);
-      // onAuthStateChanged se encarga del resto
     } catch (error) {
-      console.error(error);
+      console.log(error);
       let msg = "No se pudo iniciar sesión con Google";
       if (error.code === "auth/popup-closed-by-user") msg = "Ventana de Google cerrada";
       appState.loginError = msg;
@@ -262,7 +262,7 @@ async function procesarTarifaExcel() {
 
 
 // ======================================
-// 7) OTROS MÓDULOS (PLACEHOLDER)
+// 7) OTROS MÓDULOS (PLACEHOLDERS)
 // ======================================
 function renderProyecto() {
   clearApp();
