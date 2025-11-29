@@ -1,0 +1,48 @@
+/* ================================
+   BASE
+================================ */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+}
+
+body {
+    background: #f4f6f9;
+    color: #2f2f2f;
+}
+
+/* ================================
+   CONTENEDOR APP
+================================ */
+#app {
+    width: 100%;
+    min-height: 100vh;
+    padding: 20px;
+}
+
+/* ================================
+   TOPBAR (para login/logout después)
+================================ */
+.topbar {
+    width: 100%;
+    background: #ffffff;
+    border-bottom: 1px solid #dcdfe3;
+    padding: 12px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.topbar-title {
+    font-size: 1.4rem;
+    font-weight: 600;
+    color: #1b3a57;
+}
+
+.btn-logout {
+    background: #e74c3c;
+    color: white;
+    border: none;
+    padding: 8p
