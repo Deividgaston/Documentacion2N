@@ -1,4 +1,4 @@
-// app.js de prueba: si esto no se ve, el problema es ruta/nombre, no Firebase.
+// app.js mínimo para comprobar que index + JS externo funcionan
 
 const appRoot = document.getElementById("app");
 
@@ -8,17 +8,12 @@ if (!appRoot) {
   appRoot.innerHTML = `
     <div class="login-container">
       <div class="login-title">PRUEBA LOGIN 2N</div>
-      <div class="grid" style="gap:12px;">
-        <div>
-          <label>Email</label>
-          <input type="email" />
-        </div>
-        <div>
-          <label>Contraseña</label>
-          <input type="password" />
-        </div>
-        <button class="btn btn-blue" style="width:100%;">Entrar (demo)</button>
-      </div>
+      <label>Email</label>
+      <input type="email" />
+      <label>Contraseña</label>
+      <input type="password" />
+      <button class="btn btn-blue" style="width:100%;">Entrar (demo)</button>
     </div>
   `;
+  console.log("PRUEBA 2N CARGADA DESDE app.js");
 }
