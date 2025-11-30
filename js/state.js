@@ -1,33 +1,29 @@
 // js/state.js
-// Estado global y referencias base
+// Estado global simple
 
-const appRoot = document.getElementById("app");
-
-// cache local de tarifa
-const TARIFA_CACHE_KEY = "tarifa_2n_v1";
-
-const appState = {
+window.appState = {
+  currentTab: "proyecto",
   user: null,
-  loginError: "",
-  tarifas: null,          // Productos de la tarifa 2N (por referencia)
-  lineasProyecto: [],     // Líneas importadas desde el Excel del proyecto
-
-  // Pestaña activa del menú superior
-  activeTab: "proyecto",
-
-  // Descuento global aplicado sobre el subtotal
-  descuentoGlobal: 0,
-  aplicarIVA: false,
-
-  // Datos de cabecera del presupuesto
-  infoPresupuesto: {
+  lineasProyecto: [],
+  presupuestoCabecera: {
     cliente: "",
     proyecto: "",
     direccion: "",
     contacto: "",
     email: "",
     telefono: "",
-    notas:
-      "Para la alimentación de los equipos se requiere de un switch PoE acorde con el consumo de los dispositivos."
-  }
+    notas: "",
+  },
+  presupuestoOpciones: {
+    descuentoGlobal: 0,
+    aplicarIVA: false,
+  },
+  presupuestoTotales: {
+    subtotal: 0,
+    descuento: 0,
+    base: 0,
+    iva: 0,
+    total: 0,
+  },
+  tarifas: {}, // se llena desde firebase_tarifa.js
 };
