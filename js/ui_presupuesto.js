@@ -1,8 +1,11 @@
 // js/ui_presupuesto.js
-// Pantalla de presupuesto + cálculo + modal de SECCIÓN + secciones agrupadas
-// Las líneas solo permiten cambiar unidades e incluir/excluir. REF, DESCRIPCIÓN y PVP no se tocan.
+// Presupuesto con:
+// - Secciones agrupadas y editables (título + comentario)
+// - Líneas importadas (solo unidades + incluir)
+// - Líneas manuales (sección, ref, descripción, pvp, unidades) sin guardar en BD
 
 let modalSeccionEl = null;
+let modalLineaManualEl = null;
 
 function renderPresupuesto(container) {
   container.innerHTML = `
@@ -97,11 +100,14 @@ function renderPresupuesto(container) {
               Líneas del presupuesto
               <span class="badge-light" id="linesInfo"></span>
             </div>
-            <div class="table-actions">
+            <div class="table-actions" style="gap:8px;">
               <label>
                 Filtro ref:
                 <input type="text" id="filtroRef" class="input" style="width:140px; padding:4px 8px; font-size:0.75rem;">
               </label>
+              <button class="btn btn-outline btn-sm" id="btnAddManual">
+                Añadir línea
+              </button>
             </div>
           </div>
 
@@ -124,8 +130,9 @@ function renderPresupuesto(container) {
     </div>
   `;
 
-  // Modal de secciones
+  // Modales
   setupPresupuestoModalSeccion(container);
+  setupManualLineaModal(container);
 
   // Si no hay líneas, mensaje
   if (!appState.lineasProyecto || !appState.lineasProyecto.length) {
@@ -134,7 +141,8 @@ function renderPresupuesto(container) {
       tbody.innerHTML = `
         <tr>
           <td colspan="7" style="font-size:0.85rem; color:#6b7280; padding:10px;">
-            No hay líneas de proyecto cargadas. Importa primero un Excel en la pestaña <strong>Proyecto</strong>.
+            No hay líneas de proyecto cargadas. Importa primero un Excel en la pestaña <strong>Proyecto</strong>
+            o añade líneas manuales.
           </td>
         </tr>
       `;
@@ -176,11 +184,14 @@ function renderPresupuesto(container) {
     rebuildPresupuestoTable(filtroRef.value.trim().toLowerCase());
   };
 
+  const btnAddManual = document.getElementById("btnAddManual");
+  btnAddManual.onclick = () => openManualLineaModalForNew();
+
   recalcularPresupuesto();
 }
 
 /* ==========================
-   MODAL SECCIÓN
+   MODAL SECCIÓN (título + comentario)
    ========================== */
 
 function setupPresupuestoModalSeccion(container) {
@@ -288,6 +299,171 @@ function saveSeccionModal() {
 }
 
 /* ==========================
+   MODAL LÍNEA MANUAL
+   ========================== */
+
+function setupManualLineaModal(container) {
+  if (container.querySelector("#modalLineaManual")) {
+    modalLineaManualEl = container.querySelector("#modalLineaManual");
+    return;
+  }
+
+  const overlay = document.createElement("div");
+  overlay.id = "modalLineaManual";
+  overlay.className = "modal-overlay hidden";
+  overlay.innerHTML = `
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">Línea manual de presupuesto</div>
+        <button class="modal-close" id="modalLineaManualCerrarBtn" title="Cerrar">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div>
+          <div class="field-label">Sección</div>
+          <input type="text" id="modalManual_seccion" class="input" placeholder="Ej. Unidades de respuesta / MONITORES">
+        </div>
+        <div>
+          <div class="field-label">Referencia</div>
+          <input type="text" id="modalManual_ref" class="input" placeholder="Código de producto o referencia propia">
+        </div>
+        <div>
+          <div class="field-label">Descripción</div>
+          <input type="text" id="modalManual_desc" class="input" placeholder="Descripción del concepto">
+        </div>
+        <div class="grid-2-equal">
+          <div>
+            <div class="field-label">Unidades</div>
+            <input type="number" id="modalManual_ud" class="input" min="0" step="1" value="1">
+          </div>
+          <div>
+            <div class="field-label">PVP (€)</div>
+            <input type="number" id="modalManual_pvp" class="input" min="0" step="0.01" value="0">
+          </div>
+        </div>
+        <label style="display:flex; align-items:center; gap:8px; margin-top:4px; font-size:0.8rem;">
+          <input type="checkbox" id="modalManual_incluir" checked>
+          Incluir esta línea en el presupuesto
+        </label>
+        <p class="info-text" style="margin-top:6px;">
+          Estas líneas manuales no se guardan en ninguna base de datos. Solo existen en este presupuesto mientras tengas la aplicación abierta.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline btn-sm" id="modalManualCancelar">Cancelar</button>
+        <button class="btn btn-blue btn-sm" id="modalManualGuardar">Guardar línea</button>
+      </div>
+    </div>
+  `;
+
+  container.appendChild(overlay);
+  modalLineaManualEl = overlay;
+
+  const btnCerrar = modalLineaManualEl.querySelector("#modalLineaManualCerrarBtn");
+  const btnCancelar = modalLineaManualEl.querySelector("#modalManualCancelar");
+  const btnGuardar = modalLineaManualEl.querySelector("#modalManualGuardar");
+
+  btnCerrar.onclick = () => closeManualLineaModal();
+  btnCancelar.onclick = () => closeManualLineaModal();
+  btnGuardar.onclick = () => saveManualLineaModal();
+
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) closeManualLineaModal();
+  });
+}
+
+function openManualLineaModalForNew() {
+  if (!modalLineaManualEl) return;
+  modalLineaManualEl.dataset.mode = "new";
+  modalLineaManualEl.dataset.index = "";
+
+  modalLineaManualEl.querySelector("#modalManual_seccion").value = "";
+  modalLineaManualEl.querySelector("#modalManual_ref").value = "";
+  modalLineaManualEl.querySelector("#modalManual_desc").value = "";
+  modalLineaManualEl.querySelector("#modalManual_ud").value = "1";
+  modalLineaManualEl.querySelector("#modalManual_pvp").value = "0";
+  modalLineaManualEl.querySelector("#modalManual_incluir").checked = true;
+
+  modalLineaManualEl.classList.remove("hidden");
+}
+
+function openManualLineaModalForEdit(index) {
+  if (!modalLineaManualEl) return;
+  const linea = appState.lineasProyecto[index];
+  if (!linea || !linea.manual) return;
+
+  modalLineaManualEl.dataset.mode = "edit";
+  modalLineaManualEl.dataset.index = String(index);
+
+  modalLineaManualEl.querySelector("#modalManual_seccion").value = linea.seccion || "";
+  modalLineaManualEl.querySelector("#modalManual_ref").value = linea.ref || "";
+  modalLineaManualEl.querySelector("#modalManual_desc").value = linea.descripcion || "";
+  modalLineaManualEl.querySelector("#modalManual_ud").value = Number(linea.cantidad) || 0;
+  modalLineaManualEl.querySelector("#modalManual_pvp").value = Number(linea.pvp) || 0;
+  modalLineaManualEl.querySelector("#modalManual_incluir").checked = linea.incluir !== false;
+
+  modalLineaManualEl.classList.remove("hidden");
+}
+
+function closeManualLineaModal() {
+  if (!modalLineaManualEl) return;
+  modalLineaManualEl.classList.add("hidden");
+  modalLineaManualEl.dataset.mode = "";
+  modalLineaManualEl.dataset.index = "";
+}
+
+function saveManualLineaModal() {
+  if (!modalLineaManualEl) return;
+
+  const mode = modalLineaManualEl.dataset.mode || "new";
+  const idxStr = modalLineaManualEl.dataset.index;
+
+  const seccion = (modalLineaManualEl.querySelector("#modalManual_seccion").value || "").trim();
+  const ref = (modalLineaManualEl.querySelector("#modalManual_ref").value || "").trim();
+  const desc = (modalLineaManualEl.querySelector("#modalManual_desc").value || "").trim();
+  let ud = toNum(modalLineaManualEl.querySelector("#modalManual_ud").value);
+  const pvp = toNum(modalLineaManualEl.querySelector("#modalManual_pvp").value);
+  const incluir = modalLineaManualEl.querySelector("#modalManual_incluir").checked;
+
+  if (!ref) {
+    alert("La referencia es obligatoria para la línea manual.");
+    return;
+  }
+
+  if (!ud || ud < 0) ud = 1;
+
+  if (mode === "new") {
+    const nuevaLinea = {
+      ref,
+      descripcion: desc,
+      cantidad: ud,
+      pvp,
+      incluir,
+      seccion: seccion,
+      manual: true
+    };
+    appState.lineasProyecto.push(nuevaLinea);
+  } else if (mode === "edit" && idxStr !== undefined && idxStr !== "") {
+    const index = Number(idxStr);
+    const linea = appState.lineasProyecto[index];
+    if (linea && linea.manual) {
+      linea.ref = ref;
+      linea.descripcion = desc;
+      linea.cantidad = ud;
+      linea.pvp = pvp;
+      linea.incluir = incluir;
+      linea.seccion = seccion;
+    }
+  }
+
+  closeManualLineaModal();
+
+  const filtroRef = document.getElementById("filtroRef");
+  const filtro = filtroRef ? filtroRef.value.trim().toLowerCase() : "";
+  rebuildPresupuestoTable(filtro);
+  recalcularPresupuesto();
+}
+
+/* ==========================
    TABLA + CÁLCULOS
    ========================== */
 
@@ -340,6 +516,14 @@ function rebuildPresupuestoTable(filtroRefTexto) {
     }
 
     const tr = document.createElement("tr");
+
+    // Si es línea manual, permitimos editarla al hacer clic
+    if (linea.manual) {
+      tr.style.cursor = "pointer";
+      tr.onclick = () => {
+        openManualLineaModalForEdit(idx);
+      };
+    }
 
     const tdCheck = document.createElement("td");
     tdCheck.className = "col-check";
