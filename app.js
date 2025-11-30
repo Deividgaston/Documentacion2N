@@ -214,4 +214,304 @@ function renderTarifas() {
   const top = el("div", "topbar");
   top.innerHTML = `
     <div class="topbar-title">Tarifas 2N</div>
-    <button class="btn-logout" i
+    <button class="btn-logout" id="logoutBtn">Logout</button>
+  `;
+  top.querySelector("#logoutBtn").onclick = () => auth.signOut();
+
+  const card = el("div", "card");
+
+  card.innerHTML = `
+    <div class="card-header">Importar tarifa Excel → Firestore</div>
+
+    <p style="margin-bottom:10px;">
+      Selecciona el Excel oficial de 2N con la tabla de precios.
+    </p>
+
+    <input type="file" id="fileTarifa" accept=".xlsx,.xls" />
+
+    <button class="btn btn-blue" id="btnProcesar" style="margin-top:16px;">Procesar e importar</button>
+
+    <div id="resultado" style="margin-top:20px; font-size:0.9rem;"></div>
+
+    <button class="btn btn-grey" id="volver" style="margin-top:20px;">Volver al panel</button>
+  `;
+
+  appRoot.appendChild(top);
+  appRoot.appendChild(card);
+
+  document.getElementById("volver").onclick = renderPanel;
+  document.getElementById("btnProcesar").onclick = procesarTarifaExcel;
+}
+
+async function procesarTarifaExcel() {
+  const file = document.getElementById("fileTarifa").files[0];
+  const out = document.getElementById("resultado");
+
+  if (!file) {
+    out.innerHTML = `<span style="color:red;">Selecciona un archivo Excel.</span>`;
+    return;
+  }
+
+  out.innerHTML = "Procesando Excel...";
+
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    const data = new Uint8Array(e.target.result);
+    const workbook = XLSX.read(data, { type: "array" });
+
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet);
+
+    const productos = {};
+
+    rows.forEach((r) => {
+      const sku = r["2N SKU"] || r["SKU"] || r["Referencia"];
+      if (!sku) return;
+
+      productos[sku] = {
+        sku: sku,
+        nombre: r["Nombre"] || "",
+        pvp: r["SRP (EUR)"] || 0,
+        precio_distribuidor: r["Distributor Price (EUR)"] || 0,
+        precio_subdistribuidor: r["Recommended Reseller Price 1 (EUR)"] || 0,
+        precio_instalador: r["Recommended Reseller Price 2 (EUR)"] || 0,
+        precio_constructora: r["Recommended Reseller Price 2 (EUR)"] || 0,
+        precio_promotora: r["SRP (EUR)"] || 0,
+        ean: r["EAN"] || "",
+        hs_code: r["CUSTOMS TARIFF NUMBER (HS CODE)"] || "",
+        web: r["Página web"] || "",
+        eol: r["EOL"] || false
+      };
+    });
+
+    out.innerHTML = "Guardando en Firestore...";
+
+    await db.collection("tarifas").doc("v1").set({
+      ultima_actualizacion: new Date().toISOString(),
+      productos: productos
+    });
+
+    localStorage.setItem(TARIFA_CACHE_KEY, JSON.stringify(productos));
+    appState.tarifas = productos;
+
+    out.innerHTML = `<span style="color:green;">Tarifa importada correctamente.</span>`;
+  };
+
+  reader.readAsArrayBuffer(file);
+}
+
+// ======================================
+// 7) MÓDULO PROYECTO (EXCEL → LÍNEAS)
+// ======================================
+function renderProyecto() {
+  clearApp();
+
+  const top = el("div", "topbar");
+  top.innerHTML = `
+    <div class="topbar-title">Proyecto (Excel → Líneas)</div>
+    <button class="btn-logout" id="logoutBtn">Logout</button>
+  `;
+  top.querySelector("#logoutBtn").onclick = () => auth.signOut();
+
+  const card = el("div", "card");
+  card.innerHTML = `
+    <div class="card-header">Importar Excel de proyecto y cruzar con tarifas</div>
+
+    <p style="margin-bottom:10px;">
+      Importa el Excel de diseño de proyecto. Leeremos referencias y cantidades
+      y las cruzaremos con la tarifa 2N ya cargada.
+    </p>
+
+    <input type="file" id="fileProyecto" accept=".xlsx,.xls" />
+
+    <button class="btn btn-blue" id="btnProyecto" style="margin-top:16px;">Procesar proyecto</button>
+
+    <div id="resProyecto" style="margin-top:20px; font-size:0.9rem;"></div>
+
+    <button class="btn btn-grey" id="volver" style="margin-top:20px;">Volver al panel</button>
+  `;
+
+  appRoot.appendChild(top);
+  appRoot.appendChild(card);
+
+  document.getElementById("volver").onclick = renderPanel;
+  document.getElementById("btnProyecto").onclick = procesarProyectoExcel;
+}
+
+async function procesarProyectoExcel() {
+  const file = document.getElementById("fileProyecto").files[0];
+  const out = document.getElementById("resProyecto");
+
+  if (!file) {
+    out.innerHTML = `<span style="color:red;">Selecciona un archivo Excel de proyecto.</span>`;
+    return;
+  }
+
+  out.innerHTML = "Cargando tarifas y procesando proyecto...";
+
+  const tarifas = await loadTarifasOnce();
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const data = new Uint8Array(e.target.result);
+    const workbook = XLSX.read(data, { type: "array" });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet);
+
+    // Detección flexible de nombres de columnas
+    const sample = rows[0] || {};
+    const cols = Object.keys(sample);
+
+    const colRef =
+      cols.find((c) => /sku|ref|referencia/i.test(c)) || cols[0] || "Referencia";
+    const colQty =
+      cols.find((c) => /cant|qty|unid/i.test(c)) || cols[1] || "Cantidad";
+    const colDesc =
+      cols.find((c) => /desc|descripción|description/i.test(c)) || cols[2] || "Descripción";
+
+    const lineas = [];
+    let conTarifa = 0;
+    let sinTarifa = 0;
+
+    rows.forEach((r) => {
+      const ref = String(r[colRef] || "").trim();
+      if (!ref) return;
+
+      const qtyRaw = r[colQty];
+      const cantidad = Number(qtyRaw || 0) || 0;
+      const descripcion = r[colDesc] || "";
+
+      const tarifa = tarifas[ref];
+      let pvp = null;
+      let nombreTarifa = "";
+      if (tarifa) {
+        pvp = Number(tarifa.pvp || 0);
+        nombreTarifa = tarifa.nombre || "";
+        conTarifa++;
+      } else {
+        sinTarifa++;
+      }
+
+      lineas.push({
+        referencia: ref,
+        cantidad,
+        descripcion,
+        nombreTarifa,
+        pvp
+      });
+    });
+
+    appState.lineasProyecto = lineas;
+
+    // Pintar resumen + pequeña tabla
+    let html = `
+      <p>
+        Líneas procesadas: <strong>${lineas.length}</strong><br>
+        Con tarifa encontrada: <strong>${conTarifa}</strong><br>
+        Sin tarifa (revisar SKU/ref): <strong>${sinTarifa}</strong>
+      </p>
+    `;
+
+    if (lineas.length > 0) {
+      html += `
+        <div style="margin-top:14px; max-height:260px; overflow:auto;">
+          <table style="width:100%; border-collapse:collapse; font-size:0.85rem;">
+            <thead>
+              <tr style="border-bottom:1px solid #ddd;">
+                <th style="text-align:left; padding:4px;">Ref</th>
+                <th style="text-align:right; padding:4px;">Cant.</th>
+                <th style="text-align:left; padding:4px;">Descripción proyecto</th>
+                <th style="text-align:left; padding:4px;">Nombre tarifa</th>
+                <th style="text-align:right; padding:4px;">PVP</th>
+              </tr>
+            </thead>
+            <tbody>
+      `;
+
+      lineas.slice(0, 50).forEach((l) => {
+        html += `
+          <tr style="border-bottom:1px solid #f0f0f0;">
+            <td style="padding:4px;">${l.referencia}</td>
+            <td style="padding:4px; text-align:right;">${l.cantidad}</td>
+            <td style="padding:4px;">${l.descripcion || ""}</td>
+            <td style="padding:4px;">${l.nombreTarifa || ""}</td>
+            <td style="padding:4px; text-align:right;">${
+              l.pvp != null ? l.pvp.toFixed(2) + " €" : "-"
+            }</td>
+          </tr>
+        `;
+      });
+
+      html += `
+            </tbody>
+          </table>
+          ${
+            lineas.length > 50
+              ? `<p style="margin-top:6px; color:#777;">Mostrando primeras 50 líneas…</p>`
+              : ""
+          }
+        </div>
+      `;
+    }
+
+    out.innerHTML = html;
+  };
+
+  reader.readAsArrayBuffer(file);
+}
+
+// ======================================
+// 8) OTROS MÓDULOS (PLACEHOLDERS)
+// ======================================
+function renderPresupuesto() {
+  clearApp();
+  const top = el("div", "topbar");
+  top.innerHTML = `
+    <div class="topbar-title">Presupuesto</div>
+    <button class="btn-logout" id="logoutBtn">Logout</button>
+  `;
+  top.querySelector("#logoutBtn").onclick = () => auth.signOut();
+
+  const card = el("div", "card");
+  card.innerHTML = `
+    <div class="card-header">Generar presupuesto</div>
+    <p>Placeholder... (usará las líneas de proyecto ya calculadas).</p>
+    <button class="btn btn-grey" onclick="renderPanel()">Volver</button>
+  `;
+
+  appRoot.appendChild(top);
+  appRoot.appendChild(card);
+}
+
+function renderDoc() {
+  clearApp();
+  const top = el("div", "topbar");
+  top.innerHTML = `
+    <div class="topbar-title">Documentación & BC3</div>
+    <button class="btn-logout" id="logoutBtn">Logout</button>
+  `;
+  top.querySelector("#logoutBtn").onclick = () => auth.signOut();
+
+  const card = el("div", "card");
+  card.innerHTML = `
+    <div class="card-header">Documentación</div>
+    <p>Placeholder...</p>
+    <button class="btn btn-grey" onclick="renderPanel()">Volver</button>
+  `;
+
+  appRoot.appendChild(top);
+  appRoot.appendChild(card);
+}
+
+// ======================================
+// 9) OBSERVADOR AUTH
+// ======================================
+auth.onAuthStateChanged((user) => {
+  if (user) {
+    appState.user = { email: user.email };
+    renderPanel();
+  } else {
+    appState.user = null;
+    renderLogin();
+  }
+});
