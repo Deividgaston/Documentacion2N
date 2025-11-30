@@ -1,123 +1,104 @@
 <!DOCTYPE html>
 <html lang="es">
-
-<head>
+  <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>2N · Programa Presupuestos</title>
 
-    <!-- CSS principal (Salesforce Lightning Style) -->
     <link rel="stylesheet" href="style.css" />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  </head>
 
-    <!-- Ícono opcional -->
-  
+  <body>
+    <!-- LOGIN PAGE -->
+    <div id="loginPage" class="login-page" style="display: none">
+      <div class="login-card">
+        <h2 class="login-title">Acceso</h2>
+        <p class="login-subtitle">
+          Inicia sesión para acceder al programa de presupuestos 2N.
+        </p>
 
-</head>
-
-<body>
-
-    <!-- ==============================
-         LOGIN PAGE
-    =============================== -->
-    <div id="loginPage" class="login-page" style="display: none;">
-        <div class="login-card">
-
-            <h2 class="login-title">Acceso</h2>
-            <p class="login-subtitle">Inicia sesión para acceder al programa</p>
-
-            <div class="form-group mb-2">
-                <label>Email</label>
-                <input id="loginEmail" type="email" placeholder="nombre@empresa.com" />
-            </div>
-
-            <div class="form-group mb-3">
-                <label>Contraseña</label>
-                <input id="loginPass" type="password" placeholder="••••••••" />
-            </div>
-
-            <button id="btnLogin" class="btn btn-primary" style="width: 100%;">Entrar</button>
-
-            <div id="loginError" class="alert alert-error mt-2" style="display:none;"></div>
-
-            <p class="login-footer">Programa de Presupuestos · 2N</p>
-        </div>
-    </div>
-
-    <!-- ==============================
-         APP SHELL (SIDEBAR + CONTENIDO)
-    =============================== -->
-    <div id="appShell" class="app-shell" style="display: none;">
-
-        <!-- ===== Sidebar ===== -->
-        <aside class="app-sidebar">
-
-            <div class="app-sidebar-logo">
-                <img src="img/logo_2n.png" alt="2N" />
-                <span>2N Presupuestos</span>
-            </div>
-
-            <div class="app-nav-section-title">Menú</div>
-            <ul class="app-nav">
-
-                <li class="app-nav-item">
-                    <a href="#" class="app-nav-link active" data-view="proyecto">
-                        📁 Proyecto
-                    </a>
-                </li>
-
-                <li class="app-nav-item">
-                    <a href="#" class="app-nav-link" data-view="presupuesto">
-                        🧾 Presupuesto
-                    </a>
-                </li>
-
-                <li class="app-nav-item">
-                    <a href="#" class="app-nav-link" data-view="tarifa">
-                        💰 Tarifa 2N
-                    </a>
-                </li>
-
-                <li class="app-nav-item">
-                    <a href="#" class="app-nav-link" data-view="docs">
-                        📄 Documentación
-                    </a>
-                </li>
-
-            </ul>
-
-            <div style="margin-top: auto; padding: 1rem 0.7rem;">
-                <button id="btnLogout" class="btn btn-secondary" style="width: 100%;">Cerrar sesión</button>
-            </div>
-
-        </aside>
-
-        <!-- ===== Panel Principal ===== -->
-        <div class="app-main">
-
-            <header class="app-topbar">
-                <div class="app-topbar-left">
-                    <div class="app-topbar-title">Programa Presupuestos 2N</div>
-                    <div id="currentViewSubtitle" class="app-topbar-subtitle">
-                        Presupuestos 2N · Uso interno. Datos y precios orientativos, validar siempre con tarifa actualizada.
-                    </div>
-                </div>
-
-                <div class="app-topbar-right">
-                    <span id="userBadge" class="badge-user">Usuario</span>
-                </div>
-            </header>
-
-            <main id="appContent" class="app-content">
-                <!-- El contenido dinámico se carga aquí -->
-            </main>
-
+        <div class="form-group mb-2">
+          <label>Email</label>
+          <input
+            id="loginEmail"
+            type="email"
+            placeholder="nombre@empresa.com"
+          />
         </div>
 
+        <div class="form-group mb-3">
+          <label>Contraseña</label>
+          <input id="loginPass" type="password" placeholder="••••••••" />
+        </div>
+
+        <button id="btnLogin" class="btn btn-primary" style="width: 100%">
+          Entrar
+        </button>
+
+        <div
+          id="loginError"
+          class="alert alert-error mt-2"
+          style="display: none"
+        ></div>
+
+        <p class="login-footer">Programa Presupuestos · 2N</p>
+      </div>
     </div>
 
-    <!-- ==============================
-         SCRIPTS PRINCIPALES
-    =============================== -->
+    <!-- APP SHELL (DESPUÉS DE LOGIN) -->
+    <div id="appShell" class="app-shell" style="display: none">
+      <!-- BARRA SUPERIOR TIPO SALESFORCE LIGHTNING -->
+      <header class="app-topbar">
+        <div class="app-topbar-left">
+          <div class="app-topbar-title">Programa Presupuestos 2N</div>
+
+          <div id="currentViewSubtitle" class="app-topbar-subtitle">
+            Presupuestos 2N · Uso interno. Datos orientativos, validar siempre
+            con tarifa actualizada.
+          </div>
+        </div>
+
+        <!-- MENÚ SUPERIOR (TABS) -->
+        <nav class="app-topbar-center">
+          <a
+            href="#"
+            class="top-nav-link active"
+            data-view="proyecto"
+            id="navProyecto"
+          >
+            Proyecto
+          </a>
+
+          <a href="#" class="top-nav-link" data-view="presupuesto">
+            Presupuesto
+          </a>
+
+          <a href="#" class="top-nav-link" data-view="tarifa">
+            Tarifa 2N
+          </a>
+
+          <a href="#" class="top-nav-link" data-view="docs">
+            Documentación
+          </a>
+        </nav>
+
+        <!-- USUARIO + LOGOUT -->
+        <div class="app-topbar-right">
+          <span id="userBadge" class="badge-user">Usuario</span>
+          <button id="btnLogout" class="btn btn-secondary btn-sm">
+            Cerrar sesión
+          </button>
+        </div>
+      </header>
+
+      <!-- CONTENIDO DINÁMICO -->
+      <main id="appContent" class="app-content"></main>
+    </div>
+
+    <!-- ==========================
+         LIBRERÍAS
+    =========================== -->
 
     <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -125,10 +106,14 @@
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 
-    <!-- Librería Excel (SheetJS) -->
+    <!-- Excel -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
-    <!-- Config -->
+    <!-- ==========================
+         ARCHIVOS DEL PROYECTO
+    =========================== -->
+
+    <!-- Firebase config -->
     <script src="js/firebase.js"></script>
     <script src="js/firebase_tarifa.js"></script>
 
@@ -138,7 +123,7 @@
     <!-- Utilidades -->
     <script src="js/utils.js"></script>
 
-    <!-- Pantallas -->
+    <!-- UI -->
     <script src="js/ui_login.js"></script>
     <script src="js/ui_shell.js"></script>
     <script src="js/ui_proyecto.js"></script>
@@ -146,12 +131,11 @@
     <script src="js/ui_tarifa.js"></script>
     <script src="js/ui_dashboard_doc.js"></script>
 
-    <!-- Exportación PDF/Excel -->
+    <!-- PDF / Excel -->
     <script src="js/pdf_excel.js"></script>
 
-    <!-- Inicialización -->
+    <!-- Inicialización de la app -->
     <script src="app.js"></script>
     <script src="js/main.js"></script>
-
-</body>
+  </body>
 </html>
