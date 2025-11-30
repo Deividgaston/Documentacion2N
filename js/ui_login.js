@@ -1,58 +1,83 @@
 // js/ui_login.js
-// Pantalla de login con Google
+// Lógica de la pantalla de login
 
-function renderLogin() {
-  clearApp();
+function initLoginUI() {
+  const loginPage = document.getElementById("loginPage");
+  const appShell = document.getElementById("appShell");
+  const emailInput = document.getElementById("loginEmail");
+  const passInput = document.getElementById("loginPass");
+  const btnLogin = document.getElementById("btnLogin");
+  const loginError = document.getElementById("loginError");
 
-  const wrapper = el("div", "login-container");
-  const card = el("div", "login-card");
+  if (!loginPage || !appShell || !emailInput || !passInput || !btnLogin) {
+    console.error("Faltan elementos del login en el HTML.");
+    return;
+  }
 
-  const title = el("div", "login-title", "Acceso 2N · Presupuestos");
+  // Mostrar login por defecto hasta que Firebase diga lo contrario
+  loginPage.style.display = "flex";
+  appShell.style.display = "none";
 
-  const content = el(
-    "div",
-    null,
-    `
-      <p style="font-size:0.9rem; margin-bottom:14px; text-align:center; color:#4b5563;">
-        Inicia sesión con tu cuenta de Google para generar presupuestos
-        con la tarifa 2N y exportarlos a PDF/Excel.
-      </p>
-    `
-  );
+  function mostrarError(msg) {
+    if (!loginError) return;
+    loginError.textContent = msg;
+    loginError.style.display = "flex";
+  }
 
-  const err = el(
-    "div",
-    null,
-    appState.loginError
-      ? `<div style="color:#dc2626; font-size:0.8rem; margin-bottom:10px;">${appState.loginError}</div>`
-      : ""
-  );
+  function limpiarError() {
+    if (!loginError) return;
+    loginError.textContent = "";
+    loginError.style.display = "none";
+  }
 
-  const btn = el(
-    "button",
-    "btn btn-blue btn-full",
-    `<span>Continuar con Google</span>`
-  );
+  async function manejarLogin() {
+    limpiarError();
 
-  btn.onclick = async () => {
-    btn.disabled = true;
-    btn.innerHTML = "Conectando...";
-    appState.loginError = "";
+    const email = emailInput.value.trim();
+    const pass = passInput.value.trim();
+
+    if (!email || !pass) {
+      mostrarError("Introduce email y contraseña.");
+      return;
+    }
 
     try {
-      await auth.signInWithPopup(googleProvider);
-    } catch (error) {
-      console.error(error);
-      appState.loginError = "No se pudo iniciar sesión con Google";
-      renderLogin();
+      await auth.signInWithEmailAndPassword(email, pass);
+      // El cambio de pantalla lo gestiona initOnAuthChange() en app.js
+    } catch (err) {
+      console.error("Error de login:", err);
+
+      let msg = "No se ha podido iniciar sesión.";
+      if (err.code === "auth/user-not-found") {
+        msg = "Usuario no encontrado.";
+      } else if (err.code === "auth/wrong-password") {
+        msg = "Contraseña incorrecta.";
+      } else if (err.code === "auth/invalid-email") {
+        msg = "Email no válido.";
+      }
+
+      mostrarError(msg);
     }
-  };
+  }
 
-  content.appendChild(err);
-  content.appendChild(btn);
+  // Click en botón
+  btnLogin.addEventListener("click", (e) => {
+    e.preventDefault();
+    manejarLogin();
+  });
 
-  card.appendChild(title);
-  card.appendChild(content);
-  wrapper.appendChild(card);
-  appRoot.appendChild(wrapper);
+  // Enter en inputs
+  [emailInput, passInput].forEach((input) => {
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        manejarLogin();
+      }
+    });
+  });
 }
+
+console.log(
+  "%cUI login inicializada (ui_login.js)",
+  "color:#1d4fd8; font-weight:600;"
+);
