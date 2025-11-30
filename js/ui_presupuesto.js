@@ -1,7 +1,7 @@
 // js/ui_presupuesto.js
-// Pantalla de presupuesto + cálculo + modales (línea y sección) + secciones agrupadas
+// Pantalla de presupuesto + cálculo + modal de SECCIÓN + secciones agrupadas
+// Las líneas solo permiten cambiar unidades e incluir/excluir. REF, DESCRIPCIÓN y PVP no se tocan.
 
-let modalLineaEl = null;
 let modalSeccionEl = null;
 
 function renderPresupuesto(container) {
@@ -124,8 +124,7 @@ function renderPresupuesto(container) {
     </div>
   `;
 
-  // Crear modales (una sola vez por render)
-  setupPresupuestoModalLinea(container);
+  // Modal de secciones
   setupPresupuestoModalSeccion(container);
 
   // Si no hay líneas, mensaje
@@ -177,126 +176,6 @@ function renderPresupuesto(container) {
     rebuildPresupuestoTable(filtroRef.value.trim().toLowerCase());
   };
 
-  recalcularPresupuesto();
-}
-
-/* ==========================
-   MODAL LÍNEA
-   ========================== */
-
-function setupPresupuestoModalLinea(container) {
-  if (container.querySelector("#modalLinea")) {
-    modalLineaEl = container.querySelector("#modalLinea");
-    return;
-  }
-
-  const overlay = document.createElement("div");
-  overlay.id = "modalLinea";
-  overlay.className = "modal-overlay hidden";
-  overlay.innerHTML = `
-    <div class="modal">
-      <div class="modal-header">
-        <div class="modal-title">Editar línea de presupuesto</div>
-        <button class="modal-close" id="modalCerrarBtn" title="Cerrar">&times;</button>
-      </div>
-      <div class="modal-body">
-        <div>
-          <div class="field-label">Referencia</div>
-          <div id="modal_ref" style="font-size:0.9rem; font-weight:600;"></div>
-        </div>
-        <div>
-          <div class="field-label">Sección</div>
-          <input type="text" id="modal_seccion" class="input" placeholder="Ej. Unidades de respuesta / MONITORES">
-        </div>
-        <div>
-          <div class="field-label">Descripción</div>
-          <input type="text" id="modal_desc" class="input">
-        </div>
-        <div class="grid-2-equal">
-          <div>
-            <div class="field-label">Unidades</div>
-            <input type="number" id="modal_ud" class="input" min="0" step="1">
-          </div>
-          <div>
-            <div class="field-label">PVP (€)</div>
-            <input type="number" id="modal_pvp" class="input" min="0" step="0.01">
-          </div>
-        </div>
-        <label style="display:flex; align-items:center; gap:8px; margin-top:4px; font-size:0.8rem;">
-          <input type="checkbox" id="modal_incluir">
-          Incluir esta línea en el presupuesto
-        </label>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-outline btn-sm" id="modalCancelar">Cancelar</button>
-        <button class="btn btn-blue btn-sm" id="modalGuardar">Guardar cambios</button>
-      </div>
-    </div>
-  `;
-
-  container.appendChild(overlay);
-  modalLineaEl = overlay;
-
-  const btnCerrar = modalLineaEl.querySelector("#modalCerrarBtn");
-  const btnCancelar = modalLineaEl.querySelector("#modalCancelar");
-  const btnGuardar = modalLineaEl.querySelector("#modalGuardar");
-
-  btnCerrar.onclick = () => closeLineaModal();
-  btnCancelar.onclick = () => closeLineaModal();
-  btnGuardar.onclick = () => saveLineaModal();
-
-  overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) closeLineaModal();
-  });
-}
-
-function openLineaModal(index) {
-  if (!modalLineaEl) return;
-  const linea = appState.lineasProyecto[index];
-  if (!linea) return;
-
-  modalLineaEl.dataset.index = String(index);
-  modalLineaEl.querySelector("#modal_ref").textContent = linea.ref || "";
-  modalLineaEl.querySelector("#modal_seccion").value = linea.seccion || "";
-  modalLineaEl.querySelector("#modal_desc").value = linea.descripcion || "";
-  modalLineaEl.querySelector("#modal_ud").value = Number(linea.cantidad) || 0;
-  modalLineaEl.querySelector("#modal_pvp").value = Number(linea.pvp) || 0;
-  modalLineaEl.querySelector("#modal_incluir").checked = linea.incluir !== false;
-
-  modalLineaEl.classList.remove("hidden");
-}
-
-function closeLineaModal() {
-  if (!modalLineaEl) return;
-  modalLineaEl.classList.add("hidden");
-  modalLineaEl.dataset.index = "";
-}
-
-function saveLineaModal() {
-  if (!modalLineaEl) return;
-  const idxStr = modalLineaEl.dataset.index;
-  if (idxStr === undefined || idxStr === "") return;
-
-  const index = Number(idxStr);
-  const linea = appState.lineasProyecto[index];
-  if (!linea) return;
-
-  const seccion = modalLineaEl.querySelector("#modal_seccion").value || "";
-  const desc = modalLineaEl.querySelector("#modal_desc").value || "";
-  const ud = toNum(modalLineaEl.querySelector("#modal_ud").value);
-  const pvp = toNum(modalLineaEl.querySelector("#modal_pvp").value);
-  const incluir = modalLineaEl.querySelector("#modal_incluir").checked;
-
-  linea.seccion = seccion;
-  linea.descripcion = desc;
-  linea.cantidad = ud;
-  linea.pvp = pvp;
-  linea.incluir = incluir;
-
-  closeLineaModal();
-  const filtroRef = document.getElementById("filtroRef");
-  const filtro = filtroRef ? filtroRef.value.trim().toLowerCase() : "";
-  rebuildPresupuestoTable(filtro);
   recalcularPresupuesto();
 }
 
@@ -358,7 +237,6 @@ function setupPresupuestoModalSeccion(container) {
 function openSeccionModal(seccionKey) {
   if (!modalSeccionEl) return;
 
-  // Buscamos una línea de esa sección para sacar el comentario (seccionNota)
   const lines = appState.lineasProyecto || [];
   const lineaEjemplo = lines.find(
     (l) => (l.seccion || "SIN SECCIÓN").trim() === seccionKey
@@ -367,7 +245,8 @@ function openSeccionModal(seccionKey) {
   const nota = lineaEjemplo ? (lineaEjemplo.seccionNota || "") : "";
 
   modalSeccionEl.dataset.seccionKey = seccionKey;
-  modalSeccionEl.querySelector("#modal_seccion_titulo").value = seccionKey === "SIN SECCIÓN" ? "" : seccionKey;
+  modalSeccionEl.querySelector("#modal_seccion_titulo").value =
+    seccionKey === "SIN SECCIÓN" ? "" : seccionKey;
   modalSeccionEl.querySelector("#modal_seccion_comentario").value = nota;
 
   modalSeccionEl.classList.remove("hidden");
@@ -382,7 +261,7 @@ function closeSeccionModal() {
 function saveSeccionModal() {
   if (!modalSeccionEl) return;
   const oldKey = modalSeccionEl.dataset.seccionKey;
-  if (!oldKey && oldKey !== "SIN SECCIÓN") {
+  if (oldKey === undefined || oldKey === "") {
     closeSeccionModal();
     return;
   }
@@ -461,9 +340,6 @@ function rebuildPresupuestoTable(filtroRefTexto) {
     }
 
     const tr = document.createElement("tr");
-    tr.onclick = () => {
-      openLineaModal(idx);
-    };
 
     const tdCheck = document.createElement("td");
     tdCheck.className = "col-check";
