@@ -1,270 +1,487 @@
-/* ============================================================
-   2N – Estilo general tipo Salesforce (modo claro)
-   ============================================================ */
-
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-
-html, body {
+/* ===========================
+   RESET + BODY
+   =========================== */
+* {
   margin: 0;
   padding: 0;
-  height: 100%;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-  background: #f4f6fb;
-  color: #111827;
-}
-
-/* Contenedor raíz */
-
-#app {
-  min-height: 100vh;
-}
-
-/* ============================================================
-   NAVBAR SUPERIOR
-   ============================================================ */
-
-.navbar {
-  width: 100%;
-  background: white;
-  padding: 10px 18px;
-  border-bottom: 1px solid #d1d5db;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.navbar-left {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-}
-
-.navbar-title {
-  font-size: 16px;
-  font-weight: 600;
-}
-
-.navbar-tabs {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-
-.nav-tab {
-  padding: 6px 10px;
-  border-radius: 6px;
-  font-size: 13px;
-  cursor: pointer;
-  font-weight: 500;
-  color: #374151;
-  border-bottom: 2px solid transparent;
-}
-
-.nav-tab:hover {
-  background: #e5e7eb;
-}
-
-.nav-tab-active {
-  border-bottom-color: #2563eb;
-  color: #2563eb;
-}
-
-/* Usuario + Logout */
-
-.navbar-right {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.nav-avatar {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  background: #2563eb;
-  color: white;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  font-weight: 600;
-  font-size: 14px;
-}
-
-.nav-username {
-  font-size: 13px;
-}
-
-.logout-link {
-  color: #2563eb;
-  font-size: 13px;
-  cursor: pointer;
-}
-
-.logout-link:hover {
-  text-decoration: underline;
-}
-
-/* ============================================================
-   LAYOUT GENERAL
-   ============================================================ */
-
-#shellContent {
-  padding: 20px;
-}
-
-.page-title {
-  font-size: 20px;
-  font-weight: 600;
-  margin-bottom: 6px;
-}
-
-.page-subtitle {
-  font-size: 13px;
-  color: #6b7280;
-}
-
-/* Cards */
-
-.card {
-  background: white;
-  border-radius: 12px;
-  padding: 18px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
-  border: 1px solid #e5e7eb;
-}
-
-/* ============================================================
-   FORMULARIOS / INPUTS
-   ============================================================ */
-
-label {
-  font-size: 13px;
-  color: #374151;
-  font-weight: 500;
-}
-
-input[type="text"],
-input[type="number"],
-input[type="file"],
-textarea {
-  width: 100%;
-  padding: 8px 10px;
-  border-radius: 8px;
-  border: 1px solid #d1d5db;
-  font-size: 14px;
-  background: white;
-  margin-top: 4px;
   box-sizing: border-box;
 }
 
-textarea {
-  resize: vertical;
+html,
+body {
+  height: 100%;
 }
 
-/* ============================================================
-   BOTONES
-   ============================================================ */
-
-.btn-primary {
-  background: #2563eb;
-  color: white;
-  padding: 8px 16px;
-  border-radius: 999px;
-  border: none;
-  font-size: 14px;
-  cursor: pointer;
-  font-weight: 500;
-}
-
-.btn-primary:hover {
-  background: #1d4ed8;
-}
-
-.btn-secondary {
-  background: #e5e7eb;
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  background: #f3f4f6;
   color: #111827;
-  padding: 8px 14px;
-  border-radius: 999px;
-  border: none;
-  font-size: 13px;
-  cursor: pointer;
-  font-weight: 500;
 }
 
-.btn-secondary:hover {
-  background: #d1d5db;
+/* Links */
+a {
+  color: inherit;
+  text-decoration: none;
 }
 
-/* ============================================================
-   TABLAS
-   ============================================================ */
+/* ===========================
+   LOGIN
+   =========================== */
 
-.table-presupuesto {
+.login-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at top, #e5f0ff 0, #f3f4f6 55%, #e5e7eb 100%);
+  padding: 16px;
+}
+
+.login-title {
+  font-size: 1.4rem;
+  font-weight: 600;
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.login-card {
+  background: #ffffffcc;
+  backdrop-filter: blur(14px);
+  border-radius: 18px;
+  padding: 24px 24px 20px;
   width: 100%;
-  border-collapse: collapse;
-  margin-top: 8px;
+  max-width: 420px;
+  box-shadow: 0 22px 45px rgba(15, 23, 42, 0.18);
 }
 
-.table-presupuesto th {
-  text-align: left;
-  background: #f9fafb;
-  padding: 8px 10px;
-  font-size: 12px;
-  color: #4b5563;
-  border-bottom: 1px solid #e5e7eb;
+/* ===========================
+   BOTONES + INPUTS
+   =========================== */
+
+.btn {
+  border: none;
+  border-radius: 999px;
+  padding: 10px 18px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: transform 0.08s ease, box-shadow 0.12s ease, background-color 0.12s ease;
+  white-space: nowrap;
 }
 
-.table-presupuesto td {
-  padding: 6px 10px;
-  border-bottom: 1px solid #f3f4f6;
-  font-size: 13px;
+.btn-blue {
+  background: #2563eb;
+  color: #ffffff;
+  box-shadow: 0 10px 25px rgba(37, 99, 235, 0.35);
 }
 
-.table-presupuesto tr:hover td {
+.btn-blue:hover {
+  background: #1d4ed8;
+  transform: translateY(-1px);
+  box-shadow: 0 14px 28px rgba(37, 99, 235, 0.45);
+}
+
+.btn-outline {
+  background: transparent;
+  border: 1px solid #d1d5db;
+  color: #111827;
+}
+
+.btn-outline:hover {
   background: #f3f4f6;
 }
 
-.text-right {
-  text-align: right;
+.btn-full {
+  width: 100%;
 }
 
-/* ============================================================
-   UTILIDADES
-   ============================================================ */
+.btn-sm {
+  padding: 6px 10px;
+  font-size: 0.8rem;
+}
 
-.mt-2 { margin-top: 8px; }
-.mt-3 { margin-top: 12px; }
-.mt-4 { margin-top: 18px; }
-.mb-2 { margin-bottom: 8px; }
-.mb-3 { margin-bottom: 12px; }
+.input {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid #d1d5db;
+  padding: 8px 10px;
+  font-size: 0.88rem;
+  outline: none;
+  background: #f9fafb;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease, background-color 0.12s ease;
+}
 
-/* ============================================================
-   LAYOUT PRESUPUESTO – DOS COLUMNAS
-   ============================================================ */
+.input:focus {
+  border-color: #2563eb;
+  background: #ffffff;
+  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.4);
+}
 
-.presupuesto-grid {
+.input::placeholder {
+  color: #9ca3af;
+}
+
+.textarea-notas {
+  min-height: 80px;
+  resize: vertical;
+}
+
+/* ===========================
+   SHELL + NAV
+   =========================== */
+
+.app-shell {
   display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.main-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 18px;
+  background: #0f172a;
+  color: #e5e7eb;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.75);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.nav-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.brand-pill {
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  border-radius: 999px;
+  background: #1e293b;
+  color: #e5e7eb;
+}
+
+.app-title {
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.nav-tabs {
+  display: flex;
+  gap: 6px;
+  margin-left: 16px;
+}
+
+.nav-tab {
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: #cbd5f5;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background-color 0.1s ease, color 0.1s ease;
+}
+
+.nav-tab:hover {
+  background: #1e293b;
+}
+
+.nav-tab.active {
+  background: #f9fafb;
+  color: #111827;
+}
+
+.nav-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.8rem;
+}
+
+.user-chip {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #020617;
+  color: #cbd5f5;
+}
+
+/* ===========================
+   CONTENIDO
+   =========================== */
+
+.app-main {
+  flex: 1;
+  padding: 18px;
+}
+
+.app-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* Cabeceras de páginas */
+.page-title {
+  font-size: 1.3rem;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.page-subtitle {
+  font-size: 0.9rem;
+  color: #6b7280;
+  margin-bottom: 18px;
+}
+
+/* Cards */
+.card {
+  background: #ffffff;
+  border-radius: 18px;
+  padding: 16px 18px;
+  box-shadow: 0 18px 35px rgba(15, 23, 42, 0.08);
+  margin-bottom: 18px;
+}
+
+.card-soft {
+  background: #f9fafb;
+}
+
+.card-header {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.card-section-title {
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6b7280;
+  margin-bottom: 8px;
+}
+
+/* Grid */
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
   gap: 16px;
-  align-items: flex-start;
 }
 
-.presupuesto-col-left {
-  flex: 0 0 340px;
-  max-width: 360px;
+.grid-2-equal {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
 }
 
-.presupuesto-col-right {
-  flex: 1 1 auto;
+.grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
 }
 
-@media (max-width: 900px) {
-  .presupuesto-grid {
-    flex-direction: column;
+.field-label {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: #6b7280;
+  margin-bottom: 4px;
+}
+
+/* ===========================
+   PRESUPUESTO
+   =========================== */
+
+.layout-presupuesto {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.4fr);
+  gap: 18px;
+}
+
+.totales-box {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.totales-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.92rem;
+}
+
+.totales-row.total {
+  font-weight: 600;
+  font-size: 1rem;
+  margin-top: 4px;
+}
+
+.badge-light {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #e5e7eb;
+  font-size: 0.7rem;
+}
+
+/* Chips resumen */
+.summary-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #111827;
+  color: #e5e7eb;
+  font-size: 0.75rem;
+}
+
+.summary-chip .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #22c55e;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* Tabla líneas presupuesto */
+.table-wrapper {
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
+  overflow: hidden;
+}
+
+.table-header-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  border-bottom: 1px solid #e5e7eb;
+  background: linear-gradient(to right, #f9fafb, #eef2ff);
+}
+
+.table-header-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.table-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.table-actions label {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+}
+
+.table thead {
+  background: #f3f4f6;
+}
+
+.table th,
+.table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid #e5e7eb;
+  text-align: left;
+}
+
+.table th {
+  font-weight: 500;
+  color: #6b7280;
+}
+
+.table tr:nth-child(even) td {
+  background: #f9fafb;
+}
+
+.table tr:hover td {
+  background: #eef2ff;
+}
+
+/* Inputs pequeños en tabla */
+.table input[type="number"] {
+  width: 70px;
+  padding: 4px 6px;
+  font-size: 0.75rem;
+}
+
+.table .col-ref {
+  width: 90px;
+}
+
+.table .col-check {
+  width: 32px;
+  text-align: center;
+}
+
+/* ===========================
+   PROYECTO / TARIFA
+   =========================== */
+
+.info-text {
+  font-size: 0.83rem;
+  color: #6b7280;
+}
+
+.tag-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  background: #e0f2fe;
+  color: #075985;
+}
+
+/* ===========================
+   FOOTER
+   =========================== */
+
+.app-footer {
+  padding: 8px 18px 14px;
+  font-size: 0.72rem;
+  color: #9ca3af;
+  text-align: center;
+}
+
+/* ===========================
+   RESPONSIVE
+   =========================== */
+
+@media (max-width: 960px) {
+  .layout-presupuesto {
+    grid-template-columns: 1fr;
   }
 
-  .presupuesto-col-left,
-  .presupuesto-col-right {
-    max-width: 100%;
-    flex: 1 1 auto;
+  .grid-2,
+  .grid-2-equal {
+    grid-template-columns: 1fr;
+  }
+
+  .main-nav {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .nav-tabs {
+    margin-left: 0;
+    flex-wrap: wrap;
   }
 }
