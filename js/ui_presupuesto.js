@@ -1,5 +1,5 @@
 // js/ui_presupuesto.js
-// Pantalla de presupuesto + cálculo con secciones editables y líneas manuales
+// Presupuesto con secciones drag & drop, secciones editables y líneas manuales ligadas a tarifa
 
 if (!window.appState) {
   window.appState = {};
@@ -32,7 +32,7 @@ if (!appState.tarifas) {
 // Usamos toNum y formatCurrency de utils.js
 
 function getLineasSeleccionadas() {
-  return (appState.lineasProyecto || []).filter((l) => l.incluir !== false);
+  return (appState.lineasProyecto || []).filter((l) => l.incluir !== false && !l.isSectionPlaceholder);
 }
 
 function findTarifaItem(ref) {
@@ -49,6 +49,7 @@ function findTarifaItem(ref) {
 
 let modalSeccionEl = null;
 let modalLineaManualEl = null;
+let draggedSectionKey = null;
 
 function renderPresupuesto(container) {
   container.innerHTML = `
@@ -148,6 +149,9 @@ function renderPresupuesto(container) {
                 Filtro ref:
                 <input type="text" id="filtroRef" class="input" style="width:140px; padding:4px 8px; font-size:0.75rem;">
               </label>
+              <button class="btn btn-outline btn-sm" id="btnAddSection">
+                Añadir sección
+              </button>
               <button class="btn btn-outline btn-sm" id="btnAddManual">
                 Añadir línea
               </button>
@@ -232,6 +236,7 @@ function renderPresupuesto(container) {
   };
 
   document.getElementById("btnAddManual").onclick = () => openManualLineaModalForNew();
+  document.getElementById("btnAddSection").onclick = () => openNewSectionModal();
 
   recalcularPresupuesto();
 }
@@ -294,6 +299,7 @@ function openSeccionModal(seccionKey) {
   );
   const nota = lineaEjemplo ? (lineaEjemplo.seccionNota || "") : "";
 
+  modalSeccionEl.dataset.mode = "edit";
   modalSeccionEl.dataset.seccionKey = seccionKey;
   modalSeccionEl.querySelector("#modal_seccion_titulo").value =
     seccionKey === "SIN SECCIÓN" ? "" : seccionKey;
@@ -302,34 +308,65 @@ function openSeccionModal(seccionKey) {
   modalSeccionEl.classList.remove("hidden");
 }
 
+function openNewSectionModal() {
+  if (!modalSeccionEl) return;
+
+  modalSeccionEl.dataset.mode = "new";
+  modalSeccionEl.dataset.seccionKey = "";
+  modalSeccionEl.querySelector("#modal_seccion_titulo").value = "";
+  modalSeccionEl.querySelector("#modal_seccion_comentario").value = "";
+
+  modalSeccionEl.classList.remove("hidden");
+}
+
 function closeSeccionModal() {
   if (!modalSeccionEl) return;
   modalSeccionEl.classList.add("hidden");
   modalSeccionEl.dataset.seccionKey = "";
+  modalSeccionEl.dataset.mode = "";
 }
 
 function saveSeccionModal() {
   if (!modalSeccionEl) return;
-  const oldKey = modalSeccionEl.dataset.seccionKey;
-  if (!oldKey) {
-    closeSeccionModal();
-    return;
-  }
+  const mode = modalSeccionEl.dataset.mode || "edit";
+  const oldKey = modalSeccionEl.dataset.seccionKey || "";
 
   const nuevoTitulo = (modalSeccionEl.querySelector("#modal_seccion_titulo").value || "").trim();
   const nuevoComentario =
     modalSeccionEl.querySelector("#modal_seccion_comentario").value || "";
 
-  const tituloFinal = nuevoTitulo || "SIN SECCIÓN";
+  if (!nuevoTitulo) {
+    // sin título no creamos nada
+    closeSeccionModal();
+    return;
+  }
 
-  const lines = appState.lineasProyecto || [];
-  lines.forEach((l) => {
-    const keyLinea = (l.seccion || "SIN SECCIÓN").trim();
-    if (keyLinea === oldKey) {
-      l.seccion = tituloFinal === "SIN SECCIÓN" ? "" : tituloFinal;
-      l.seccionNota = nuevoComentario;
-    }
-  });
+  const tituloFinal = nuevoTitulo;
+
+  if (mode === "new") {
+    // Creamos una sección vacía mediante una línea placeholder
+    if (!Array.isArray(appState.lineasProyecto)) appState.lineasProyecto = [];
+    appState.lineasProyecto.push({
+      ref: "",
+      descripcion: "",
+      cantidad: 0,
+      pvp: 0,
+      incluir: false,
+      seccion: tituloFinal,
+      seccionNota: nuevoComentario,
+      manual: true,
+      isSectionPlaceholder: true
+    });
+  } else {
+    const lines = appState.lineasProyecto || [];
+    lines.forEach((l) => {
+      const keyLinea = (l.seccion || "SIN SECCIÓN").trim();
+      if (keyLinea === oldKey) {
+        l.seccion = tituloFinal;
+        l.seccionNota = nuevoComentario;
+      }
+    });
+  }
 
   closeSeccionModal();
 
@@ -383,7 +420,8 @@ function setupManualLineaModal(container) {
           Incluir esta línea en el presupuesto
         </label>
         <p class="info-text" style="margin-top:6px;">
-          Estas líneas manuales no se guardan en ninguna base de datos. Solo existen en este presupuesto mientras tengas la aplicación abierta.
+          Si la referencia coincide con la tarifa de 2N, se rellenarán automáticamente la descripción y el precio.
+          Si no coincide, puedes escribirlos manualmente.
         </p>
       </div>
       <div class="modal-footer">
@@ -486,7 +524,8 @@ function saveManualLineaModal() {
       pvp,
       incluir,
       seccion,
-      manual: true
+      manual: true,
+      isSectionPlaceholder: false
     };
     appState.lineasProyecto.push(nuevaLinea);
   } else if (mode === "edit" && idxStr !== undefined && idxStr !== "") {
@@ -510,7 +549,7 @@ function saveManualLineaModal() {
   recalcularPresupuesto();
 }
 
-/* ========== REORDENAR SECCIONES ========== */
+/* ========== REORDENAR SECCIONES (DRAG & DROP) ========== */
 
 function moveSection(seccionKey, direction) {
   const lines = appState.lineasProyecto || [];
@@ -531,6 +570,39 @@ function moveSection(seccionKey, direction) {
   const tmp = sections[idx];
   sections[idx] = sections[newIndex];
   sections[newIndex] = tmp;
+
+  const newLines = [];
+  sections.forEach((sec) => {
+    lines.forEach((l) => {
+      const key = (l.seccion || "SIN SECCIÓN").trim();
+      if (key === sec) newLines.push(l);
+    });
+  });
+
+  appState.lineasProyecto = newLines;
+
+  const filtroRef = document.getElementById("filtroRef");
+  const filtro = filtroRef ? filtroRef.value.trim().toLowerCase() : "";
+  rebuildPresupuestoTable(filtro);
+}
+
+function reorderSections(dragKey, targetKey) {
+  const lines = appState.lineasProyecto || [];
+  if (!lines.length) return;
+
+  const sections = [];
+  lines.forEach((l) => {
+    const key = (l.seccion || "SIN SECCIÓN").trim();
+    if (!sections.includes(key)) sections.push(key);
+  });
+
+  const dragIndex = sections.indexOf(dragKey);
+  const targetIndex = sections.indexOf(targetKey);
+  if (dragIndex === -1 || targetIndex === -1) return;
+
+  sections.splice(dragIndex, 1);
+  const newTargetIndex = sections.indexOf(targetKey);
+  sections.splice(newTargetIndex, 0, dragKey);
 
   const newLines = [];
   sections.forEach((sec) => {
@@ -570,13 +642,37 @@ function rebuildPresupuestoTable(filtroRefTexto) {
   items.forEach(({ linea, idx }) => {
     const seccionKey = (linea.seccion || "SIN SECCIÓN").trim();
 
+    // CABECERA DE SECCIÓN
     if (seccionKey !== lastSeccionKey) {
       const trSec = document.createElement("tr");
       trSec.className = "section-row";
-      trSec.onclick = (e) => {
+      trSec.draggable = true;
+
+      trSec.addEventListener("click", (e) => {
         e.stopPropagation();
         openSeccionModal(seccionKey);
-      };
+      });
+
+      trSec.addEventListener("dragstart", (e) => {
+        draggedSectionKey = seccionKey;
+        e.dataTransfer.effectAllowed = "move";
+      });
+
+      trSec.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+      });
+
+      trSec.addEventListener("drop", (e) => {
+        e.preventDefault();
+        if (!draggedSectionKey || draggedSectionKey === seccionKey) return;
+        reorderSections(draggedSectionKey, seccionKey);
+        draggedSectionKey = null;
+      });
+
+      trSec.addEventListener("dragend", () => {
+        draggedSectionKey = null;
+      });
 
       const tdSec = document.createElement("td");
       tdSec.colSpan = 7;
@@ -638,6 +734,9 @@ function rebuildPresupuestoTable(filtroRefTexto) {
       tbody.appendChild(trSec);
       lastSeccionKey = seccionKey;
     }
+
+    // Si es una línea placeholder de sección, no mostramos fila de producto
+    if (linea.isSectionPlaceholder) return;
 
     const tr = document.createElement("tr");
 
