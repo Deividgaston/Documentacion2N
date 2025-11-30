@@ -1,10 +1,5 @@
 // js/ui_presupuesto.js
-// Presupuesto con:
-// - Secciones agrupadas y editables (título + comentario)
-// - Líneas importadas (solo unidades + incluir)
-// - Líneas manuales (sección, ref, descripción, pvp, unidades) sin guardar en BD
-// - Ref manual opcional; si coincide con tarifa, autocompleta descripción y precio
-// - Reordenación de secciones (subir / bajar bloque)
+// Pantalla de presupuesto + cálculo con secciones editables y líneas manuales
 
 if (!window.appState) {
   window.appState = {};
@@ -17,7 +12,8 @@ if (!appState.infoPresupuesto) {
     contacto: "",
     email: "",
     telefono: "",
-    notas: ""
+    notas:
+      "Para la alimentación de los equipos se requiere de un switch PoE acorde con el consumo de los dispositivos."
   };
 }
 if (!Array.isArray(appState.lineasProyecto)) {
@@ -27,44 +23,27 @@ if (typeof appState.descuentoGlobal !== "number") {
   appState.descuentoGlobal = 0;
 }
 if (typeof appState.aplicarIVA !== "boolean") {
-  appState.aplicarIVA = true;
+  appState.aplicarIVA = false;
 }
 if (!appState.tarifas) {
   appState.tarifas = {};
 }
 
-// Helper numérico simple (por si no existe toNum global)
-function toNum(v) {
-  if (typeof v === "number") return v;
-  if (v == null) return 0;
-  const s = String(v).trim().replace(/\./g, "").replace(",", ".");
-  const n = parseFloat(s);
-  return isNaN(n) ? 0 : n;
-}
+// Usamos toNum y formatCurrency de utils.js
 
-// Helper moneda simple (por si no existe formatCurrency global)
-function formatCurrency(v) {
-  const n = toNum(v);
-  return n.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
-}
-
-// Helper: líneas seleccionadas (incluir === true)
 function getLineasSeleccionadas() {
   return (appState.lineasProyecto || []).filter((l) => l.incluir !== false);
 }
 
-// Helper para buscar en tarifa en memoria (sin Firebase)
 function findTarifaItem(ref) {
   if (!ref) return null;
   let t = null;
-
   if (appState.tarifas && appState.tarifas[ref]) {
     t = appState.tarifas[ref];
   }
   if (!t && typeof tarifasCache !== "undefined" && tarifasCache && tarifasCache[ref]) {
     t = tarifasCache[ref];
   }
-
   return t || null;
 }
 
@@ -84,63 +63,63 @@ function renderPresupuesto(container) {
     </div>
 
     <div class="layout-presupuesto">
-      <!-- COLUMNA IZQUIERDA: DATOS PRESUPUESTO -->
+      <!-- COLUMNA IZQUIERDA -->
       <div class="col-left">
         <div class="card">
-          <div class="card-section-title">Datos del cliente / proyecto</div>
+          <div class="card-header-row">
+            <span class="card-header">Datos del presupuesto</span>
+            <span class="badge-light">Cabecera</span>
+          </div>
 
-          <div class="grid-2-equal" style="margin-bottom:10px;">
+          <div class="form-grid">
             <div>
-              <div class="field-label">Cliente</div>
+              <label>Cliente</label>
               <input type="text" id="p_cliente" class="input" value="${appState.infoPresupuesto.cliente}">
             </div>
             <div>
-              <div class="field-label">Proyecto</div>
+              <label>Proyecto / Obra</label>
               <input type="text" id="p_proyecto" class="input" value="${appState.infoPresupuesto.proyecto}">
             </div>
-          </div>
-
-          <div class="grid-2-equal" style="margin-bottom:10px;">
             <div>
-              <div class="field-label">Dirección</div>
+              <label>Dirección</label>
               <input type="text" id="p_direccion" class="input" value="${appState.infoPresupuesto.direccion}">
             </div>
             <div>
-              <div class="field-label">Contacto</div>
+              <label>Persona de contacto</label>
               <input type="text" id="p_contacto" class="input" value="${appState.infoPresupuesto.contacto}">
             </div>
-          </div>
-
-          <div class="grid-2-equal" style="margin-bottom:10px;">
             <div>
-              <div class="field-label">Email</div>
+              <label>Email</label>
               <input type="text" id="p_email" class="input" value="${appState.infoPresupuesto.email}">
             </div>
             <div>
-              <div class="field-label">Teléfono</div>
+              <label>Teléfono</label>
               <input type="text" id="p_telefono" class="input" value="${appState.infoPresupuesto.telefono}">
             </div>
           </div>
 
-          <div style="margin-top:8px;">
-            <div class="field-label">Notas adicionales</div>
+          <div style="margin-top:10px;">
+            <label>Notas adicionales</label>
             <textarea id="p_notas" class="input textarea-notas">${appState.infoPresupuesto.notas}</textarea>
           </div>
 
           <button class="btn btn-blue btn-full" style="margin-top:12px;" id="btnGuardarDatos">
-            Guardar datos
+            Guardar cabecera
           </button>
         </div>
 
         <div class="card card-soft">
-          <div class="card-section-title">Opciones de cálculo</div>
+          <div class="card-header-row">
+            <span class="card-header">Opciones de cálculo</span>
+            <span class="badge-light">Totales</span>
+          </div>
 
-          <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px;">
+          <div class="form-row" style="margin-bottom:8px;">
             <div style="flex:1;">
-              <div class="field-label">Descuento global (%)</div>
+              <label>Descuento global (%)</label>
               <input type="number" id="p_descuentoGlobal" class="input" value="${appState.descuentoGlobal}">
             </div>
-            <label style="display:flex; align-items:center; gap:6px; margin-top:18px; font-size:0.8rem;">
+            <label style="display:flex; align-items:center; gap:6px; margin-top:22px; font-size:0.8rem;">
               <input type="checkbox" id="p_aplicarIVA" ${appState.aplicarIVA ? "checked" : ""} />
               Aplicar IVA (21%)
             </label>
@@ -156,9 +135,9 @@ function renderPresupuesto(container) {
         </div>
       </div>
 
-      <!-- COLUMNA DERECHA: TABLA LÍNEAS -->
+      <!-- COLUMNA DERECHA -->
       <div class="col-right">
-        <div class="table-wrapper">
+        <div class="card card-table">
           <div class="table-header-actions">
             <div class="table-header-title">
               Líneas del presupuesto
@@ -175,20 +154,22 @@ function renderPresupuesto(container) {
             </div>
           </div>
 
-          <table class="table">
-            <thead>
-              <tr>
-                <th class="col-check">OK</th>
-                <th class="col-ref">Ref.</th>
-                <th>Sección</th>
-                <th>Descripción</th>
-                <th>Ud.</th>
-                <th>PVP</th>
-                <th>Importe</th>
-              </tr>
-            </thead>
-            <tbody id="tbodyPresupuesto"></tbody>
-          </table>
+          <div class="table-wrapper">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th class="col-check">OK</th>
+                  <th class="col-ref">Ref.</th>
+                  <th>Sección</th>
+                  <th>Descripción</th>
+                  <th>Ud.</th>
+                  <th>PVP</th>
+                  <th>Importe</th>
+                </tr>
+              </thead>
+              <tbody id="tbodyPresupuesto"></tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
@@ -237,16 +218,20 @@ function renderPresupuesto(container) {
   };
 
   document.getElementById("btnRecalcular").onclick = () => recalcularPresupuesto();
-  document.getElementById("btnPDF").onclick = () => generarPDF && generarPDF();
-  document.getElementById("btnExcel").onclick = () => generarExcel && generarExcel();
+
+  document.getElementById("btnPDF").onclick = () => {
+    if (typeof generarPDF === "function") generarPDF();
+  };
+  document.getElementById("btnExcel").onclick = () => {
+    if (typeof generarExcel === "function") generarExcel();
+  };
 
   const filtroRef = document.getElementById("filtroRef");
   filtroRef.oninput = () => {
     rebuildPresupuestoTable(filtroRef.value.trim().toLowerCase());
   };
 
-  const btnAddManual = document.getElementById("btnAddManual");
-  btnAddManual.onclick = () => openManualLineaModalForNew();
+  document.getElementById("btnAddManual").onclick = () => openManualLineaModalForNew();
 
   recalcularPresupuesto();
 }
@@ -291,13 +276,9 @@ function setupPresupuestoModalSeccion(container) {
   container.appendChild(overlay);
   modalSeccionEl = overlay;
 
-  const btnCerrar = modalSeccionEl.querySelector("#modalSeccionCerrarBtn");
-  const btnCancelar = modalSeccionEl.querySelector("#modalSeccionCancelar");
-  const btnGuardar = modalSeccionEl.querySelector("#modalSeccionGuardar");
-
-  btnCerrar.onclick = () => closeSeccionModal();
-  btnCancelar.onclick = () => closeSeccionModal();
-  btnGuardar.onclick = () => saveSeccionModal();
+  modalSeccionEl.querySelector("#modalSeccionCerrarBtn").onclick = closeSeccionModal;
+  modalSeccionEl.querySelector("#modalSeccionCancelar").onclick = closeSeccionModal;
+  modalSeccionEl.querySelector("#modalSeccionGuardar").onclick = saveSeccionModal;
 
   overlay.addEventListener("click", (e) => {
     if (e.target === overlay) closeSeccionModal();
@@ -311,7 +292,6 @@ function openSeccionModal(seccionKey) {
   const lineaEjemplo = lines.find(
     (l) => (l.seccion || "SIN SECCIÓN").trim() === seccionKey
   );
-
   const nota = lineaEjemplo ? (lineaEjemplo.seccionNota || "") : "";
 
   modalSeccionEl.dataset.seccionKey = seccionKey;
@@ -337,7 +317,8 @@ function saveSeccionModal() {
   }
 
   const nuevoTitulo = (modalSeccionEl.querySelector("#modal_seccion_titulo").value || "").trim();
-  const nuevoComentario = modalSeccionEl.querySelector("#modal_seccion_comentario").value || "";
+  const nuevoComentario =
+    modalSeccionEl.querySelector("#modal_seccion_comentario").value || "";
 
   const tituloFinal = nuevoTitulo || "SIN SECCIÓN";
 
@@ -387,7 +368,7 @@ function setupManualLineaModal(container) {
           <div class="field-label">Descripción</div>
           <input type="text" id="modalManual_desc" class="input" placeholder="Descripción del concepto">
         </div>
-        <div class="grid-2-equal">
+        <div class="form-grid">
           <div>
             <div class="field-label">Unidades</div>
             <input type="number" id="modalManual_ud" class="input" min="0" step="1" value="1">
@@ -415,13 +396,9 @@ function setupManualLineaModal(container) {
   container.appendChild(overlay);
   modalLineaManualEl = overlay;
 
-  const btnCerrar = modalLineaManualEl.querySelector("#modalLineaManualCerrarBtn");
-  const btnCancelar = modalLineaManualEl.querySelector("#modalManualCancelar");
-  const btnGuardar = modalLineaManualEl.querySelector("#modalManualGuardar");
-
-  btnCerrar.onclick = () => closeManualLineaModal();
-  btnCancelar.onclick = () => closeManualLineaModal();
-  btnGuardar.onclick = () => saveManualLineaModal();
+  modalLineaManualEl.querySelector("#modalLineaManualCerrarBtn").onclick = closeManualLineaModal;
+  modalLineaManualEl.querySelector("#modalManualCancelar").onclick = closeManualLineaModal;
+  modalLineaManualEl.querySelector("#modalManualGuardar").onclick = saveManualLineaModal;
 
   const refInput = modalLineaManualEl.querySelector("#modalManual_ref");
   const descInput = modalLineaManualEl.querySelector("#modalManual_desc");
@@ -503,12 +480,12 @@ function saveManualLineaModal() {
 
   if (mode === "new") {
     const nuevaLinea = {
-      ref: ref,
+      ref,
       descripcion: desc,
       cantidad: ud,
       pvp,
       incluir,
-      seccion: seccion,
+      seccion,
       manual: true
     };
     appState.lineasProyecto.push(nuevaLinea);
@@ -570,7 +547,7 @@ function moveSection(seccionKey, direction) {
   rebuildPresupuestoTable(filtro);
 }
 
-/* ========== TABLA + CÁLCULO TOTALES ========== */
+/* ========== TABLA + TOTALES ========== */
 
 function rebuildPresupuestoTable(filtroRefTexto) {
   const tbody = document.getElementById("tbodyPresupuesto");
