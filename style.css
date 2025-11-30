@@ -1,86 +1,113 @@
+/* ===========================
+   RESET BÁSICO + BODY
+   =========================== */
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
-  font-family: "Inter", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+}
+
+html, body {
+  height: 100%;
 }
 
 body {
-  background: #f4f6f9;
-  color: #2f2f2f;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  background: #f5f6fa;
+  color: #1f2933;
 }
 
-#app {
-  width: 100%;
-  min-height: 100vh;
+/* ===========================
+   BOTONES GENÉRICOS
+   =========================== */
+
+button {
+  font-family: inherit;
+  border: none;
+  cursor: pointer;
 }
 
-/* =====================
+.btn {
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  transition: transform 0.06s ease, box-shadow 0.06s ease, background 0.2s ease;
+}
+
+.btn-blue {
+  background: #4f7cf9;
+  color: #ffffff;
+  box-shadow: 0 8px 18px rgba(79, 124, 249, 0.35);
+}
+
+.btn-blue:hover {
+  background: #3f6ae0;
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px rgba(79, 124, 249, 0.45);
+}
+
+.btn-blue:active {
+  transform: translateY(0);
+  box-shadow: 0 4px 10px rgba(79,124,249,0.35);
+}
+
+.btn-logout {
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.5);
+  color: #ffffff;
+  font-size: 0.8rem;
+}
+
+.btn-logout:hover {
+  background: rgba(255,255,255,0.12);
+}
+
+/* ===========================
    LOGIN
-   ===================== */
+   =========================== */
 
 .login-container {
   max-width: 420px;
   margin: 80px auto;
-  padding: 32px 28px;
+  padding: 32px 32px 28px;
   background: #ffffff;
-  border-radius: 14px;
-  border: 1px solid #dde2eb;
-  box-shadow: 0 14px 45px rgba(15, 23, 42, 0.12);
+  border-radius: 20px;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.18);
 }
 
 .login-title {
-  text-align: center;
   font-size: 1.5rem;
-  margin-bottom: 18px;
-  font-weight: 700;
-  color: #18243a;
+  font-weight: 600;
+  text-align: center;
+  margin-bottom: 24px;
 }
 
-.btn {
-  padding: 10px 16px;
-  border-radius: 8px;
-  border: none;
-  cursor: pointer;
-  font-size: 0.95rem;
-  font-weight: 500;
-  transition: 0.18s ease;
-}
-
-.btn-blue {
-  background: #4678ff;
-  color: #ffffff;
-}
-.btn-blue:hover {
-  background: #335ee0;
-}
-
-.btn-grey {
-  background: #eceff3;
-  color: #333;
-}
-.btn-grey:hover {
-  background: #dde2ea;
-}
-
-/* =====================
-   LAYOUT TIPO CRM
-   ===================== */
+/* ===========================
+   SHELL + NAV
+   =========================== */
 
 .app-shell {
-  min-height: 100vh;
   display: flex;
   flex-direction: column;
+  min-height: 100vh;
 }
 
-/* barra superior tipo CRM */
 .main-nav {
-  background: #ffffff;
-  border-bottom: 1px solid #dde2eb;
-  padding: 10px 32px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  padding: 10px 32px;
+  background: #111827;
+  color: #ffffff;
+  box-shadow: 0 6px 16px rgba(15,23,42,0.45);
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 .nav-left {
@@ -90,182 +117,188 @@ body {
 }
 
 .nav-brand {
-  font-weight: 700;
-  font-size: 1.25rem;
-  color: #25427a;
+  font-size: 1.2rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
 }
 
 .nav-tabs {
   display: flex;
   align-items: center;
-  gap: 22px;
+  gap: 16px;
 }
 
 .nav-tab {
-  font-size: 0.95rem;
-  font-weight: 500;
-  color: #495365;
-  padding-bottom: 6px;
-  cursor: pointer;
   position: relative;
+  padding: 6px 4px;
+  font-size: 0.95rem;
+  opacity: 0.75;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.nav-tab:hover {
+  opacity: 1;
 }
 
 .nav-tab.active {
-  color: #2554ff;
+  opacity: 1;
+  font-weight: 500;
 }
 
 .nav-tab.active::after {
   content: "";
   position: absolute;
   left: 0;
-  bottom: -4px;
-  width: 100%;
-  height: 3px;
+  right: 0;
+  bottom: -6px;
+  height: 2px;
   border-radius: 999px;
-  background: #2554ff;
+  background: #4f7cf9;
 }
 
 .nav-right {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   font-size: 0.85rem;
-  color: #6b7280;
 }
 
-.btn-logout {
-  background: #ef4444;
-  color: #ffffff;
-  border: none;
-  border-radius: 999px;
-  padding: 6px 12px;
-  font-size: 0.8rem;
-  cursor: pointer;
-}
-.btn-logout:hover {
-  background: #dc2626;
-}
+/* ===========================
+   MAIN CONTENT
+   =========================== */
 
-/* contenido principal */
 .main-content {
   flex: 1;
-  padding: 22px 32px 32px;
-}
-
-/* =====================
-   TARJETAS Y TABLAS
-   ===================== */
-
-.card {
-  background: #ffffff;
-  border-radius: 12px;
-  border: 1px solid #dde2eb;
-  padding: 18px 20px;
-  margin-bottom: 20px;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
-}
-
-.card-header {
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: #1f2937;
-  margin-bottom: 10px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  padding: 24px 32px 40px;
+  max-width: 1180px;
+  margin: 0 auto;
 }
 
 .page-title {
-  font-size: 1.6rem;
-  font-weight: 700;
-  color: #111827;
+  font-size: 1.4rem;
+  font-weight: 600;
   margin-bottom: 4px;
 }
 
 .page-subtitle {
-  font-size: 0.92rem;
+  font-size: 0.95rem;
   color: #6b7280;
-  margin-bottom: 16px;
+  margin-bottom: 18px;
+}
+
+/* ===========================
+   CARDS
+   =========================== */
+
+.card {
+  background: #ffffff;
+  border-radius: 18px;
+  padding: 18px 20px 20px;
+  box-shadow: 0 12px 30px rgba(15,23,42,0.12);
+  margin-bottom: 12px;
+}
+
+.card-header {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+/* ===========================
+   FORMULARIOS
+   =========================== */
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px 18px;
+  margin-top: 6px;
 }
 
 label {
-  font-weight: 500;
+  font-size: 0.85rem;
   color: #4b5563;
-  margin-bottom: 4px;
   display: block;
-  font-size: 0.9rem;
+  margin-bottom: 4px;
 }
 
-input[type="file"],
-input[type="text"],
-input[type="number"],
-input[type="email"],
-input[type="password"] {
+.input {
   width: 100%;
-  padding: 9px 11px;
-  border-radius: 8px;
-  border: 1px solid #cbd2e1;
-  font-size: 0.9rem;
+  border-radius: 10px;
+  border: 1px solid #d1d5db;
+  padding: 8px 10px;
+  font-size: 0.92rem;
+  outline: none;
+  transition: border 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
   background: #f9fafb;
 }
 
-input:focus {
-  border-color: #4678ff;
-  outline: none;
-  box-shadow: 0 0 0 2px rgba(70, 120, 255, 0.15);
+.input:focus {
+  border-color: #4f7cf9;
+  box-shadow: 0 0 0 1px rgba(79,124,249,0.3);
+  background: #ffffff;
 }
 
-.grid {
-  display: grid;
-  gap: 16px;
-}
-
-.grid-2 {
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-}
-
-/* tabla vista rápida proyecto */
-
-.table-wrapper {
-  margin-top: 14px;
-  max-height: 260px;
-  overflow: auto;
-}
+/* ===========================
+   TABLAS
+   =========================== */
 
 .table-simple {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
+}
+
+.table-simple thead {
+  background: #f3f4ff;
 }
 
 .table-simple th,
 .table-simple td {
-  padding: 4px 6px;
-}
-
-.table-simple thead tr {
+  padding: 8px 10px;
   border-bottom: 1px solid #e5e7eb;
-  background: #f9fafb;
 }
 
-.table-simple tbody tr {
-  border-bottom: 1px solid #f3f4f6;
+.table-simple th {
+  text-align: left;
+  font-weight: 600;
+  color: #374151;
 }
 
-.table-simple tbody tr:nth-child(even) {
-  background: #f9fafb;
+.table-simple tbody tr:nth-child(odd) {
+  background: #fafbff;
+}
+
+.table-simple tbody tr:hover {
+  background: #eef2ff;
 }
 
 .text-right {
   text-align: right;
 }
 
-.badge-soft {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  background: #e0ecff;
-  color: #1d4ed8;
+/* ===========================
+   RESPONSIVE BÁSICO
+   =========================== */
+
+@media (max-width: 768px) {
+  .main-nav {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .nav-left {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .main-content {
+    padding: 18px 14px 28px;
+  }
+
+  .card {
+    padding: 16px 14px 18px;
+  }
 }
