@@ -1,5 +1,5 @@
 // js/ui_presupuesto.js
-// Pantalla de presupuesto + cálculo + modal edición de línea
+// Pantalla de presupuesto + cálculo + modal edición de línea + secciones
 
 let modalLineaEl = null;
 
@@ -109,6 +109,7 @@ function renderPresupuesto(container) {
               <tr>
                 <th class="col-check">OK</th>
                 <th class="col-ref">Ref.</th>
+                <th>Sección</th>
                 <th>Descripción</th>
                 <th>Ud.</th>
                 <th>PVP</th>
@@ -131,7 +132,7 @@ function renderPresupuesto(container) {
     if (tbody) {
       tbody.innerHTML = `
         <tr>
-          <td colspan="6" style="font-size:0.85rem; color:#6b7280; padding:10px;">
+          <td colspan="7" style="font-size:0.85rem; color:#6b7280; padding:10px;">
             No hay líneas de proyecto cargadas. Importa primero un Excel en la pestaña <strong>Proyecto</strong>.
           </td>
         </tr>
@@ -182,7 +183,6 @@ function renderPresupuesto(container) {
 // ==============================
 
 function setupPresupuestoModal(container) {
-  // Si ya existe en este render, no duplicar
   if (container.querySelector("#modalLinea")) {
     modalLineaEl = container.querySelector("#modalLinea");
     return;
@@ -201,6 +201,10 @@ function setupPresupuestoModal(container) {
         <div>
           <div class="field-label">Referencia</div>
           <div id="modal_ref" style="font-size:0.9rem; font-weight:600;"></div>
+        </div>
+        <div>
+          <div class="field-label">Sección</div>
+          <input type="text" id="modal_seccion" class="input" placeholder="Ej. Unidades de respuesta / MONITORES">
         </div>
         <div>
           <div class="field-label">Descripción</div>
@@ -231,7 +235,6 @@ function setupPresupuestoModal(container) {
   container.appendChild(overlay);
   modalLineaEl = overlay;
 
-  // Eventos base modal
   const btnCerrar = modalLineaEl.querySelector("#modalCerrarBtn");
   const btnCancelar = modalLineaEl.querySelector("#modalCancelar");
   const btnGuardar = modalLineaEl.querySelector("#modalGuardar");
@@ -240,11 +243,8 @@ function setupPresupuestoModal(container) {
   btnCancelar.onclick = () => closeLineaModal();
   btnGuardar.onclick = () => saveLineaModal();
 
-  // Cerrar si haces click fuera de la tarjeta
   overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) {
-      closeLineaModal();
-    }
+    if (e.target === overlay) closeLineaModal();
   });
 }
 
@@ -254,8 +254,8 @@ function openLineaModal(index) {
   if (!linea) return;
 
   modalLineaEl.dataset.index = String(index);
-
   modalLineaEl.querySelector("#modal_ref").textContent = linea.ref || "";
+  modalLineaEl.querySelector("#modal_seccion").value = linea.seccion || "";
   modalLineaEl.querySelector("#modal_desc").value = linea.descripcion || "";
   modalLineaEl.querySelector("#modal_ud").value = Number(linea.cantidad) || 0;
   modalLineaEl.querySelector("#modal_pvp").value = Number(linea.pvp) || 0;
@@ -279,11 +279,13 @@ function saveLineaModal() {
   const linea = appState.lineasProyecto[index];
   if (!linea) return;
 
+  const seccion = modalLineaEl.querySelector("#modal_seccion").value || "";
   const desc = modalLineaEl.querySelector("#modal_desc").value || "";
   const ud = toNum(modalLineaEl.querySelector("#modal_ud").value);
   const pvp = toNum(modalLineaEl.querySelector("#modal_pvp").value);
   const incluir = modalLineaEl.querySelector("#modal_incluir").checked;
 
+  linea.seccion = seccion;
   linea.descripcion = desc;
   linea.cantidad = ud;
   linea.pvp = pvp;
@@ -297,7 +299,7 @@ function saveLineaModal() {
 }
 
 // ==============================
-// TABLA + CÁLCULOS
+// TABLA + CÁLCULOS (agrupada por secciones)
 // ==============================
 
 function rebuildPresupuestoTable(filtroRefTexto) {
@@ -309,12 +311,33 @@ function rebuildPresupuestoTable(filtroRefTexto) {
 
   tbody.innerHTML = "";
 
+  // Creamos una lista con índice para poder abrir el modal luego
+  const items = [];
   lines.forEach((linea, idx) => {
     if (filtro && !linea.ref.toLowerCase().includes(filtro)) return;
+    items.push({ linea, idx });
+  });
+
+  // Opcional: mantenemos el orden original (Project Designer ya viene por bloques)
+  // pero usamos un agrupador por sección
+  let lastSeccionKey = null;
+
+  items.forEach(({ linea, idx }) => {
+    const seccionKey = (linea.seccion || "SIN SECCIÓN").trim();
+
+    if (seccionKey !== lastSeccionKey) {
+      // Insertamos fila de sección
+      const trSec = document.createElement("tr");
+      trSec.className = "section-row";
+      const tdSec = document.createElement("td");
+      tdSec.colSpan = 7;
+      tdSec.textContent = seccionKey;
+      trSec.appendChild(tdSec);
+      tbody.appendChild(trSec);
+      lastSeccionKey = seccionKey;
+    }
 
     const tr = document.createElement("tr");
-
-    // Click en toda la fila → abrir modal
     tr.onclick = () => {
       openLineaModal(idx);
     };
@@ -324,9 +347,7 @@ function rebuildPresupuestoTable(filtroRefTexto) {
     const chk = document.createElement("input");
     chk.type = "checkbox";
     chk.checked = linea.incluir !== false;
-    chk.onclick = (e) => {
-      e.stopPropagation(); // para no abrir el modal
-    };
+    chk.onclick = (e) => e.stopPropagation();
     chk.onchange = () => {
       linea.incluir = chk.checked;
       recalcularPresupuesto();
@@ -336,6 +357,9 @@ function rebuildPresupuestoTable(filtroRefTexto) {
     const tdRef = document.createElement("td");
     tdRef.className = "col-ref";
     tdRef.textContent = linea.ref;
+
+    const tdSeccion = document.createElement("td");
+    tdSeccion.textContent = linea.seccion || "";
 
     const tdDesc = document.createElement("td");
     tdDesc.textContent = linea.descripcion || "";
@@ -366,6 +390,7 @@ function rebuildPresupuestoTable(filtroRefTexto) {
 
     tr.appendChild(tdCheck);
     tr.appendChild(tdRef);
+    tr.appendChild(tdSeccion);
     tr.appendChild(tdDesc);
     tr.appendChild(tdUd);
     tr.appendChild(tdPvp);
