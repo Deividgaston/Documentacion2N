@@ -1,10 +1,5 @@
 // js/ui_presupuesto.js
-// Presupuesto con:
-// - Secciones agrupadas y editables
-// - Drag & drop de secciones
-// - Botones independientes: Añadir sección / Añadir línea
-// - Precios y descripciones tomados SIEMPRE de la base de datos de tarifa (Firebase)
-//   usando las referencias importadas o introducidas manualmente
+// Presupuesto 2N: secciones + líneas, calculando precios desde Firestore (tarifas)
 
 if (!window.appState) {
   window.appState = {};
@@ -31,10 +26,11 @@ if (typeof appState.aplicarIVA !== "boolean") {
   appState.aplicarIVA = false;
 }
 if (!appState.tarifas) {
-  appState.tarifas = {}; // cache en memoria: { ref: { descripcion, pvp, ... } }
+  appState.tarifas = {};
 }
 
-// Usamos toNum y formatCurrency de utils.js
+// Utilidades que ya tienes en utils.js
+// toNum(valor) y formatCurrency(valor)
 
 function getLineasSeleccionadas() {
   return (appState.lineasProyecto || []).filter(
@@ -42,82 +38,56 @@ function getLineasSeleccionadas() {
   );
 }
 
-// Busca un item de tarifa en la caché en memoria
-function findTarifaItem(ref) {
-  if (!ref) return null;
-  const r = ref.trim();
-  let t = null;
-  if (appState.tarifas && appState.tarifas[r]) {
-    t = appState.tarifas[r];
-  }
-  if (!t && typeof tarifasCache !== "undefined" && tarifasCache && tarifasCache[r]) {
-    t = tarifasCache[r];
-  }
-  return t || null;
-}
+// ==== RELLENAR LÍNEAS CON PRECIOS/DESDE FIRESTORE ====
 
-// Rellena precios y descripciones de TODAS las líneas usando la tarifa
 async function rellenarLineasDesdeTarifa() {
   const lineas = appState.lineasProyecto || [];
   if (!lineas.length) return;
 
-  // 1) refs que necesitamos consultar (sin duplicados)
-  const refsNecesarias = [];
-  lineas.forEach((l) => {
-    const ref = (l.ref || "").trim();
-    if (!ref) return;
+  // refs únicas
+  const refs = [...new Set(
+    lineas
+      .map(l => (l.ref || "").trim())
+      .filter(r => r && r.length > 0)
+  )];
 
-    const yaTienePrecio = l.pvp && Number(l.pvp) > 0;
-    const yaTieneDesc = !!(l.descripcion && l.descripcion.trim());
-    const yaEnCache = !!findTarifaItem(ref);
+  if (!refs.length) return;
 
-    // Si ya está todo relleno y/o en caché, no hace falta pedirla
-    if (yaTienePrecio && yaTieneDesc && yaEnCache) return;
+  console.log("[Presupuesto] Necesito tarifas para refs:", refs);
 
-    if (!refsNecesarias.includes(ref)) refsNecesarias.push(ref);
-  });
-
-  // 2) Si hay función para cargar tarifas, la usamos UNA vez
-  if (refsNecesarias.length) {
-    try {
-      console.log("[Presupuesto] Necesito tarifas para refs:", refsNecesarias);
-
-      // Si tienes una función específica para cargar sólo esas refs:
-      if (typeof loadTarifasForRefs === "function") {
-        await loadTarifasForRefs(refsNecesarias);
-      }
-      // Si solo tienes una función genérica:
-      else if (typeof loadTarifasIfNeeded === "function") {
-        await loadTarifasIfNeeded();
-      }
-
-      // Suponemos que esas funciones rellenan appState.tarifas o tarifasCache
-    } catch (err) {
-      console.error("[Presupuesto] Error cargando tarifas desde BD:", err);
-    }
+  // Hace SOLO las lecturas necesarias (las que no estén en cache)
+  if (typeof loadTarifasForRefs === "function") {
+    await loadTarifasForRefs(refs);
   }
 
-  // 3) Ahora sí, rellenamos todas las líneas usando la caché
+  // Una vez cargadas, rellenamos descripción + pvp donde falte
   lineas.forEach((l) => {
     const ref = (l.ref || "").trim();
     if (!ref) return;
 
-    const item = findTarifaItem(ref);
+    const item = typeof findTarifaItem === "function"
+      ? findTarifaItem(ref)
+      : (appState.tarifas && appState.tarifas[ref]);
+
     if (!item) return;
 
     if (!l.descripcion || !l.descripcion.trim()) {
-      if (item.descripcion) l.descripcion = item.descripcion;
+      l.descripcion = item.descripcion || l.descripcion;
     }
+
     if (!l.pvp || Number(l.pvp) === 0) {
-      const precio = item.pvp ?? item.PVP ?? item.precio;
-      if (precio != null) l.pvp = Number(precio);
+      l.pvp = Number(item.pvp || 0);
     }
   });
 }
 
+// ==== MODALES Y VARIABLES ====
+
 let modalSeccionEl = null;
 let modalLineaManualEl = null;
 let draggedSectionKey = null;
+
+// ==== RENDER PRINCIPAL ====
 
 function renderPresupuesto(container) {
   container.innerHTML = `
@@ -290,7 +260,7 @@ function renderPresupuesto(container) {
   document.getElementById("btnAddManual").onclick = () => openManualLineaModalForNew();
   document.getElementById("btnAddSection").onclick = () => openNewSectionModal();
 
-  // Si ya hay líneas importadas, las pintamos
+  // Pintamos tabla inicial (por si ya veníamos con líneas cargadas)
   if (appState.lineasProyecto && appState.lineasProyecto.length) {
     rebuildPresupuestoTable();
   } else {
@@ -307,7 +277,7 @@ function renderPresupuesto(container) {
     }
   }
 
-  // Muy importante: aquí pedimos a la BD los precios de TODAS las refs del presupuesto
+  // Aquí es donde hacemos la MAGIA: cargar precios desde Firestore
   (async () => {
     await rellenarLineasDesdeTarifa();
     const filtro = filtroRef.value.trim().toLowerCase();
@@ -316,7 +286,7 @@ function renderPresupuesto(container) {
   })();
 }
 
-/* ========== MODAL SECCIÓN ========== */
+// ==== MODAL SECCIÓN (título + comentario) ====
 
 function setupPresupuestoModalSeccion(container) {
   if (container.querySelector("#modalSeccion")) {
@@ -448,7 +418,7 @@ function saveSeccionModal() {
   rebuildPresupuestoTable(filtro);
 }
 
-/* ========== MODAL LÍNEA MANUAL ========== */
+// ==== MODAL LÍNEA MANUAL ====
 
 function setupManualLineaModal(container) {
   if (container.querySelector("#modalLineaManual")) {
@@ -519,23 +489,18 @@ function setupManualLineaModal(container) {
     const ref = refInput.value.trim();
     if (!ref) return;
 
-    // Por si la ref no está aún en caché, intentamos cargarla desde BD
-    if (!findTarifaItem(ref) && typeof loadTarifasForRefs === "function") {
-      try {
-        await loadTarifasForRefs([ref]);
-      } catch (e) {
-        console.error("[Presupuesto] Error pidiendo tarifa para ref manual:", e);
-      }
+    if (typeof loadTarifasForRefs === "function") {
+      await loadTarifasForRefs([ref]);
     }
 
-    const item = findTarifaItem(ref);
+    const item = typeof findTarifaItem === "function"
+      ? findTarifaItem(ref)
+      : (appState.tarifas && appState.tarifas[ref]);
+
     if (item) {
-      if (!descInput.value.trim() && item.descripcion) {
-        descInput.value = item.descripcion;
-      }
-      const precio = item.pvp ?? item.PVP ?? item.precio;
-      if (precio != null && (!pvpInput.value || Number(pvpInput.value) === 0)) {
-        pvpInput.value = Number(precio);
+      if (!descInput.value.trim()) descInput.value = item.descripcion || "";
+      if (!pvpInput.value || Number(pvpInput.value) === 0) {
+        pvpInput.value = Number(item.pvp || 0);
       }
     }
   });
@@ -633,7 +598,7 @@ function saveManualLineaModal() {
   recalcularPresupuesto();
 }
 
-/* ========== REORDENAR SECCIONES (DRAG & DROP) ========== */
+// ==== DRAG & DROP DE SECCIONES ====
 
 function moveSection(seccionKey, direction) {
   const lines = appState.lineasProyecto || [];
@@ -703,7 +668,7 @@ function reorderSections(dragKey, targetKey) {
   rebuildPresupuestoTable(filtro);
 }
 
-/* ========== TABLA + TOTALES ========== */
+// ==== TABLA + TOTALES ====
 
 function rebuildPresupuestoTable(filtroRefTexto) {
   const tbody = document.getElementById("tbodyPresupuesto");
@@ -726,7 +691,7 @@ function rebuildPresupuestoTable(filtroRefTexto) {
   items.forEach(({ linea, idx }) => {
     const seccionKey = (linea.seccion || "SIN SECCIÓN").trim();
 
-    // CABECERA DE SECCIÓN (draggable)
+    // Cabecera de sección (draggable)
     if (seccionKey !== lastSeccionKey) {
       const trSec = document.createElement("tr");
       trSec.className = "section-row";
@@ -819,7 +784,7 @@ function rebuildPresupuestoTable(filtroRefTexto) {
       lastSeccionKey = seccionKey;
     }
 
-    // Si es placeholder de sección, no se pinta línea de producto
+    // Línea placeholder (solo sección vacía) → no pinta producto
     if (linea.isSectionPlaceholder) return;
 
     const tr = document.createElement("tr");
