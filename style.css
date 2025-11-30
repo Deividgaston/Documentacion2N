@@ -206,39 +206,6 @@ button {
   margin-bottom: 8px;
 }
 
-/* KPI dashboard */
-.card-grid-3 {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 16px;
-}
-
-.kpi-card {
-  padding: 20px 22px;
-}
-
-.kpi-label {
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: #6b7280;
-  margin-bottom: 6px;
-}
-
-.kpi-value {
-  font-size: 2rem;
-  font-weight: 700;
-  color: #111827;
-}
-
-.kpi-ok {
-  color: #14532d;
-}
-
-.kpi-bad {
-  color: #b91c1c;
-}
-
 /* ===========================
    FORMULARIOS
    =========================== */
@@ -313,7 +280,7 @@ label {
 }
 
 /* ===========================
-   PRESUPUESTO LAYOUT BONITO
+   PRESUPUESTO LAYOUT
    =========================== */
 
 .page-header-row {
@@ -468,78 +435,6 @@ label {
 }
 
 /* ===========================
-   KANBAN PIPELINE (tipo Salesforce)
-   =========================== */
-
-.kanban-board {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 12px;
-  overflow-x: auto;
-}
-
-.kanban-column {
-  background: #f9fafb;
-  border-radius: 16px;
-  padding: 10px;
-  min-width: 220px;
-  max-height: 520px;
-  display: flex;
-  flex-direction: column;
-}
-
-.kanban-column-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-}
-
-.kanban-column-title {
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: #4b5563;
-}
-
-.kanban-count {
-  font-size: 0.75rem;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: #e5edff;
-  color: #1d4ed8;
-}
-
-.kanban-column-body {
-  overflow-y: auto;
-  padding-right: 2px;
-}
-
-.kanban-card {
-  background: #ffffff;
-  border-radius: 12px;
-  padding: 10px 10px 8px;
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
-  margin-bottom: 8px;
-}
-
-.kanban-card-title {
-  font-size: 0.9rem;
-  font-weight: 500;
-  margin-bottom: 4px;
-}
-
-.kanban-card-meta {
-  font-size: 0.75rem;
-  color: #9ca3af;
-}
-
-.kanban-empty {
-  font-size: 0.8rem;
-  color: #9ca3af;
-}
-
-/* ===========================
    RESPONSIVE
    =========================== */
 
@@ -567,15 +462,5 @@ label {
 
   .card {
     padding: 16px 14px 18px;
-  }
-
-  .kanban-board {
-    grid-template-columns: repeat(3, minmax(220px, 1fr));
-  }
-}
-
-@media (max-width: 550px) {
-  .kanban-board {
-    grid-template-columns: repeat(2, minmax(220px, 1fr));
   }
 }
