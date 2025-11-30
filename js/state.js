@@ -9,14 +9,13 @@ const TARIFA_CACHE_KEY = "tarifa_2n_v1";
 const appState = {
   user: null,
   loginError: "",
-  tarifas: null,          // Productos de la tarifa 2N
+  tarifas: null,          // Productos de la tarifa 2N (por referencia)
   lineasProyecto: [],     // Líneas importadas desde el Excel del proyecto
 
   // Pestaña activa del menú superior
   activeTab: "proyecto",
 
-  // Parámetros económicos del presupuesto
-  rol: "pvp",             // por defecto PVP sin márgenes
+  // Descuento global aplicado sobre el subtotal
   descuentoGlobal: 0,
   aplicarIVA: false,
 
