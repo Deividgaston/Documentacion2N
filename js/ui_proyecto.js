@@ -1,12 +1,18 @@
-// ui_proyecto.js
+// js/ui_proyecto.js
 // Pantalla de importación del proyecto desde Excel (Project Designer)
 // - Lee archivo XLSX
-// - Detecta una fila de cabeceras
+// - Detecta fila de cabeceras (si la hay)
 // - Detecta secciones (filas con solo texto en la primera celda)
 // - Genera appState.lineasProyecto con ref, descripcion, cantidad, pvp, seccion
 // - Al terminar, navega a la página "presupuesto"
 
-// ========== RENDER PÁGINA ==========
+if (!window.appState) {
+  window.appState = {};
+}
+if (!Array.isArray(appState.lineasProyecto)) {
+  appState.lineasProyecto = [];
+}
+
 function renderProyecto(container) {
   container.innerHTML = `
     <div class="page-header-row">
@@ -35,38 +41,31 @@ function renderProyecto(container) {
   btn.onclick = importarProyectoYIrAPresupuesto;
 }
 
-// ========== HANDLER BOTÓN (IMPORTAR + IR A PRESUPUESTO) ==========
+// Botón: importar + cambiar a Presupuesto
 async function importarProyectoYIrAPresupuesto() {
   const ok = await importarProyectoDesdeExcel();
   console.log("[Proyecto] resultado importarProyectoDesdeExcel ->", ok);
 
   if (!ok) return;
 
-  // Intento 1: función global del shell
   if (typeof renderShellContent === "function") {
     console.log("[Proyecto] Llamando a renderShellContent('presupuesto')");
     renderShellContent("presupuesto");
-    return;
-  }
-
-  // Intento 2: simular click en algún elemento de menú
-  const btnNav =
-    document.querySelector('[data-page="presupuesto"]') ||
-    document.querySelector('[data-page-key="presupuesto"]') ||
-    document.querySelector('#nav-presupuesto');
-
-  if (btnNav) {
-    console.log("[Proyecto] Haciendo click en botón de menú de Presupuesto");
-    btnNav.click();
   } else {
-    console.warn("[Proyecto] No he encontrado cómo navegar a Presupuesto; revisa el shell.");
+    console.warn("[Proyecto] renderShellContent no existe. Ve manualmente a Presupuesto.");
   }
 }
 
-/* ============================
-   IMPORTADOR DEL EXCEL
-   =========================== */
+// Función auxiliar para parsear números (comas/puntos)
+function parseNum(v) {
+  if (v == null) return 0;
+  if (typeof v === "number") return v;
+  const s = String(v).trim().replace(/\./g, "").replace(",", ".");
+  const n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
+}
 
+// IMPORTADOR DEL EXCEL
 async function importarProyectoDesdeExcel() {
   const fileInput = document.getElementById("inputExcelProyecto");
   const infoBox = document.getElementById("importInfo");
@@ -93,7 +92,6 @@ async function importarProyectoDesdeExcel() {
       return false;
     }
 
-    // raw:false para tratar números como string, así gestionamos comas
     const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false });
 
     if (!rows || !rows.length) {
@@ -103,28 +101,16 @@ async function importarProyectoDesdeExcel() {
     }
 
     console.log("[Proyecto] Nº filas leídas:", rows.length);
-
-    // ---- Helper numérico ----
-    const parseNum = (v) => {
-      if (v == null) return 0;
-      if (typeof v === "number") return v;
-      const s = String(v).trim().replace(/\./g, "").replace(",", ".");
-      const n = parseFloat(s);
-      return isNaN(n) ? 0 : n;
-    };
+    console.log("[Proyecto] Primeras filas para revisar:", rows.slice(0, 5));
 
     const lineas = [];
     let currentSection = "SIN SECCIÓN";
 
-    // Intentar detectar cabeceras
+    // Detectar fila de cabeceras (Referencia / Descripción / Cantidad / PVP…)
     let headerRowIndex = -1;
     for (let i = 0; i < rows.length; i++) {
       const r = rows[i] || [];
-      const t0 = (r[0] || "").toString().toLowerCase();
-      const t1 = (r[1] || "").toString().toLowerCase();
-      const t2 = (r[2] || "").toString().toLowerCase();
-      const t3 = (r[3] || "").toString().toLowerCase();
-      const joined = `${t0} ${t1} ${t2} ${t3}`;
+      const joined = (r.map(c => (c || "").toString().toLowerCase()).join(" ")).trim();
       if (
         joined.includes("ref") ||
         joined.includes("referencia") ||
@@ -140,11 +126,8 @@ async function importarProyectoDesdeExcel() {
     }
 
     console.log("[Proyecto] Fila de cabeceras detectada en índice:", headerRowIndex);
-
-    // Si no detectamos cabeceras, asumimos que todos los datos relevantes están “debajo” de donde empiezan a aparecer refs
     const startIndex = headerRowIndex >= 0 ? headerRowIndex + 1 : 0;
 
-    // Recorremos filas a partir de startIndex
     for (let i = startIndex; i < rows.length; i++) {
       const r = rows[i] || [];
       const c0 = (r[0] ?? "").toString().trim();
@@ -152,23 +135,21 @@ async function importarProyectoDesdeExcel() {
       const c2 = (r[2] ?? "").toString().trim();
       const c3 = (r[3] ?? "").toString().trim();
 
-      // fila totalmente vacía
+      // fila vacía
       if (!c0 && !c1 && !c2 && !c3) continue;
 
-      // Fila de SECCIÓN: texto solo en la primera celda
+      // Fila de sección: solo texto en primera celda
       if (c0 && !c1 && !c2 && !c3) {
         currentSection = c0;
-        console.log("[Proyecto] Sección detectada:", currentSection, " (fila", i, ")");
+        console.log("[Proyecto] Sección detectada:", currentSection, "(fila", i, ")");
         continue;
       }
 
-      // Posible línea: REF | DESCRIPCIÓN | UD | PVP
       const ref = c0;
       const desc = c1;
       const cantidad = parseNum(c2) || 1;
       const pvp = parseNum(c3);
 
-      // Si no hay ni ref ni descripción, descartamos
       if (!ref && !desc) continue;
 
       lineas.push({
@@ -188,10 +169,6 @@ async function importarProyectoDesdeExcel() {
       return false;
     }
 
-    // Guardamos en el estado global
-    if (typeof appState === "undefined") {
-      window.appState = {};
-    }
     if (!appState.infoPresupuesto) {
       appState.infoPresupuesto = {
         cliente: "",
@@ -205,8 +182,8 @@ async function importarProyectoDesdeExcel() {
     }
 
     appState.lineasProyecto = lineas;
+    console.log("[Proyecto] Ejemplo línea 0:", lineas[0]);
 
-    console.log("[Proyecto] appState.lineasProyecto ejemplo[0]:", lineas[0]);
     if (infoBox) {
       infoBox.textContent = `Importación correcta: ${lineas.length} líneas. Abriendo presupuesto…`;
     }
