@@ -1,146 +1,226 @@
 // js/ui_proyecto.js
-// Importación del Excel de proyecto
 
-function renderProyecto(container) {
+// Asegurar appState básico
+window.appState = window.appState || {};
+appState.proyecto = appState.proyecto || {
+  filas: [],
+  archivoNombre: null,
+  fechaImportacion: null,
+};
+
+// Elementos clave
+function getAppContent() {
+  return document.getElementById("appContent");
+}
+
+function setSubtitleProyecto() {
+  const sub = document.getElementById("currentViewSubtitle");
+  if (sub) {
+    sub.textContent =
+      "Importa el Excel del proyecto para generar el presupuesto con la tarifa 2N.";
+  }
+}
+
+// Render principal de la vista Proyecto
+function renderProyectoView() {
+  const container = getAppContent();
+  if (!container) return;
+
+  setSubtitleProyecto();
+
   container.innerHTML = `
-    <div class="page-title">Proyecto</div>
-    <div class="page-subtitle">
-      Importa el Excel del proyecto para generar el presupuesto con la tarifa 2N.
-    </div>
+    <div class="proyecto-layout">
 
-    <div class="card">
-      <div class="card-header">Importar proyecto</div>
-      <p class="info-text" style="margin-bottom:10px;">
-        El Excel debe contener al menos columnas de <strong>Referencia</strong> y <strong>Cantidad</strong>.
-        Opcionalmente también <strong>Descripción</strong>.
-      </p>
-      <input type="file" id="fileProyecto" accept=".xlsx,.xls" />
-      <button class="btn btn-blue" id="btnProyecto" style="margin-top:12px;">Procesar proyecto</button>
-      <div id="resProyecto" style="margin-top:14px; font-size:0.85rem;"></div>
-    </div>
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Proyecto</div>
+            <div class="card-subtitle">
+              Importa el Excel del proyecto para generar el presupuesto con la tarifa 2N.
+            </div>
+          </div>
+          <div class="chip">Paso 1 de 3</div>
+        </div>
 
-    <div class="card">
-      <div class="card-header">Estado</div>
-      <p class="info-text" id="estadoProyecto">
-        ${
-          appState.lineasProyecto.length
-            ? `Actualmente hay <strong>${appState.lineasProyecto.length}</strong> líneas cargadas.`
-            : "Todavía no se ha importado ningún proyecto."
-        }
-      </p>
+        <div class="card-body">
+
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Importar proyecto</label>
+              <p style="font-size:0.78rem; color:#6b7280; margin-bottom:0.5rem;">
+                El Excel debe contener al menos las columnas
+                <strong>Referencia</strong> y <strong>Cantidad</strong>.
+                Opcionalmente también <strong>Descripción</strong>.
+              </p>
+
+              <input id="proyectoFileInput" type="file" accept=".xlsx,.xls,.csv" />
+
+              <button id="btnProcesarProyecto" class="btn btn-primary mt-3">
+                Procesar proyecto
+              </button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Estado</div>
+        </div>
+        <div class="card-body" id="proyectoEstado">
+          Todavía no se ha importado ningún proyecto.
+        </div>
+      </div>
+
     </div>
   `;
 
-  const fileInput = document.getElementById("fileProyecto");
-  const btn = document.getElementById("btnProyecto");
-  const out = document.getElementById("resProyecto");
-  const estado = document.getElementById("estadoProyecto");
+  // Eventos
+  const btnProcesar = document.getElementById("btnProcesarProyecto");
+  if (btnProcesar) {
+    btnProcesar.addEventListener("click", onProcesarProyectoClick);
+  }
 
-  btn.onclick = async () => {
-    if (!fileInput.files || !fileInput.files[0]) {
-      out.innerHTML =
-        `<span style="color:#b91c1c;">Selecciona un archivo Excel primero.</span>`;
+  // Mostrar estado actual si ya había un proyecto cargado
+  actualizarEstadoProyecto();
+}
+
+// Maneja clic en "Procesar proyecto"
+async function onProcesarProyectoClick() {
+  const fileInput = document.getElementById("proyectoFileInput");
+  const estado = document.getElementById("proyectoEstado");
+
+  if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+    if (estado) {
+      estado.textContent = "Selecciona un archivo antes de procesar.";
+    }
+    return;
+  }
+
+  const file = fileInput.files[0];
+
+  try {
+    const filas = await leerProyectoDesdeExcel(file);
+
+    if (!filas || filas.length === 0) {
+      if (estado) {
+        estado.textContent =
+          "No se han encontrado filas válidas en el archivo. Revisa que tenga columnas 'Referencia' y 'Cantidad'.";
+      }
       return;
     }
 
-    btn.disabled = true;
-    btn.textContent = "Procesando...";
-    out.innerHTML = "";
+    appState.proyecto = {
+      filas,
+      archivoNombre: file.name,
+      fechaImportacion: new Date().toISOString(),
+    };
 
-    const file = fileInput.files[0];
-
+    // Opcional: guardar en localStorage para persistir en la sesión
     try {
-      const tarifas = await loadTarifasOnce(); // 1 sola lectura máx.
-      leerExcelComoMatriz(file, (err, rows) => {
-        btn.disabled = false;
-        btn.textContent = "Procesar proyecto";
-
-        if (err) {
-          console.error(err);
-          out.innerHTML =
-            `<span style="color:#b91c1c;">No se ha podido leer el Excel.</span>`;
-          return;
-        }
-
-        if (!rows || rows.length < 2) {
-          out.innerHTML =
-            `<span style="color:#b91c1c;">El Excel no tiene datos suficientes.</span>`;
-          return;
-        }
-
-        const header = rows[0].map((h) => String(h || "").toLowerCase());
-
-        const idxRef = header.findIndex((h) => h.includes("ref"));
-        const idxQty = header.findIndex(
-          (h) => h.includes("cant") || h.includes("qty") || h.includes("ud")
-        );
-        const idxDesc = header.findIndex(
-          (h) => h.includes("desc") || h.includes("concepto")
-        );
-
-        if (idxRef === -1 || idxQty === -1) {
-          out.innerHTML = `
-            <span style="color:#b91c1c;">
-              No se han encontrado columnas de referencia/cantidad. Revisa los encabezados.
-            </span>`;
-          return;
-        }
-
-        const lineas = [];
-        let conTarifa = 0;
-        let sinTarifa = 0;
-
-        for (let i = 1; i < rows.length; i++) {
-          const r = rows[i] || [];
-          const ref = (r[idxRef] || "").toString().trim();
-          if (!ref) continue;
-
-          const qty = toNum(r[idxQty]);
-          if (!qty) continue;
-
-          const descExcel =
-            idxDesc >= 0 ? (r[idxDesc] || "").toString().trim() : "";
-
-          const tarifaItem = tarifas[ref] || null;
-          const pvp = tarifaItem ? toNum(tarifaItem.pvp || tarifaItem.PVP || tarifaItem.precio) : 0;
-          const descTarifa = tarifaItem ? tarifaItem.descripcion || "" : "";
-
-          const linea = {
-            ref,
-            descripcion: descExcel || descTarifa || "",
-            cantidad: qty,
-            pvp,
-            incluir: !!tarifaItem // por defecto solo entra si tiene precio en tarifa
-          };
-
-          if (tarifaItem) conTarifa++;
-          else sinTarifa++;
-
-          lineas.push(linea);
-        }
-
-        appState.lineasProyecto = lineas;
-
-        out.innerHTML = `
-          <p>
-            <strong>${lineas.length}</strong> líneas procesadas.<br>
-            Con tarifa: <strong>${conTarifa}</strong><br>
-            Sin tarifa: <strong>${sinTarifa}</strong>
-          </p>
-          <p class="info-text" style="margin-top:6px;">
-            Ahora puedes ir a la pestaña <strong>Presupuesto</strong> para ajustar cantidades,
-            descuentos y exportar a PDF/Excel.
-          </p>
-        `;
-
-        estado.innerHTML = `Actualmente hay <strong>${lineas.length}</strong> líneas cargadas.`;
-      });
+      localStorage.setItem(
+        "proyecto_actual",
+        JSON.stringify(appState.proyecto)
+      );
     } catch (e) {
-      console.error(e);
-      btn.disabled = false;
-      btn.textContent = "Procesar proyecto";
-      out.innerHTML =
-        `<span style="color:#b91c1c;">Error inesperado cargando tarifa/proyecto.</span>`;
+      console.warn("No se pudo guardar proyecto en localStorage:", e);
     }
-  };
+
+    actualizarEstadoProyecto();
+  } catch (err) {
+    console.error("Error procesando proyecto:", err);
+    if (estado) {
+      estado.textContent =
+        "Se ha producido un error al leer el archivo. Revisa el formato.";
+    }
+  }
 }
+
+// Lectura del Excel usando SheetJS (xlsx)
+function leerProyectoDesdeExcel(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = function (e) {
+      try {
+        const data = new Uint8Array(e.target.result);
+        const wb = XLSX.read(data, { type: "array" });
+
+        // Primera hoja
+        const wsName = wb.SheetNames[0];
+        const ws = wb.Sheets[wsName];
+
+        const json = XLSX.utils.sheet_to_json(ws, { defval: "" });
+
+        // Normalizar columnas: Referencia, Cantidad, Descripcion
+        const filas = json
+          .map((row) => {
+            // admitir variantes de nombre de columna
+            const ref =
+              row["Referencia"] ||
+              row["REF"] ||
+              row["Ref"] ||
+              row["Referencia 2N"] ||
+              "";
+            const cant = row["Cantidad"] || row["Cant"] || row["Qty"] || "";
+            const desc =
+              row["Descripción"] ||
+              row["Descripcion"] ||
+              row["DESCRIPCION"] ||
+              "";
+
+            return {
+              referencia: String(ref).trim(),
+              cantidad: Number(cant) || 0,
+              descripcion: String(desc).trim(),
+            };
+          })
+          .filter((r) => r.referencia && r.cantidad > 0);
+
+        resolve(filas);
+      } catch (err) {
+        reject(err);
+      }
+    };
+
+    reader.onerror = function (err) {
+      reject(err);
+    };
+
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+// Actualiza el texto de la tarjeta de estado
+function actualizarEstadoProyecto() {
+  const estado = document.getElementById("proyectoEstado");
+  if (!estado) return;
+
+  const proyecto = appState.proyecto;
+  if (!proyecto || !proyecto.filas || proyecto.filas.length === 0) {
+    estado.textContent = "Todavía no se ha importado ningún proyecto.";
+    return;
+  }
+
+  const numFilas = proyecto.filas.length;
+  const nombre = proyecto.archivoNombre || "Proyecto";
+  const fecha = proyecto.fechaImportacion
+    ? new Date(proyecto.fechaImportacion).toLocaleString()
+    : "N/D";
+
+  estado.innerHTML = `
+    <div class="metric-card">
+      <span class="metric-label">Proyecto importado</span>
+      <span class="metric-value">${numFilas} líneas</span>
+    </div>
+    <p class="mt-2" style="font-size:0.82rem; color:#4b5563;">
+      Archivo: <strong>${nombre}</strong><br/>
+      Importado: ${fecha}
+    </p>
+  `;
+}
+
+// Si quieres que la vista Proyecto sea la inicial al arrancar,
+// puedes llamar a renderProyectoView() desde tu main.js/ui_shell
+// cuando se seleccione el menú "Proyecto".
