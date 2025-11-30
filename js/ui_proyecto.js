@@ -13,14 +13,6 @@ function getAppContent() {
   return document.getElementById("appContent");
 }
 
-function setSubtitleProyecto() {
-  const sub = document.getElementById("currentViewSubtitle");
-  if (sub) {
-    sub.textContent =
-      "Paso 1 · Importa el Excel del proyecto para poder generar el presupuesto con la tarifa 2N.";
-  }
-}
-
 // ====================
 // RENDER PRINCIPAL
 // ====================
@@ -28,8 +20,6 @@ function setSubtitleProyecto() {
 function renderProyectoView() {
   const container = getAppContent();
   if (!container) return;
-
-  setSubtitleProyecto();
 
   container.innerHTML = `
     <div class="proyecto-layout">
