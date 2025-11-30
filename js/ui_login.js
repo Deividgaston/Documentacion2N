@@ -4,35 +4,45 @@
 function renderLogin() {
   clearApp();
 
-  const box = el("div", "login-container");
-  const title = el("div", "login-title", "Acceso 2N Presupuestos");
+  const wrapper = el("div", "login-container");
+  const card = el("div", "login-card");
+
+  const title = el("div", "login-title", "Acceso 2N · Presupuestos");
 
   const content = el(
     "div",
     null,
     `
-    <p style="font-size:0.9rem; margin-bottom:16px; text-align:center;">
-      Inicia sesión con tu cuenta de Google para generar presupuestos.
-    </p>
-  `
+      <p style="font-size:0.9rem; margin-bottom:14px; text-align:center; color:#4b5563;">
+        Inicia sesión con tu cuenta de Google para generar presupuestos
+        con la tarifa 2N y exportarlos a PDF/Excel.
+      </p>
+    `
   );
 
   const err = el(
     "div",
     null,
     appState.loginError
-      ? `<p style="color:#e74c3c; font-size:0.85rem; text-align:center;">${appState.loginError}</p>`
+      ? `<div style="color:#dc2626; font-size:0.8rem; margin-bottom:10px;">${appState.loginError}</div>`
       : ""
   );
 
-  const btn = el("button", "btn btn-blue", "Entrar con Google");
-  btn.style.width = "100%";
+  const btn = el(
+    "button",
+    "btn btn-blue btn-full",
+    `<span>Continuar con Google</span>`
+  );
+
   btn.onclick = async () => {
+    btn.disabled = true;
+    btn.innerHTML = "Conectando...";
     appState.loginError = "";
-    renderLogin();
+
     try {
       await auth.signInWithPopup(googleProvider);
     } catch (error) {
+      console.error(error);
       appState.loginError = "No se pudo iniciar sesión con Google";
       renderLogin();
     }
@@ -41,7 +51,8 @@ function renderLogin() {
   content.appendChild(err);
   content.appendChild(btn);
 
-  box.appendChild(title);
-  box.appendChild(content);
-  appRoot.appendChild(box);
+  card.appendChild(title);
+  card.appendChild(content);
+  wrapper.appendChild(card);
+  appRoot.appendChild(wrapper);
 }
