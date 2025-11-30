@@ -1,104 +1,132 @@
 // js/firebase_tarifa.js
-// Servicio de tarifas 2N para Firestore (Firebase v8)
-
-// Requiere que en firebase.js ya exista:
-//   const db = firebase.firestore();
+// Servicio de tarifas 2N para Firestore (Firebase v8, productos como MAP en tarifas/v1)
 
 if (!window.appState) window.appState = {};
 if (!appState.tarifas) appState.tarifas = {};
 
-// Cache en memoria compartida
 window.tarifasCache = window.tarifasCache || {};
 const tarifasCache = window.tarifasCache;
 
 // Ruta en Firestore:
-// tarifas / v1 / productos / {ref}
+// tarifas / v1   --> campo "productos" (MAP) con claves = ref (9157101, 9160347, etc.)
 const TARIFAS_COLLECTION = "tarifas";
 const TARIFAS_DOC_VERSION = "v1";
-const TARIFAS_SUBCOL = "productos";
+
+// cache del documento completo tarifas/v1
+let tarifaProductosMap = null;
+let tarifaDocLoaded = false;
 
 /**
- * Carga desde Firestore solo las refs que no estén en caché.
- * refs: array de referencias tipo ["916020", "915510E", ...]
+ * Carga el documento tarifas/v1 UNA sola vez
+ * y guarda en memoria el campo "productos" (MAP)
+ */
+async function ensureTarifaLoaded() {
+  if (tarifaDocLoaded && tarifaProductosMap) return;
+
+  try {
+    const docRef = db.collection(TARIFAS_COLLECTION).doc(TARIFAS_DOC_VERSION);
+    const snap = await docRef.get();
+
+    if (!snap.exists) {
+      console.error("[Tarifa] El documento tarifas/" + TARIFAS_DOC_VERSION + " no existe.");
+      tarifaProductosMap = {};
+      tarifaDocLoaded = true;
+      return;
+    }
+
+    const data = snap.data() || {};
+    // aquí está el MAP con todas las refs
+    tarifaProductosMap = data.productos || {};
+    tarifaDocLoaded = true;
+
+    console.log(
+      "[Tarifa] Documento tarifas/" + TARIFAS_DOC_VERSION + " cargado. Nº refs en MAP:",
+      Object.keys(tarifaProductosMap).length
+    );
+  } catch (err) {
+    console.error("[Tarifa] Error cargando tarifas/" + TARIFAS_DOC_VERSION + ":", err);
+    tarifaProductosMap = {};
+    tarifaDocLoaded = true;
+  }
+}
+
+/**
+ * Carga en caché solo las refs que faltan, usando el MAP productos del doc tarifas/v1
  */
 async function loadTarifasForRefs(refs) {
   if (!refs || !refs.length) return;
 
-  // Normalizamos y quitamos duplicados
+  // normalizamos
   const limpias = [...new Set(refs.map(r => String(r || "").trim()).filter(Boolean))];
 
-  // Solo las que no están en caché
   const pendientes = limpias.filter(ref => !tarifasCache[ref]);
   if (!pendientes.length) {
     console.log("[Tarifa] Todas las refs ya estaban cacheadas.");
     return;
   }
 
-  console.log("[Tarifa] Consultando Firestore para refs:", pendientes);
+  // aseguramos tener cargado tarifas/v1
+  await ensureTarifaLoaded();
 
-  // Leemos todos los docs en paralelo (1 lectura por ref, pero sin duplicados)
-  const promises = pendientes.map(async (ref) => {
-    try {
-      const docRef = db
-        .collection(TARIFAS_COLLECTION)
-        .doc(TARIFAS_DOC_VERSION)
-        .collection(TARIFAS_SUBCOL)
-        .doc(ref);
+  if (!tarifaProductosMap) {
+    console.warn("[Tarifa] No se ha podido cargar el MAP de productos.");
+    return;
+  }
 
-      const snapshot = await docRef.get();
-      if (!snapshot.exists) {
-        console.warn("[Tarifa] No existe producto con ref", ref);
-        return;
-      }
+  pendientes.forEach(ref => {
+    const prod = tarifaProductosMap[ref];
 
-      const data = snapshot.data() || {};
-      const co = data.campos_originales || {};
-
-      const descripcion =
-        co["Product Name"] ||
-        co["Description"] ||
-        co["Product description"] ||
-        co["2N SKU"] ||
-        ref;
-
-      const precio =
-        co["List Price (EUR)"] ??
-        co["Distributor Price (EUR)"] ??
-        0;
-
-      const item = {
-        ref,
-        descripcion: descripcion || "",
-        pvp: Number(precio) || 0
-      };
-
-      tarifasCache[ref] = item;
-      appState.tarifas[ref] = item;
-    } catch (err) {
-      console.error("[Tarifa] Error obteniendo ref", ref, err);
+    if (!prod) {
+      console.warn("[Tarifa] No existe producto con ref", ref);
+      return;
     }
+
+    // en tu estructura, los datos “reales” están en prod.campos_originales
+    const co = prod.campos_originales || prod;
+
+    const descripcion =
+      co["Product Name"] ||
+      co["Descripción"] ||
+      co["Description"] ||
+      co["2N SKU"] ||
+      ref;
+
+    const precio =
+      co["Distributor Price (EUR)"] ??
+      co["List Price (EUR)"] ??
+      co["Price (EUR)"] ??
+      0;
+
+    const item = {
+      ref,
+      descripcion: descripcion || "",
+      pvp: Number(precio) || 0
+    };
+
+    tarifasCache[ref] = item;
+    appState.tarifas[ref] = item;
   });
 
-  await Promise.all(promises);
-
-  console.log("[Tarifa] Total refs en caché ahora:", Object.keys(tarifasCache).length);
+  console.log(
+    "[Tarifa] Total refs en caché ahora:",
+    Object.keys(tarifasCache).length
+  );
 }
 
 /**
- * Función opcional, por si en algún sitio quieres precargar todo.
- * Aquí no hacemos nada porque preferimos cargar solo lo necesario.
+ * API opcional, aquí no hace falta precarga global
  */
 async function loadTarifasIfNeeded() {
-  return;
+  await ensureTarifaLoaded();
 }
 
-// Helpers globales para el resto de archivos
 function findTarifaItem(ref) {
   if (!ref) return null;
   const key = String(ref).trim();
   return appState.tarifas[key] || tarifasCache[key] || null;
 }
 
+// Exponer en global
 window.loadTarifasForRefs = loadTarifasForRefs;
 window.loadTarifasIfNeeded = loadTarifasIfNeeded;
 window.findTarifaItem = findTarifaItem;
