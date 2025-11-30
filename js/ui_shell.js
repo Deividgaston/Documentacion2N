@@ -13,16 +13,19 @@ function renderShell() {
   const nav = el("div", "main-nav");
 
   const navLeft = el("div", "nav-left");
-  const brand = el("div", "nav-brand", "Presupuestos 2N");
+  const brand = el("div", "nav-brand", "CRM 2N");
 
   const tabs = el("div", "nav-tabs");
-  [
+  const items = [
     ["dashboard", "Dashboard"],
-    ["proyecto", "Proyecto"],
+    ["proyecto", "Proyectos"],
+    ["pipeline", "Pipeline"],
     ["presupuesto", "Presupuesto"],
-    ["doc", "Documentación"],
-    ["tarifa", "Tarifa 2N"]
-  ].forEach(([id, label]) => {
+    ["tarifa", "Tarifa 2N"],
+    ["doc", "Documentación"]
+  ];
+
+  items.forEach(([id, label]) => {
     const t = el(
       "div",
       "nav-tab" + (appState.activeTab === id ? " active" : ""),
@@ -61,6 +64,7 @@ function renderActiveView() {
 
   if (appState.activeTab === "dashboard") renderDashboard(c);
   else if (appState.activeTab === "proyecto") renderProyecto(c);
+  else if (appState.activeTab === "pipeline") renderPipeline(c);
   else if (appState.activeTab === "presupuesto") renderPresupuesto(c);
   else if (appState.activeTab === "tarifa") renderTarifas(c);
   else if (appState.activeTab === "doc") renderDoc(c);
