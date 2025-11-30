@@ -108,7 +108,7 @@ function renderShell() {
 
   const shell = el("div", "app-shell");
 
-  // --- NAV SUPERIOR ---
+  // NAV SUPERIOR
   const nav = el("div", "main-nav");
 
   const navLeft = el("div", "nav-left");
@@ -145,7 +145,6 @@ function renderShell() {
   nav.appendChild(navLeft);
   nav.appendChild(navRight);
 
-  // --- CONTENIDO ---
   const mainContent = el("div", "main-content");
   mainContent.id = "mainContent";
 
@@ -297,6 +296,7 @@ function renderTarifas(container) {
 
     <p style="margin-bottom:10px; font-size:0.9rem;">
       Selecciona el Excel de tarifa de 2N y pulsa <strong>Importar tarifa</strong>.
+      Se guardarán <strong>todos los parámetros</strong> de cada fila en Firebase.
     </p>
 
     <input type="file" id="fileTarifa" accept=".xlsx,.xls" />
@@ -308,6 +308,13 @@ function renderTarifas(container) {
   container.appendChild(card);
 
   document.getElementById("btnProcesar").onclick = procesarTarifaExcel;
+}
+
+// helper para convertir a número
+function toNum(v) {
+  if (v === null || v === undefined || v === "") return 0;
+  const n = Number(String(v).replace(",", "."));
+  return isNaN(n) ? 0 : n;
 }
 
 async function procesarTarifaExcel() {
@@ -332,22 +339,82 @@ async function procesarTarifaExcel() {
     const productos = {};
 
     rows.forEach((r) => {
-      const sku = r["2N SKU"] || r["SKU"] || r["Referencia"];
+      // Cabeceras reales de tu Excel:
+      // "2N SKU", "Nombre",
+      // "NFR\nDistributor\n(EUR)", "NFR\nReseller\n(EUR)",
+      // "Distributor\nPrice\n(EUR)",
+      // "Recommended\nReseller Price 2\n(EUR)",
+      // "Recommended\nReseller Price 1\n(EUR)",
+      // "MSRP\n(EUR)",
+      // "Nota",
+      // "Ancho\n(mm)", "Alto\n(mm)", "Profundidad\n(mm)", "Peso\n(kg)",
+      // "HS code", "EAN code", "Página web", "EOL", "Motivo de finalización de venta"
+
+      const sku = (r["2N SKU"] || r["SKU"] || r["Referencia"] || "").toString().trim();
       if (!sku) return;
 
+      const nombre =
+        r["Nombre"] ||
+        r["Product Name"] ||
+        "";
+
+      const nfr_dist = toNum(r["NFR\nDistributor\n(EUR)"]);
+      const nfr_reseller = toNum(r["NFR\nReseller\n(EUR)"]);
+      const distributor_price = toNum(r["Distributor\nPrice\n(EUR)"]);
+      const rr2 = toNum(r["Recommended\nReseller Price 2\n(EUR)"]);
+      const rr1 = toNum(r["Recommended\nReseller Price 1\n(EUR)"]);
+      const msrp = toNum(r["MSRP\n(EUR)"]);
+
+      const nota = r["Nota"] || "";
+      const ancho = toNum(r["Ancho\n(mm)"]);
+      const alto = toNum(r["Alto\n(mm)"]);
+      const profundidad = toNum(r["Profundidad\n(mm)"]);
+      const peso = toNum(r["Peso\n(kg)"]);
+
+      const hsCode = r["HS code"] || "";
+      const eanCode = r["EAN code"] || "";
+      const paginaWeb = r["Página web"] || "";
+      const eolFlag = !!r["EOL"];
+      const motivoEol = r["Motivo de finalización de venta"] || "";
+
       productos[sku] = {
-        sku: sku,
-        nombre: r["Nombre"] || "",
-        pvp: r["SRP (EUR)"] || 0,
-        precio_distribuidor: r["Distributor Price (EUR)"] || 0,
-        precio_subdistribuidor: r["Recommended Reseller Price 1 (EUR)"] || 0,
-        precio_instalador: r["Recommended Reseller Price 2 (EUR)"] || 0,
-        precio_constructora: r["Recommended Reseller Price 2 (EUR)"] || 0,
-        precio_promotora: r["SRP (EUR)"] || 0,
-        ean: r["EAN"] || "",
-        hs_code: r["CUSTOMS TARIFF NUMBER (HS CODE)"] || "",
-        web: r["Página web"] || "",
-        eol: r["EOL"] || false
+        // claves normalizadas para el motor de presupuestos
+        sku,
+        nombre,
+
+        // NFR
+        nfr_distributor_eur: nfr_dist,
+        nfr_reseller_eur: nfr_reseller,
+
+        // lista de precios oficial
+        distributor_price_eur: distributor_price,
+        reseller_price_2_eur: rr2,
+        reseller_price_1_eur: rr1,
+        msrp_eur: msrp,
+
+        // mapping a roles que luego usaremos:
+        pvp: msrp, // PVP = MSRP
+        precio_distribuidor: distributor_price,
+        precio_subdistribuidor: rr1,
+        precio_instalador: rr2,
+        precio_constructora: rr2,
+        precio_promotora: msrp,
+
+        // dimensiones / logística
+        ancho_mm: ancho,
+        alto_mm: alto,
+        profundidad_mm: profundidad,
+        peso_kg: peso,
+
+        hs_code: hsCode,
+        ean_code: eanCode,
+        pagina_web: paginaWeb,
+        eol: eolFlag,
+        motivo_eol: motivoEol,
+        nota,
+
+        // TODO: cualquier campo extra del Excel lo dejamos aquí
+        campos_originales: r
       };
     });
 
@@ -355,13 +422,14 @@ async function procesarTarifaExcel() {
 
     await db.collection("tarifas").doc("v1").set({
       ultima_actualizacion: new Date().toISOString(),
+      total_productos: Object.keys(productos).length,
       productos: productos
     });
 
     localStorage.setItem(TARIFA_CACHE_KEY, JSON.stringify(productos));
     appState.tarifas = productos;
 
-    out.innerHTML = `<span style="color:green;">Tarifa actualizada correctamente.</span>`;
+    out.innerHTML = `<span style="color:green;">Tarifa actualizada correctamente (${Object.keys(productos).length} productos).</span>`;
   };
 
   reader.readAsArrayBuffer(file);
@@ -385,7 +453,7 @@ function renderProyecto(container) {
     <div class="card-header">Importar Excel de proyecto</div>
 
     <p style="margin-bottom:10px;">
-      Este será tu flujo principal: selecciona el Excel del proyecto y la herramienta generará las líneas con PVP.
+      Flujo principal: selecciona el Excel del proyecto y la herramienta generará las líneas con PVP.
     </p>
 
     <input type="file" id="fileProyecto" accept=".xlsx,.xls" />
