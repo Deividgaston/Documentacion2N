@@ -1,96 +1,143 @@
 // js/ui_tarifa.js
-// Importación de tarifa 2N
+// Importar y subir tarifa 2N a Firestore (mínimas escrituras)
 
-function renderTarifas(container) {
+function renderTarifa(container) {
   container.innerHTML = `
     <div class="page-title">Tarifa 2N</div>
-    <div class="page-subtitle">Importa la tarifa oficial (solo cuando cambie el Excel).</div>
+    <div class="page-subtitle">
+      Importa la tarifa 2N desde Excel y súbela a Firestore para reutilizarla en todos los proyectos.
+    </div>
 
     <div class="card">
-      <div class="card-header">Actualizar tarifa</div>
-      <input type="file" id="fileTarifa" accept=".xlsx,.xls"/>
-      <button class="btn btn-blue" id="btnProcesarTarifa" style="margin-top:16px;">Importar tarifa</button>
-      <div id="resultadoTarifa" style="margin-top:16px; font-size:0.9rem;"></div>
+      <div class="card-header">Importar tarifa</div>
+      <p class="info-text" style="margin-bottom:10px;">
+        El Excel debe contener columnas de <strong>Referencia</strong>, <strong>Descripción</strong> y <strong>PVP</strong>.
+        Las cabeceras se detectan automáticamente (ref, referencia, desc, descripción, pvp, precio...).
+      </p>
+      <input type="file" id="fileTarifa" accept=".xlsx,.xls" />
+      <button class="btn btn-blue" id="btnTarifa" style="margin-top:12px;">Procesar tarifa</button>
+      <div id="resTarifa" style="margin-top:14px; font-size:0.85rem;"></div>
+    </div>
+
+    <div class="card card-soft">
+      <div class="card-header">Estado de la tarifa cargada</div>
+      <p class="info-text" id="estadoTarifa">
+        ${
+          appState.tarifas && Object.keys(appState.tarifas).length
+            ? `Hay <strong>${Object.keys(appState.tarifas).length}</strong> referencias en memoria/localStorage.`
+            : "Todavía no hay tarifa cargada en esta sesión."
+        }
+      </p>
     </div>
   `;
 
-  document.getElementById("btnProcesarTarifa").onclick = procesarTarifaExcel;
-}
+  const fileInput = document.getElementById("fileTarifa");
+  const btn = document.getElementById("btnTarifa");
+  const out = document.getElementById("resTarifa");
+  const estado = document.getElementById("estadoTarifa");
 
-async function procesarTarifaExcel() {
-  const file = document.getElementById("fileTarifa").files[0];
-  const out = document.getElementById("resultadoTarifa");
+  btn.onclick = async () => {
+    if (!fileInput.files || !fileInput.files[0]) {
+      out.innerHTML =
+        `<span style="color:#b91c1c;">Selecciona un Excel de tarifa primero.</span>`;
+      return;
+    }
 
-  if (!file) {
-    out.innerHTML = `<span style="color:red;">Selecciona un archivo.</span>`;
-    return;
-  }
+    btn.disabled = true;
+    btn.textContent = "Procesando...";
+    out.innerHTML = "";
 
-  out.innerHTML = "Procesando tarifa…";
+    const file = fileInput.files[0];
 
-  const reader = new FileReader();
-  reader.onload = async (e) => {
-    const data = new Uint8Array(e.target.result);
-    const wb = XLSX.read(data, { type: "array" });
-
-    const sheet = wb.Sheets[wb.SheetNames[0]];
-    const matrix = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
-
-    let headerRow = -1;
-    for (let i = 0; i < matrix.length; i++) {
-      if (matrix[i].some((c) => String(c).toLowerCase().includes("2n sku"))) {
-        headerRow = i;
-        break;
+    leerExcelComoMatriz(file, async (err, rows) => {
+      if (err) {
+        console.error(err);
+        btn.disabled = false;
+        btn.textContent = "Procesar tarifa";
+        out.innerHTML =
+          `<span style="color:#b91c1c;">No se ha podido leer el Excel.</span>`;
+        return;
       }
-    }
 
-    if (headerRow === -1) {
-      out.innerHTML = `<span style="color:red;">No se encontró la columna 2N SKU.</span>`;
-      return;
-    }
+      if (!rows || rows.length < 2) {
+        btn.disabled = false;
+        btn.textContent = "Procesar tarifa";
+        out.innerHTML =
+          `<span style="color:#b91c1c;">El Excel no tiene datos suficientes.</span>`;
+        return;
+      }
 
-    const rows = XLSX.utils.sheet_to_json(sheet, {
-      range: headerRow,
-      defval: ""
+      const header = rows[0].map((h) => String(h || "").toLowerCase());
+
+      const idxRef = header.findIndex((h) => h.includes("ref"));
+      const idxDesc = header.findIndex(
+        (h) => h.includes("desc") || h.includes("concepto")
+      );
+      const idxPvp = header.findIndex(
+        (h) => h.includes("pvp") || h.includes("precio") || h.includes("price")
+      );
+
+      if (idxRef === -1 || idxPvp === -1) {
+        btn.disabled = false;
+        btn.textContent = "Procesar tarifa";
+        out.innerHTML = `
+          <span style="color:#b91c1c;">
+            No se han encontrado columnas de referencia/precio en la primera fila.
+          </span>`;
+        return;
+      }
+
+      const productos = {};
+      let count = 0;
+
+      for (let i = 1; i < rows.length; i++) {
+        const r = rows[i] || [];
+        const ref = (r[idxRef] || "").toString().trim();
+        if (!ref) continue;
+
+        const desc = idxDesc >= 0 ? (r[idxDesc] || "").toString().trim() : "";
+        const pvp = toNum(r[idxPvp]);
+        if (!pvp) continue;
+
+        productos[ref] = {
+          referencia: ref,
+          descripcion: desc,
+          pvp
+        };
+        count++;
+      }
+
+      try {
+        // 1 escritura en Firestore
+        await db.collection("tarifas").doc("v1").set({
+          ultima_actualizacion: new Date().toISOString(),
+          total_productos: count,
+          productos
+        });
+
+        // cache local
+        appState.tarifas = productos;
+        try {
+          localStorage.setItem(TARIFA_CACHE_KEY, JSON.stringify(productos));
+        } catch (e) {
+          console.warn("No se pudo cachear la tarifa", e);
+        }
+
+        out.innerHTML = `
+          <p>
+            Tarifa procesada con <strong>${count}</strong> referencias válidas.<br>
+            Se ha guardado en Firestore (tarifas/v1) y en localStorage.
+          </p>
+        `;
+        estado.innerHTML = `Hay <strong>${count}</strong> referencias en memoria/localStorage.`;
+      } catch (e) {
+        console.error(e);
+        out.innerHTML =
+          `<span style="color:#b91c1c;">Error guardando la tarifa en Firestore.</span>`;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Procesar tarifa";
+      }
     });
-
-    if (!rows.length) {
-      out.innerHTML = `<span style="color:red;">Tarifa vacía.</span>`;
-      return;
-    }
-
-    const keys = Object.keys(rows[0]);
-    const skuKey = findHeaderKey(keys, [/sku/i]);
-    const nombreKey = findHeaderKey(keys, [/nombre/i, /name/i]);
-    const msrpKey = findHeaderKey(keys, [/msrp/i, /pvp/i]);
-
-    const productos = {};
-    let count = 0;
-
-    rows.forEach((r) => {
-      const sku = r[skuKey]?.toString().trim();
-      if (!sku) return;
-
-      productos[sku] = {
-        sku,
-        nombre: r[nombreKey] || "",
-        pvp: toNum(r[msrpKey]),
-        campos_originales: r
-      };
-      count++;
-    });
-
-    await db.collection("tarifas").doc("v1").set({
-      ultima_actualizacion: new Date().toISOString(),
-      total_productos: count,
-      productos
-    });
-
-    localStorage.setItem(TARIFA_CACHE_KEY, JSON.stringify(productos));
-    appState.tarifas = productos;
-
-    out.innerHTML = `<span style="color:green;">Tarifa importada correctamente (${count} productos).</span>`;
   };
-
-  reader.readAsArrayBuffer(file);
 }
