@@ -26,7 +26,8 @@ const appState = {
   user: null,
   loginError: "",
   tarifas: null,
-  lineasProyecto: []
+  lineasProyecto: [],
+  activeTab: "dashboard" // dashboard | proyecto | presupuesto | doc | tarifa
 };
 
 const appRoot = document.getElementById("app");
@@ -56,7 +57,7 @@ function renderLogin() {
     null,
     `
     <p style="font-size:0.9rem; margin-bottom:16px; text-align:center;">
-      Inicia sesión con tu cuenta de Google 2N.
+      Inicia sesión con tu cuenta de Google 2N para generar presupuestos de forma rápida y consistente.
     </p>
   `
   );
@@ -95,76 +96,143 @@ function renderLogin() {
 }
 
 // ======================================
-// 4) PANEL PRINCIPAL
+// 4) SHELL TIPO CRM + NAVEGACIÓN
 // ======================================
-function renderPanel() {
+function setActiveTab(tab) {
+  appState.activeTab = tab;
+  renderShell();
+}
+
+function renderShell() {
   clearApp();
 
-  const top = el("div", "topbar");
-  top.innerHTML = `
-    <div class="topbar-title">2N · Presupuestos</div>
-    <div>
-      ${appState.user.email}
-      &nbsp;&nbsp;
-      <button class="btn-logout" id="logoutBtn">Logout</button>
-    </div>
-  `;
-  top.querySelector("#logoutBtn").onclick = () => auth.signOut();
+  const shell = el("div", "app-shell");
 
-  const main = el("div");
-  main.style.marginTop = "20px";
+  // --- NAV SUPERIOR ---
+  const nav = el("div", "main-nav");
 
-  const card = el("div", "card");
-  card.innerHTML = `
-    <div class="card-header">
-      Panel principal
-      <span style="font-size:0.85rem; font-weight:400; color:#667;">
-        Flujo: Tarifas → Proyecto → Presupuesto → Documentación → BC3
-      </span>
-    </div>
+  const navLeft = el("div", "nav-left");
+  const brand = el("div", "nav-brand", "Presupuestos 2N");
 
-    <div class="grid grid-2">
+  const tabs = el("div", "nav-tabs");
+  const tabsInfo = [
+    { id: "dashboard", label: "Dashboard" },
+    { id: "proyecto", label: "Proyecto" },
+    { id: "presupuesto", label: "Presupuesto" },
+    { id: "doc", label: "Documentación" },
+    { id: "tarifa", label: "Tarifa 2N" }
+  ];
 
-      <div class="card">
-        <div class="card-header">1. Tarifas 2N</div>
-        <p>Importar Excel de tarifas → guardar en Firestore con una sola escritura.</p>
-        <button class="btn btn-blue" id="goTarifas">Ir a tarifas</button>
-      </div>
+  tabsInfo.forEach((t) => {
+    const tab = el(
+      "div",
+      "nav-tab" + (appState.activeTab === t.id ? " active" : ""),
+      t.label
+    );
+    tab.addEventListener("click", () => setActiveTab(t.id));
+    tabs.appendChild(tab);
+  });
 
-      <div class="card">
-        <div class="card-header">2. Proyecto</div>
-        <p>Importar Excel del proyecto y cruzar con tarifas.</p>
-        <button class="btn btn-blue" id="goProyecto">Ir a proyectos</button>
-      </div>
+  navLeft.appendChild(brand);
+  navLeft.appendChild(tabs);
 
-      <div class="card">
-        <div class="card-header">3. Presupuesto</div>
-        <p>Generar presupuesto por rol y exportar.</p>
-        <button class="btn btn-blue" id="goPresupuesto">Ir a presupuestos</button>
-      </div>
-
-      <div class="card">
-        <div class="card-header">4. Documentación & BC3</div>
-        <p>Hojas técnicas, memoria y BC3.</p>
-        <button class="btn btn-blue" id="goDoc">Ir a documentación</button>
-      </div>
-
-    </div>
+  const navRight = el("div", "nav-right");
+  navRight.innerHTML = `
+    <span>${appState.user?.email || ""}</span>
+    <button class="btn-logout" id="btnLogout">Salir</button>
   `;
 
-  main.appendChild(card);
+  nav.appendChild(navLeft);
+  nav.appendChild(navRight);
 
-  appRoot.appendChild(top);
-  appRoot.appendChild(main);
+  // --- CONTENIDO ---
+  const mainContent = el("div", "main-content");
+  mainContent.id = "mainContent";
 
-  document.getElementById("goTarifas").onclick = renderTarifas;
-  document.getElementById("goProyecto").onclick = renderProyecto;
-  document.getElementById("goPresupuesto").onclick = renderPresupuesto;
-  document.getElementById("goDoc").onclick = renderDoc;
+  shell.appendChild(nav);
+  shell.appendChild(mainContent);
+  appRoot.appendChild(shell);
+
+  document.getElementById("btnLogout").onclick = () => auth.signOut();
+
+  renderActiveView();
+}
+
+function renderActiveView() {
+  const container = document.getElementById("mainContent");
+  container.innerHTML = "";
+
+  switch (appState.activeTab) {
+    case "dashboard":
+      renderDashboard(container);
+      break;
+    case "proyecto":
+      renderProyecto(container);
+      break;
+    case "presupuesto":
+      renderPresupuesto(container);
+      break;
+    case "doc":
+      renderDoc(container);
+      break;
+    case "tarifa":
+      renderTarifas(container);
+      break;
+    default:
+      renderDashboard(container);
+  }
 }
 
 // ======================================
-// 5) UTILIDAD: CARGAR TARIFAS OPTIMIZADO
+// 5) DASHBOARD
+// ======================================
+function renderDashboard(container) {
+  const title = el("div", null);
+  title.innerHTML = `
+    <div class="page-title">Dashboard general</div>
+    <div class="page-subtitle">
+      Vista rápida de proyectos, líneas calculadas y estado de la tarifa 2N.
+    </div>
+  `;
+  container.appendChild(title);
+
+  const cards = el("div", "grid grid-2");
+
+  const cardProyecto = el("div", "card");
+  cardProyecto.innerHTML = `
+    <div class="card-header">
+      Proyectos recientes
+      <span class="badge-soft">${appState.lineasProyecto.length} líneas en memoria</span>
+    </div>
+    <p style="font-size:0.9rem;">
+      Importa un Excel de proyecto desde la pestaña <strong>Proyecto</strong> para generar precios de forma automática.
+    </p>
+  `;
+
+  const cardTarifa = el("div", "card");
+  const tarifaEstado =
+    appState.tarifas && Object.keys(appState.tarifas).length
+      ? `<span style="color:#16a34a;">Tarifa cargada (${Object.keys(appState.tarifas).length} referencias)</span>`
+      : `<span style="color:#dc2626;">Tarifa no cargada</span>`;
+
+  cardTarifa.innerHTML = `
+    <div class="card-header">
+      Tarifa 2N
+    </div>
+    <p style="font-size:0.9rem; margin-bottom:6px;">
+      La tarifa solo se actualiza cuando 2N publica una nueva versión (1–2 veces/año).
+    </p>
+    <p style="font-size:0.9rem;">Estado actual: ${tarifaEstado}</p>
+  `;
+
+  cards.appendChild(cardProyecto);
+  cards.appendChild(cardTarifa);
+
+  container.appendChild(cards);
+}
+
+// ======================================
+// 6) UTILIDAD: CARGAR TARIFAS OPTIMIZADO
 // ======================================
 async function loadTarifasOnce() {
   if (appState.tarifas && Object.keys(appState.tarifas).length > 0) {
@@ -206,40 +274,39 @@ async function loadTarifasOnce() {
 }
 
 // ======================================
-// 6) MÓDULO TARIFAS
+// 7) MÓDULO TARIFA (CONFIGURACIÓN OCASIONAL)
 // ======================================
-function renderTarifas() {
-  clearApp();
-
-  const top = el("div", "topbar");
-  top.innerHTML = `
-    <div class="topbar-title">Tarifas 2N</div>
-    <button class="btn-logout" id="logoutBtn">Logout</button>
+function renderTarifas(container) {
+  const header = el("div", null);
+  header.innerHTML = `
+    <div class="page-title">Tarifa 2N</div>
+    <div class="page-subtitle">
+      Configuración puntual. Solo cuando cambie el Excel oficial de precios.
+    </div>
   `;
-  top.querySelector("#logoutBtn").onclick = () => auth.signOut();
+  container.appendChild(header);
 
   const card = el("div", "card");
-
   card.innerHTML = `
-    <div class="card-header">Importar tarifa Excel → Firestore</div>
+    <div class="card-header">
+      Actualizar tarifa oficial de 2N
+      <span style="font-size:0.8rem; font-weight:400; color:#777;">
+        Se guarda en Firestore y se reutiliza en todos los proyectos.
+      </span>
+    </div>
 
-    <p style="margin-bottom:10px;">
-      Selecciona el Excel oficial de 2N con la tabla de precios.
+    <p style="margin-bottom:10px; font-size:0.9rem;">
+      Selecciona el Excel de tarifa de 2N y pulsa <strong>Importar tarifa</strong>.
     </p>
 
     <input type="file" id="fileTarifa" accept=".xlsx,.xls" />
 
-    <button class="btn btn-blue" id="btnProcesar" style="margin-top:16px;">Procesar e importar</button>
+    <button class="btn btn-blue" id="btnProcesar" style="margin-top:16px;">Importar tarifa</button>
 
     <div id="resultado" style="margin-top:20px; font-size:0.9rem;"></div>
-
-    <button class="btn btn-grey" id="volver" style="margin-top:20px;">Volver al panel</button>
   `;
+  container.appendChild(card);
 
-  appRoot.appendChild(top);
-  appRoot.appendChild(card);
-
-  document.getElementById("volver").onclick = renderPanel;
   document.getElementById("btnProcesar").onclick = procesarTarifaExcel;
 }
 
@@ -248,11 +315,11 @@ async function procesarTarifaExcel() {
   const out = document.getElementById("resultado");
 
   if (!file) {
-    out.innerHTML = `<span style="color:red;">Selecciona un archivo Excel.</span>`;
+    out.innerHTML = `<span style="color:red;">Selecciona un archivo Excel de tarifas.</span>`;
     return;
   }
 
-  out.innerHTML = "Procesando Excel...";
+  out.innerHTML = "Procesando Excel de tarifa...";
 
   const reader = new FileReader();
   reader.onload = async (e) => {
@@ -284,7 +351,7 @@ async function procesarTarifaExcel() {
       };
     });
 
-    out.innerHTML = "Guardando en Firestore...";
+    out.innerHTML = "Guardando tarifa en Firestore...";
 
     await db.collection("tarifas").doc("v1").set({
       ultima_actualizacion: new Date().toISOString(),
@@ -294,32 +361,31 @@ async function procesarTarifaExcel() {
     localStorage.setItem(TARIFA_CACHE_KEY, JSON.stringify(productos));
     appState.tarifas = productos;
 
-    out.innerHTML = `<span style="color:green;">Tarifa importada correctamente.</span>`;
+    out.innerHTML = `<span style="color:green;">Tarifa actualizada correctamente.</span>`;
   };
 
   reader.readAsArrayBuffer(file);
 }
 
 // ======================================
-// 7) MÓDULO PROYECTO (EXCEL → LÍNEAS)
+// 8) MÓDULO PROYECTO (EXCEL → LÍNEAS)
 // ======================================
-function renderProyecto() {
-  clearApp();
-
-  const top = el("div", "topbar");
-  top.innerHTML = `
-    <div class="topbar-title">Proyecto (Excel → Líneas)</div>
-    <button class="btn-logout" id="logoutBtn">Logout</button>
+function renderProyecto(container) {
+  const header = el("div", null);
+  header.innerHTML = `
+    <div class="page-title">Proyecto</div>
+    <div class="page-subtitle">
+      Importa el Excel de diseño del proyecto y cruzamos referencias con la tarifa 2N para generar las líneas de cálculo.
+    </div>
   `;
-  top.querySelector("#logoutBtn").onclick = () => auth.signOut();
+  container.appendChild(header);
 
   const card = el("div", "card");
   card.innerHTML = `
-    <div class="card-header">Importar Excel de proyecto y cruzar con tarifas</div>
+    <div class="card-header">Importar Excel de proyecto</div>
 
     <p style="margin-bottom:10px;">
-      Importa el Excel de diseño de proyecto. Leeremos referencias y cantidades
-      y las cruzaremos con la tarifa 2N ya cargada.
+      Este será tu flujo principal: selecciona el Excel del proyecto y la herramienta generará las líneas con PVP.
     </p>
 
     <input type="file" id="fileProyecto" accept=".xlsx,.xls" />
@@ -327,14 +393,9 @@ function renderProyecto() {
     <button class="btn btn-blue" id="btnProyecto" style="margin-top:16px;">Procesar proyecto</button>
 
     <div id="resProyecto" style="margin-top:20px; font-size:0.9rem;"></div>
-
-    <button class="btn btn-grey" id="volver" style="margin-top:20px;">Volver al panel</button>
   `;
+  container.appendChild(card);
 
-  appRoot.appendChild(top);
-  appRoot.appendChild(card);
-
-  document.getElementById("volver").onclick = renderPanel;
   document.getElementById("btnProyecto").onclick = procesarProyectoExcel;
 }
 
@@ -347,7 +408,7 @@ async function procesarProyectoExcel() {
     return;
   }
 
-  out.innerHTML = "Cargando tarifas y procesando proyecto...";
+  out.innerHTML = "Cargando tarifa y procesando proyecto...";
 
   const tarifas = await loadTarifasOnce();
 
@@ -358,7 +419,6 @@ async function procesarProyectoExcel() {
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json(sheet);
 
-    // Detección flexible de nombres de columnas
     const sample = rows[0] || {};
     const cols = Object.keys(sample);
 
@@ -403,7 +463,6 @@ async function procesarProyectoExcel() {
 
     appState.lineasProyecto = lineas;
 
-    // Pintar resumen + pequeña tabla
     let html = `
       <p>
         Líneas procesadas: <strong>${lineas.length}</strong><br>
@@ -414,15 +473,15 @@ async function procesarProyectoExcel() {
 
     if (lineas.length > 0) {
       html += `
-        <div style="margin-top:14px; max-height:260px; overflow:auto;">
-          <table style="width:100%; border-collapse:collapse; font-size:0.85rem;">
+        <div class="table-wrapper">
+          <table class="table-simple">
             <thead>
-              <tr style="border-bottom:1px solid #ddd;">
-                <th style="text-align:left; padding:4px;">Ref</th>
-                <th style="text-align:right; padding:4px;">Cant.</th>
-                <th style="text-align:left; padding:4px;">Descripción proyecto</th>
-                <th style="text-align:left; padding:4px;">Nombre tarifa</th>
-                <th style="text-align:right; padding:4px;">PVP</th>
+              <tr>
+                <th style="text-align:left;">Ref</th>
+                <th class="text-right">Cant.</th>
+                <th style="text-align:left;">Descripción proyecto</th>
+                <th style="text-align:left;">Nombre tarifa</th>
+                <th class="text-right">PVP</th>
               </tr>
             </thead>
             <tbody>
@@ -430,12 +489,12 @@ async function procesarProyectoExcel() {
 
       lineas.slice(0, 50).forEach((l) => {
         html += `
-          <tr style="border-bottom:1px solid #f0f0f0;">
-            <td style="padding:4px;">${l.referencia}</td>
-            <td style="padding:4px; text-align:right;">${l.cantidad}</td>
-            <td style="padding:4px;">${l.descripcion || ""}</td>
-            <td style="padding:4px;">${l.nombreTarifa || ""}</td>
-            <td style="padding:4px; text-align:right;">${
+          <tr>
+            <td>${l.referencia}</td>
+            <td class="text-right">${l.cantidad}</td>
+            <td>${l.descripcion || ""}</td>
+            <td>${l.nombreTarifa || ""}</td>
+            <td class="text-right">${
               l.pvp != null ? l.pvp.toFixed(2) + " €" : "-"
             }</td>
           </tr>
@@ -461,57 +520,59 @@ async function procesarProyectoExcel() {
 }
 
 // ======================================
-// 8) OTROS MÓDULOS (PLACEHOLDERS)
+// 9) PLACEHOLDERS PRESUPUESTO / DOC
 // ======================================
-function renderPresupuesto() {
-  clearApp();
-  const top = el("div", "topbar");
-  top.innerHTML = `
-    <div class="topbar-title">Presupuesto</div>
-    <button class="btn-logout" id="logoutBtn">Logout</button>
+function renderPresupuesto(container) {
+  const header = el("div", null);
+  header.innerHTML = `
+    <div class="page-title">Presupuesto</div>
+    <div class="page-subtitle">
+      En esta sección generaremos el presupuesto por rol (distribuidor, instalador, etc.) usando las líneas del proyecto.
+    </div>
   `;
-  top.querySelector("#logoutBtn").onclick = () => auth.signOut();
+  container.appendChild(header);
 
   const card = el("div", "card");
   card.innerHTML = `
-    <div class="card-header">Generar presupuesto</div>
-    <p>Placeholder... (usará las líneas de proyecto ya calculadas).</p>
-    <button class="btn btn-grey" onclick="renderPanel()">Volver</button>
+    <div class="card-header">Generador de presupuesto</div>
+    <p style="font-size:0.9rem;">
+      Pendiente de implementar: cálculo por rol, descuentos y exportación a PDF / Excel.
+    </p>
   `;
-
-  appRoot.appendChild(top);
-  appRoot.appendChild(card);
+  container.appendChild(card);
 }
 
-function renderDoc() {
-  clearApp();
-  const top = el("div", "topbar");
-  top.innerHTML = `
-    <div class="topbar-title">Documentación & BC3</div>
-    <button class="btn-logout" id="logoutBtn">Logout</button>
+function renderDoc(container) {
+  const header = el("div", null);
+  header.innerHTML = `
+    <div class="page-title">Documentación & BC3</div>
+    <div class="page-subtitle">
+      Aquí añadiremos memoria descriptiva, hojas técnicas, declaraciones y exportación BC3 para Presto.
+    </div>
   `;
-  top.querySelector("#logoutBtn").onclick = () => auth.signOut();
+  container.appendChild(header);
 
   const card = el("div", "card");
   card.innerHTML = `
-    <div class="card-header">Documentación</div>
-    <p>Placeholder...</p>
-    <button class="btn btn-grey" onclick="renderPanel()">Volver</button>
+    <div class="card-header">Gestor de documentación</div>
+    <p style="font-size:0.9rem;">
+      Pendiente de implementar: selección de PDFs, plantillas de memoria y generación BC3.
+    </p>
   `;
-
-  appRoot.appendChild(top);
-  appRoot.appendChild(card);
+  container.appendChild(card);
 }
 
 // ======================================
-// 9) OBSERVADOR AUTH
+// 10) OBSERVADOR AUTH
 // ======================================
 auth.onAuthStateChanged((user) => {
   if (user) {
     appState.user = { email: user.email };
-    renderPanel();
+    if (!appState.activeTab) appState.activeTab = "dashboard";
+    renderShell();
   } else {
     appState.user = null;
+    appState.activeTab = "dashboard";
     renderLogin();
   }
 });
