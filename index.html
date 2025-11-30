@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>2N · Programa Presupuestos</title>
+    <title>Presupuestos 2N</title>
 
     <!-- CSS principal -->
     <link rel="stylesheet" href="style.css" />
@@ -20,7 +20,7 @@
       <div class="login-card">
         <h2 class="login-title">Acceso</h2>
         <p class="login-subtitle">
-          Inicia sesión para acceder al programa de presupuestos 2N.
+          Inicia sesión para acceder a Presupuestos 2N.
         </p>
 
         <div class="form-group mb-2">
@@ -47,27 +47,25 @@
           style="display: none"
         ></div>
 
-        <p class="login-footer">Programa Presupuestos · 2N</p>
+        <p class="login-footer">Presupuestos 2N</p>
       </div>
     </div>
 
     <!-- =========================================================
-         APP SHELL (DESPUÉS DEL LOGIN)
+         APP (DESPUÉS DE LOGIN)
     ========================================================== -->
     <div id="appShell" class="app-shell" style="display: none">
-      <!-- ===== BARRA SUPERIOR TIPO SALESFORCE ===== -->
+      <!-- ===== BARRA SUPERIOR ===== -->
       <header class="app-topbar">
-        <!-- Título + subtítulo fijo -->
+        <!-- Título -->
         <div class="app-topbar-left">
-          <div class="app-topbar-title">Programa Presupuestos 2N</div>
+          <div class="app-topbar-title">Presupuestos 2N</div>
 
-          <div id="currentViewSubtitle" class="app-topbar-subtitle">
-            Presupuestos 2N · Uso interno. Datos orientativos, validar siempre
-            con tarifa actualizada.
-          </div>
+          <!-- Subtítulo vacío (no se usa ya) -->
+          <div id="currentViewSubtitle" class="app-topbar-subtitle"></div>
         </div>
 
-        <!-- ===== Tabs Superiores ===== -->
+        <!-- ===== Tabs ===== -->
         <nav class="app-topbar-center">
           <a
             href="#"
@@ -76,13 +74,10 @@
             id="navProyecto"
             >Proyecto</a
           >
-
           <a href="#" class="top-nav-link" data-view="presupuesto">
             Presupuesto
           </a>
-
           <a href="#" class="top-nav-link" data-view="tarifa">Tarifa 2N</a>
-
           <a href="#" class="top-nav-link" data-view="docs">Documentación</a>
         </nav>
 
@@ -95,7 +90,7 @@
         </div>
       </header>
 
-      <!-- ===== CONTENIDO CENTRAL ===== -->
+      <!-- ===== CONTENIDO ===== -->
       <main id="appContent" class="app-content"></main>
     </div>
 
@@ -103,20 +98,18 @@
          LIBRERÍAS
     ========================================================== -->
 
-    <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 
-    <!-- Excel (SheetJS) -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
     <!-- =========================================================
-         ARCHIVOS PRINCIPALES DEL PROYECTO
+         ARCHIVOS JS DEL PROYECTO
     ========================================================== -->
 
-    <!-- Firebase config -->
+    <!-- Firebase -->
     <script src="js/firebase.js"></script>
     <script src="js/firebase_tarifa.js"></script>
 
@@ -126,7 +119,7 @@
     <!-- Utilidades -->
     <script src="js/utils.js"></script>
 
-    <!-- UI Components -->
+    <!-- UI -->
     <script src="js/ui_login.js"></script>
     <script src="js/ui_shell.js"></script>
     <script src="js/ui_proyecto.js"></script>
@@ -134,10 +127,10 @@
     <script src="js/ui_tarifa.js"></script>
     <script src="js/ui_dashboard_doc.js"></script>
 
-    <!-- PDF y Excel export -->
+    <!-- Export (PDF/Excel) -->
     <script src="js/pdf_excel.js"></script>
 
-    <!-- Core app -->
+    <!-- Core -->
     <script src="app.js"></script>
     <script src="js/main.js"></script>
   </body>
