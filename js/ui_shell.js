@@ -1,115 +1,44 @@
 // js/ui_shell.js
 // Shell principal del programa de PRESUPUESTOS 2N
-// - Layout con barra superior tipo Salesforce (claro)
-// - Navegación entre "Proyecto" y "Presupuesto"
-// - Estado global appState compartido con el resto de archivos
+// NO modifica el HTML ni los estilos existentes.
+// Solo controla qué página se renderiza dentro del contenedor principal.
 
-// ==============================
-// ESTADO GLOBAL
-// ==============================
 if (!window.appState) {
   window.appState = {};
-}
-
-// Valores por defecto (solo si no existen)
-if (!appState.infoPresupuesto) {
-  appState.infoPresupuesto = {
-    cliente: "",
-    proyecto: "",
-    direccion: "",
-    contacto: "",
-    email: "",
-    telefono: "",
-    notas: ""
-  };
-}
-
-if (!Array.isArray(appState.lineasProyecto)) {
-  appState.lineasProyecto = [];
-}
-
-if (typeof appState.descuentoGlobal !== "number") {
-  appState.descuentoGlobal = 0;
-}
-
-if (typeof appState.aplicarIVA !== "boolean") {
-  appState.aplicarIVA = true;
-}
-
-if (!appState.tarifas) {
-  appState.tarifas = {}; // cache en memoria si en algún momento se cargan tarifas
 }
 
 if (!appState.currentPage) {
   appState.currentPage = "proyecto";
 }
 
-// ==============================
-// INICIALIZAR SHELL
-// ==============================
-function initShell() {
-  const appEl = document.getElementById("app");
-  if (!appEl) {
-    console.error("[Shell] No se encontró el elemento raíz con id='app'");
-    return;
-  }
-
-  // Layout general: barra superior + contenido
-  appEl.innerHTML = `
-    <div class="shell-root">
-      <header class="shell-topbar">
-        <div class="shell-topbar-left">
-          <div class="shell-logo-mark">2N</div>
-          <div class="shell-logo-text">
-            <div class="shell-logo-title">Presupuestos 2N</div>
-            <div class="shell-logo-subtitle">Project Designer · Oferta al cliente</div>
-          </div>
-        </div>
-        <nav class="shell-topbar-nav">
-          <button class="nav-item" data-page="proyecto">Proyecto</button>
-          <button class="nav-item" data-page="presupuesto">Presupuesto</button>
-        </nav>
-        <div class="shell-topbar-right">
-          <span class="shell-badge">Modo local · Sincronización mínima</span>
-        </div>
-      </header>
-
-      <main class="shell-main">
-        <div id="mainContent"></div>
-      </main>
-    </div>
-  `;
-
-  // Eventos de navegación
-  document.querySelectorAll(".nav-item[data-page]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const page = btn.dataset.page;
-      renderShellContent(page);
-    });
-  });
-
-  // Página inicial
-  renderShellContent(appState.currentPage || "proyecto");
+// Intenta encontrar el contenedor principal de contenido
+function getMainContentEl() {
+  return (
+    document.getElementById("mainContent") ||
+    document.getElementById("content") ||
+    document.getElementById("appContent") ||
+    document.getElementById("app") // último recurso
+  );
 }
 
-// ==============================
-// RENDER CONTENIDO SEGÚN PÁGINA
-// ==============================
+// Marca la pestaña activa en la navegación, si existe
+function markActiveNav(page) {
+  document.querySelectorAll("[data-page]").forEach((btn) => {
+    btn.classList.toggle("nav-item-active", btn.dataset.page === page);
+  });
+}
+
+// Función central para cambiar de página
 function renderShellContent(page) {
-  const contentEl = document.getElementById("mainContent");
+  const contentEl = getMainContentEl();
   if (!contentEl) {
-    console.error("[Shell] No se encontró #mainContent");
+    console.error("[Shell] No se encontró contenedor para el contenido (mainContent/content/appContent/app)");
     return;
   }
 
   appState.currentPage = page;
+  markActiveNav(page);
 
-  // Marcar active en la barra superior
-  document.querySelectorAll(".nav-item[data-page]").forEach((btn) => {
-    btn.classList.toggle("nav-item-active", btn.dataset.page === page);
-  });
-
-  // Render según página
   if (page === "proyecto") {
     if (typeof renderProyecto === "function") {
       renderProyecto(contentEl);
@@ -134,9 +63,20 @@ function renderShellContent(page) {
   }
 }
 
-// ==============================
-// AUTO-INIT AL CARGAR LA PÁGINA
-// ==============================
+// Inicializa los listeners de navegación sin tocar el HTML
+function initShell() {
+  // Asignar eventos a los botones de menú que ya tengas en el HTML
+  document.querySelectorAll("[data-page]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const page = btn.dataset.page;
+      renderShellContent(page);
+    });
+  });
+
+  // Primera carga
+  renderShellContent(appState.currentPage || "proyecto");
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   initShell();
 });
