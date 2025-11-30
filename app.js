@@ -19,16 +19,23 @@ const googleProvider = new firebase.auth.GoogleAuthProvider();
 
 const TARIFA_CACHE_KEY = "tarifa_2n_v1";
 
+// ======================================
+// ESTADO GLOBAL
+// ======================================
 const appState = {
   user: null,
   loginError: "",
   tarifas: null,
   lineasProyecto: [],
-  activeTab: "dashboard"
+  activeTab: "dashboard",
+  rol: "pvp",             // Default sin márgenes
+  descuentoGlobal: 0,
+  aplicarIVA: false
 };
 
 const appRoot = document.getElementById("app");
 
+// Helpers UI
 function clearApp() {
   appRoot.innerHTML = "";
 }
@@ -48,19 +55,13 @@ function renderLogin() {
   const box = el("div", "login-container");
   const title = el("div", "login-title", "Acceso 2N Presupuestos");
 
-  const content = el(
-    "div",
-    null,
-    `
-      <p style="font-size:0.9rem; margin-bottom:16px; text-align:center;">
-        Inicia sesión con tu cuenta de Google 2N para generar presupuestos.
-      </p>
-    `
-  );
+  const content = el("div", null, `
+    <p style="font-size:0.9rem; margin-bottom:16px; text-align:center;">
+      Inicia sesión con tu cuenta de Google 2N para generar presupuestos.
+    </p>
+  `);
 
-  const err = el(
-    "div",
-    null,
+  const err = el("div", null,
     appState.loginError
       ? `<p style="color:#e74c3c; font-size:0.85rem; text-align:center;">${appState.loginError}</p>`
       : ""
@@ -97,7 +98,6 @@ function setActiveTab(tab) {
 
 function renderShell() {
   clearApp();
-
   const shell = el("div", "app-shell");
   const nav = el("div", "main-nav");
 
@@ -129,7 +129,6 @@ function renderShell() {
     <span>${appState.user?.email || ""}</span>
     <button class="btn-logout" id="btnLogout">Salir</button>
   `;
-
   nav.appendChild(navLeft);
   nav.appendChild(navRight);
 
@@ -152,8 +151,8 @@ function renderActiveView() {
   if (appState.activeTab === "dashboard") renderDashboard(c);
   else if (appState.activeTab === "proyecto") renderProyecto(c);
   else if (appState.activeTab === "presupuesto") renderPresupuesto(c);
-  else if (appState.activeTab === "doc") renderDoc(c);
   else if (appState.activeTab === "tarifa") renderTarifas(c);
+  else if (appState.activeTab === "doc") renderDoc(c);
 }
 
 // ======================================
@@ -167,7 +166,7 @@ function renderDashboard(container) {
 }
 
 // ======================================
-// UTILIDAD
+// UTILIDADES
 // ======================================
 async function loadTarifasOnce() {
   if (appState.tarifas) return appState.tarifas;
@@ -260,15 +259,10 @@ async function procesarTarifaExcel() {
       defval: ""
     });
 
-    if (!rows.length) {
-      out.innerHTML = `<span style="color:red;">Tarifa vacía.</span>`;
-      return;
-    }
-
     const keys = Object.keys(rows[0]);
 
     const skuKey = findHeaderKey(keys, [/sku/i]);
-    const nombreKey = findHeaderKey(keys, [/nombre/i, /name/i]);
+    const nombreKey = findHeaderKey(keys, [/nombre/i]);
     const msrpKey = findHeaderKey(keys, [/msrp/i, /pvp/i]);
 
     const productos = {};
@@ -365,36 +359,144 @@ async function procesarProyectoExcel() {
       lineas.push({
         referencia: ref,
         cantidad: qty,
+        nombreTarifa: tarifa ? tarifa.nombre : "",
         pvp: tarifa ? tarifa.pvp : null
       });
     });
 
     appState.lineasProyecto = lineas;
 
-    let html = `
+    out.innerHTML = `
       <p>
         <strong>${lineas.length}</strong> líneas procesadas<br>
         Con tarifa: <strong>${conTarifa}</strong><br>
         Sin tarifa: <strong>${sinTarifa}</strong>
       </p>
     `;
-
-    out.innerHTML = html;
   };
 
   reader.readAsArrayBuffer(file);
 }
 
 // ======================================
-// PRESUPUESTO / DOC (placeholders)
+// PRESUPUESTO (MÓDULO COMPLETO)
 // ======================================
 function renderPresupuesto(container) {
   container.innerHTML = `
     <div class="page-title">Presupuesto</div>
-    <p>Pendiente de implementar.</p>
+    <div class="page-subtitle">Generador profesional basado en PVP.</div>
+
+    <div class="card">
+      <div class="card-header">Opciones</div>
+
+      <label>Rol:</label>
+      <select id="rolSelect" class="input">
+        <option value="pvp">PVP (sin márgenes)</option>
+        <option value="distribuidor">Distribuidor</option>
+        <option value="subdistribuidor">Subdistribuidor</option>
+        <option value="integrador">Integrador</option>
+        <option value="promotora">Promotora / constructora</option>
+      </select>
+
+      <label style="margin-top:12px;">Descuento global (%):</label>
+      <input type="number" id="descuentoGlobal" class="input" value="${appState.descuentoGlobal}" />
+
+      <label style="margin-top:12px;">
+        <input type="checkbox" id="aplicarIVA" ${appState.aplicarIVA ? "checked" : ""}/>
+        Aplicar IVA (21%)
+      </label>
+
+      <button class="btn btn-blue" style="margin-top:16px;" id="btnRecalcular">Recalcular</button>
+    </div>
+
+    <div class="card" style="margin-top:20px;">
+      <div class="card-header">Líneas del presupuesto</div>
+      <div id="tablaPresupuesto"></div>
+    </div>
+
+    <div class="card" style="margin-top:20px;">
+      <div class="card-header">Totales</div>
+      <div id="totalesPresupuesto"></div>
+    </div>
+  `;
+
+  document.getElementById("btnRecalcular").onclick = () => {
+    appState.rol = document.getElementById("rolSelect").value;
+    appState.descuentoGlobal = Number(document.getElementById("descuentoGlobal").value || 0);
+    appState.aplicarIVA = document.getElementById("aplicarIVA").checked;
+    recalcularPresupuesto();
+  };
+
+  recalcularPresupuesto();
+}
+
+function recalcularPresupuesto() {
+  const contTabla = document.getElementById("tablaPresupuesto");
+  const contTotales = document.getElementById("totalesPresupuesto");
+
+  if (!appState.lineasProyecto.length) {
+    contTabla.innerHTML = `<p style="color:#666;">No hay líneas importadas.</p>`;
+    contTotales.innerHTML = "";
+    return;
+  }
+
+  let html = `
+    <table class="table-simple">
+      <thead>
+        <tr>
+          <th>Referencia</th>
+          <th>Descripción</th>
+          <th class="text-right">Cant.</th>
+          <th class="text-right">PVP</th>
+          <th class="text-right">Total línea</th>
+        </tr>
+      </thead>
+      <tbody>
+  `;
+
+  let subtotal = 0;
+
+  appState.lineasProyecto.forEach(l => {
+    const pvp = Number(l.pvp || 0);
+    const totalLinea = l.cantidad * pvp;
+    subtotal += totalLinea;
+
+    html += `
+      <tr>
+        <td>${l.referencia}</td>
+        <td>${l.nombreTarifa || ""}</td>
+        <td class="text-right">${l.cantidad}</td>
+        <td class="text-right">${pvp.toFixed(2)} €</td>
+        <td class="text-right">${totalLinea.toFixed(2)} €</td>
+      </tr>
+    `;
+  });
+
+  html += `</tbody></table>`;
+  contTabla.innerHTML = html;
+
+  // DESCUENTO
+  const descuentoEur = subtotal * (appState.descuentoGlobal / 100);
+  const baseImponible = subtotal - descuentoEur;
+
+  // IVA opcional
+  let iva = 0;
+  if (appState.aplicarIVA) iva = baseImponible * 0.21;
+
+  const totalFinal = baseImponible + iva;
+
+  contTotales.innerHTML = `
+    <p>Subtotal: <strong>${subtotal.toFixed(2)} €</strong></p>
+    <p>Descuento (${appState.descuentoGlobal}%): <strong>-${descuentoEur.toFixed(2)} €</strong></p>
+    <p>Base imponible: <strong>${baseImponible.toFixed(2)} €</strong></p>
+    <p>IVA (21%): <strong>${iva.toFixed(2)} €</strong></p>
+    <p style="font-size:1.1rem; margin-top:10px;">TOTAL: <strong>${totalFinal.toFixed(2)} €</strong></p>
   `;
 }
 
+// ======================================
+// DOCUMENTACIÓN
+// ======================================
 function renderDoc(container) {
   container.innerHTML = `
     <div class="page-title">Documentación</div>
