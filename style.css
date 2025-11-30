@@ -1,140 +1,271 @@
 * {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-    font-family: "Inter", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
 }
 
 body {
-    background: #f4f6f9;
-    color: #2f2f2f;
+  background: #f4f6f9;
+  color: #2f2f2f;
 }
 
 #app {
-    width: 100%;
-    min-height: 100vh;
-    padding: 20px;
+  width: 100%;
+  min-height: 100vh;
 }
 
-.topbar {
-    width: 100%;
-    background: #ffffff;
-    border-bottom: 1px solid #dcdfe3;
-    padding: 12px 20px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.topbar-title {
-    font-size: 1.4rem;
-    font-weight: 600;
-    color: #1b3a57;
-}
-
-.btn-logout {
-    background: #e74c3c;
-    color: white;
-    border: none;
-    padding: 8px 14px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 0.9rem;
-}
-.btn-logout:hover {
-    background: #c0392b;
-}
-
-.card {
-    background: #ffffff;
-    border-radius: 8px;
-    border: 1px solid #dfe3e8;
-    padding: 20px;
-    margin-bottom: 20px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.06);
-}
-
-.card-header {
-    font-size: 1.1rem;
-    font-weight: 600;
-    color: #2d4f6c;
-    margin-bottom: 14px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-label {
-    font-weight: 500;
-    color: #4a4a4a;
-    margin-bottom: 4px;
-    display: block;
-    font-size: 0.9rem;
-}
-
-input {
-    width: 100%;
-    padding: 10px 12px;
-    border-radius: 6px;
-    border: 1px solid #ced4da;
-    font-size: 0.9rem;
-    background: #ffffff;
-}
-input:focus {
-    border-color: #3f8efc;
-    outline: none;
-    box-shadow: 0 0 0 2px rgba(63,142,252,0.2);
-}
-
-.btn {
-    padding: 10px 16px;
-    border-radius: 6px;
-    border: none;
-    cursor: pointer;
-    font-size: 0.9rem;
-    font-weight: 500;
-    transition: 0.2s;
-}
-
-.btn-blue {
-    background: #3f8efc;
-    color: white;
-}
-.btn-blue:hover {
-    background: #1f78f0;
-}
-
-.btn-grey {
-    background: #eceff3;
-    color: #333;
-}
-.btn-grey:hover {
-    background: #dfe3e8;
-}
-
-.grid {
-    display: grid;
-    gap: 16px;
-}
-
-.grid-2 {
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-}
+/* =====================
+   LOGIN
+   ===================== */
 
 .login-container {
-    max-width: 380px;
-    margin: 80px auto;
-    padding: 30px;
-    background: white;
-    border: 1px solid #dfe3e8;
-    border-radius: 8px;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+  max-width: 420px;
+  margin: 80px auto;
+  padding: 32px 28px;
+  background: #ffffff;
+  border-radius: 14px;
+  border: 1px solid #dde2eb;
+  box-shadow: 0 14px 45px rgba(15, 23, 42, 0.12);
 }
 
 .login-title {
-    text-align: center;
-    font-size: 1.4rem;
-    margin-bottom: 20px;
-    font-weight: 600;
-    color: #1b3a57;
+  text-align: center;
+  font-size: 1.5rem;
+  margin-bottom: 18px;
+  font-weight: 700;
+  color: #18243a;
+}
+
+.btn {
+  padding: 10px 16px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 500;
+  transition: 0.18s ease;
+}
+
+.btn-blue {
+  background: #4678ff;
+  color: #ffffff;
+}
+.btn-blue:hover {
+  background: #335ee0;
+}
+
+.btn-grey {
+  background: #eceff3;
+  color: #333;
+}
+.btn-grey:hover {
+  background: #dde2ea;
+}
+
+/* =====================
+   LAYOUT TIPO CRM
+   ===================== */
+
+.app-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* barra superior tipo CRM */
+.main-nav {
+  background: #ffffff;
+  border-bottom: 1px solid #dde2eb;
+  padding: 10px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.nav-left {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+}
+
+.nav-brand {
+  font-weight: 700;
+  font-size: 1.25rem;
+  color: #25427a;
+}
+
+.nav-tabs {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+
+.nav-tab {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #495365;
+  padding-bottom: 6px;
+  cursor: pointer;
+  position: relative;
+}
+
+.nav-tab.active {
+  color: #2554ff;
+}
+
+.nav-tab.active::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -4px;
+  width: 100%;
+  height: 3px;
+  border-radius: 999px;
+  background: #2554ff;
+}
+
+.nav-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+
+.btn-logout {
+  background: #ef4444;
+  color: #ffffff;
+  border: none;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.btn-logout:hover {
+  background: #dc2626;
+}
+
+/* contenido principal */
+.main-content {
+  flex: 1;
+  padding: 22px 32px 32px;
+}
+
+/* =====================
+   TARJETAS Y TABLAS
+   ===================== */
+
+.card {
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid #dde2eb;
+  padding: 18px 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+}
+
+.card-header {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.page-title {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #111827;
+  margin-bottom: 4px;
+}
+
+.page-subtitle {
+  font-size: 0.92rem;
+  color: #6b7280;
+  margin-bottom: 16px;
+}
+
+label {
+  font-weight: 500;
+  color: #4b5563;
+  margin-bottom: 4px;
+  display: block;
+  font-size: 0.9rem;
+}
+
+input[type="file"],
+input[type="text"],
+input[type="number"],
+input[type="email"],
+input[type="password"] {
+  width: 100%;
+  padding: 9px 11px;
+  border-radius: 8px;
+  border: 1px solid #cbd2e1;
+  font-size: 0.9rem;
+  background: #f9fafb;
+}
+
+input:focus {
+  border-color: #4678ff;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(70, 120, 255, 0.15);
+}
+
+.grid {
+  display: grid;
+  gap: 16px;
+}
+
+.grid-2 {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+/* tabla vista rápida proyecto */
+
+.table-wrapper {
+  margin-top: 14px;
+  max-height: 260px;
+  overflow: auto;
+}
+
+.table-simple {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.table-simple th,
+.table-simple td {
+  padding: 4px 6px;
+}
+
+.table-simple thead tr {
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.table-simple tbody tr {
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.table-simple tbody tr:nth-child(even) {
+  background: #f9fafb;
+}
+
+.text-right {
+  text-align: right;
+}
+
+.badge-soft {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  background: #e0ecff;
+  color: #1d4ed8;
 }
