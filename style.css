@@ -187,6 +187,16 @@ body {
   gap: 0.5rem;
 }
 
+/* Layout específico proyecto */
+
+.proyecto-layout {
+  max-width: 820px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
 /* ===========================
    TARJETAS (cards)
    =========================== */
@@ -273,6 +283,7 @@ input[type="text"],
 input[type="number"],
 input[type="email"],
 input[type="date"],
+input[type="file"],
 select,
 textarea {
   border-radius: 0.5rem;
@@ -391,12 +402,6 @@ textarea {
 
 .table tbody tr:hover {
   background: #f4f6ff;
-}
-
-/* Checkbox en tabla */
-
-.table input[type="checkbox"] {
-  transform: scale(1.02);
 }
 
 /* ===========================
