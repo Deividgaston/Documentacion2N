@@ -1,301 +1,299 @@
 // js/ui_presupuesto.js
-// Página PRESUPUESTO – cabecera, opciones, líneas, totales
+// Pantalla de presupuesto + cálculo
 
-function renderPresupuesto(root) {
-  // asegurar tarifas cargadas para todas las refs actuales
-  const refs = [...new Set((appState.lineasProyecto || []).map(l => l.ref).filter(Boolean))];
-  if (refs.length && window.loadTarifasForRefs) {
-    // no await para no bloquear UI: se recalcualará al siguiente render
-    loadTarifasForRefs(refs).then(() => {
-      recalcularPresupuestoCore();
-      pintarPresupuesto(root);
-    });
-  }
+function renderPresupuesto(container) {
+  container.innerHTML = `
+    <div class="page-header-row">
+      <div>
+        <div class="page-title">Presupuesto</div>
+        <div class="page-subtitle">
+          Generador de presupuesto basado en PVP, descuento global e IVA opcional.
+        </div>
+      </div>
+      <div id="summaryChip" class="summary-chip hidden"></div>
+    </div>
 
-  recalcularPresupuestoCore();
-  pintarPresupuesto(root);
-}
-
-function pintarPresupuesto(root) {
-  const cab = appState.presupuestoCabecera;
-  const opt = appState.presupuestoOpciones;
-  const tot = appState.presupuestoTotales;
-  const lineas = appState.lineasProyecto || [];
-
-  root.innerHTML = `
-    <h2 class="page-title">Presupuesto</h2>
-    <p class="page-subtitle">
-      Generador de presupuesto basado en PVP, descuento global e IVA opcional.
-    </p>
-
-    <div class="presupuesto-grid">
-      <div class="presupuesto-col-left">
+    <div class="layout-presupuesto">
+      <!-- COLUMNA IZQUIERDA: DATOS PRESUPUESTO -->
+      <div class="col-left">
         <div class="card">
-          <h3>Datos del presupuesto</h3>
+          <div class="card-section-title">Datos del cliente / proyecto</div>
 
-          <div class="mt-2">
-            <label>Cliente</label>
-            <input id="cab_cliente" type="text" value="${cab.cliente || ""}">
-          </div>
-          <div class="mt-2">
-            <label>Proyecto / Obra</label>
-            <input id="cab_proyecto" type="text" value="${cab.proyecto || ""}">
-          </div>
-          <div class="mt-2">
-            <label>Dirección</label>
-            <input id="cab_direccion" type="text" value="${cab.direccion || ""}">
-          </div>
-          <div class="mt-2">
-            <label>Persona de contacto</label>
-            <input id="cab_contacto" type="text" value="${cab.contacto || ""}">
-          </div>
-          <div class="mt-2">
-            <label>Email</label>
-            <input id="cab_email" type="text" value="${cab.email || ""}">
-          </div>
-          <div class="mt-2">
-            <label>Teléfono</label>
-            <input id="cab_telefono" type="text" value="${cab.telefono || ""}">
-          </div>
-          <div class="mt-2">
-            <label>Notas adicionales</label>
-            <textarea id="cab_notas" rows="3">${cab.notas || ""}</textarea>
+          <div class="grid-2-equal" style="margin-bottom:10px;">
+            <div>
+              <div class="field-label">Cliente</div>
+              <input type="text" id="p_cliente" class="input" value="${appState.infoPresupuesto.cliente}">
+            </div>
+            <div>
+              <div class="field-label">Proyecto</div>
+              <input type="text" id="p_proyecto" class="input" value="${appState.infoPresupuesto.proyecto}">
+            </div>
           </div>
 
-          <button id="btnGuardarCabecera" class="btn-primary mt-3">Guardar cabecera</button>
+          <div class="grid-2-equal" style="margin-bottom:10px;">
+            <div>
+              <div class="field-label">Dirección</div>
+              <input type="text" id="p_direccion" class="input" value="${appState.infoPresupuesto.direccion}">
+            </div>
+            <div>
+              <div class="field-label">Contacto</div>
+              <input type="text" id="p_contacto" class="input" value="${appState.infoPresupuesto.contacto}">
+            </div>
+          </div>
+
+          <div class="grid-2-equal" style="margin-bottom:10px;">
+            <div>
+              <div class="field-label">Email</div>
+              <input type="text" id="p_email" class="input" value="${appState.infoPresupuesto.email}">
+            </div>
+            <div>
+              <div class="field-label">Teléfono</div>
+              <input type="text" id="p_telefono" class="input" value="${appState.infoPresupuesto.telefono}">
+            </div>
+          </div>
+
+          <div style="margin-top:8px;">
+            <div class="field-label">Notas adicionales</div>
+            <textarea id="p_notas" class="input textarea-notas">${appState.infoPresupuesto.notas}</textarea>
+          </div>
+
+          <button class="btn btn-blue btn-full" style="margin-top:12px;" id="btnGuardarDatos">
+            Guardar datos
+          </button>
         </div>
 
-        <div class="card mt-3">
-          <h3>Opciones de cálculo</h3>
-          <div class="mt-2">
-            <label>Descuento global (%)</label>
-            <input id="opt_descuento" type="number" min="0" max="100" step="0.01"
-              value="${opt.descuentoGlobal}">
-          </div>
-          <div class="mt-2">
-            <label>
-              <input id="opt_iva" type="checkbox" ${opt.aplicarIVA ? "checked" : ""}>
+        <div class="card card-soft">
+          <div class="card-section-title">Opciones de cálculo</div>
+
+          <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px;">
+            <div style="flex:1;">
+              <div class="field-label">Descuento global (%)</div>
+              <input type="number" id="p_descuentoGlobal" class="input" value="${appState.descuentoGlobal}">
+            </div>
+            <label style="display:flex; align-items:center; gap:6px; margin-top:18px; font-size:0.8rem;">
+              <input type="checkbox" id="p_aplicarIVA" ${appState.aplicarIVA ? "checked" : ""} />
               Aplicar IVA (21%)
             </label>
           </div>
 
-          <div class="mt-3">
-            <div>Subtotal: ${formatoEUR(tot.subtotal)}</div>
-            <div>Descuento: ${formatoEUR(tot.descuento)}</div>
-            <div>Base imponible: ${formatoEUR(tot.base)}</div>
-            <div>IVA: ${formatoEUR(tot.iva)}</div>
-            <div><strong>Total: ${formatoEUR(tot.total)}</strong></div>
-          </div>
+          <div class="totales-box" id="totalesBox"></div>
 
-          <div class="mt-3">
-            <button id="btnRecalcular" class="btn-secondary">Recalcular</button>
-            <button id="btnExportarPDF" class="btn-secondary">Exportar PDF</button>
-            <button id="btnExportarExcel" class="btn-secondary">Exportar Excel</button>
+          <div style="display:flex; gap:8px; margin-top:12px;">
+            <button class="btn btn-outline btn-sm" id="btnRecalcular">Recalcular</button>
+            <button class="btn btn-outline btn-sm" id="btnPDF">Exportar PDF</button>
+            <button class="btn btn-outline btn-sm" id="btnExcel">Exportar Excel</button>
           </div>
         </div>
       </div>
 
-      <div class="presupuesto-col-right">
-        <div class="card">
-          <div style="display:flex;justify-content:space-between;align-items:center;">
-            <div>
-              <h3>Líneas del presupuesto</h3>
-              <p class="page-subtitle" style="margin-bottom:0;">
-                ${lineas.length} líneas cargadas desde el proyecto
-              </p>
+      <!-- COLUMNA DERECHA: TABLA LÍNEAS -->
+      <div class="col-right">
+        <div class="table-wrapper">
+          <div class="table-header-actions">
+            <div class="table-header-title">
+              Líneas del presupuesto
+              <span class="badge-light" id="linesInfo"></span>
             </div>
-            <div style="display:flex;gap:8px;align-items:center;">
-              <input id="filtroRef" type="text" placeholder="Filtrar ref..." style="width:150px;">
-              <button id="btnAddSeccion" class="btn-secondary">Añadir sección</button>
-              <button id="btnAddLinea" class="btn-secondary">Añadir línea</button>
+            <div class="table-actions">
+              <label>
+                Filtro ref:
+                <input type="text" id="filtroRef" class="input" style="width:140px; padding:4px 8px; font-size:0.75rem;">
+              </label>
             </div>
           </div>
 
-          <div class="mt-3" style="overflow-x:auto;">
-            ${renderTablaLineas(lineas)}
-          </div>
+          <table class="table">
+            <thead>
+              <tr>
+                <th class="col-check">OK</th>
+                <th class="col-ref">Ref.</th>
+                <th>Descripción</th>
+                <th>Ud.</th>
+                <th>PVP</th>
+                <th>Importe</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyPresupuesto"></tbody>
+          </table>
         </div>
       </div>
     </div>
   `;
 
-  enlazarEventosPresupuesto();
-}
-
-function renderTablaLineas(lineas) {
-  if (!lineas.length) {
-    return `<p>No hay líneas cargadas. Importa un proyecto desde la pestaña Proyecto.</p>`;
+  // Si no hay líneas, simple aviso
+  if (!appState.lineasProyecto || !appState.lineasProyecto.length) {
+    const tbody = document.getElementById("tbodyPresupuesto");
+    if (tbody) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="6" style="font-size:0.85rem; color:#6b7280; padding:10px;">
+            No hay líneas de proyecto cargadas. Importa primero un Excel en la pestaña <strong>Proyecto</strong>.
+          </td>
+        </tr>
+      `;
+    }
+  } else {
+    rebuildPresupuestoTable();
   }
 
-  let html = `
-    <table class="table-presupuesto">
-      <thead>
-        <tr>
-          <th>OK</th>
-          <th>Sección</th>
-          <th>Ref.</th>
-          <th>Descripción</th>
-          <th class="text-right">Ud.</th>
-          <th class="text-right">PVP</th>
-          <th class="text-right">Importe</th>
-        </tr>
-      </thead>
-      <tbody>
-  `;
+  // Eventos datos cabecera
+  document.getElementById("btnGuardarDatos").onclick = () => {
+    appState.infoPresupuesto.cliente = document.getElementById("p_cliente").value.trim();
+    appState.infoPresupuesto.proyecto = document.getElementById("p_proyecto").value.trim();
+    appState.infoPresupuesto.direccion = document.getElementById("p_direccion").value.trim();
+    appState.infoPresupuesto.contacto = document.getElementById("p_contacto").value.trim();
+    appState.infoPresupuesto.email = document.getElementById("p_email").value.trim();
+    appState.infoPresupuesto.telefono = document.getElementById("p_telefono").value.trim();
+    appState.infoPresupuesto.notas = document.getElementById("p_notas").value;
+  };
 
-  lineas.forEach((l, idx) => {
-    html += `
-      <tr class="fila-presupuesto" data-index="${idx}" data-ref="${l.ref || ""}">
-        <td><input type="checkbox" class="ln_ok" ${l.ok !== false ? "checked" : ""}></td>
-        <td><input type="text" class="ln_seccion" value="${l.seccion || ""}" style="width:140px;"></td>
-        <td><input type="text" class="ln_ref" value="${l.ref || ""}" style="width:90px;"></td>
-        <td><input type="text" class="ln_desc" value="${l.descripcion || ""}" style="width:100%;"></td>
-        <td class="text-right"><input type="number" class="ln_cant" min="0" step="1"
-          value="${l.cantidad || 1}" style="width:60px;text-align:right;"></td>
-        <td class="text-right"><input type="number" class="ln_pvp" step="0.01"
-          value="${l.pvp || 0}" style="width:80px;text-align:right;"></td>
-        <td class="text-right">${formatoEUR(l.importe || 0)}</td>
-      </tr>
-    `;
+  const inDesc = document.getElementById("p_descuentoGlobal");
+  const cbIVA = document.getElementById("p_aplicarIVA");
+
+  inDesc.onchange = () => {
+    appState.descuentoGlobal = toNum(inDesc.value);
+    recalcularPresupuesto();
+  };
+
+  cbIVA.onchange = () => {
+    appState.aplicarIVA = cbIVA.checked;
+    recalcularPresupuesto();
+  };
+
+  document.getElementById("btnRecalcular").onclick = () => recalcularPresupuesto();
+  document.getElementById("btnPDF").onclick = () => generarPDF();
+  document.getElementById("btnExcel").onclick = () => generarExcel();
+
+  const filtroRef = document.getElementById("filtroRef");
+  filtroRef.oninput = () => {
+    rebuildPresupuestoTable(filtroRef.value.trim().toLowerCase());
+  };
+
+  recalcularPresupuesto();
+}
+
+function rebuildPresupuestoTable(filtroRefTexto) {
+  const tbody = document.getElementById("tbodyPresupuesto");
+  if (!tbody) return;
+
+  const lines = appState.lineasProyecto || [];
+  const filtro = (filtroRefTexto || "").toLowerCase();
+
+  tbody.innerHTML = "";
+
+  lines.forEach((linea, idx) => {
+    if (filtro && !linea.ref.toLowerCase().includes(filtro)) return;
+
+    const tr = document.createElement("tr");
+
+    const tdCheck = document.createElement("td");
+    tdCheck.className = "col-check";
+    const chk = document.createElement("input");
+    chk.type = "checkbox";
+    chk.checked = linea.incluir !== false;
+    chk.onchange = () => {
+      linea.incluir = chk.checked;
+      recalcularPresupuesto();
+    };
+    tdCheck.appendChild(chk);
+
+    const tdRef = document.createElement("td");
+    tdRef.className = "col-ref";
+    tdRef.textContent = linea.ref;
+
+    const tdDesc = document.createElement("td");
+    tdDesc.textContent = linea.descripcion || "";
+
+    const tdUd = document.createElement("td");
+    const inputUd = document.createElement("input");
+    inputUd.type = "number";
+    inputUd.min = "0";
+    inputUd.step = "1";
+    inputUd.value = linea.cantidad;
+    inputUd.onchange = () => {
+      linea.cantidad = toNum(inputUd.value);
+      recalcularPresupuesto();
+      // actualizar subtotal fila
+      tdImporte.textContent = formatCurrency(
+        (Number(linea.cantidad) || 0) * (Number(linea.pvp) || 0)
+      );
+    };
+    tdUd.appendChild(inputUd);
+
+    const tdPvp = document.createElement("td");
+    tdPvp.textContent = formatCurrency(linea.pvp);
+
+    const tdImporte = document.createElement("td");
+    tdImporte.textContent = formatCurrency(
+      (Number(linea.cantidad) || 0) * (Number(linea.pvp) || 0)
+    );
+
+    tr.appendChild(tdCheck);
+    tr.appendChild(tdRef);
+    tr.appendChild(tdDesc);
+    tr.appendChild(tdUd);
+    tr.appendChild(tdPvp);
+    tr.appendChild(tdImporte);
+
+    tbody.appendChild(tr);
   });
 
-  html += `</tbody></table>`;
-  return html;
+  const linesInfo = document.getElementById("linesInfo");
+  if (linesInfo) {
+    linesInfo.textContent = `${appState.lineasProyecto.length} líneas cargadas desde el proyecto`;
+  }
 }
 
-function enlazarEventosPresupuesto() {
-  // Cabecera
-  document.getElementById("btnGuardarCabecera").onclick = () => {
-    const cab = appState.presupuestoCabecera;
-    cab.cliente = document.getElementById("cab_cliente").value.trim();
-    cab.proyecto = document.getElementById("cab_proyecto").value.trim();
-    cab.direccion = document.getElementById("cab_direccion").value.trim();
-    cab.contacto = document.getElementById("cab_contacto").value.trim();
-    cab.email = document.getElementById("cab_email").value.trim();
-    cab.telefono = document.getElementById("cab_telefono").value.trim();
-    cab.notas = document.getElementById("cab_notas").value.trim();
-    alert("Cabecera guardada (en memoria de la app).");
-  };
-
-  // Opciones
-  document.getElementById("btnRecalcular").onclick = () => {
-    leerOpcionesDesdeUI();
-    renderPresupuesto(document.getElementById("shellContent"));
-  };
-  document.getElementById("opt_descuento").onchange =
-    document.getElementById("opt_iva").onchange =
-      () => {
-        leerOpcionesDesdeUI();
-        renderPresupuesto(document.getElementById("shellContent"));
-      };
-
-  // Export
-  document.getElementById("btnExportarPDF").onclick = () => {
-    if (window.exportarPresupuestoPDF) exportarPresupuestoPDF();
-    else alert("Función PDF aún no implementada.");
-  };
-  document.getElementById("btnExportarExcel").onclick = () => {
-    if (window.exportarPresupuestoExcel) exportarPresupuestoExcel();
-    else alert("Función Excel aún no implementada.");
-  };
-
-  // Filtro
-  const filtro = document.getElementById("filtroRef");
-  filtro.oninput = () => {
-    const val = filtro.value.trim().toLowerCase();
-    document.querySelectorAll(".fila-presupuesto").forEach(tr => {
-      const ref = (tr.getAttribute("data-ref") || "").toLowerCase();
-      tr.style.display = !val || ref.includes(val) ? "" : "none";
-    });
-  };
-
-  // Añadir sección / línea
-  document.getElementById("btnAddSeccion").onclick = () => {
-    const titulo = prompt("Título de la nueva sección:");
-    if (!titulo) return;
-    appState.lineasProyecto.push({
-      ref: "",
-      descripcion: "",
-      seccion: titulo.toUpperCase(),
-      cantidad: 0,
-      pvp: 0,
-      importe: 0,
-      ok: true,
-    });
-    renderPresupuesto(document.getElementById("shellContent"));
-  };
-  document.getElementById("btnAddLinea").onclick = () => {
-    appState.lineasProyecto.push({
-      ref: "",
-      descripcion: "",
-      seccion: "NUEVA SECCIÓN",
-      cantidad: 1,
-      pvp: 0,
-      importe: 0,
-      ok: true,
-    });
-    renderPresupuesto(document.getElementById("shellContent"));
-  };
-
-  // Edición de filas
-  document.querySelectorAll(".fila-presupuesto").forEach(tr => {
-    const idx = Number(tr.getAttribute("data-index"));
-    const linea = appState.lineasProyecto[idx];
-
-    const ck = tr.querySelector(".ln_ok");
-    const sec = tr.querySelector(".ln_seccion");
-    const ref = tr.querySelector(".ln_ref");
-    const desc = tr.querySelector(".ln_desc");
-    const cant = tr.querySelector(".ln_cant");
-    const pvp = tr.querySelector(".ln_pvp");
-
-    ck.onchange = () => { linea.ok = ck.checked; renderPresupuesto(document.getElementById("shellContent")); };
-    sec.onchange = () => { linea.seccion = sec.value.trim(); };
-    ref.onchange = () => { linea.ref = ref.value.trim(); renderPresupuesto(document.getElementById("shellContent")); };
-    desc.onchange = () => { linea.descripcion = desc.value.trim(); };
-    cant.onchange = () => { linea.cantidad = Number(cant.value || 1); renderPresupuesto(document.getElementById("shellContent")); };
-    pvp.onchange = () => { linea.pvp = Number(pvp.value || 0); renderPresupuesto(document.getElementById("shellContent")); };
-  });
-}
-
-function leerOpcionesDesdeUI() {
-  const opt = appState.presupuestoOpciones;
-  const d = parseFloat(document.getElementById("opt_descuento").value.replace(",", "."));
-  opt.descuentoGlobal = isNaN(d) ? 0 : d;
-  opt.aplicarIVA = document.getElementById("opt_iva").checked;
-}
-
-function recalcularPresupuestoCore() {
-  const lineas = appState.lineasProyecto || [];
-  const opt = appState.presupuestoOpciones;
-  const tot = appState.presupuestoTotales;
-
+function recalcularPresupuesto() {
+  const seleccionadas = getLineasSeleccionadas();
   let subtotal = 0;
 
-  lineas.forEach(l => {
-    if (l.ref && window.findTarifaItem) {
-      const t = findTarifaItem(l.ref);
-      if (t) {
-        if (!l.pvp || l.pvp === 0) l.pvp = t.pvp || 0;
-        if (!l.descripcion) l.descripcion = t.descripcion || l.descripcion;
-      }
-    }
-    const cant = Number(l.cantidad || 1);
-    const pvp = Number(l.pvp || 0);
-    l.importe = (l.ok !== false) ? cant * pvp : 0;
-    subtotal += l.importe;
+  seleccionadas.forEach((l) => {
+    subtotal += (Number(l.cantidad) || 0) * (Number(l.pvp) || 0);
   });
 
-  const desc = subtotal * (opt.descuentoGlobal / 100);
-  const base = subtotal - desc;
-  const iva = opt.aplicarIVA ? base * 0.21 : 0;
-  const total = base + iva;
+  const descuento = subtotal * (appState.descuentoGlobal / 100);
+  const baseImp = subtotal - descuento;
+  const iva = appState.aplicarIVA ? baseImp * 0.21 : 0;
+  const total = baseImp + iva;
 
-  tot.subtotal = subtotal;
-  tot.descuento = desc;
-  tot.base = base;
-  tot.iva = iva;
-  tot.total = total;
+  const totalesBox = document.getElementById("totalesBox");
+  if (totalesBox) {
+    totalesBox.innerHTML = `
+      <div class="totales-row">
+        <span>Subtotal</span>
+        <span>${formatCurrency(subtotal)}</span>
+      </div>
+      <div class="totales-row">
+        <span>Descuento (${appState.descuentoGlobal || 0}%)</span>
+        <span>-${formatCurrency(descuento)}</span>
+      </div>
+      <div class="totales-row">
+        <span>Base imponible</span>
+        <span>${formatCurrency(baseImp)}</span>
+      </div>
+      <div class="totales-row">
+        <span>IVA ${appState.aplicarIVA ? "21%" : "(no aplicado)"}</span>
+        <span>${formatCurrency(iva)}</span>
+      </div>
+      <div class="totales-row total">
+        <span>Total</span>
+        <span>${formatCurrency(total)}</span>
+      </div>
+    `;
+  }
+
+  const summaryChip = document.getElementById("summaryChip");
+  if (summaryChip) {
+    if (!appState.lineasProyecto.length) {
+      summaryChip.classList.add("hidden");
+    } else {
+      summaryChip.classList.remove("hidden");
+      summaryChip.innerHTML = `
+        <span>${appState.lineasProyecto.length} líneas</span>
+        <span class="dot"></span>
+        <span>Subtotal: ${subtotal.toFixed(0)} €</span>
+      `;
+    }
+  }
 }
-
-window.renderPresupuesto = renderPresupuesto;
