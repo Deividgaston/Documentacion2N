@@ -10,13 +10,15 @@
   padding: 0;
 }
 
-html, body {
+html,
+body {
   height: 100%;
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-  background: #f3f5f9; /* Fondo claro tipo Lightning */
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui,
+    sans-serif;
+  background: #f3f5f9;
   color: #1f2933;
 }
 
@@ -25,96 +27,17 @@ body {
    =========================== */
 
 .app-shell {
-  display: flex;
   min-height: 100vh;
-}
-
-/* Sidebar tipo Salesforce */
-
-.app-sidebar {
-  width: 260px;
-  background: #001b3f; /* Azul muy oscuro */
-  color: #e5ecf5;
-  display: flex;
-  flex-direction: column;
-  padding: 1rem 0.75rem;
-  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.15);
-}
-
-.app-sidebar-logo {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0 0.5rem 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  margin-bottom: 0.75rem;
-}
-
-.app-sidebar-logo img {
-  height: 32px;
-  width: 32px;
-  object-fit: contain;
-}
-
-.app-sidebar-logo span {
-  font-weight: 600;
-  font-size: 1.05rem;
-}
-
-/* Menú lateral */
-
-.app-nav-section-title {
-  text-transform: uppercase;
-  font-size: 0.7rem;
-  letter-spacing: 0.08em;
-  opacity: 0.7;
-  padding: 0.75rem 0.75rem 0.25rem;
-}
-
-.app-nav {
-  list-style: none;
-}
-
-.app-nav-item {
-  margin: 0.1rem 0;
-}
-
-.app-nav-link {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 0.55rem 0.75rem;
-  border-radius: 0.55rem;
-  font-size: 0.88rem;
-  color: #e5ecf5;
-  text-decoration: none;
-  transition: background 0.15s ease, transform 0.08s ease;
-}
-
-.app-nav-link:hover {
-  background: rgba(255, 255, 255, 0.08);
-  transform: translateY(-1px);
-}
-
-.app-nav-link.active {
-  background: #0870d1;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.15);
-}
-
-/* Contenedor principal */
-
-.app-main {
-  flex: 1;
   display: flex;
   flex-direction: column;
 }
 
 /* ===========================
-   TOPBAR
+   TOPBAR PRINCIPAL (Lightning)
    =========================== */
 
 .app-topbar {
-  height: 56px;
+  height: 64px;
   background: #ffffff;
   border-bottom: 1px solid #e2e6f0;
   display: flex;
@@ -124,6 +47,7 @@ body {
   position: sticky;
   top: 0;
   z-index: 10;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
 }
 
 .app-topbar-left {
@@ -132,17 +56,63 @@ body {
   gap: 0.75rem;
 }
 
+.app-topbar-logo {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.app-topbar-logo img {
+  height: 28px;
+  width: 28px;
+  object-fit: contain;
+}
+
 .app-topbar-title {
   font-weight: 600;
   font-size: 1.05rem;
 }
 
 .app-topbar-subtitle {
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   color: #6b7280;
 }
 
-/* usuario / logout */
+/* Navegación superior (páginas) */
+
+.app-topbar-center {
+  display: flex;
+  align-items: stretch;
+  gap: 0.25rem;
+  margin: 0 1.5rem;
+}
+
+.top-nav-link {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding: 0.35rem 0.9rem;
+  border-radius: 999px;
+  font-size: 0.86rem;
+  color: #4b5563;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.08s ease;
+}
+
+.top-nav-link:hover {
+  background: #f3f4ff;
+  color: #1d4fd8;
+  transform: translateY(-1px);
+}
+
+.top-nav-link.active {
+  background: #1d4fd8;
+  color: #ffffff;
+  box-shadow: 0 8px 18px rgba(59, 130, 246, 0.4);
+}
+
+/* Área usuario + logout */
 
 .app-topbar-right {
   display: flex;
@@ -160,7 +130,7 @@ body {
 }
 
 /* ===========================
-   CONTENIDO / GRID
+   CONTENIDO
    =========================== */
 
 .app-content {
@@ -198,7 +168,7 @@ body {
 }
 
 /* ===========================
-   TARJETAS (cards)
+   TARJETAS
    =========================== */
 
 .card {
@@ -231,7 +201,7 @@ body {
   font-size: 0.88rem;
 }
 
-/* Tarjeta de métricas / resumen */
+/* Métricas */
 
 .metric-card {
   display: flex;
@@ -292,7 +262,8 @@ textarea {
   font-size: 0.88rem;
   outline: none;
   background: #ffffff;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease,
+    background 0.15s ease;
 }
 
 input:focus,
@@ -325,7 +296,8 @@ textarea {
   cursor: pointer;
   background: #e5e7f2;
   color: #111827;
-  transition: background 0.15s ease, transform 0.08s ease, box-shadow 0.12s ease;
+  transition: background 0.15s ease, transform 0.08s ease,
+    box-shadow 0.12s ease;
 }
 
 .btn:hover {
@@ -360,12 +332,12 @@ textarea {
 /* pequeño */
 
 .btn-sm {
-  padding: 0.3rem 0.7rem;
-  font-size: 0.8rem;
+  padding: 0.28rem 0.7rem;
+  font-size: 0.78rem;
 }
 
 /* ===========================
-   TABLAS (tipo Lightning)
+   TABLAS
    =========================== */
 
 .table-wrapper {
@@ -496,25 +468,35 @@ textarea {
    UTILS
    =========================== */
 
-.mt-1 { margin-top: 0.25rem; }
-.mt-2 { margin-top: 0.5rem; }
-.mt-3 { margin-top: 0.75rem; }
-.mt-4 { margin-top: 1rem; }
+.mt-1 {
+  margin-top: 0.25rem;
+}
+.mt-2 {
+  margin-top: 0.5rem;
+}
+.mt-3 {
+  margin-top: 0.75rem;
+}
+.mt-4 {
+  margin-top: 1rem;
+}
 
-.mb-1 { margin-bottom: 0.25rem; }
-.mb-2 { margin-bottom: 0.5rem; }
-.mb-3 { margin-bottom: 0.75rem; }
-.mb-4 { margin-bottom: 1rem; }
+.mb-1 {
+  margin-bottom: 0.25rem;
+}
+.mb-2 {
+  margin-bottom: 0.5rem;
+}
+.mb-3 {
+  margin-bottom: 0.75rem;
+}
+.mb-4 {
+  margin-bottom: 1rem;
+}
 
-.text-right { text-align: right; }
-.text-center { text-align: center; }
-
-.badge-neutral {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.2rem 0.6rem;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  background: #f3f4f6;
-  color: #4b5563;
+.text-right {
+  text-align: right;
+}
+.text-center {
+  text-align: center;
 }
