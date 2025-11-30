@@ -1,114 +1,146 @@
 // js/utils.js
-// Utilidades comunes
+// Funciones auxiliares y carga optimizada de tarifas 2N
 
-function clearApp() {
-  if (appRoot) appRoot.innerHTML = "";
-}
+/* ============================================================
+   CARGA OPTIMIZADA DE TARIFAS 2N (con caché y una sola lectura)
+   ============================================================ */
 
-function el(tag, className, html) {
-  const x = document.createElement(tag);
-  if (className) x.className = className;
-  if (html !== undefined && html !== null) x.innerHTML = html;
-  return x;
-}
+let tarifasPromise = null;
 
-function toNum(v) {
-  if (v === null || v === undefined || v === "") return 0;
-  const n = Number(
-    String(v)
-      .replace(/\./g, "")
-      .replace(",", ".")
-      .trim()
-  );
-  return isNaN(n) ? 0 : n;
-}
-
-function formatCurrency(v) {
-  const n = Number(v) || 0;
-  return new Intl.NumberFormat("es-ES", {
-    style: "currency",
-    currency: "EUR",
-    minimumFractionDigits: 2
-  }).format(n);
-}
-
-function generarCodigoPresupuesto() {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const d = String(now.getDate()).padStart(2, "0");
-  const rand = String(Math.floor(Math.random() * 9999)).padStart(4, "0");
-  return `2N-${y}${m}${d}-${rand}`;
-}
-
-// ==============================
-// LECTURA DE EXCEL (utilidad)
-// ==============================
-
-function leerExcelComoMatriz(file, cb) {
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    try {
-      const data = new Uint8Array(e.target.result);
-      const wb = XLSX.read(data, { type: "array" });
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
-      cb(null, rows);
-    } catch (err) {
-      cb(err);
-    }
-  };
-  reader.onerror = (err) => cb(err);
-  reader.readAsArrayBuffer(file);
-}
-
-// ==============================
-// CARGA DE TARIFAS (mínimas lecturas)
-// ==============================
-
-async function loadTarifasOnce() {
-  // 1) Memoria
-  if (appState.tarifas) return appState.tarifas;
-
-  // 2) localStorage
-  try {
-    const cached = localStorage.getItem(TARIFA_CACHE_KEY);
-    if (cached) {
-      appState.tarifas = JSON.parse(cached) || {};
-      return appState.tarifas;
-    }
-  } catch (e) {
-    console.warn("No se pudo leer la tarifa cacheada", e);
-  }
-
-  // 3) Firestore (1 sola lectura)
-  if (!db) {
-    appState.tarifas = {};
+async function getTarifas() {
+  // 1) Si ya están cargadas en memoria → devolver
+  if (appState.tarifas && Object.keys(appState.tarifas).length > 0) {
     return appState.tarifas;
   }
 
-  try {
-    const snap = await db.collection("tarifas").doc("v1").get();
-    if (snap.exists) {
-      const data = snap.data() || {};
-      appState.tarifas = data.productos || {};
+  // 2) Si ya hay una petición en curso → reutilizar
+  if (tarifasPromise) return tarifasPromise;
+
+  // 3) Crear la promesa compartida
+  tarifasPromise = (async () => {
+    /* 3.1) Intentar cargar desde localStorage */
+    const cached = localStorage.getItem(TARIFA_CACHE_KEY);
+    if (cached) {
       try {
-        localStorage.setItem(TARIFA_CACHE_KEY, JSON.stringify(appState.tarifas));
+        const data = JSON.parse(cached);
+        if (data && typeof data === "object") {
+          appState.tarifas = data;
+          return data;
+        }
       } catch (e) {
-        console.warn("No se pudo cachear la tarifa", e);
+        console.warn("Error parseando tarifa cacheada:", e);
       }
-    } else {
-      appState.tarifas = {};
     }
-  } catch (err) {
-    console.error("Error leyendo tarifas de Firestore", err);
-    appState.tarifas = {};
+
+    /* 3.2) Si no hay cache → UNA sola lectura a Firestore */
+    try {
+      const snap = await db.collection("tarifas").doc("v1").get();
+
+      if (!snap.exists) {
+        console.warn("No existe tarifas/v1 en Firestore");
+        appState.tarifas = {};
+        return {};
+      }
+
+      const data = snap.data() || {};
+      const productos = data.productos || {};
+
+      appState.tarifas = productos;
+
+      // Guardar en caché local
+      localStorage.setItem(TARIFA_CACHE_KEY, JSON.stringify(productos));
+
+      return productos;
+    } catch (err) {
+      console.error("Error cargando tarifas:", err);
+      return {};
+    }
+  })();
+
+  try {
+    return await tarifasPromise;
+  } finally {
+    tarifasPromise = null; // liberar
+  }
+}
+
+/* ============================================================
+   UTILIDADES PARA ARCHIVOS, STRINGS, FECHAS
+   ============================================================ */
+
+// Formatear número con separadores
+function formatNumber(num, dec = 2) {
+  return Number(num || 0).toLocaleString("es-ES", {
+    minimumFractionDigits: dec,
+    maximumFractionDigits: dec,
+  });
+}
+
+// Fecha formateada
+function formatFecha(fecha = null) {
+  try {
+    return new Date(fecha || Date.now()).toLocaleDateString("es-ES", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+  } catch {
+    return "--/--/----";
+  }
+}
+
+// Descargar archivo (PDF / Excel)
+function downloadFile(content, filename, mime) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+
+  URL.revokeObjectURL(url);
+}
+
+/* ============================================================
+   UTILIDADES PARA PRESUPUESTOS / PROYECTOS
+   ============================================================ */
+
+// Calcula los totales del presupuesto
+function calcularTotalesPresupuesto(lineas, dtoGlobal = 0) {
+  let base = 0;
+
+  for (const l of lineas) {
+    base += Number(l.total) || 0;
   }
 
-  return appState.tarifas;
+  const dtoImporte = base * (dtoGlobal / 100);
+  const baseConDto = base - dtoImporte;
+  const iva = baseConDto * 0.21;
+
+  return {
+    base: Number(base.toFixed(2)),
+    dtoGlobal: Number(dtoImporte.toFixed(2)),
+    iva: Number(iva.toFixed(2)),
+    totalConIva: Number((baseConDto + iva).toFixed(2)),
+  };
 }
 
-// Devuelve las líneas incluidas en presupuesto
-function getLineasSeleccionadas() {
-  return (appState.lineasProyecto || []).filter((l) => l.incluir !== false);
+// Limpia un string genérico
+function limpiarTexto(txt) {
+  return String(txt || "").trim().replace(/\s+/g, " ");
 }
+
+// Normaliza referencias (mayúsculas)
+function normalizarRef(ref) {
+  return limpiarTexto(ref).toUpperCase();
+}
+
+/* ============================================================
+   AVISO PARA LA CONSOLA
+   ============================================================ */
+
+console.log(
+  "%c2N Presupuestos - utils.js cargado correctamente",
+  "color:#1d4fd8; font-weight:600;"
+);
