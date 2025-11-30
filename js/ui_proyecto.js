@@ -102,6 +102,7 @@ async function importarProyectoDesdeExcel() {
           const c1 = r[1];
           const c2 = r[2];
           const c3 = r[3];
+          const c4 = r[4]; // posible columna de PVP
 
           const s0 = c0 != null ? String(c0).trim() : "";
           const s1 = c1 != null ? String(c1).trim() : "";
@@ -109,10 +110,10 @@ async function importarProyectoDesdeExcel() {
           const s3 = c3 != null ? String(c3).trim() : "";
 
           // Fila vacía
-          if (!s0 && !s1 && !s2 && !s3) continue;
+          if (!s0 && !s1 && !s2 && !s3 && (c4 == null || String(c4).trim() === "")) continue;
 
           // Fila de sección: texto solo en la primera celda
-          if (s0 && !s1 && !s2 && !s3) {
+          if (s0 && !s1 && !s2 && !s3 && (c4 == null || String(c4).trim() === "")) {
             currentSection = s0;
             console.log("[Proyecto] Sección detectada:", currentSection, "(fila", i, ")");
             continue;
@@ -125,15 +126,15 @@ async function importarProyectoDesdeExcel() {
             s2.toLowerCase().includes("número") &&
             s3.toLowerCase().includes("cantidad")
           ) {
-            // simplemente marcamos que a partir de aquí vienen productos
             continue;
           }
 
           // Fila de producto de Project Designer:
-          // (None, 'Nombre producto', 'Número de pedido', Cantidad)
+          // (None, 'Nombre producto', 'Número de pedido', Cantidad, [PVP opcional])
           const ref = s2;        // Número de pedido
           const desc = s1;       // Nombre del producto
           const cantidad = parseNumCell(c3) || 1;
+          const pvp = parseNumCell(c4); // si no hay precio en la col 5, será 0
 
           if (!ref && !desc) continue;
 
@@ -141,7 +142,7 @@ async function importarProyectoDesdeExcel() {
             ref,
             descripcion: desc,
             cantidad,
-            pvp: 0,             // se rellenará con la tarifa más adelante
+            pvp,
             incluir: true,
             seccion: currentSection,
             manual: false
