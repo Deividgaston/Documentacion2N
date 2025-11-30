@@ -1,7 +1,8 @@
 // js/ui_presupuesto.js
-// Pantalla de presupuesto + cálculo + modal edición de línea + secciones
+// Pantalla de presupuesto + cálculo + modales (línea y sección) + secciones agrupadas
 
 let modalLineaEl = null;
+let modalSeccionEl = null;
 
 function renderPresupuesto(container) {
   container.innerHTML = `
@@ -123,8 +124,9 @@ function renderPresupuesto(container) {
     </div>
   `;
 
-  // Crear modal (una sola vez por render)
-  setupPresupuestoModal(container);
+  // Crear modales (una sola vez por render)
+  setupPresupuestoModalLinea(container);
+  setupPresupuestoModalSeccion(container);
 
   // Si no hay líneas, mensaje
   if (!appState.lineasProyecto || !appState.lineasProyecto.length) {
@@ -178,11 +180,11 @@ function renderPresupuesto(container) {
   recalcularPresupuesto();
 }
 
-// ==============================
-// MODAL – creación y lógica
-// ==============================
+/* ==========================
+   MODAL LÍNEA
+   ========================== */
 
-function setupPresupuestoModal(container) {
+function setupPresupuestoModalLinea(container) {
   if (container.querySelector("#modalLinea")) {
     modalLineaEl = container.querySelector("#modalLinea");
     return;
@@ -298,9 +300,117 @@ function saveLineaModal() {
   recalcularPresupuesto();
 }
 
-// ==============================
-// TABLA + CÁLCULOS (agrupada por secciones)
-// ==============================
+/* ==========================
+   MODAL SECCIÓN
+   ========================== */
+
+function setupPresupuestoModalSeccion(container) {
+  if (container.querySelector("#modalSeccion")) {
+    modalSeccionEl = container.querySelector("#modalSeccion");
+    return;
+  }
+
+  const overlay = document.createElement("div");
+  overlay.id = "modalSeccion";
+  overlay.className = "modal-overlay hidden";
+  overlay.innerHTML = `
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">Editar sección del presupuesto</div>
+        <button class="modal-close" id="modalSeccionCerrarBtn" title="Cerrar">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div>
+          <div class="field-label">Título de la sección</div>
+          <input type="text" id="modal_seccion_titulo" class="input" placeholder="Ej. Unidades de respuesta / MONITORES">
+        </div>
+        <div>
+          <div class="field-label">Comentario de la sección</div>
+          <textarea id="modal_seccion_comentario" class="input textarea-notas" placeholder="Texto que aparecerá debajo del título de la sección."></textarea>
+        </div>
+        <p class="info-text">
+          Al guardar, se actualizarán todas las líneas que pertenezcan a esta sección.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline btn-sm" id="modalSeccionCancelar">Cancelar</button>
+        <button class="btn btn-blue btn-sm" id="modalSeccionGuardar">Guardar sección</button>
+      </div>
+    </div>
+  `;
+
+  container.appendChild(overlay);
+  modalSeccionEl = overlay;
+
+  const btnCerrar = modalSeccionEl.querySelector("#modalSeccionCerrarBtn");
+  const btnCancelar = modalSeccionEl.querySelector("#modalSeccionCancelar");
+  const btnGuardar = modalSeccionEl.querySelector("#modalSeccionGuardar");
+
+  btnCerrar.onclick = () => closeSeccionModal();
+  btnCancelar.onclick = () => closeSeccionModal();
+  btnGuardar.onclick = () => saveSeccionModal();
+
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) closeSeccionModal();
+  });
+}
+
+function openSeccionModal(seccionKey) {
+  if (!modalSeccionEl) return;
+
+  // Buscamos una línea de esa sección para sacar el comentario (seccionNota)
+  const lines = appState.lineasProyecto || [];
+  const lineaEjemplo = lines.find(
+    (l) => (l.seccion || "SIN SECCIÓN").trim() === seccionKey
+  );
+
+  const nota = lineaEjemplo ? (lineaEjemplo.seccionNota || "") : "";
+
+  modalSeccionEl.dataset.seccionKey = seccionKey;
+  modalSeccionEl.querySelector("#modal_seccion_titulo").value = seccionKey === "SIN SECCIÓN" ? "" : seccionKey;
+  modalSeccionEl.querySelector("#modal_seccion_comentario").value = nota;
+
+  modalSeccionEl.classList.remove("hidden");
+}
+
+function closeSeccionModal() {
+  if (!modalSeccionEl) return;
+  modalSeccionEl.classList.add("hidden");
+  modalSeccionEl.dataset.seccionKey = "";
+}
+
+function saveSeccionModal() {
+  if (!modalSeccionEl) return;
+  const oldKey = modalSeccionEl.dataset.seccionKey;
+  if (!oldKey && oldKey !== "SIN SECCIÓN") {
+    closeSeccionModal();
+    return;
+  }
+
+  const nuevoTitulo = (modalSeccionEl.querySelector("#modal_seccion_titulo").value || "").trim();
+  const nuevoComentario = modalSeccionEl.querySelector("#modal_seccion_comentario").value || "";
+
+  const tituloFinal = nuevoTitulo || "SIN SECCIÓN";
+
+  const lines = appState.lineasProyecto || [];
+  lines.forEach((l) => {
+    const keyLinea = (l.seccion || "SIN SECCIÓN").trim();
+    if (keyLinea === oldKey) {
+      l.seccion = tituloFinal === "SIN SECCIÓN" ? "" : tituloFinal;
+      l.seccionNota = nuevoComentario;
+    }
+  });
+
+  closeSeccionModal();
+
+  const filtroRef = document.getElementById("filtroRef");
+  const filtro = filtroRef ? filtroRef.value.trim().toLowerCase() : "";
+  rebuildPresupuestoTable(filtro);
+}
+
+/* ==========================
+   TABLA + CÁLCULOS
+   ========================== */
 
 function rebuildPresupuestoTable(filtroRefTexto) {
   const tbody = document.getElementById("tbodyPresupuesto");
@@ -311,27 +421,40 @@ function rebuildPresupuestoTable(filtroRefTexto) {
 
   tbody.innerHTML = "";
 
-  // Creamos una lista con índice para poder abrir el modal luego
   const items = [];
   lines.forEach((linea, idx) => {
     if (filtro && !linea.ref.toLowerCase().includes(filtro)) return;
     items.push({ linea, idx });
   });
 
-  // Opcional: mantenemos el orden original (Project Designer ya viene por bloques)
-  // pero usamos un agrupador por sección
   let lastSeccionKey = null;
 
   items.forEach(({ linea, idx }) => {
     const seccionKey = (linea.seccion || "SIN SECCIÓN").trim();
 
     if (seccionKey !== lastSeccionKey) {
-      // Insertamos fila de sección
       const trSec = document.createElement("tr");
       trSec.className = "section-row";
+      trSec.onclick = (e) => {
+        e.stopPropagation();
+        openSeccionModal(seccionKey);
+      };
+
       const tdSec = document.createElement("td");
       tdSec.colSpan = 7;
-      tdSec.textContent = seccionKey;
+
+      const divTitulo = document.createElement("div");
+      divTitulo.textContent = seccionKey;
+      tdSec.appendChild(divTitulo);
+
+      const nota = linea.seccionNota || "";
+      if (nota) {
+        const divNota = document.createElement("div");
+        divNota.className = "section-note";
+        divNota.textContent = nota;
+        tdSec.appendChild(divNota);
+      }
+
       trSec.appendChild(tdSec);
       tbody.appendChild(trSec);
       lastSeccionKey = seccionKey;
