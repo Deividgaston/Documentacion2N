@@ -1,91 +1,78 @@
 // js/firebase_tarifa.js
-// Servicio de tarifa 2N para el generador de presupuestos
+// Servicio de tarifas 2N para Firestore (Firebase v8 namespaced)
 
-// IMPORTANTE:
-// - Asumo que ya tienes inicializado Firebase y una instancia "db" de Firestore.
-//   Ejemplo típico en otro archivo:
-//   import { getFirestore } from "firebase/firestore";
-//   const db = getFirestore(app);
-//
-// - Ajusta el nombre de la colección y de los campos según tu base de datos:
-//   const COLECCION_TARIFA = "tarifa2n";
-//   Campo referencia: "ref"
-//   Campo descripción: "descripcion"
-//   Campo precio: "pvp"
-
-import {
-  collection,
-  query,
-  where,
-  getDocs
-} from "firebase/firestore";
-
-const COLECCION_TARIFA = "tarifa2n";
+// Requiere que en firebase.js ya exista:
+//   const db = firebase.firestore();
+// y que ese archivo se haya cargado antes que este.
 
 if (!window.appState) window.appState = {};
 if (!appState.tarifas) appState.tarifas = {};
 
-let tarifasCache = window.tarifasCache || {};
-window.tarifasCache = tarifasCache;
+window.tarifasCache = window.tarifasCache || {};
+const tarifasCache = window.tarifasCache;
 
-// Carga desde Firestore SOLO las refs que falten en caché
-export async function loadTarifasForRefs(refs) {
+// NOMBRE DE LA COLECCIÓN EN FIRESTORE
+// ⚠️ AJUSTA ESTE VALOR AL NOMBRE REAL DE TU BD
+const COLECCION_TARIFA = "tarifa2n";
+
+// Carga solo las REF que no están en caché
+async function loadTarifasForRefs(refs) {
   if (!refs || !refs.length) return;
 
-  // Normalizamos refs y quitamos duplicados
-  const normalizadas = [...new Set(refs.map(r => String(r).trim()).filter(Boolean))];
+  const limpias = [...new Set(refs.map(r => String(r || "").trim()).filter(Boolean))];
+  const pendientes = limpias.filter(ref => !tarifasCache[ref]);
 
-  // Filtramos las que ya están en cache
-  const pendientes = normalizadas.filter(ref => !tarifasCache[ref]);
   if (!pendientes.length) {
-    console.log("[Tarifa] Todas las refs ya están en caché:", normalizadas);
+    console.log("[Tarifa] Todas las refs ya están cacheadas.");
     return;
   }
 
-  console.log("[Tarifa] Voy a Firestore por estas refs:", pendientes);
+  console.log("[Tarifa] Descargando desde Firestore:", pendientes);
 
-  // Firestore limita 'in' a 10 elementos -> troceamos
+  // Firestore limita where("in") a 10 elementos → troceamos
   const trocear = (arr, size) => {
-    const chunks = [];
-    for (let i = 0; i < arr.length; i += size) {
-      chunks.push(arr.slice(i, i + size));
-    }
-    return chunks;
+    const out = [];
+    for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+    return out;
   };
 
   const lotes = trocear(pendientes, 10);
 
   for (const lote of lotes) {
-    const colRef = collection(db, COLECCION_TARIFA);
-    // Ojo: ajusta "ref" al nombre REAL del campo de referencia en tu colección
-    const q = query(colRef, where("ref", "in", lote));
+    try {
+      const snap = await db
+        .collection(COLECCION_TARIFA)
+        .where("ref", "in", lote)
+        .get();
 
-    const snap = await getDocs(q);
+      snap.forEach(doc => {
+        const data = doc.data();
+        const ref = String(data.ref || "").trim();
+        if (!ref) return;
 
-    snap.forEach(docSnap => {
-      const data = docSnap.data();
-      const ref = String(data.ref || "").trim();
-      if (!ref) return;
+        const item = {
+          ref,
+          descripcion: data.descripcion || data.Desc || data.Descripcion || "",
+          pvp: Number(data.pvp ?? data.PVP ?? data.precio ?? 0)
+        };
 
-      const item = {
-        ref,
-        // Ajusta nombres de campos si hace falta
-        descripcion: data.descripcion || data.Descripcion || "",
-        pvp: Number(data.pvp ?? data.PVP ?? data.precio ?? 0)
-      };
-
-      tarifasCache[ref] = item;
-      appState.tarifas[ref] = item;
-    });
+        // Guardar en memoria
+        tarifasCache[ref] = item;
+        appState.tarifas[ref] = item;
+      });
+    } catch (error) {
+      console.error("[Tarifa] ERROR consultando Firestore:", error);
+    }
   }
 
   console.log("[Tarifa] Tarifas cacheadas:", Object.keys(tarifasCache).length);
 }
 
-// Versión genérica por si en algún sitio llamas loadTarifasIfNeeded()
-export async function loadTarifasIfNeeded() {
-  // Aquí podrías cargar toda la tarifa si quieres.
-  // Para este proyecto, realmente usamos loadTarifasForRefs(refs),
-  // así que puede quedarse vacío o hacer un preload básico si lo deseas.
+// Para compatibilidad si algún archivo la llama
+async function loadTarifasIfNeeded() {
   return;
 }
+
+// Hacer accesible globalmente
+window.loadTarifasForRefs = loadTarifasForRefs;
+window.loadTarifasIfNeeded = loadTarifasIfNeeded;
