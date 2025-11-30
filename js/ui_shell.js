@@ -1,10 +1,9 @@
 // js/ui_shell.js
-// Shell principal de la app: barra superior + tabs + logout
+// Shell principal: barra superior estilo Salesforce + tabs + logout
 
 if (!window.appState) window.appState = {};
 if (!appState.currentTab) appState.currentTab = "proyecto";
 
-// Render principal del shell
 function renderShell() {
   const root = document.getElementById("app");
   if (!root) return;
@@ -14,94 +13,75 @@ function renderShell() {
   const inicial = (nombreUsuario || "?").charAt(0).toUpperCase();
 
   root.innerHTML = `
-    <div class="shell">
+    <div class="app-shell">
+
       <!-- TOP BAR -->
-      <header class="topbar">
-        <div class="topbar-left">
-          <div class="brand">
-            <span class="brand-main">Presupuestos 2N</span>
+      <header class="app-header" style="display:flex;align-items:center;justify-content:space-between;padding:8px 16px;border-bottom:1px solid #e5e7eb;background:#f9fafb;">
+        <div style="display:flex;align-items:center;gap:16px;">
+          <div style="font-weight:600;font-size:14px;color:#111827;">
+            Presupuestos 2N
           </div>
 
-          <nav class="topnav">
-            <button id="navProyecto" class="topnav-item" data-tab="proyecto">
-              Proyecto
-            </button>
-            <button id="navPresupuesto" class="topnav-item" data-tab="presupuesto">
-              Presupuesto
-            </button>
-            <button id="navTarifa" class="topnav-item" data-tab="tarifa">
-              Tarifa 2N
-            </button>
-            <button id="navDocs" class="topnav-item" data-tab="docs">
-              Documentación
-            </button>
+          <nav style="display:flex;gap:8px;">
+            <button class="tab-btn" id="navProyecto" data-tab="proyecto">Proyecto</button>
+            <button class="tab-btn" id="navPresupuesto" data-tab="presupuesto">Presupuesto</button>
+            <button class="tab-btn" id="navTarifa" data-tab="tarifa">Tarifa 2N</button>
+            <button class="tab-btn" id="navDocs" data-tab="docs">Documentación</button>
           </nav>
         </div>
 
-        <div class="topbar-right">
-          <div class="user-chip">
-            <div class="user-avatar">${inicial}</div>
-            <div class="user-info">
-              <div class="user-name">${nombreUsuario}</div>
-              <button id="btnLogout" class="btn-link">Cerrar sesión</button>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:999px;background:#eef2ff;">
+            <div style="width:24px;height:24px;border-radius:999px;background:#4f46e5;color:white;font-size:12px;display:flex;align-items:center;justify-content:center;">
+              ${inicial}
             </div>
+            <span style="font-size:12px;color:#111827;">${nombreUsuario}</span>
           </div>
+          <button id="btnLogout" style="border:none;background:none;color:#2563eb;font-size:12px;cursor:pointer;">
+            Cerrar sesión
+          </button>
         </div>
       </header>
 
       <!-- CONTENIDO -->
-      <main id="shellContent" class="shell-content"></main>
+      <main id="shellContent" class="shell-content" style="padding:16px;"></main>
     </div>
   `;
 
-  // Activar tab actual visualmente
-  const navIds = {
-    proyecto: "navProyecto",
-    presupuesto: "navPresupuesto",
-    tarifa: "navTarifa",
-    docs: "navDocs",
-  };
-  Object.entries(navIds).forEach(([tab, id]) => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    if (appState.currentTab === tab) el.classList.add("active");
-    el.onclick = () => switchTab(tab);
+  // Activar pestaña actual
+  const tabs = ["proyecto", "presupuesto", "tarifa", "docs"];
+  tabs.forEach(tab => {
+    const btn = document.getElementById("nav" + capitalizar(tab));
+    if (!btn) return;
+    if (appState.currentTab === tab) {
+      btn.classList.add("active");
+      btn.style.background = "#2563eb";
+      btn.style.color = "#ffffff";
+    } else {
+      btn.classList.remove("active");
+      btn.style.background = "#e5e7eb";
+      btn.style.color = "#111827";
+    }
+    btn.onclick = () => switchTab(tab);
   });
 
-  // Logout
   const btnLogout = document.getElementById("btnLogout");
   if (btnLogout) {
     btnLogout.onclick = handleLogout;
   }
 
-  // Pintar contenido inicial
   renderShellContent();
 }
 
-// Cambiar de pestaña
+function capitalizar(txt) {
+  return txt.charAt(0).toUpperCase() + txt.slice(1);
+}
+
 function switchTab(tab) {
   appState.currentTab = tab;
-  // actualizar estado visual de los botones
-  document
-    .querySelectorAll(".topnav-item")
-    .forEach((btn) => btn.classList.remove("active"));
-
-  const currentId =
-    tab === "proyecto"
-      ? "navProyecto"
-      : tab === "presupuesto"
-      ? "navPresupuesto"
-      : tab === "tarifa"
-      ? "navTarifa"
-      : "navDocs";
-
-  const currentBtn = document.getElementById(currentId);
-  if (currentBtn) currentBtn.classList.add("active");
-
-  renderShellContent();
+  renderShell(); // re-pinta barra + contenido y aplica la pestaña activa
 }
 
-// Render del contenido según la pestaña
 function renderShellContent() {
   const content = document.getElementById("shellContent");
   if (!content) return;
@@ -137,16 +117,12 @@ function renderShellContent() {
   }
 }
 
-// Logout Firebase
 function handleLogout() {
   firebase
     .auth()
     .signOut()
     .then(() => {
-      // Opcional: limpiar estado local
       appState.user = null;
-      // Puedes redirigir a una página de login si la tienes
-      // window.location.href = "login.html";
       location.reload();
     })
     .catch((err) => {
@@ -154,13 +130,3 @@ function handleLogout() {
       alert("No se pudo cerrar sesión. Revisa la consola.");
     });
 }
-
-// Inicialización desde main.js:
-// firebase.auth().onAuthStateChanged(user => {
-//   if (user) {
-//     appState.user = user;
-//     renderShell();
-//   } else {
-//     // aquí muestras tu pantalla de login
-//   }
-// });
