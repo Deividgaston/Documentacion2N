@@ -1,105 +1,63 @@
 // js/firebase_tarifa.js
-// Lectura optimizada de tarifas 2N desde Firestore
-// Estructura esperada:
-//  collection "tarifas" / doc "v1" / campo "productos" (MAP)
-//  productos[ref].campos_originales["Distributor Price (EUR)"], ["Product Name"], etc.
+// Gestión opcional de la tarifa 2N en Firebase (subidas / mantenimiento)
 
-if (!window.appState) window.appState = {};
-if (!appState.tarifas) appState.tarifas = {};
+/* ============================================================
+   SUBIR TARIFA A FIRESTORE (por ejemplo desde Excel)
+   ============================================================ */
 
-window.tarifasCache = window.tarifasCache || {};
-const tarifasCache = window.tarifasCache;
-
-const TARIFAS_COLLECTION = "tarifas";
-const TARIFAS_DOC_VERSION = "v1";
-
-let tarifaProductosMap = null;
-let tarifaDocLoaded = false;
-
-async function ensureTarifaLoaded() {
-  if (tarifaDocLoaded && tarifaProductosMap) return;
+async function guardarTarifaEnFirebase(productos) {
+  if (!productos || typeof productos !== "object") {
+    console.error("Formato incorrecto para productos:", productos);
+    return false;
+  }
 
   try {
-    const docRef = db.collection(TARIFAS_COLLECTION).doc(TARIFAS_DOC_VERSION);
-    const snap = await docRef.get();
+    await db.collection("tarifas").doc("v1").set(
+      {
+        productos: productos,
+        fechaActualizacion: new Date().toISOString(),
+      },
+      { merge: true }
+    );
+
+    console.log(
+      "%cTarifa actualizada correctamente en Firebase",
+      "color:#1d4fd8; font-weight:600;"
+    );
+
+    // Actualizar cache local
+    localStorage.setItem(TARIFA_CACHE_KEY, JSON.stringify(productos));
+
+    // Actualizar estado en memoria
+    appState.tarifas = productos;
+
+    return true;
+  } catch (err) {
+    console.error("Error guardando tarifa:", err);
+    return false;
+  }
+}
+
+/* ============================================================
+   LEER TARIFA DIRECTAMENTE DE FIRESTORE (modo mantenimiento)
+   ============================================================ */
+
+async function leerTarifaDirectoFirebase() {
+  try {
+    const snap = await db.collection("tarifas").doc("v1").get();
 
     if (!snap.exists) {
-      console.error("[Tarifa] El documento tarifas/v1 no existe.");
-      tarifaProductosMap = {};
-      tarifaDocLoaded = true;
-      return;
+      console.warn("No existe tarifas/v1");
+      return null;
     }
 
-    const data = snap.data() || {};
-    tarifaProductosMap = data.productos || {};
-    tarifaDocLoaded = true;
+    const data = snap.data()?.productos || {};
 
-    console.log("[Tarifa] tarifas/v1 cargado. Nº refs:", Object.keys(tarifaProductosMap).length);
+    console.log(
+      "%cTarifa leída directamente desde Firestore",
+      "color:#6b7280;"
+    );
+
+    return data;
   } catch (err) {
-    console.error("[Tarifa] Error cargando tarifas/v1:", err);
-    tarifaProductosMap = {};
-    tarifaDocLoaded = true;
-  }
-}
-
-async function loadTarifasForRefs(refs) {
-  if (!refs || !refs.length) return;
-
-  const limpias = [...new Set(refs.map(r => String(r || "").trim()).filter(Boolean))];
-  const pendientes = limpias.filter(ref => !tarifasCache[ref]);
-
-  if (!pendientes.length) {
-    console.log("[Tarifa] Todas las refs ya estaban en caché.");
-    return;
-  }
-
-  await ensureTarifaLoaded();
-  if (!tarifaProductosMap) {
-    console.warn("[Tarifa] MAP de productos no disponible.");
-    return;
-  }
-
-  pendientes.forEach(ref => {
-    const prod = tarifaProductosMap[ref];
-    if (!prod) {
-      console.warn("[Tarifa] No existe producto con ref", ref);
-      return;
-    }
-
-    const co = prod.campos_originales || prod;
-
-    const descripcion =
-      co["Product Name"] ||
-      co["Descripción"] ||
-      co["Description"] ||
-      co["2N SKU"] ||
-      ref;
-
-    const precio =
-      co["Distributor Price (EUR)"] ??
-      co["List Price (EUR)"] ??
-      co["Price (EUR)"] ??
-      0;
-
-    const item = {
-      ref,
-      descripcion: descripcion || "",
-      pvp: Number(precio) || 0,
-    };
-
-    tarifasCache[ref] = item;
-    appState.tarifas[ref] = item;
-  });
-
-  console.log("[Tarifa] Total refs en caché:", Object.keys(tarifasCache).length);
-}
-
-function findTarifaItem(ref) {
-  if (!ref) return null;
-  const key = String(ref).trim();
-  return appState.tarifas[key] || tarifasCache[key] || null;
-}
-
-window.loadTarifasForRefs = loadTarifasForRefs;
-window.findTarifaItem = findTarifaItem;
-window.ensureTarifaLoaded = ensureTarifaLoaded;
+    console.error("Error leyendo ta
