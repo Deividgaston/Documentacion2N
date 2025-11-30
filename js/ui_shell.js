@@ -1,92 +1,142 @@
 // js/ui_shell.js
-// Shell principal + navegación
+// Shell principal del programa de PRESUPUESTOS 2N
+// - Layout con barra superior tipo Salesforce (claro)
+// - Navegación entre "Proyecto" y "Presupuesto"
+// - Estado global appState compartido con el resto de archivos
 
-function renderShell() {
-  clearApp();
+// ==============================
+// ESTADO GLOBAL
+// ==============================
+if (!window.appState) {
+  window.appState = {};
+}
 
-  const shell = el("div", "app-shell");
+// Valores por defecto (solo si no existen)
+if (!appState.infoPresupuesto) {
+  appState.infoPresupuesto = {
+    cliente: "",
+    proyecto: "",
+    direccion: "",
+    contacto: "",
+    email: "",
+    telefono: "",
+    notas: ""
+  };
+}
 
-  // NAVBAR
-  const nav = el("div", "main-nav");
+if (!Array.isArray(appState.lineasProyecto)) {
+  appState.lineasProyecto = [];
+}
 
-  const left = el("div", "nav-left");
-  const brand = el("div", "brand-pill", "2N · Presupuestos");
-  const title = el("div", "app-title", "Generador de presupuestos");
+if (typeof appState.descuentoGlobal !== "number") {
+  appState.descuentoGlobal = 0;
+}
 
-  const tabs = el("div", "nav-tabs");
+if (typeof appState.aplicarIVA !== "boolean") {
+  appState.aplicarIVA = true;
+}
 
-  const tabsDef = [
-    { id: "proyecto", label: "Proyecto" },
-    { id: "presupuesto", label: "Presupuesto" },
-    { id: "tarifa", label: "Tarifa 2N" },
-    { id: "doc", label: "Documentación" }
-  ];
+if (!appState.tarifas) {
+  appState.tarifas = {}; // cache en memoria si en algún momento se cargan tarifas
+}
 
-  tabsDef.forEach((t) => {
-    const b = el("button", "nav-tab" + (appState.activeTab === t.id ? " active" : ""), t.label);
-    b.dataset.tab = t.id;
-    b.onclick = () => {
-      appState.activeTab = t.id;
-      document
-        .querySelectorAll(".nav-tab")
-        .forEach((x) => x.classList.toggle("active", x.dataset.tab === t.id));
-      renderShellContent(); // solo re-render del cuerpo
-    };
-    tabs.appendChild(b);
+if (!appState.currentPage) {
+  appState.currentPage = "proyecto";
+}
+
+// ==============================
+// INICIALIZAR SHELL
+// ==============================
+function initShell() {
+  const appEl = document.getElementById("app");
+  if (!appEl) {
+    console.error("[Shell] No se encontró el elemento raíz con id='app'");
+    return;
+  }
+
+  // Layout general: barra superior + contenido
+  appEl.innerHTML = `
+    <div class="shell-root">
+      <header class="shell-topbar">
+        <div class="shell-topbar-left">
+          <div class="shell-logo-mark">2N</div>
+          <div class="shell-logo-text">
+            <div class="shell-logo-title">Presupuestos 2N</div>
+            <div class="shell-logo-subtitle">Project Designer · Oferta al cliente</div>
+          </div>
+        </div>
+        <nav class="shell-topbar-nav">
+          <button class="nav-item" data-page="proyecto">Proyecto</button>
+          <button class="nav-item" data-page="presupuesto">Presupuesto</button>
+        </nav>
+        <div class="shell-topbar-right">
+          <span class="shell-badge">Modo local · Sincronización mínima</span>
+        </div>
+      </header>
+
+      <main class="shell-main">
+        <div id="mainContent"></div>
+      </main>
+    </div>
+  `;
+
+  // Eventos de navegación
+  document.querySelectorAll(".nav-item[data-page]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const page = btn.dataset.page;
+      renderShellContent(page);
+    });
   });
 
-  left.appendChild(brand);
-  left.appendChild(title);
-  left.appendChild(tabs);
-
-  const right = el("div", "nav-right");
-  const userChip = el(
-    "div",
-    "user-chip",
-    appState.user ? appState.user.email || appState.user.displayName || "Usuario" : "Invitado"
-  );
-  const btnLogout = el("button", "btn btn-outline btn-sm", "Cerrar sesión");
-  btnLogout.onclick = () => auth.signOut();
-
-  right.appendChild(userChip);
-  right.appendChild(btnLogout);
-
-  nav.appendChild(left);
-  nav.appendChild(right);
-
-  // MAIN CONTENT
-  const main = el("div", "app-main");
-  const inner = el("div", "app-inner");
-  inner.id = "appContent";
-  main.appendChild(inner);
-
-  // FOOTER
-  const footer = el(
-    "div",
-    "app-footer",
-    "Presupuestos 2N · Uso interno. Datos y precios orientativos, validar siempre con tarifa actualizada."
-  );
-
-  shell.appendChild(nav);
-  shell.appendChild(main);
-  shell.appendChild(footer);
-
-  appRoot.appendChild(shell);
-
-  renderShellContent();
+  // Página inicial
+  renderShellContent(appState.currentPage || "proyecto");
 }
 
-function renderShellContent() {
-  const container = document.getElementById("appContent");
-  if (!container) return;
+// ==============================
+// RENDER CONTENIDO SEGÚN PÁGINA
+// ==============================
+function renderShellContent(page) {
+  const contentEl = document.getElementById("mainContent");
+  if (!contentEl) {
+    console.error("[Shell] No se encontró #mainContent");
+    return;
+  }
 
-  if (appState.activeTab === "proyecto") {
-    renderProyecto(container);
-  } else if (appState.activeTab === "presupuesto") {
-    renderPresupuesto(container);
-  } else if (appState.activeTab === "tarifa") {
-    renderTarifa(container);
-  } else if (appState.activeTab === "doc") {
-    renderDashboardDoc(container);
+  appState.currentPage = page;
+
+  // Marcar active en la barra superior
+  document.querySelectorAll(".nav-item[data-page]").forEach((btn) => {
+    btn.classList.toggle("nav-item-active", btn.dataset.page === page);
+  });
+
+  // Render según página
+  if (page === "proyecto") {
+    if (typeof renderProyecto === "function") {
+      renderProyecto(contentEl);
+    } else {
+      console.error("[Shell] renderProyecto no está definida");
+      contentEl.innerHTML = "<p>Error: página Proyecto no disponible.</p>";
+    }
+  } else if (page === "presupuesto") {
+    if (typeof renderPresupuesto === "function") {
+      renderPresupuesto(contentEl);
+    } else {
+      console.error("[Shell] renderPresupuesto no está definida");
+      contentEl.innerHTML = "<p>Error: página Presupuesto no disponible.</p>";
+    }
+  } else {
+    // Fallback
+    if (typeof renderProyecto === "function") {
+      renderProyecto(contentEl);
+    } else {
+      contentEl.innerHTML = "<p>Error: página no disponible.</p>";
+    }
   }
 }
+
+// ==============================
+// AUTO-INIT AL CARGAR LA PÁGINA
+// ==============================
+document.addEventListener("DOMContentLoaded", () => {
+  initShell();
+});
