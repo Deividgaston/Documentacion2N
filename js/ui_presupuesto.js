@@ -3,6 +3,26 @@
 // - Secciones agrupadas y editables (título + comentario)
 // - Líneas importadas (solo unidades + incluir)
 // - Líneas manuales (sección, ref, descripción, pvp, unidades) sin guardar en BD
+// - Ref manual opcional; si coincide con tarifa, autocompleta descripción y precio
+// - Reordenación de secciones (subir / bajar bloque)
+
+// ===== Helper para buscar en tarifa en memoria (sin Firebase) =====
+function findTarifaItem(ref) {
+  if (!ref) return null;
+  let t = null;
+
+  // Si guardaste tarifas en appState.tarifas
+  if (typeof appState !== "undefined" && appState && appState.tarifas && appState.tarifas[ref]) {
+    t = appState.tarifas[ref];
+  }
+
+  // Si existiera un cache global tipo tarifasCache
+  if (!t && typeof tarifasCache !== "undefined" && tarifasCache && tarifasCache[ref]) {
+    t = tarifasCache[ref];
+  }
+
+  return t || null;
+}
 
 let modalSeccionEl = null;
 let modalLineaManualEl = null;
@@ -128,7 +148,7 @@ function renderPresupuesto(container) {
         </div>
       </div>
     </div>
-  `;
+  ";
 
   // Modales
   setupPresupuestoModalSeccion(container);
@@ -323,8 +343,8 @@ function setupManualLineaModal(container) {
           <input type="text" id="modalManual_seccion" class="input" placeholder="Ej. Unidades de respuesta / MONITORES">
         </div>
         <div>
-          <div class="field-label">Referencia</div>
-          <input type="text" id="modalManual_ref" class="input" placeholder="Código de producto o referencia propia">
+          <div class="field-label">Referencia (opcional)</div>
+          <input type="text" id="modalManual_ref" class="input" placeholder="Código 2N o referencia propia">
         </div>
         <div>
           <div class="field-label">Descripción</div>
@@ -365,6 +385,25 @@ function setupManualLineaModal(container) {
   btnCerrar.onclick = () => closeManualLineaModal();
   btnCancelar.onclick = () => closeManualLineaModal();
   btnGuardar.onclick = () => saveManualLineaModal();
+
+  // Autocompletar desde tarifa cuando cambie la referencia
+  const refInput = modalLineaManualEl.querySelector("#modalManual_ref");
+  const descInput = modalLineaManualEl.querySelector("#modalManual_desc");
+  const pvpInput = modalLineaManualEl.querySelector("#modalManual_pvp");
+
+  refInput.addEventListener("change", () => {
+    const ref = refInput.value.trim();
+    const item = findTarifaItem(ref);
+    if (item) {
+      if (!descInput.value.trim() && item.descripcion) {
+        descInput.value = item.descripcion;
+      }
+      const precio = item.pvp ?? item.PVP ?? item.precio;
+      if (precio != null && (!pvpInput.value || Number(pvpInput.value) === 0)) {
+        pvpInput.value = Number(precio);
+      }
+    }
+  });
 
   overlay.addEventListener("click", (e) => {
     if (e.target === overlay) closeManualLineaModal();
@@ -424,16 +463,11 @@ function saveManualLineaModal() {
   const pvp = toNum(modalLineaManualEl.querySelector("#modalManual_pvp").value);
   const incluir = modalLineaManualEl.querySelector("#modalManual_incluir").checked;
 
-  if (!ref) {
-    alert("La referencia es obligatoria para la línea manual.");
-    return;
-  }
-
   if (!ud || ud < 0) ud = 1;
 
   if (mode === "new") {
     const nuevaLinea = {
-      ref,
+      ref: ref,
       descripcion: desc,
       cantidad: ud,
       pvp,
@@ -464,6 +498,48 @@ function saveManualLineaModal() {
 }
 
 /* ==========================
+   REORDENAR SECCIONES
+   ========================== */
+
+function moveSection(seccionKey, direction) {
+  const lines = appState.lineasProyecto || [];
+  if (!lines.length) return;
+
+  // Sacamos orden actual de secciones
+  const sections = [];
+  lines.forEach((l) => {
+    const key = (l.seccion || "SIN SECCIÓN").trim();
+    if (!sections.includes(key)) sections.push(key);
+  });
+
+  const idx = sections.indexOf(seccionKey);
+  if (idx === -1) return;
+
+  const newIndex = idx + direction;
+  if (newIndex < 0 || newIndex >= sections.length) return; // no podemos mover fuera
+
+  // Intercambiamos secciones en el array
+  const tmp = sections[idx];
+  sections[idx] = sections[newIndex];
+  sections[newIndex] = tmp;
+
+  // Reconstruimos appState.lineasProyecto agrupando por nuevo orden de secciones
+  const newLines = [];
+  sections.forEach((sec) => {
+    lines.forEach((l) => {
+      const key = (l.seccion || "SIN SECCIÓN").trim();
+      if (key === sec) newLines.push(l);
+    });
+  });
+
+  appState.lineasProyecto = newLines;
+
+  const filtroRef = document.getElementById("filtroRef");
+  const filtro = filtroRef ? filtroRef.value.trim().toLowerCase() : "";
+  rebuildPresupuestoTable(filtro);
+}
+
+/* ==========================
    TABLA + CÁLCULOS
    ========================== */
 
@@ -478,7 +554,8 @@ function rebuildPresupuestoTable(filtroRefTexto) {
 
   const items = [];
   lines.forEach((linea, idx) => {
-    if (filtro && !linea.ref.toLowerCase().includes(filtro)) return;
+    const refLower = (linea.ref || "").toLowerCase();
+    if (filtro && !refLower.includes(filtro)) return;
     items.push({ linea, idx });
   });
 
@@ -498,9 +575,50 @@ function rebuildPresupuestoTable(filtroRefTexto) {
       const tdSec = document.createElement("td");
       tdSec.colSpan = 7;
 
+      const headerRow = document.createElement("div");
+      headerRow.style.display = "flex";
+      headerRow.style.justifyContent = "space-between";
+      headerRow.style.alignItems = "center";
+      headerRow.style.gap = "8px";
+
       const divTitulo = document.createElement("div");
       divTitulo.textContent = seccionKey;
-      tdSec.appendChild(divTitulo);
+
+      const controls = document.createElement("div");
+      controls.style.display = "flex";
+      controls.style.gap = "4px";
+
+      const btnUp = document.createElement("button");
+      btnUp.textContent = "↑";
+      btnUp.title = "Subir sección";
+      btnUp.style.border = "none";
+      btnUp.style.background = "transparent";
+      btnUp.style.cursor = "pointer";
+      btnUp.style.fontSize = "0.75rem";
+      btnUp.onclick = (e) => {
+        e.stopPropagation();
+        moveSection(seccionKey, -1);
+      };
+
+      const btnDown = document.createElement("button");
+      btnDown.textContent = "↓";
+      btnDown.title = "Bajar sección";
+      btnDown.style.border = "none";
+      btnDown.style.background = "transparent";
+      btnDown.style.cursor = "pointer";
+      btnDown.style.fontSize = "0.75rem";
+      btnDown.onclick = (e) => {
+        e.stopPropagation();
+        moveSection(seccionKey, 1);
+      };
+
+      controls.appendChild(btnUp);
+      controls.appendChild(btnDown);
+
+      headerRow.appendChild(divTitulo);
+      headerRow.appendChild(controls);
+
+      tdSec.appendChild(headerRow);
 
       const nota = linea.seccionNota || "";
       if (nota) {
@@ -539,7 +657,7 @@ function rebuildPresupuestoTable(filtroRefTexto) {
 
     const tdRef = document.createElement("td");
     tdRef.className = "col-ref";
-    tdRef.textContent = linea.ref;
+    tdRef.textContent = linea.ref || "";
 
     const tdSeccion = document.createElement("td");
     tdSeccion.textContent = linea.seccion || "";
