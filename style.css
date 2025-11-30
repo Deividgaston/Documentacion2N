@@ -309,6 +309,16 @@ a {
 /* ===========================
    PRESUPUESTO – TABLA SALESFORCE
    =========================== */
+/* Fila de sección (agrupador) en la tabla de presupuesto */
+.section-row td {
+  background: #e5e9f2;
+  color: #111827;
+  font-weight: 600;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 6px 10px;
+}
 
 .layout-presupuesto {
   display: grid;
