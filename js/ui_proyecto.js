@@ -1,10 +1,5 @@
 // js/ui_proyecto.js
-// Pantalla de importación del proyecto desde Excel (Project Designer)
-// - Lee archivo XLSX
-// - Detecta fila de cabeceras (si la hay)
-// - Detecta secciones (filas con solo texto en la primera celda)
-// - Genera appState.lineasProyecto con ref, descripcion, cantidad, pvp, seccion
-// - Al terminar, navega a la página "presupuesto"
+// Importación del Excel de proyecto (Project Designer 2N)
 
 if (!window.appState) {
   window.appState = {};
@@ -15,30 +10,26 @@ if (!Array.isArray(appState.lineasProyecto)) {
 
 function renderProyecto(container) {
   container.innerHTML = `
-    <div class="page-header-row">
-      <div>
-        <div class="page-title">Proyecto</div>
-        <div class="page-subtitle">Importa un proyecto desde Project Designer (Excel XLSX)</div>
-      </div>
-    </div>
+    <div class="page-title">Proyecto</div>
+    <div class="page-subtitle">Importa el Excel del Project Designer para generar el presupuesto.</div>
 
-    <div class="card" style="max-width:600px;">
-      <div class="card-section-title">Importar archivo</div>
-
-      <div>
-        <input type="file" id="inputExcelProyecto" accept=".xlsx" class="input" />
+    <div class="card">
+      <div class="card-header-row">
+        <span class="card-header">Importar proyecto</span>
+        <span class="badge-light">Excel Project Designer</span>
       </div>
 
-      <button class="btn btn-blue btn-full" style="margin-top:12px;" id="btnImportarProyecto">
-        Importar proyecto
+      <input type="file" id="fileProyecto" accept=".xlsx,.xls" />
+
+      <button class="btn btn-blue" id="btnProyecto" style="margin-top:16px;">
+        Procesar proyecto
       </button>
 
-      <div id="importInfo" style="margin-top:12px; font-size:0.85rem; color:#6b7280;"></div>
+      <div id="resProyecto" style="margin-top:16px; font-size:0.9rem;"></div>
     </div>
   `;
 
-  const btn = document.getElementById("btnImportarProyecto");
-  btn.onclick = importarProyectoYIrAPresupuesto;
+  document.getElementById("btnProyecto").onclick = importarProyectoYIrAPresupuesto;
 }
 
 // Botón: importar + cambiar a Presupuesto
@@ -48,16 +39,15 @@ async function importarProyectoYIrAPresupuesto() {
 
   if (!ok) return;
 
-  if (typeof renderShellContent === "function") {
-    console.log("[Proyecto] Llamando a renderShellContent('presupuesto')");
+  if (typeof setActiveTab === "function") {
+    setActiveTab("presupuesto");
+  } else if (typeof renderShellContent === "function") {
     renderShellContent("presupuesto");
-  } else {
-    console.warn("[Proyecto] renderShellContent no existe. Ve manualmente a Presupuesto.");
   }
 }
 
-// Función auxiliar para parsear números (comas/puntos)
-function parseNum(v) {
+// Helper número
+function parseNumCell(v) {
   if (v == null) return 0;
   if (typeof v === "number") return v;
   const s = String(v).trim().replace(/\./g, "").replace(",", ".");
@@ -65,133 +55,130 @@ function parseNum(v) {
   return isNaN(n) ? 0 : n;
 }
 
-// IMPORTADOR DEL EXCEL
+// IMPORTADOR DEL EXCEL (formato Project Designer)
 async function importarProyectoDesdeExcel() {
-  const fileInput = document.getElementById("inputExcelProyecto");
-  const infoBox = document.getElementById("importInfo");
+  const fileInput = document.getElementById("fileProyecto");
+  const out = document.getElementById("resProyecto");
 
   if (!fileInput || !fileInput.files || !fileInput.files[0]) {
-    if (infoBox) infoBox.textContent = "Selecciona un archivo XLSX antes de importar.";
+    if (out) out.textContent = "Selecciona un archivo Excel antes de procesar.";
     return false;
   }
 
   const file = fileInput.files[0];
-  if (infoBox) infoBox.textContent = "Leyendo archivo…";
-  console.log("[Proyecto] Leyendo archivo:", file.name);
+  if (out) out.textContent = "Leyendo archivo…";
 
-  try {
-    const data = await file.arrayBuffer();
-    const workbook = XLSX.read(data, { type: "array" });
+  return new Promise((resolve) => {
+    const reader = new FileReader();
 
-    const sheetName = workbook.SheetNames[0];
-    const sheet = workbook.Sheets[sheetName];
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: "array" });
 
-    if (!sheet) {
-      if (infoBox) infoBox.textContent = "No se pudo leer la hoja del Excel.";
-      console.error("[Proyecto] Hoja no encontrada");
-      return false;
-    }
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
 
-    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false });
+        if (!sheet) {
+          if (out) out.textContent = "No se pudo leer la hoja del Excel.";
+          return resolve(false);
+        }
 
-    if (!rows || !rows.length) {
-      if (infoBox) infoBox.textContent = "El archivo no tiene contenido.";
-      console.warn("[Proyecto] Excel sin filas");
-      return false;
-    }
+        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true });
+        if (!rows || !rows.length) {
+          if (out) out.textContent = "El archivo no tiene contenido.";
+          return resolve(false);
+        }
 
-    console.log("[Proyecto] Nº filas leídas:", rows.length);
-    console.log("[Proyecto] Primeras filas para revisar:", rows.slice(0, 5));
+        console.log("[Proyecto] Filas leídas:", rows.length);
+        console.log("[Proyecto] Primeras filas:", rows.slice(0, 15));
 
-    const lineas = [];
-    let currentSection = "SIN SECCIÓN";
+        const lineas = [];
+        let currentSection = "";
 
-    // Detectar fila de cabeceras (Referencia / Descripción / Cantidad / PVP…)
-    let headerRowIndex = -1;
-    for (let i = 0; i < rows.length; i++) {
-      const r = rows[i] || [];
-      const joined = (r.map(c => (c || "").toString().toLowerCase()).join(" ")).trim();
-      if (
-        joined.includes("ref") ||
-        joined.includes("referencia") ||
-        joined.includes("descrip") ||
-        joined.includes("cantidad") ||
-        joined.includes("ud") ||
-        joined.includes("pvp") ||
-        joined.includes("precio")
-      ) {
-        headerRowIndex = i;
-        break;
+        for (let i = 0; i < rows.length; i++) {
+          const r = rows[i] || [];
+          const c0 = r[0];
+          const c1 = r[1];
+          const c2 = r[2];
+          const c3 = r[3];
+
+          const s0 = c0 != null ? String(c0).trim() : "";
+          const s1 = c1 != null ? String(c1).trim() : "";
+          const s2 = c2 != null ? String(c2).trim() : "";
+          const s3 = c3 != null ? String(c3).trim() : "";
+
+          // Fila vacía
+          if (!s0 && !s1 && !s2 && !s3) continue;
+
+          // Fila de sección: texto solo en la primera celda
+          if (s0 && !s1 && !s2 && !s3) {
+            currentSection = s0;
+            console.log("[Proyecto] Sección detectada:", currentSection, "(fila", i, ")");
+            continue;
+          }
+
+          // Fila cabecera de productos: Foto | Nombre del producto | Número de pedido | Cantidad
+          if (
+            s0.toLowerCase() === "foto" &&
+            s1.toLowerCase().includes("nombre") &&
+            s2.toLowerCase().includes("número") &&
+            s3.toLowerCase().includes("cantidad")
+          ) {
+            // simplemente marcamos que a partir de aquí vienen productos
+            continue;
+          }
+
+          // Fila de producto de Project Designer:
+          // (None, 'Nombre producto', 'Número de pedido', Cantidad)
+          const ref = s2;        // Número de pedido
+          const desc = s1;       // Nombre del producto
+          const cantidad = parseNumCell(c3) || 1;
+
+          if (!ref && !desc) continue;
+
+          lineas.push({
+            ref,
+            descripcion: desc,
+            cantidad,
+            pvp: 0,             // se rellenará con la tarifa más adelante
+            incluir: true,
+            seccion: currentSection,
+            manual: false
+          });
+        }
+
+        console.log("[Proyecto] Líneas construidas:", lineas.length);
+        if (!lineas.length) {
+          if (out) out.textContent = "No se encontraron líneas válidas en el Excel.";
+          return resolve(false);
+        }
+
+        appState.lineasProyecto = lineas;
+
+        if (out) {
+          out.innerHTML = `
+            <p>
+              <strong>${lineas.length}</strong> líneas procesadas.<br>
+              Última sección detectada: <strong>${lineas[lineas.length - 1].seccion || "SIN SECCIÓN"}</strong>
+            </p>
+          `;
+        }
+
+        console.log("[Proyecto] Ejemplo línea 0:", lineas[0]);
+        resolve(true);
+      } catch (err) {
+        console.error("[Proyecto] Error procesando Excel:", err);
+        if (out) out.textContent = "Error al procesar el archivo.";
+        resolve(false);
       }
-    }
+    };
 
-    console.log("[Proyecto] Fila de cabeceras detectada en índice:", headerRowIndex);
-    const startIndex = headerRowIndex >= 0 ? headerRowIndex + 1 : 0;
+    reader.onerror = () => {
+      if (out) out.textContent = "No se pudo leer el archivo.";
+      resolve(false);
+    };
 
-    for (let i = startIndex; i < rows.length; i++) {
-      const r = rows[i] || [];
-      const c0 = (r[0] ?? "").toString().trim();
-      const c1 = (r[1] ?? "").toString().trim();
-      const c2 = (r[2] ?? "").toString().trim();
-      const c3 = (r[3] ?? "").toString().trim();
-
-      // fila vacía
-      if (!c0 && !c1 && !c2 && !c3) continue;
-
-      // Fila de sección: solo texto en primera celda
-      if (c0 && !c1 && !c2 && !c3) {
-        currentSection = c0;
-        console.log("[Proyecto] Sección detectada:", currentSection, "(fila", i, ")");
-        continue;
-      }
-
-      const ref = c0;
-      const desc = c1;
-      const cantidad = parseNum(c2) || 1;
-      const pvp = parseNum(c3);
-
-      if (!ref && !desc) continue;
-
-      lineas.push({
-        ref,
-        descripcion: desc,
-        cantidad,
-        pvp,
-        incluir: true,
-        seccion: currentSection,
-        manual: false
-      });
-    }
-
-    console.log("[Proyecto] Líneas construidas:", lineas.length);
-    if (!lineas.length) {
-      if (infoBox) infoBox.textContent = "No se encontraron líneas válidas en el Excel.";
-      return false;
-    }
-
-    if (!appState.infoPresupuesto) {
-      appState.infoPresupuesto = {
-        cliente: "",
-        proyecto: "",
-        direccion: "",
-        contacto: "",
-        email: "",
-        telefono: "",
-        notas: ""
-      };
-    }
-
-    appState.lineasProyecto = lineas;
-    console.log("[Proyecto] Ejemplo línea 0:", lineas[0]);
-
-    if (infoBox) {
-      infoBox.textContent = `Importación correcta: ${lineas.length} líneas. Abriendo presupuesto…`;
-    }
-
-    return true;
-  } catch (err) {
-    console.error("[Proyecto] Error al procesar el archivo:", err);
-    if (infoBox) infoBox.textContent = "Error al procesar el archivo.";
-    return false;
-  }
+    reader.readAsArrayBuffer(file);
+  });
 }
