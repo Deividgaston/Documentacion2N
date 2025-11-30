@@ -1,133 +1,4 @@
-/* ===========================
-   RESET + BODY
-   =========================== */
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-html,
-body {
-  height: 100%;
-}
-
-body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-  background: #f4f6fb; /* fondo tipo Salesforce */
-  color: #111827;
-}
-
-a {
-  color: inherit;
-  text-decoration: none;
-}
-
-/* ===========================
-   LOGIN
-   =========================== */
-
-.login-container {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: radial-gradient(circle at top, #e5f0ff 0, #f4f6fb 55%, #e5e7eb 100%);
-  padding: 16px;
-}
-
-.login-title {
-  font-size: 1.4rem;
-  font-weight: 600;
-  text-align: center;
-  margin-bottom: 16px;
-}
-
-.login-card {
-  background: #ffffffcc;
-  backdrop-filter: blur(14px);
-  border-radius: 18px;
-  padding: 24px 24px 20px;
-  width: 100%;
-  max-width: 420px;
-  box-shadow: 0 22px 45px rgba(15, 23, 42, 0.18);
-}
-
-/* ===========================
-   BOTONES + INPUTS
-   =========================== */
-
-.btn {
-  border: none;
-  border-radius: 999px;
-  padding: 10px 18px;
-  font-size: 0.9rem;
-  font-weight: 500;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  transition: 0.12s ease;
-  white-space: nowrap;
-}
-
-.btn-blue {
-  background: #0176d3;
-  color: #ffffff;
-  box-shadow: 0 8px 20px rgba(1, 118, 211, 0.35);
-}
-
-.btn-blue:hover {
-  background: #01509a;
-  transform: translateY(-1px);
-}
-
-.btn-outline {
-  background: #ffffff;
-  border: 1px solid #d0d7e2;
-  color: #111827;
-}
-
-.btn-outline:hover {
-  background: #f9fafb;
-  border-color: #c3cce0;
-}
-
-.btn-full {
-  width: 100%;
-}
-
-.btn-sm {
-  padding: 6px 10px;
-  font-size: 0.8rem;
-}
-
-.input {
-  width: 100%;
-  border-radius: 10px;
-  border: 1px solid #d0d7e2;
-  padding: 8px 10px;
-  font-size: 0.88rem;
-  outline: none;
-  background: #f9fafb;
-  transition: 0.12s ease;
-}
-
-.input:focus {
-  border-color: #0176d3;
-  background: #ffffff;
-  box-shadow: 0 0 0 1px rgba(1, 118, 211, 0.4);
-}
-
-.textarea-notas {
-  min-height: 80px;
-  resize: vertical;
-}
-
-/* ===========================
-   SHELL + NAV (Salesforce)
-   =========================== */
+/* ========== SHELL / TOPBAR SALESFORCE LIGHT ========== */
 
 .app-shell {
   display: flex;
@@ -135,402 +6,91 @@ a {
   min-height: 100vh;
 }
 
-/* Barra superior */
-.main-nav {
+.app-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 18px;
-  background: linear-gradient(180deg, #ffffff, #f7f9fc);
-  border-bottom: 1px solid #d0d7e2;
-  color: #111827;
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
-  position: sticky;
-  top: 0;
-  z-index: 20;
+  padding: 8px 16px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #ffffff;
 }
 
-.nav-left {
+.app-header-left {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
 }
 
-.brand-pill {
-  padding: 4px 12px;
-  border-radius: 999px;
-  background: #e5f3ff;
-  color: #0176d3;
-  font-size: 0.75rem;
+.app-brand {
   font-weight: 600;
+  font-size: 14px;
+  color: #111827;
 }
 
-.app-title {
-  font-size: 1rem;
-  font-weight: 600;
-}
-
-.nav-tabs {
+.top-tabs {
   display: flex;
   gap: 4px;
-  margin-left: 16px;
 }
 
-.nav-tab {
-  position: relative;
-  padding: 8px 14px;
+.tab-btn {
   border: none;
   background: transparent;
-  color: #6b7280;
-  font-size: 0.8rem;
-  border-radius: 4px 4px 0 0;
-  cursor: pointer;
-  transition: 0.12s ease;
-}
-
-.nav-tab:hover {
-  background: #eef1f7;
-  color: #111827;
-}
-
-.nav-tab.active {
-  background: #ffffff;
-  color: #0176d3;
-  font-weight: 600;
-}
-
-.nav-tab.active::after {
-  content: "";
-  position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: -6px;
-  height: 3px;
-  border-radius: 999px;
-  background: #0176d3;
-}
-
-.nav-right {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.user-chip {
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: #f3f4f6;
-  border: 1px solid #d0d7e2;
-}
-
-/* ===========================
-   CONTENIDO
-   =========================== */
-
-.app-main {
-  flex: 1;
-  padding: 18px;
-}
-
-.app-inner {
-  max-width: 1200px;
-  margin: 0 auto;
-}
-
-.page-title {
-  font-size: 1.3rem;
-  font-weight: 600;
-  margin-bottom: 6px;
-}
-
-.page-subtitle {
-  font-size: 0.9rem;
-  color: #6b7280;
-  margin-bottom: 18px;
-}
-
-/* ===========================
-   CARDS (Salesforce)
-   =========================== */
-
-.card {
-  background: #ffffff;
-  border-radius: 12px;
-  padding: 16px 18px;
-  border: 1px solid #e5e9f2;
-  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
-  margin-bottom: 18px;
-}
-
-.card-soft {
-  background: #f7f9fc;
-  border-radius: 12px;
-  padding: 16px 18px;
-  border: 1px solid #e0e6f1;
-}
-
-.card-header {
-  font-size: 0.95rem;
-  font-weight: 600;
-  margin-bottom: 8px;
-}
-
-.card-section-title {
-  font-size: 0.8rem;
-  color: #6b7280;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  margin-bottom: 8px;
-}
-
-/* ===========================
-   GRID
-   =========================== */
-
-.grid-2 {
-  display: grid;
-  grid-template-columns: 1.2fr 1fr;
-  gap: 16px;
-}
-
-.grid-2-equal {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-}
-
-.field-label {
-  font-size: 0.78rem;
-  font-weight: 500;
-  color: #6b7280;
-  margin-bottom: 4px;
-}
-
-/* ===========================
-   PRESUPUESTO – TABLA SALESFORCE
-   =========================== */
-/* Fila de sección (agrupador) en la tabla de presupuesto */
-.section-row td {
-  background: #e5e9f2;
-  color: #111827;
-  font-weight: 600;
-  font-size: 0.78rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
   padding: 6px 10px;
-}
-/* Comentario de la sección, debajo del título */
-.section-note {
-  font-size: 0.72rem;
-  font-weight: 400;
-  text-transform: none;
-  letter-spacing: normal;
+  font-size: 13px;
   color: #4b5563;
-  margin-top: 2px;
-}
-
-.layout-presupuesto {
-  display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.4fr);
-  gap: 18px;
-}
-
-.table-wrapper {
-  border-radius: 12px;
-  background: #ffffff;
-  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
-  border: 1px solid #e5e9f2;
-  overflow: hidden;
-}
-
-.table-header-actions {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 14px;
-  border-bottom: 1px solid #e5e9f2;
-  background: linear-gradient(to right, #f9fafb, #eef3ff);
-}
-
-.table-header-title {
-  font-size: 0.9rem;
-  font-weight: 600;
-}
-
-.table {
-  width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-  font-size: 0.78rem;
-}
-
-.table thead {
-  background: #f4f6fb;
-  border-bottom: 1px solid #e5e9f2;
-}
-
-.table th,
-.table td {
-  padding: 8px 10px;
-  border-bottom: 1px solid #e5e7eb;
-  vertical-align: middle;
-}
-
-.table th {
-  font-weight: 600;
-  color: #4b5563;
-}
-
-/* Zebra suave */
-.table tbody tr:nth-child(even) td {
-  background: #fafbff;
-}
-
-/* Hover azul Salesforce */
-.table tbody tr:hover td {
-  background: #eef3ff;
-}
-
-.col-ref {
-  width: 100px;
-  font-weight: 600;
-  color: #111827;
-}
-
-.col-check {
-  width: 40px;
-  text-align: center;
-}
-
-.col-check input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
+  border-bottom: 2px solid transparent;
   cursor: pointer;
 }
 
-/* Inputs de unidades */
-.table input[type="number"] {
-  width: 72px;
-  padding: 4px 6px;
-  border-radius: 8px;
-  border: 1px solid #d0d7e2;
-  background: #f9fafb;
+.tab-btn:hover {
+  color: #111827;
+  background: #f3f4f6;
 }
 
-.table input[type="number"]:focus {
-  outline: none;
-  border-color: #0176d3;
-  box-shadow: 0 0 0 1px rgba(1, 118, 211, 0.25);
-  background: #ffffff;
+.tab-btn.active {
+  color: #111827;
+  font-weight: 500;
+  border-bottom-color: #2563eb;
+  background: transparent;
 }
 
-/* Totales */
-.totales-row {
+.app-header-right {
   display: flex;
-  justify-content: space-between;
-  font-size: 0.92rem;
-  padding: 2px 0;
+  align-items: center;
+  gap: 8px;
 }
 
-.totales-row.total {
-  font-weight: 600;
-  font-size: 1rem;
+.user-chip-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #eef2ff;
 }
 
-/* ===========================
-   FOOTER
-   =========================== */
-
-.app-footer {
-  padding: 8px 18px 14px;
-  font-size: 0.72rem;
-  color: #9ca3af;
-  text-align: center;
-}
-/* ===========================
-   MODAL EDICIÓN LÍNEA (Salesforce)
-   =========================== */
-
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(15, 23, 42, 0.35);
+.user-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: #4f46e5;
+  color: #ffffff;
+  font-size: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 50;
 }
 
-.modal {
-  background: #ffffff;
-  border-radius: 12px;
-  padding: 16px 18px;
-  width: min(420px, 94%);
-  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.35);
-  border: 1px solid #e5e9f2;
+.user-name {
+  font-size: 12px;
+  color: #111827;
 }
 
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
-}
-
-.modal-title {
-  font-size: 0.95rem;
-  font-weight: 600;
-}
-
-.modal-close {
+.btn-link-logout {
   border: none;
-  background: transparent;
+  background: none;
+  color: #2563eb;
+  font-size: 12px;
   cursor: pointer;
-  font-size: 1.1rem;
-  color: #6b7280;
-}
-
-.modal-body {
-  font-size: 0.85rem;
-  color: #374151;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 14px;
-}
-
-/* ===========================
-   RESPONSIVE
-   =========================== */
-
-@media (max-width: 960px) {
-  .layout-presupuesto {
-    grid-template-columns: 1fr;
-  }
-
-  .grid-2,
-  .grid-2-equal {
-    grid-template-columns: 1fr;
-  }
-
-  .main-nav {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-  }
-
-  .nav-tabs {
-    margin-left: 0;
-    flex-wrap: wrap;
-  }
-}
-/* Utilidad genérica para ocultar elementos */
-.hidden {
-  display: none !important;
+  padding: 4px 6px;
 }
