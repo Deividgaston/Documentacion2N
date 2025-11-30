@@ -2,24 +2,41 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <title>Presupuestos 2N</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
+  <title>Presupuestos 2N</title>
+
+  <!-- Estilos generales -->
   <link rel="stylesheet" href="style.css" />
 
-  <!-- Firebase v8 -->
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-storage.js"></script>
+  <!-- Fuente limpia tipo CRM -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
 
-  <!-- XLSX para leer Excels en el navegador -->
-  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Inter', sans-serif;
+      background: #f5f6fa;
+    }
+  </style>
+
+  <!-- FIREBASE -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
+
+  <!-- XLSX PARA LEER EXCEL (DEBE IR ANTES DE app.js) -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 
 <body>
+
+  <!-- APP ROOT -->
   <div id="app"></div>
 
+  <!-- JS PRINCIPAL -->
   <script src="app.js"></script>
+
 </body>
 </html>
