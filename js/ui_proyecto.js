@@ -14,11 +14,13 @@ function renderProyecto(root) {
     <h2>Proyecto</h2>
     <p>Importa el Excel del Project Designer para generar el presupuesto.</p>
 
-    <div class="card" style="padding:20px;">
-      <h3>Importar proyecto <small>Excel Project Designer</small></h3>
+    <div class="card" style="padding:20px; max-width:900px;">
+      <h3 style="margin-bottom:12px;">Importar proyecto <small>Excel Project Designer</small></h3>
 
-      <input type="file" id="inputExcelProyecto" accept=".xlsx" />
-      <button id="btnProcesarProyecto" class="btn-primary" style="margin-top:12px;">
+      <div class="mb-3">
+        <input type="file" id="inputExcelProyecto" accept=".xlsx" />
+      </div>
+      <button id="btnProcesarProyecto" class="btn-primary">
         Procesar proyecto
       </button>
     </div>
@@ -56,17 +58,19 @@ async function importarProyectoDesdeExcel(file) {
 
     if (!sheet) {
       console.error("[Proyecto] Error: No se pudo leer la hoja.");
+      alert("No se pudo leer la hoja del Excel.");
       return;
     }
 
-    const json = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false });
+    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false });
 
     // ==========================
     // PARSE DEL EXCEL
     // ==========================
-    const lineas = parsearExcelProyectoDesigner(json);
+    const lineas = parsearExcelProyectoDesigner(rows);
 
     console.log("[Proyecto] Líneas construidas:", lineas.length);
+    console.log("[Proyecto] Ejemplo línea 0:", lineas[0]);
 
     appState.lineasProyecto = lineas;
 
@@ -77,8 +81,8 @@ async function importarProyectoDesdeExcel(file) {
 
     console.log("[Proyecto] refs que pedimos a tarifa:", refs);
 
-    // Llamamos al motor de tarifas
-    if (window.loadTarifasForRefs) {
+    // Llamamos al motor de tarifas (Firestore)
+    if (window.loadTarifasForRefs && refs.length > 0) {
       await loadTarifasForRefs(refs);
     }
 
@@ -89,7 +93,6 @@ async function importarProyectoDesdeExcel(file) {
     // ==============================
     appState.currentTab = "presupuesto";
     renderShell();
-
   } catch (err) {
     console.error("[Proyecto] Error importando XLSX:", err);
     alert("Error procesando el archivo. Revisa la consola.");
@@ -97,45 +100,73 @@ async function importarProyectoDesdeExcel(file) {
 }
 
 // ======================================================
-// FUNCIÓN: Parseo detallado del Excel de Project Designer
+// FUNCIÓN: Parseo flexible del Excel Project Designer
 // ======================================================
 function parsearExcelProyectoDesigner(rows) {
   const lineas = [];
-
   let seccionActual = "";
-  // Detecta filas que son SECCIÓN:
-  // Ej: "PLACA DE CALLE", "MONITORES", "ACCESORIOS"
-  const REGEX_SECCION = /^[A-ZÁÉÍÓÚÑ0-9 ]{3,}$/;
+
+  // Sección: texto en mayúsculas en la primera columna y resto casi vacío
+  const esFilaSeccion = (values) => {
+    const col0 = (values[0] || "").trim();
+    if (!col0) return false;
+    if (col0.length < 3) return false;
+    // mayúsculas o números
+    const esMayus = col0 === col0.toUpperCase();
+    const restoVacio = values.slice(1).every((v) => !v || !v.trim());
+    return esMayus && restoVacio;
+  };
+
+  // Referencia típica 2N: 5-8 dígitos, opcional letra al final (ej. 9155011B)
+  const REGEX_REF = /^[0-9]{5,8}[A-Z]?$/;
 
   for (let i = 0; i < rows.length; i++) {
-    const fila = rows[i];
-    if (!fila || fila.length < 2) continue;
+    const row = rows[i] || [];
+    const values = row.map((c) => (c || "").toString().trim());
 
-    const colA = (fila[0] || "").toString().trim();
-    const colB = (fila[1] || "").toString().trim();
+    if (values.every((v) => v === "")) continue; // fila vacía
 
-    // -----------------------------------------
-    // Si es una SECCIÓN (texto en mayúsculas)
-    // -----------------------------------------
-    if (REGEX_SECCION.test(colA) && colB === "") {
-      seccionActual = colA;
+    // -------- SECCIÓN --------
+    if (esFilaSeccion(values)) {
+      seccionActual = values[0];
       console.log("[Proyecto] Sección detectada:", seccionActual, "(fila " + i + ")");
       continue;
     }
 
-    // -----------------------------------------
-    // Caso: línea con referencia
-    // -----------------------------------------
-    const ref = colA;
-    const descripcion = colB;
-    const cantidad = Number(fila[2] || 1);
+    // -------- LÍNEA CON REFERENCIA --------
+    // Buscamos la primera celda que parezca una ref 2N
+    let refIndex = -1;
+    for (let c = 0; c < values.length; c++) {
+      if (REGEX_REF.test(values[c])) {
+        refIndex = c;
+        break;
+      }
+    }
+    if (refIndex === -1) continue; // sin referencia -> no es línea de producto
 
-    // Validación de referencia típica 2N: numérica
-    const esReferenciaValida = /^[0-9]{5,10}$/.test(ref);
+    const ref = values[refIndex];
 
-    if (!esReferenciaValida) continue;
+    // Descripción: primer texto no vacío después de la referencia
+    let descripcion = "";
+    for (let c = refIndex + 1; c < values.length; c++) {
+      if (values[c] && values[c].length > 0) {
+        descripcion = values[c];
+        break;
+      }
+    }
 
-    lineas.push({
+    // Cantidad: último número significativo de la fila (si no, 1)
+    let cantidad = 1;
+    for (let c = values.length - 1; c > refIndex; c--) {
+      const raw = values[c].replace(",", ".");
+      const num = parseFloat(raw);
+      if (!isNaN(num) && num > 0) {
+        cantidad = num;
+        break;
+      }
+    }
+
+    const linea = {
       ref,
       descripcion,
       seccion: seccionActual || "SIN SECCIÓN",
@@ -143,7 +174,9 @@ function parsearExcelProyectoDesigner(rows) {
       pvp: 0,
       importe: 0,
       ok: true,
-    });
+    };
+
+    lineas.push(linea);
   }
 
   return lineas;
