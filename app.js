@@ -310,11 +310,22 @@ function renderTarifas(container) {
   document.getElementById("btnProcesar").onclick = procesarTarifaExcel;
 }
 
-// helper para convertir a número
+// Helper número
 function toNum(v) {
   if (v === null || v === undefined || v === "") return 0;
   const n = Number(String(v).replace(",", "."));
   return isNaN(n) ? 0 : n;
+}
+
+// Helper: buscar cabecera por patrones
+function findHeaderKey(keys, regexList) {
+  for (const k of keys) {
+    const kNorm = (k || "").toString().replace(/\s+/g, " ").trim();
+    for (const r of regexList) {
+      if (r.test(kNorm)) return k;
+    }
+  }
+  return null;
 }
 
 async function procesarTarifaExcel() {
@@ -333,74 +344,115 @@ async function procesarTarifaExcel() {
     const data = new Uint8Array(e.target.result);
     const workbook = XLSX.read(data, { type: "array" });
 
+    // 1) Leemos como matriz (header:1) para localizar la fila que contiene "2N SKU"
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json(sheet);
+    const rowsMatrix = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+
+    let headerRowIndex = -1;
+    for (let i = 0; i < rowsMatrix.length; i++) {
+      const row = rowsMatrix[i];
+      const hasSku = row.some((cell) =>
+        typeof cell === "string" &&
+        cell.toLowerCase().replace(/\s+/g, " ").includes("2n sku")
+      );
+      if (hasSku) {
+        headerRowIndex = i;
+        break;
+      }
+    }
+
+    if (headerRowIndex === -1) {
+      out.innerHTML = `<span style="color:red;">No se ha encontrado la columna "2N SKU" en la tarifa.</span>`;
+      return;
+    }
+
+    // 2) Convertimos desde esa fila en adelante a objetos { cabecera: valor }
+    const rows = XLSX.utils.sheet_to_json(sheet, {
+      range: headerRowIndex,
+      defval: ""
+    });
+
+    if (!rows.length) {
+      out.innerHTML = `<span style="color:red;">La tabla de productos está vacía.</span>`;
+      return;
+    }
+
+    // 3) Detectamos dinámicamente nombres de columnas
+    const sample = rows[0];
+    const keys = Object.keys(sample);
+
+    const skuKey = findHeaderKey(keys, [/2n\s*sku/i, /\bsku\b/i, /referencia/i]);
+    const nombreKey = findHeaderKey(keys, [/nombre/i, /name/i]);
+
+    const nfrDistKey = findHeaderKey(keys, [/nfr.*distrib/i, /nfr.*distributor/i]);
+    const nfrResKey = findHeaderKey(keys, [/nfr.*resell/i]);
+
+    const distPriceKey = findHeaderKey(keys, [/distributor.*price/i]);
+    const res1Key = findHeaderKey(keys, [/reseller.*price.*1/i, /reseller.*1/i]);
+    const res2Key = findHeaderKey(keys, [/reseller.*price.*2/i, /reseller.*2/i]);
+    const msrpKey = findHeaderKey(keys, [/msrp/i, /srp/i, /pvp/i]);
+
+    const notaKey = findHeaderKey(keys, [/nota/i, /note/i]);
+    const anchoKey = findHeaderKey(keys, [/ancho/i, /width/i]);
+    const altoKey = findHeaderKey(keys, [/alto/i, /height/i]);
+    const profKey = findHeaderKey(keys, [/profundidad/i, /depth/i]);
+    const pesoKey = findHeaderKey(keys, [/peso/i, /weight/i]);
+    const hsKey = findHeaderKey(keys, [/hs\s*code/i]);
+    const eanKey = findHeaderKey(keys, [/ean/i]);
+    const webKey = findHeaderKey(keys, [/p[aá]gina web/i, /pagina web/i, /\bweb\b/i]);
+    const eolKey = findHeaderKey(keys, [/^eol$/i]);
+    const motivoEolKey = findHeaderKey(keys, [/motivo.*venta/i, /reason.*end/i]);
 
     const productos = {};
+    let count = 0;
 
     rows.forEach((r) => {
-      // Cabeceras reales de tu Excel:
-      // "2N SKU", "Nombre",
-      // "NFR\nDistributor\n(EUR)", "NFR\nReseller\n(EUR)",
-      // "Distributor\nPrice\n(EUR)",
-      // "Recommended\nReseller Price 2\n(EUR)",
-      // "Recommended\nReseller Price 1\n(EUR)",
-      // "MSRP\n(EUR)",
-      // "Nota",
-      // "Ancho\n(mm)", "Alto\n(mm)", "Profundidad\n(mm)", "Peso\n(kg)",
-      // "HS code", "EAN code", "Página web", "EOL", "Motivo de finalización de venta"
+      const rawSku = skuKey ? r[skuKey] : "";
+      const sku = (rawSku || "").toString().trim();
+      if (!sku) return; // saltamos filas de sección / vacías
 
-      const sku = (r["2N SKU"] || r["SKU"] || r["Referencia"] || "").toString().trim();
-      if (!sku) return;
+      const nombre = nombreKey ? (r[nombreKey] || "") : "";
 
-      const nombre =
-        r["Nombre"] ||
-        r["Product Name"] ||
-        "";
+      const nfrDist = nfrDistKey ? toNum(r[nfrDistKey]) : 0;
+      const nfrRes = nfrResKey ? toNum(r[nfrResKey]) : 0;
 
-      const nfr_dist = toNum(r["NFR\nDistributor\n(EUR)"]);
-      const nfr_reseller = toNum(r["NFR\nReseller\n(EUR)"]);
-      const distributor_price = toNum(r["Distributor\nPrice\n(EUR)"]);
-      const rr2 = toNum(r["Recommended\nReseller Price 2\n(EUR)"]);
-      const rr1 = toNum(r["Recommended\nReseller Price 1\n(EUR)"]);
-      const msrp = toNum(r["MSRP\n(EUR)"]);
+      const distPrice = distPriceKey ? toNum(r[distPriceKey]) : 0;
+      const res1 = res1Key ? toNum(r[res1Key]) : 0;
+      const res2 = res2Key ? toNum(r[res2Key]) : 0;
+      const msrp = msrpKey ? toNum(r[msrpKey]) : 0;
 
-      const nota = r["Nota"] || "";
-      const ancho = toNum(r["Ancho\n(mm)"]);
-      const alto = toNum(r["Alto\n(mm)"]);
-      const profundidad = toNum(r["Profundidad\n(mm)"]);
-      const peso = toNum(r["Peso\n(kg)"]);
+      const nota = notaKey ? (r[notaKey] || "") : "";
+      const ancho = anchoKey ? toNum(r[anchoKey]) : 0;
+      const alto = altoKey ? toNum(r[altoKey]) : 0;
+      const profundidad = profKey ? toNum(r[profKey]) : 0;
+      const peso = pesoKey ? toNum(r[pesoKey]) : 0;
 
-      const hsCode = r["HS code"] || "";
-      const eanCode = r["EAN code"] || "";
-      const paginaWeb = r["Página web"] || "";
-      const eolFlag = !!r["EOL"];
-      const motivoEol = r["Motivo de finalización de venta"] || "";
+      const hsCode = hsKey ? (r[hsKey] || "") : "";
+      const eanCode = eanKey ? (r[eanKey] || "") : "";
+      const paginaWeb = webKey ? (r[webKey] || "") : "";
+      const eolFlag = eolKey ? !!r[eolKey] : false;
+      const motivoEol = motivoEolKey ? (r[motivoEolKey] || "") : "";
 
       productos[sku] = {
-        // claves normalizadas para el motor de presupuestos
         sku,
         nombre,
 
-        // NFR
-        nfr_distributor_eur: nfr_dist,
-        nfr_reseller_eur: nfr_reseller,
-
-        // lista de precios oficial
-        distributor_price_eur: distributor_price,
-        reseller_price_2_eur: rr2,
-        reseller_price_1_eur: rr1,
+        // precios brutos de la tabla, flexibles a cambios de columnas
+        nfr_distributor_eur: nfrDist,
+        nfr_reseller_eur: nfrRes,
+        distributor_price_eur: distPrice,
+        reseller_price_1_eur: res1,
+        reseller_price_2_eur: res2,
         msrp_eur: msrp,
 
-        // mapping a roles que luego usaremos:
-        pvp: msrp, // PVP = MSRP
-        precio_distribuidor: distributor_price,
-        precio_subdistribuidor: rr1,
-        precio_instalador: rr2,
-        precio_constructora: rr2,
-        precio_promotora: msrp,
+        // mapping estándar de roles (podremos cambiar la lógica luego)
+        pvp: msrp,
+        precio_distribuidor: distPrice || nfrDist || 0,
+        precio_subdistribuidor: res1 || res2 || 0,
+        precio_instalador: res2 || res1 || 0,
+        precio_constructora: res2 || res1 || 0,
+        precio_promotora: msrp || res1 || res2 || 0,
 
-        // dimensiones / logística
         ancho_mm: ancho,
         alto_mm: alto,
         profundidad_mm: profundidad,
@@ -413,23 +465,25 @@ async function procesarTarifaExcel() {
         motivo_eol: motivoEol,
         nota,
 
-        // TODO: cualquier campo extra del Excel lo dejamos aquí
+        // TODO: cualquier campo adicional queda aquí
         campos_originales: r
       };
+
+      count++;
     });
 
     out.innerHTML = "Guardando tarifa en Firestore...";
 
     await db.collection("tarifas").doc("v1").set({
       ultima_actualizacion: new Date().toISOString(),
-      total_productos: Object.keys(productos).length,
-      productos: productos
+      total_productos: count,
+      productos
     });
 
     localStorage.setItem(TARIFA_CACHE_KEY, JSON.stringify(productos));
     appState.tarifas = productos;
 
-    out.innerHTML = `<span style="color:green;">Tarifa actualizada correctamente (${Object.keys(productos).length} productos).</span>`;
+    out.innerHTML = `<span style="color:green;">Tarifa actualizada correctamente (${count} productos).</span>`;
   };
 
   reader.readAsArrayBuffer(file);
@@ -485,7 +539,7 @@ async function procesarProyectoExcel() {
     const data = new Uint8Array(e.target.result);
     const workbook = XLSX.read(data, { type: "array" });
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json(sheet);
+    const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
 
     const sample = rows[0] || {};
     const cols = Object.keys(sample);
@@ -533,114 +587,4 @@ async function procesarProyectoExcel() {
 
     let html = `
       <p>
-        Líneas procesadas: <strong>${lineas.length}</strong><br>
-        Con tarifa encontrada: <strong>${conTarifa}</strong><br>
-        Sin tarifa (revisar SKU/ref): <strong>${sinTarifa}</strong>
-      </p>
-    `;
-
-    if (lineas.length > 0) {
-      html += `
-        <div class="table-wrapper">
-          <table class="table-simple">
-            <thead>
-              <tr>
-                <th style="text-align:left;">Ref</th>
-                <th class="text-right">Cant.</th>
-                <th style="text-align:left;">Descripción proyecto</th>
-                <th style="text-align:left;">Nombre tarifa</th>
-                <th class="text-right">PVP</th>
-              </tr>
-            </thead>
-            <tbody>
-      `;
-
-      lineas.slice(0, 50).forEach((l) => {
-        html += `
-          <tr>
-            <td>${l.referencia}</td>
-            <td class="text-right">${l.cantidad}</td>
-            <td>${l.descripcion || ""}</td>
-            <td>${l.nombreTarifa || ""}</td>
-            <td class="text-right">${
-              l.pvp != null ? l.pvp.toFixed(2) + " €" : "-"
-            }</td>
-          </tr>
-        `;
-      });
-
-      html += `
-            </tbody>
-          </table>
-          ${
-            lineas.length > 50
-              ? `<p style="margin-top:6px; color:#777;">Mostrando primeras 50 líneas…</p>`
-              : ""
-          }
-        </div>
-      `;
-    }
-
-    out.innerHTML = html;
-  };
-
-  reader.readAsArrayBuffer(file);
-}
-
-// ======================================
-// 9) PLACEHOLDERS PRESUPUESTO / DOC
-// ======================================
-function renderPresupuesto(container) {
-  const header = el("div", null);
-  header.innerHTML = `
-    <div class="page-title">Presupuesto</div>
-    <div class="page-subtitle">
-      En esta sección generaremos el presupuesto por rol (distribuidor, instalador, etc.) usando las líneas del proyecto.
-    </div>
-  `;
-  container.appendChild(header);
-
-  const card = el("div", "card");
-  card.innerHTML = `
-    <div class="card-header">Generador de presupuesto</div>
-    <p style="font-size:0.9rem;">
-      Pendiente de implementar: cálculo por rol, descuentos y exportación a PDF / Excel.
-    </p>
-  `;
-  container.appendChild(card);
-}
-
-function renderDoc(container) {
-  const header = el("div", null);
-  header.innerHTML = `
-    <div class="page-title">Documentación & BC3</div>
-    <div class="page-subtitle">
-      Aquí añadiremos memoria descriptiva, hojas técnicas, declaraciones y exportación BC3 para Presto.
-    </div>
-  `;
-  container.appendChild(header);
-
-  const card = el("div", "card");
-  card.innerHTML = `
-    <div class="card-header">Gestor de documentación</div>
-    <p style="font-size:0.9rem;">
-      Pendiente de implementar: selección de PDFs, plantillas de memoria y generación BC3.
-    </p>
-  `;
-  container.appendChild(card);
-}
-
-// ======================================
-// 10) OBSERVADOR AUTH
-// ======================================
-auth.onAuthStateChanged((user) => {
-  if (user) {
-    appState.user = { email: user.email };
-    if (!appState.activeTab) appState.activeTab = "dashboard";
-    renderShell();
-  } else {
-    appState.user = null;
-    appState.activeTab = "dashboard";
-    renderLogin();
-  }
-});
+        Líneas procesadas: <strong>${lineas.len
