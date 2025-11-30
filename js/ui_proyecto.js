@@ -1,139 +1,146 @@
 // js/ui_proyecto.js
-// Página PROYECTO – importar Excel Project Designer (con secciones)
+// Importación del Excel de proyecto
 
-function renderProyecto(root) {
-  root.innerHTML = `
-    <h2 class="page-title">Proyecto</h2>
-    <p class="page-subtitle">
-      Importa el Excel del Project Designer para generar el presupuesto.
-    </p>
+function renderProyecto(container) {
+  container.innerHTML = `
+    <div class="page-title">Proyecto</div>
+    <div class="page-subtitle">
+      Importa el Excel del proyecto para generar el presupuesto con la tarifa 2N.
+    </div>
 
-    <div class="card" style="max-width:900px;">
-      <h3>Importar proyecto <small>Excel Project Designer</small></h3>
-      <div class="mt-3">
-        <input type="file" id="inputExcelProyecto" accept=".xlsx" />
-      </div>
-      <button id="btnProcesarProyecto" class="btn-primary mt-3">Procesar proyecto</button>
+    <div class="card">
+      <div class="card-header">Importar proyecto</div>
+      <p class="info-text" style="margin-bottom:10px;">
+        El Excel debe contener al menos columnas de <strong>Referencia</strong> y <strong>Cantidad</strong>.
+        Opcionalmente también <strong>Descripción</strong>.
+      </p>
+      <input type="file" id="fileProyecto" accept=".xlsx,.xls" />
+      <button class="btn btn-blue" id="btnProyecto" style="margin-top:12px;">Procesar proyecto</button>
+      <div id="resProyecto" style="margin-top:14px; font-size:0.85rem;"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">Estado</div>
+      <p class="info-text" id="estadoProyecto">
+        ${
+          appState.lineasProyecto.length
+            ? `Actualmente hay <strong>${appState.lineasProyecto.length}</strong> líneas cargadas.`
+            : "Todavía no se ha importado ningún proyecto."
+        }
+      </p>
     </div>
   `;
 
-  document.getElementById("btnProcesarProyecto").onclick = handleImportProyecto;
-}
+  const fileInput = document.getElementById("fileProyecto");
+  const btn = document.getElementById("btnProyecto");
+  const out = document.getElementById("resProyecto");
+  const estado = document.getElementById("estadoProyecto");
 
-async function handleImportProyecto() {
-  const input = document.getElementById("inputExcelProyecto");
-  if (!input.files.length) {
-    alert("Selecciona un archivo XLSX primero.");
-    return;
-  }
-  await importarProyectoDesdeExcel(input.files[0]);
-}
-
-async function importarProyectoDesdeExcel(file) {
-  try {
-    const arrayBuffer = await file.arrayBuffer();
-    const workbook = XLSX.read(arrayBuffer, { type: "array" });
-    const sheetName = workbook.SheetNames[0];
-    const sheet = workbook.Sheets[sheetName];
-    if (!sheet) {
-      alert("No se pudo leer la hoja del Excel.");
+  btn.onclick = async () => {
+    if (!fileInput.files || !fileInput.files[0]) {
+      out.innerHTML =
+        `<span style="color:#b91c1c;">Selecciona un archivo Excel primero.</span>`;
       return;
     }
 
-    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false });
-    const lineas = parsearExcelProyectoDesigner(rows);
+    btn.disabled = true;
+    btn.textContent = "Procesando...";
+    out.innerHTML = "";
 
-    console.log("[Proyecto] Líneas construidas:", lineas.length);
-    appState.lineasProyecto = lineas;
+    const file = fileInput.files[0];
 
-    const refs = [...new Set(lineas.map(l => l.ref).filter(Boolean))];
-    console.log("[Proyecto] refs para tarifa:", refs);
+    try {
+      const tarifas = await loadTarifasOnce(); // 1 sola lectura máx.
+      leerExcelComoMatriz(file, (err, rows) => {
+        btn.disabled = false;
+        btn.textContent = "Procesar proyecto";
 
-    if (refs.length && window.loadTarifasForRefs) {
-      await loadTarifasForRefs(refs);
+        if (err) {
+          console.error(err);
+          out.innerHTML =
+            `<span style="color:#b91c1c;">No se ha podido leer el Excel.</span>`;
+          return;
+        }
+
+        if (!rows || rows.length < 2) {
+          out.innerHTML =
+            `<span style="color:#b91c1c;">El Excel no tiene datos suficientes.</span>`;
+          return;
+        }
+
+        const header = rows[0].map((h) => String(h || "").toLowerCase());
+
+        const idxRef = header.findIndex((h) => h.includes("ref"));
+        const idxQty = header.findIndex(
+          (h) => h.includes("cant") || h.includes("qty") || h.includes("ud")
+        );
+        const idxDesc = header.findIndex(
+          (h) => h.includes("desc") || h.includes("concepto")
+        );
+
+        if (idxRef === -1 || idxQty === -1) {
+          out.innerHTML = `
+            <span style="color:#b91c1c;">
+              No se han encontrado columnas de referencia/cantidad. Revisa los encabezados.
+            </span>`;
+          return;
+        }
+
+        const lineas = [];
+        let conTarifa = 0;
+        let sinTarifa = 0;
+
+        for (let i = 1; i < rows.length; i++) {
+          const r = rows[i] || [];
+          const ref = (r[idxRef] || "").toString().trim();
+          if (!ref) continue;
+
+          const qty = toNum(r[idxQty]);
+          if (!qty) continue;
+
+          const descExcel =
+            idxDesc >= 0 ? (r[idxDesc] || "").toString().trim() : "";
+
+          const tarifaItem = tarifas[ref] || null;
+          const pvp = tarifaItem ? toNum(tarifaItem.pvp || tarifaItem.PVP || tarifaItem.precio) : 0;
+          const descTarifa = tarifaItem ? tarifaItem.descripcion || "" : "";
+
+          const linea = {
+            ref,
+            descripcion: descExcel || descTarifa || "",
+            cantidad: qty,
+            pvp,
+            incluir: !!tarifaItem // por defecto solo entra si tiene precio en tarifa
+          };
+
+          if (tarifaItem) conTarifa++;
+          else sinTarifa++;
+
+          lineas.push(linea);
+        }
+
+        appState.lineasProyecto = lineas;
+
+        out.innerHTML = `
+          <p>
+            <strong>${lineas.length}</strong> líneas procesadas.<br>
+            Con tarifa: <strong>${conTarifa}</strong><br>
+            Sin tarifa: <strong>${sinTarifa}</strong>
+          </p>
+          <p class="info-text" style="margin-top:6px;">
+            Ahora puedes ir a la pestaña <strong>Presupuesto</strong> para ajustar cantidades,
+            descuentos y exportar a PDF/Excel.
+          </p>
+        `;
+
+        estado.innerHTML = `Actualmente hay <strong>${lineas.length}</strong> líneas cargadas.`;
+      });
+    } catch (e) {
+      console.error(e);
+      btn.disabled = false;
+      btn.textContent = "Procesar proyecto";
+      out.innerHTML =
+        `<span style="color:#b91c1c;">Error inesperado cargando tarifa/proyecto.</span>`;
     }
-
-    appState.currentTab = "presupuesto";
-    renderShell();
-  } catch (err) {
-    console.error("[Proyecto] Error importando XLSX:", err);
-    alert("Error procesando el archivo. Revisa la consola.");
-  }
+  };
 }
-
-// Parser robusto por filas:
-// - Filas en MAYÚSCULAS = secciones
-// - Fila con un patrón de referencia = línea
-function parsearExcelProyectoDesigner(rows) {
-  const lineas = [];
-  let seccionActual = "";
-
-  const REGEX_REF = /^[0-9]{5,8}[A-Z]?$/;
-
-  for (let i = 0; i < rows.length; i++) {
-    const rawRow = rows[i] || [];
-    const values = rawRow.map(v => (v || "").toString().trim());
-    if (values.every(v => v === "")) continue;
-
-    // ¿Sección?
-    const firstNonEmpty = values.find(v => v !== "");
-    const resto = values.filter(v => v !== firstNonEmpty);
-    if (
-      firstNonEmpty &&
-      firstNonEmpty.length >= 3 &&
-      firstNonEmpty === firstNonEmpty.toUpperCase() &&
-      resto.every(v => v === "")
-    ) {
-      seccionActual = firstNonEmpty;
-      console.log("[Proyecto] Sección detectada:", seccionActual, "(fila", i, ")");
-      continue;
-    }
-
-    // ¿Línea con referencia?
-    let refIndex = -1;
-    for (let c = 0; c < values.length; c++) {
-      if (REGEX_REF.test(values[c])) {
-        refIndex = c;
-        break;
-      }
-    }
-    if (refIndex === -1) continue;
-
-    const ref = values[refIndex];
-
-    // Descripción: primer texto no vacío después de la ref
-    let descripcion = "";
-    for (let c = refIndex + 1; c < values.length; c++) {
-      if (values[c]) {
-        descripcion = values[c];
-        break;
-      }
-    }
-
-    // Cantidad: último número positivo en la fila (después de la ref)
-    let cantidad = 1;
-    for (let c = values.length - 1; c > refIndex; c--) {
-      const raw = values[c].replace(",", ".");
-      const num = parseFloat(raw);
-      if (!isNaN(num) && num > 0) {
-        cantidad = num;
-        break;
-      }
-    }
-
-    lineas.push({
-      ref,
-      descripcion,
-      seccion: seccionActual || "SIN SECCIÓN",
-      cantidad,
-      pvp: 0,
-      importe: 0,
-      ok: true,
-    });
-  }
-
-  return lineas;
-}
-
-window.renderProyecto = renderProyecto;
-window.importarProyectoDesdeExcel = importarProyectoDesdeExcel;
