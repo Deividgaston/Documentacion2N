@@ -3,8 +3,8 @@
 // - Lee archivo XLSX
 // - Detecta secciones automáticamente
 // - Crea lineas de proyecto
-// - Guarda en appState
-// - Redirige automáticamente a Presupuesto
+// - Guarda en appState.lineasProyecto
+// - Al terminar, navega a la página "presupuesto"
 
 function renderProyecto(container) {
   container.innerHTML = `
@@ -30,12 +30,19 @@ function renderProyecto(container) {
     </div>
   `;
 
-  document.getElementById("btnImportarProyecto").onclick = importarProyectoDesdeExcel;
+  const btn = document.getElementById("btnImportarProyecto");
+  btn.onclick = async () => {
+    const ok = await importarProyectoDesdeExcel();
+    // si ha ido bien, cambiamos a PRESUPUESTO
+    if (ok && typeof renderShellContent === "function") {
+      renderShellContent("presupuesto");
+    }
+  };
 }
 
 /* ============================
    IMPORTADOR DEL EXCEL
-=============================== */
+   =========================== */
 
 async function importarProyectoDesdeExcel() {
   const fileInput = document.getElementById("inputExcelProyecto");
@@ -43,7 +50,7 @@ async function importarProyectoDesdeExcel() {
 
   if (!fileInput.files || !fileInput.files[0]) {
     infoBox.textContent = "Selecciona un archivo XLSX antes de importar.";
-    return;
+    return false;
   }
 
   const file = fileInput.files[0];
@@ -53,80 +60,101 @@ async function importarProyectoDesdeExcel() {
     const data = await file.arrayBuffer();
     const workbook = XLSX.read(data, { type: "array" });
 
-    // Cogemos la primera hoja
     const sheetName = workbook.SheetNames[0];
     const sheet = workbook.Sheets[sheetName];
 
     if (!sheet) {
       infoBox.textContent = "No se pudo leer la hoja del Excel.";
-      return;
+      return false;
     }
 
-    // Convertimos a JSON
-    let rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+    // raw:false para que convierta números como string (por si hay comas)
+    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false });
 
     if (!rows || !rows.length) {
       infoBox.textContent = "El archivo no tiene contenido.";
-      return;
+      return false;
     }
 
-    // EXTRAER LÍNEAS – detección automática de secciones
     const lineas = [];
     let currentSection = "SIN SECCIÓN";
+    let headersDetected = false;
+
+    // Función auxiliar para parsear números con coma o punto
+    const parseNum = (v) => {
+      if (v == null) return 0;
+      if (typeof v === "number") return v;
+      const s = String(v).trim().replace(/\./g, "").replace(",", ".");
+      const n = parseFloat(s);
+      return isNaN(n) ? 0 : n;
+    };
 
     for (let i = 0; i < rows.length; i++) {
       const r = rows[i];
-
       if (!r || r.length === 0) continue;
 
-      // Detectar filas que son SECCIONES (grandes títulos)
-      if (typeof r[0] === "string" && r[0].trim() !== "" && r[1] == null) {
-        currentSection = r[0].trim();
+      const c0 = (r[0] ?? "").toString().trim();
+      const c1 = (r[1] ?? "").toString().trim();
+      const c2 = (r[2] ?? "").toString().trim();
+      const c3 = (r[3] ?? "").toString().trim();
+
+      // Saltar filas totalmente vacías
+      if (!c0 && !c1 && !c2 && !c3) continue;
+
+      // Detectar fila de CABECERAS (Referencia / Descripción / Cantidad / PVP...)
+      if (!headersDetected) {
+        const headerRowText = (c0 + " " + c1 + " " + c2 + " " + c3).toLowerCase();
+        if (
+          /ref/.test(headerRowText) ||
+          /referencia/.test(headerRowText) ||
+          /descrip/.test(headerRowText)
+        ) {
+          headersDetected = true;
+          continue; // no es una línea del proyecto
+        }
+      }
+
+      // Detectar SECCIÓN: texto solo en la primera celda
+      if (c0 && !c1 && !c2 && !c3) {
+        currentSection = c0;
         continue;
       }
 
-      // Detectar líneas del proyecto
-      // Estructura típica: REF | DESCRIPCIÓN | UD | PVP
-      const ref = (r[0] || "").toString().trim();
-      const desc = (r[1] || "").toString().trim();
-      const ud = Number(r[2]) || 0;
-      const pvp = Number(r[3]) || 0;
+      // A partir de aquí consideramos que es una LÍNEA:
+      // Usamos la estructura REF | DESCRIPCIÓN | UD | PVP
+      const ref = c0;           // referencia
+      const desc = c1;          // descripción
+      const cantidad = parseNum(c2) || 1;
+      const pvp = parseNum(c3);
 
-      // Saltar filas vacías
+      // Si no hay ni ref ni descripción, no tiene sentido
       if (!ref && !desc) continue;
 
-      // Crear línea
-      const linea = {
+      lineas.push({
         ref,
         descripcion: desc,
-        cantidad: ud || 1,
+        cantidad,
         pvp,
         incluir: true,
         seccion: currentSection,
         manual: false
-      };
-
-      lineas.push(linea);
+      });
     }
 
     if (!lineas.length) {
       infoBox.textContent = "No se encontraron líneas válidas en el Excel.";
-      return;
+      return false;
     }
 
-    // GUARDAR EN appState
+    // Guardamos en el estado global
     appState.lineasProyecto = lineas;
 
-    // Mensaje
-    infoBox.textContent = `Importación correcta: ${lineas.length} líneas. Redirigiendo…`;
-
-    // 🔥 REDIRIGIR DIRECTAMENTE A PRESUPUESTO
-    setTimeout(() => {
-      renderShellContent("presupuesto");
-    }, 300);
+    infoBox.textContent = `Importación correcta: ${lineas.length} líneas. Abriendo presupuesto…`;
+    return true;
 
   } catch (err) {
     console.error(err);
     infoBox.textContent = "Error al procesar el archivo.";
+    return false;
   }
 }
