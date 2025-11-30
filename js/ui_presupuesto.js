@@ -1,5 +1,7 @@
 // js/ui_presupuesto.js
-// Pantalla de presupuesto + cálculo
+// Pantalla de presupuesto + cálculo + modal edición de línea
+
+let modalLineaEl = null;
 
 function renderPresupuesto(container) {
   container.innerHTML = `
@@ -120,7 +122,10 @@ function renderPresupuesto(container) {
     </div>
   `;
 
-  // Si no hay líneas, simple aviso
+  // Crear modal (una sola vez por render)
+  setupPresupuestoModal(container);
+
+  // Si no hay líneas, mensaje
   if (!appState.lineasProyecto || !appState.lineasProyecto.length) {
     const tbody = document.getElementById("tbodyPresupuesto");
     if (tbody) {
@@ -172,6 +177,129 @@ function renderPresupuesto(container) {
   recalcularPresupuesto();
 }
 
+// ==============================
+// MODAL – creación y lógica
+// ==============================
+
+function setupPresupuestoModal(container) {
+  // Si ya existe en este render, no duplicar
+  if (container.querySelector("#modalLinea")) {
+    modalLineaEl = container.querySelector("#modalLinea");
+    return;
+  }
+
+  const overlay = document.createElement("div");
+  overlay.id = "modalLinea";
+  overlay.className = "modal-overlay hidden";
+  overlay.innerHTML = `
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">Editar línea de presupuesto</div>
+        <button class="modal-close" id="modalCerrarBtn" title="Cerrar">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div>
+          <div class="field-label">Referencia</div>
+          <div id="modal_ref" style="font-size:0.9rem; font-weight:600;"></div>
+        </div>
+        <div>
+          <div class="field-label">Descripción</div>
+          <input type="text" id="modal_desc" class="input">
+        </div>
+        <div class="grid-2-equal">
+          <div>
+            <div class="field-label">Unidades</div>
+            <input type="number" id="modal_ud" class="input" min="0" step="1">
+          </div>
+          <div>
+            <div class="field-label">PVP (€)</div>
+            <input type="number" id="modal_pvp" class="input" min="0" step="0.01">
+          </div>
+        </div>
+        <label style="display:flex; align-items:center; gap:8px; margin-top:4px; font-size:0.8rem;">
+          <input type="checkbox" id="modal_incluir">
+          Incluir esta línea en el presupuesto
+        </label>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline btn-sm" id="modalCancelar">Cancelar</button>
+        <button class="btn btn-blue btn-sm" id="modalGuardar">Guardar cambios</button>
+      </div>
+    </div>
+  `;
+
+  container.appendChild(overlay);
+  modalLineaEl = overlay;
+
+  // Eventos base modal
+  const btnCerrar = modalLineaEl.querySelector("#modalCerrarBtn");
+  const btnCancelar = modalLineaEl.querySelector("#modalCancelar");
+  const btnGuardar = modalLineaEl.querySelector("#modalGuardar");
+
+  btnCerrar.onclick = () => closeLineaModal();
+  btnCancelar.onclick = () => closeLineaModal();
+  btnGuardar.onclick = () => saveLineaModal();
+
+  // Cerrar si haces click fuera de la tarjeta
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) {
+      closeLineaModal();
+    }
+  });
+}
+
+function openLineaModal(index) {
+  if (!modalLineaEl) return;
+  const linea = appState.lineasProyecto[index];
+  if (!linea) return;
+
+  modalLineaEl.dataset.index = String(index);
+
+  modalLineaEl.querySelector("#modal_ref").textContent = linea.ref || "";
+  modalLineaEl.querySelector("#modal_desc").value = linea.descripcion || "";
+  modalLineaEl.querySelector("#modal_ud").value = Number(linea.cantidad) || 0;
+  modalLineaEl.querySelector("#modal_pvp").value = Number(linea.pvp) || 0;
+  modalLineaEl.querySelector("#modal_incluir").checked = linea.incluir !== false;
+
+  modalLineaEl.classList.remove("hidden");
+}
+
+function closeLineaModal() {
+  if (!modalLineaEl) return;
+  modalLineaEl.classList.add("hidden");
+  modalLineaEl.dataset.index = "";
+}
+
+function saveLineaModal() {
+  if (!modalLineaEl) return;
+  const idxStr = modalLineaEl.dataset.index;
+  if (idxStr === undefined || idxStr === "") return;
+
+  const index = Number(idxStr);
+  const linea = appState.lineasProyecto[index];
+  if (!linea) return;
+
+  const desc = modalLineaEl.querySelector("#modal_desc").value || "";
+  const ud = toNum(modalLineaEl.querySelector("#modal_ud").value);
+  const pvp = toNum(modalLineaEl.querySelector("#modal_pvp").value);
+  const incluir = modalLineaEl.querySelector("#modal_incluir").checked;
+
+  linea.descripcion = desc;
+  linea.cantidad = ud;
+  linea.pvp = pvp;
+  linea.incluir = incluir;
+
+  closeLineaModal();
+  const filtroRef = document.getElementById("filtroRef");
+  const filtro = filtroRef ? filtroRef.value.trim().toLowerCase() : "";
+  rebuildPresupuestoTable(filtro);
+  recalcularPresupuesto();
+}
+
+// ==============================
+// TABLA + CÁLCULOS
+// ==============================
+
 function rebuildPresupuestoTable(filtroRefTexto) {
   const tbody = document.getElementById("tbodyPresupuesto");
   if (!tbody) return;
@@ -186,11 +314,19 @@ function rebuildPresupuestoTable(filtroRefTexto) {
 
     const tr = document.createElement("tr");
 
+    // Click en toda la fila → abrir modal
+    tr.onclick = () => {
+      openLineaModal(idx);
+    };
+
     const tdCheck = document.createElement("td");
     tdCheck.className = "col-check";
     const chk = document.createElement("input");
     chk.type = "checkbox";
     chk.checked = linea.incluir !== false;
+    chk.onclick = (e) => {
+      e.stopPropagation(); // para no abrir el modal
+    };
     chk.onchange = () => {
       linea.incluir = chk.checked;
       recalcularPresupuesto();
@@ -210,10 +346,10 @@ function rebuildPresupuestoTable(filtroRefTexto) {
     inputUd.min = "0";
     inputUd.step = "1";
     inputUd.value = linea.cantidad;
+    inputUd.onclick = (e) => e.stopPropagation();
     inputUd.onchange = () => {
       linea.cantidad = toNum(inputUd.value);
       recalcularPresupuesto();
-      // actualizar subtotal fila
       tdImporte.textContent = formatCurrency(
         (Number(linea.cantidad) || 0) * (Number(linea.pvp) || 0)
       );
@@ -273,7 +409,7 @@ function recalcularPresupuesto() {
         <span>${formatCurrency(baseImp)}</span>
       </div>
       <div class="totales-row">
-        <span>IVA ${appState.aplicarIVA ? "21%" : "(no aplicado)"}</span>
+        <span>IVA ${appState.aplicarIVA ? "21%" : "(no aplicado)"} </span>
         <span>${formatCurrency(iva)}</span>
       </div>
       <div class="totales-row total">
