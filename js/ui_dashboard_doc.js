@@ -1,28 +1,32 @@
 // js/ui_dashboard_doc.js
-// Solo pantalla de Documentación para el programa de Presupuestos
+// Pestaña de documentación (solo texto informativo)
 
-function renderDoc(container) {
+function renderDashboardDoc(container) {
   container.innerHTML = `
-    <div class="page-title">Documentación</div>
+    <div class="page-title">Documentación 2N</div>
     <div class="page-subtitle">
-      Hojas técnicas, declaraciones de conformidad y memoria descriptiva.
-      (Pendiente de implementar: aquí solo definimos el diseño base.)
+      Información orientativa para acompañar el presupuesto en fase de diseño.
     </div>
 
     <div class="card">
-      <div class="card-header">Documentación del sistema 2N</div>
-      <p style="font-size:0.9rem; color:#6b7280; margin-top:4px;">
-        En esta sección añadiremos:
-      </p>
-      <ul style="font-size:0.9rem; color:#4b5563; margin-top:8px; padding-left:18px;">
-        <li>Hojas de datos de los dispositivos 2N incluidos en el presupuesto.</li>
-        <li>Declaraciones de conformidad y certificados necesarios.</li>
-        <li>Memoria descriptiva generada automáticamente a partir del proyecto.</li>
+      <div class="card-header">Notas generales</div>
+      <ul style="font-size:0.85rem; color:#4b5563; padding-left:18px; margin-top:8px;">
+        <li style="margin-bottom:4px;">
+          Todos los precios son orientativos y deben confirmarse con la tarifa oficial vigente.
+        </li>
+        <li style="margin-bottom:4px;">
+          La alimentación de los equipos se realizará mediante switches PoE dimensionados
+          según el consumo de cada dispositivo.
+        </li>
+        <li style="margin-bottom:4px;">
+          La solución admite desvío de llamadas a móvil, control de accesos por Bluetooth,
+          códigos PIN, tarjetas RFID/NFC y códigos QR temporales.
+        </li>
+        <li>
+          El sistema es ampliable e integrable con domótica, PMS y sistemas terceros de seguridad
+          según las necesidades del proyecto.
+        </li>
       </ul>
-      <p style="font-size:0.85rem; color:#9ca3af; margin-top:10px;">
-        * De momento esta pantalla es estática. Más adelante conectaremos con Firestore o con una
-        carpeta de documentación para generar PDFs y dossiers completos de forma automática.
-      </p>
     </div>
   `;
 }
