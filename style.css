@@ -14,11 +14,10 @@ body {
 
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-  background: #f3f4f6;
+  background: #f4f6fb; /* fondo tipo Salesforce */
   color: #111827;
 }
 
-/* Links */
 a {
   color: inherit;
   text-decoration: none;
@@ -33,7 +32,7 @@ a {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(circle at top, #e5f0ff 0, #f3f4f6 55%, #e5e7eb 100%);
+  background: radial-gradient(circle at top, #e5f0ff 0, #f4f6fb 55%, #e5e7eb 100%);
   padding: 16px;
 }
 
@@ -69,36 +68,30 @@ a {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  transition:
-    transform 0.08s ease,
-    box-shadow 0.12s ease,
-    background-color 0.12s ease,
-    border-color 0.12s ease;
+  transition: 0.12s ease;
   white-space: nowrap;
 }
 
 .btn-blue {
-  background: #2563eb;
+  background: #0176d3;
   color: #ffffff;
-  box-shadow: 0 10px 25px rgba(37, 99, 235, 0.35);
+  box-shadow: 0 8px 20px rgba(1, 118, 211, 0.35);
 }
 
 .btn-blue:hover {
-  background: #1d4ed8;
+  background: #01509a;
   transform: translateY(-1px);
-  box-shadow: 0 14px 28px rgba(37, 99, 235, 0.45);
 }
 
 .btn-outline {
   background: #ffffff;
-  border: 1px solid #e5e7eb;
+  border: 1px solid #d0d7e2;
   color: #111827;
-  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.03);
 }
 
 .btn-outline:hover {
   background: #f9fafb;
-  border-color: #d1d5db;
+  border-color: #c3cce0;
 }
 
 .btn-full {
@@ -113,25 +106,18 @@ a {
 .input {
   width: 100%;
   border-radius: 10px;
-  border: 1px solid #d1d5db;
+  border: 1px solid #d0d7e2;
   padding: 8px 10px;
   font-size: 0.88rem;
   outline: none;
   background: #f9fafb;
-  transition:
-    border-color 0.12s ease,
-    box-shadow 0.12s ease,
-    background-color 0.12s ease;
+  transition: 0.12s ease;
 }
 
 .input:focus {
-  border-color: #2563eb;
+  border-color: #0176d3;
   background: #ffffff;
-  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.4);
-}
-
-.input::placeholder {
-  color: #9ca3af;
+  box-shadow: 0 0 0 1px rgba(1, 118, 211, 0.4);
 }
 
 .textarea-notas {
@@ -140,7 +126,7 @@ a {
 }
 
 /* ===========================
-   SHELL + NAV
+   SHELL + NAV (Salesforce)
    =========================== */
 
 .app-shell {
@@ -149,90 +135,92 @@ a {
   min-height: 100vh;
 }
 
-/* Barra superior más blanca y moderna */
+/* Barra superior */
 .main-nav {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 10px 18px;
-  background: linear-gradient(90deg, #ffffff, #f9fafb);
+  background: linear-gradient(180deg, #ffffff, #f7f9fc);
+  border-bottom: 1px solid #d0d7e2;
   color: #111827;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
-  border-bottom: 1px solid #e5e7eb;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
   position: sticky;
   top: 0;
-  z-index: 10;
+  z-index: 20;
 }
 
 .nav-left {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
-/* Píldora de marca estilo SaaS */
 .brand-pill {
-  padding: 4px 10px;
-  font-size: 0.75rem;
+  padding: 4px 12px;
   border-radius: 999px;
-  background: #eef2ff;
-  color: #4f46e5;
-  font-weight: 500;
+  background: #e5f3ff;
+  color: #0176d3;
+  font-size: 0.75rem;
+  font-weight: 600;
 }
 
 .app-title {
-  font-weight: 600;
   font-size: 1rem;
+  font-weight: 600;
 }
 
 .nav-tabs {
   display: flex;
-  gap: 6px;
+  gap: 4px;
   margin-left: 16px;
 }
 
-/* Tabs más claros y modernos */
 .nav-tab {
-  padding: 6px 12px;
-  border-radius: 999px;
+  position: relative;
+  padding: 8px 14px;
   border: none;
   background: transparent;
   color: #6b7280;
   font-size: 0.8rem;
+  border-radius: 4px 4px 0 0;
   cursor: pointer;
-  transition:
-    background-color 0.12s ease,
-    color 0.12s ease,
-    box-shadow 0.12s ease,
-    transform 0.08s ease;
+  transition: 0.12s ease;
 }
 
 .nav-tab:hover {
-  background: #e5e7eb;
+  background: #eef1f7;
   color: #111827;
 }
 
 .nav-tab.active {
-  background: #111827;
-  color: #f9fafb;
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.4);
-  transform: translateY(-1px);
+  background: #ffffff;
+  color: #0176d3;
+  font-weight: 600;
+}
+
+.nav-tab.active::after {
+  content: "";
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: -6px;
+  height: 3px;
+  border-radius: 999px;
+  background: #0176d3;
 }
 
 .nav-right {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 0.8rem;
 }
 
-/* Chip de usuario más limpio */
 .user-chip {
   padding: 4px 10px;
   border-radius: 999px;
   background: #f3f4f6;
-  color: #111827;
-  border: 1px solid #e5e7eb;
+  border: 1px solid #d0d7e2;
 }
 
 /* ===========================
@@ -249,11 +237,10 @@ a {
   margin: 0 auto;
 }
 
-/* Cabeceras de páginas */
 .page-title {
   font-size: 1.3rem;
   font-weight: 600;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 
 .page-subtitle {
@@ -262,42 +249,44 @@ a {
   margin-bottom: 18px;
 }
 
-.page-header-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 12px;
-}
+/* ===========================
+   CARDS (Salesforce)
+   =========================== */
 
-/* Cards */
 .card {
   background: #ffffff;
-  border-radius: 18px;
+  border-radius: 12px;
   padding: 16px 18px;
-  box-shadow: 0 18px 35px rgba(15, 23, 42, 0.08);
+  border: 1px solid #e5e9f2;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
   margin-bottom: 18px;
 }
 
 .card-soft {
-  background: #f9fafb;
+  background: #f7f9fc;
+  border-radius: 12px;
+  padding: 16px 18px;
+  border: 1px solid #e0e6f1;
 }
 
 .card-header {
   font-size: 0.95rem;
   font-weight: 600;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .card-section-title {
   font-size: 0.8rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
   margin-bottom: 8px;
 }
 
-/* Grid */
+/* ===========================
+   GRID
+   =========================== */
+
 .grid-2 {
   display: grid;
   grid-template-columns: 1.2fr 1fr;
@@ -310,12 +299,6 @@ a {
   gap: 16px;
 }
 
-.grid-3 {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-}
-
 .field-label {
   font-size: 0.78rem;
   font-weight: 500;
@@ -324,7 +307,7 @@ a {
 }
 
 /* ===========================
-   PRESUPUESTO
+   PRESUPUESTO – TABLA SALESFORCE
    =========================== */
 
 .layout-presupuesto {
@@ -333,59 +316,11 @@ a {
   gap: 18px;
 }
 
-.totales-box {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.totales-row {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.92rem;
-}
-
-.totales-row.total {
-  font-weight: 600;
-  font-size: 1rem;
-  margin-top: 4px;
-}
-
-.badge-light {
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: #e5e7eb;
-  font-size: 0.7rem;
-}
-
-/* Chips resumen */
-.summary-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  border-radius: 999px;
-  background: #111827;
-  color: #e5e7eb;
-  font-size: 0.75rem;
-}
-
-.summary-chip .dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  background: #22c55e;
-}
-
-.hidden {
-  display: none !important;
-}
-
-/* Tabla líneas presupuesto */
 .table-wrapper {
-  border-radius: 16px;
+  border-radius: 12px;
   background: #ffffff;
-  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+  border: 1px solid #e5e9f2;
   overflow: hidden;
 }
 
@@ -393,9 +328,9 @@ a {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 12px;
-  border-bottom: 1px solid #e5e7eb;
-  background: linear-gradient(to right, #f9fafb, #eef2ff);
+  padding: 10px 14px;
+  border-bottom: 1px solid #e5e9f2;
+  background: linear-gradient(to right, #f9fafb, #eef3ff);
 }
 
 .table-header-title {
@@ -403,81 +338,84 @@ a {
   font-weight: 600;
 }
 
-.table-actions {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-}
-
-.table-actions label {
-  font-size: 0.75rem;
-  color: #6b7280;
-}
-
 .table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   font-size: 0.78rem;
 }
 
 .table thead {
-  background: #f3f4f6;
+  background: #f4f6fb;
+  border-bottom: 1px solid #e5e9f2;
 }
 
 .table th,
 .table td {
-  padding: 6px 8px;
+  padding: 8px 10px;
   border-bottom: 1px solid #e5e7eb;
-  text-align: left;
+  vertical-align: middle;
 }
 
 .table th {
-  font-weight: 500;
-  color: #6b7280;
+  font-weight: 600;
+  color: #4b5563;
 }
 
-.table tr:nth-child(even) td {
-  background: #f9fafb;
+/* Zebra suave */
+.table tbody tr:nth-child(even) td {
+  background: #fafbff;
 }
 
-.table tr:hover td {
-  background: #eef2ff;
+/* Hover azul Salesforce */
+.table tbody tr:hover td {
+  background: #eef3ff;
 }
 
-/* Inputs pequeños en tabla */
-.table input[type="number"] {
-  width: 70px;
-  padding: 4px 6px;
-  font-size: 0.75rem;
+.col-ref {
+  width: 100px;
+  font-weight: 600;
+  color: #111827;
 }
 
-.table .col-ref {
-  width: 90px;
-}
-
-.table .col-check {
-  width: 32px;
+.col-check {
+  width: 40px;
   text-align: center;
 }
 
-/* ===========================
-   PROYECTO / TARIFA
-   =========================== */
-
-.info-text {
-  font-size: 0.83rem;
-  color: #6b7280;
+.col-check input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
 }
 
-.tag-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  background: #e0f2fe;
-  color: #075985;
+/* Inputs de unidades */
+.table input[type="number"] {
+  width: 72px;
+  padding: 4px 6px;
+  border-radius: 8px;
+  border: 1px solid #d0d7e2;
+  background: #f9fafb;
+}
+
+.table input[type="number"]:focus {
+  outline: none;
+  border-color: #0176d3;
+  box-shadow: 0 0 0 1px rgba(1, 118, 211, 0.25);
+  background: #ffffff;
+}
+
+/* Totales */
+.totales-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.92rem;
+  padding: 2px 0;
+}
+
+.totales-row.total {
+  font-weight: 600;
+  font-size: 1rem;
 }
 
 /* ===========================
