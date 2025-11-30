@@ -1,12 +1,13 @@
 // js/main.js
+// Arranque principal de la aplicación
 
 document.addEventListener("DOMContentLoaded", () => {
-  // Inicializar UI de login (definida en ui_login.js)
+  // Inicializar UI del login (definido en ui_login.js)
   if (typeof initLoginUI === "function") {
     initLoginUI();
   }
 
-  // Empezar a escuchar cambios de autenticación
+  // Escuchar cambios de autenticación (app.js)
   if (typeof initOnAuthChange === "function") {
     initOnAuthChange();
   }
