@@ -16,10 +16,7 @@ const TARIFAS_DOC_VERSION = "v1";
 let tarifaProductosMap = null;
 let tarifaDocLoaded = false;
 
-/**
- * Carga el documento tarifas/v1 UNA sola vez
- * y guarda en memoria el campo "productos" (MAP)
- */
+// Cargar doc tarifas/v1 una sola vez
 async function ensureTarifaLoaded() {
   if (tarifaDocLoaded && tarifaProductosMap) return;
 
@@ -35,7 +32,7 @@ async function ensureTarifaLoaded() {
     }
 
     const data = snap.data() || {};
-    // aquí está el MAP con todas las refs
+    // 👇 aquí está el MAP con todos los productos
     tarifaProductosMap = data.productos || {};
     tarifaDocLoaded = true;
 
@@ -50,22 +47,18 @@ async function ensureTarifaLoaded() {
   }
 }
 
-/**
- * Carga en caché solo las refs que faltan, usando el MAP productos del doc tarifas/v1
- */
+// Cargar en caché solo las refs que falten
 async function loadTarifasForRefs(refs) {
   if (!refs || !refs.length) return;
 
-  // normalizamos
   const limpias = [...new Set(refs.map(r => String(r || "").trim()).filter(Boolean))];
-
   const pendientes = limpias.filter(ref => !tarifasCache[ref]);
+
   if (!pendientes.length) {
     console.log("[Tarifa] Todas las refs ya estaban cacheadas.");
     return;
   }
 
-  // aseguramos tener cargado tarifas/v1
   await ensureTarifaLoaded();
 
   if (!tarifaProductosMap) {
@@ -81,7 +74,7 @@ async function loadTarifasForRefs(refs) {
       return;
     }
 
-    // en tu estructura, los datos “reales” están en prod.campos_originales
+    // En tu estructura, los datos están en prod.campos_originales
     const co = prod.campos_originales || prod;
 
     const descripcion =
@@ -113,9 +106,6 @@ async function loadTarifasForRefs(refs) {
   );
 }
 
-/**
- * API opcional, aquí no hace falta precarga global
- */
 async function loadTarifasIfNeeded() {
   await ensureTarifaLoaded();
 }
