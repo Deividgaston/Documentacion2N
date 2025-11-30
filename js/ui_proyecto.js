@@ -4,89 +4,143 @@
 function renderProyecto(container) {
   container.innerHTML = `
     <div class="page-title">Proyecto</div>
-    <div class="page-subtitle">Importa el Excel del proyecto para generar el presupuesto.</div>
+    <div class="page-subtitle">
+      Importa el Excel del proyecto para generar el presupuesto con la tarifa 2N.
+    </div>
 
     <div class="card">
       <div class="card-header">Importar proyecto</div>
-      <input type="file" id="fileProyecto" accept=".xlsx,.xls"/>
-      <button class="btn btn-blue" id="btnProyecto" style="margin-top:16px;">Procesar proyecto</button>
-      <div id="resProyecto" style="margin-top:16px; font-size:0.9rem;"></div>
+      <p class="info-text" style="margin-bottom:10px;">
+        El Excel debe contener al menos columnas de <strong>Referencia</strong> y <strong>Cantidad</strong>.
+        Opcionalmente también <strong>Descripción</strong>.
+      </p>
+      <input type="file" id="fileProyecto" accept=".xlsx,.xls" />
+      <button class="btn btn-blue" id="btnProyecto" style="margin-top:12px;">Procesar proyecto</button>
+      <div id="resProyecto" style="margin-top:14px; font-size:0.85rem;"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">Estado</div>
+      <p class="info-text" id="estadoProyecto">
+        ${
+          appState.lineasProyecto.length
+            ? `Actualmente hay <strong>${appState.lineasProyecto.length}</strong> líneas cargadas.`
+            : "Todavía no se ha importado ningún proyecto."
+        }
+      </p>
     </div>
   `;
 
-  document.getElementById("btnProyecto").onclick = procesarProyectoExcel;
-}
-
-async function procesarProyectoExcel() {
-  const file = document.getElementById("fileProyecto").files[0];
+  const fileInput = document.getElementById("fileProyecto");
+  const btn = document.getElementById("btnProyecto");
   const out = document.getElementById("resProyecto");
+  const estado = document.getElementById("estadoProyecto");
 
-  if (!file) {
-    out.innerHTML = `<span style="color:red;">Selecciona un archivo.</span>`;
-    return;
-  }
-
-  out.innerHTML = "Procesando proyecto…";
-
-  const tarifas = await loadTarifasOnce();
-
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    const data = new Uint8Array(e.target.result);
-    const wb = XLSX.read(data, { type: "array" });
-    const sheet = wb.Sheets[wb.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
-
-    if (!rows.length) {
-      out.innerHTML = `<span style="color:red;">El Excel del proyecto está vacío.</span>`;
-      return;
-    }
-
-    const sample = rows[0];
-    const cols = Object.keys(sample);
-    const colRef = cols.find((c) => /sku|ref|referencia/i.test(c));
-    const colQty = cols.find((c) => /cant|qty|cantidad/i.test(c));
-
-    if (!colRef || !colQty) {
+  btn.onclick = async () => {
+    if (!fileInput.files || !fileInput.files[0]) {
       out.innerHTML =
-        `<span style="color:red;">No encuentro columnas de referencia/cantidad.</span>`;
+        `<span style="color:#b91c1c;">Selecciona un archivo Excel primero.</span>`;
       return;
     }
 
-    const lineas = [];
-    let conTarifa = 0;
-    let sinTarifa = 0;
+    btn.disabled = true;
+    btn.textContent = "Procesando...";
+    out.innerHTML = "";
 
-    rows.forEach((r) => {
-      const ref = r[colRef]?.toString().trim();
-      if (!ref) return;
+    const file = fileInput.files[0];
 
-      const qty = Number(r[colQty] || 0);
-      if (!qty) return;
+    try {
+      const tarifas = await loadTarifasOnce(); // 1 sola lectura máx.
+      leerExcelComoMatriz(file, (err, rows) => {
+        btn.disabled = false;
+        btn.textContent = "Procesar proyecto";
 
-      const tarifa = tarifas[ref];
+        if (err) {
+          console.error(err);
+          out.innerHTML =
+            `<span style="color:#b91c1c;">No se ha podido leer el Excel.</span>`;
+          return;
+        }
 
-      if (tarifa) conTarifa++;
-      else sinTarifa++;
+        if (!rows || rows.length < 2) {
+          out.innerHTML =
+            `<span style="color:#b91c1c;">El Excel no tiene datos suficientes.</span>`;
+          return;
+        }
 
-      lineas.push({
-        referencia: ref,
-        cantidad: qty,
-        nombreTarifa: tarifa ? tarifa.nombre : "",
-        pvp: tarifa ? tarifa.pvp : 0
+        const header = rows[0].map((h) => String(h || "").toLowerCase());
+
+        const idxRef = header.findIndex((h) => h.includes("ref"));
+        const idxQty = header.findIndex(
+          (h) => h.includes("cant") || h.includes("qty") || h.includes("ud")
+        );
+        const idxDesc = header.findIndex(
+          (h) => h.includes("desc") || h.includes("concepto")
+        );
+
+        if (idxRef === -1 || idxQty === -1) {
+          out.innerHTML = `
+            <span style="color:#b91c1c;">
+              No se han encontrado columnas de referencia/cantidad. Revisa los encabezados.
+            </span>`;
+          return;
+        }
+
+        const lineas = [];
+        let conTarifa = 0;
+        let sinTarifa = 0;
+
+        for (let i = 1; i < rows.length; i++) {
+          const r = rows[i] || [];
+          const ref = (r[idxRef] || "").toString().trim();
+          if (!ref) continue;
+
+          const qty = toNum(r[idxQty]);
+          if (!qty) continue;
+
+          const descExcel =
+            idxDesc >= 0 ? (r[idxDesc] || "").toString().trim() : "";
+
+          const tarifaItem = tarifas[ref] || null;
+          const pvp = tarifaItem ? toNum(tarifaItem.pvp || tarifaItem.PVP || tarifaItem.precio) : 0;
+          const descTarifa = tarifaItem ? tarifaItem.descripcion || "" : "";
+
+          const linea = {
+            ref,
+            descripcion: descExcel || descTarifa || "",
+            cantidad: qty,
+            pvp,
+            incluir: !!tarifaItem // por defecto solo entra si tiene precio en tarifa
+          };
+
+          if (tarifaItem) conTarifa++;
+          else sinTarifa++;
+
+          lineas.push(linea);
+        }
+
+        appState.lineasProyecto = lineas;
+
+        out.innerHTML = `
+          <p>
+            <strong>${lineas.length}</strong> líneas procesadas.<br>
+            Con tarifa: <strong>${conTarifa}</strong><br>
+            Sin tarifa: <strong>${sinTarifa}</strong>
+          </p>
+          <p class="info-text" style="margin-top:6px;">
+            Ahora puedes ir a la pestaña <strong>Presupuesto</strong> para ajustar cantidades,
+            descuentos y exportar a PDF/Excel.
+          </p>
+        `;
+
+        estado.innerHTML = `Actualmente hay <strong>${lineas.length}</strong> líneas cargadas.`;
       });
-    });
-
-    appState.lineasProyecto = lineas;
-
-    out.innerHTML = `
-      <p>
-        <strong>${lineas.length}</strong> líneas procesadas<br>
-        Con tarifa: <strong>${conTarifa}</strong><br>
-        Sin tarifa: <strong>${sinTarifa}</strong>
-      </p>
-    `;
+    } catch (e) {
+      console.error(e);
+      btn.disabled = false;
+      btn.textContent = "Procesar proyecto";
+      out.innerHTML =
+        `<span style="color:#b91c1c;">Error inesperado cargando tarifa/proyecto.</span>`;
+    }
   };
-
-  reader.readAsArrayBuffer(file);
 }
