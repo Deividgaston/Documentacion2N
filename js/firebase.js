@@ -13,7 +13,15 @@ const firebaseConfig = {
 // Inicializar Firebase (solo una vez)
 firebase.initializeApp(firebaseConfig);
 
+// Referencias globales
+const app = firebase.app();
 const auth = firebase.auth();
 const db = firebase.firestore();
 const storage = firebase.storage();
-const googleProvider = new firebase.auth.GoogleAuthProvider();
+
+// (Opcional) Ajustes de Firestore
+// db.settings({ ignoreUndefinedProperties: true });
+
+console.log(
+  "%cFirebase inicializado correctamente",
+  "color:#16a34a; font-weight:600;");
