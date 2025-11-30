@@ -18,10 +18,10 @@ function renderShell() {
         <div class="app-header-left">
           <div class="app-brand">Presupuestos 2N</div>
           <nav class="top-tabs">
-            <button class="tab-btn" id="navProyecto" data-tab="proyecto">Proyecto</button>
-            <button class="tab-btn" id="navPresupuesto" data-tab="presupuesto">Presupuesto</button>
-            <button class="tab-btn" id="navTarifa" data-tab="tarifa">Tarifa 2N</button>
-            <button class="tab-btn" id="navDocs" data-tab="docs">Documentación</button>
+            <button class="tab-btn" data-tab="proyecto" id="navProyecto">Proyecto</button>
+            <button class="tab-btn" data-tab="presupuesto" id="navPresupuesto">Presupuesto</button>
+            <button class="tab-btn" data-tab="tarifa" id="navTarifa">Tarifa 2N</button>
+            <button class="tab-btn" data-tab="docs" id="navDocs">Documentación</button>
           </nav>
         </div>
         <div class="app-header-right">
@@ -60,7 +60,7 @@ function renderShell() {
 
 function switchTab(tab) {
   appState.currentTab = tab;
-  renderShell(); // repinta barra + contenido con la pestaña activa subrayada
+  renderShell(); // repinta y subraya la pestaña activa
 }
 
 function renderShellContent() {
@@ -68,21 +68,31 @@ function renderShellContent() {
   if (!content) return;
 
   if (appState.currentTab === "proyecto") {
-    typeof renderProyecto === "function"
-      ? renderProyecto(content)
-      : (content.innerHTML = "<p>No se encontró la página de Proyecto.</p>");
+    if (typeof renderProyecto === "function") {
+      renderProyecto(content);
+    } else {
+      content.innerHTML = "<p>No se encontró la página de Proyecto.</p>";
+    }
   } else if (appState.currentTab === "presupuesto") {
-    typeof renderPresupuesto === "function"
-      ? renderPresupuesto(content)
-      : (content.innerHTML = "<p>No se encontró la página de Presupuesto.</p>");
+    if (typeof renderPresupuesto === "function") {
+      renderPresupuesto(content);
+    } else {
+      content.innerHTML = "<p>No se encontró la página de Presupuesto.</p>";
+    }
   } else if (appState.currentTab === "tarifa") {
-    if (typeof renderTarifa === "function") renderTarifa(content);
-    else if (typeof renderTarifa2N === "function") renderTarifa2N(content);
-    else content.innerHTML = "<p>No se encontró la página de Tarifa 2N.</p>";
+    if (typeof renderTarifa === "function") {
+      renderTarifa(content);
+    } else if (typeof renderTarifa2N === "function") {
+      renderTarifa2N(content);
+    } else {
+      content.innerHTML = "<p>No se encontró la página de Tarifa 2N.</p>";
+    }
   } else if (appState.currentTab === "docs") {
-    typeof renderDocumentacion === "function"
-      ? renderDocumentacion(content)
-      : (content.innerHTML = "<p>No se encontró la página de Documentación.</p>");
+    if (typeof renderDocumentacion === "function") {
+      renderDocumentacion(content);
+    } else {
+      content.innerHTML = "<p>No se encontró la página de Documentación.</p>";
+    }
   } else {
     content.innerHTML = "<p>Pestaña no reconocida.</p>";
   }
