@@ -1,5 +1,5 @@
 // ======================================
-// 1) CONFIGURACIÓN FIREBASE (REAL TUYA)
+// 1) CONFIGURACIÓN FIREBASE (REAL)
 // ======================================
 const firebaseConfig = {
   apiKey: "AIzaSyDzVSSaP2wNJenJov-5S9PsYWWUp-HITz0",
@@ -10,17 +10,14 @@ const firebaseConfig = {
   appId: "1:380694582040:web:d88b2298eecf4f15eec46d"
 };
 
-// Inicializar Firebase v8
 firebase.initializeApp(firebaseConfig);
 
 const auth = firebase.auth();
 const db = firebase.firestore();
 const storage = firebase.storage();
-
 const googleProvider = new firebase.auth.GoogleAuthProvider();
 
 const TARIFA_CACHE_KEY = "tarifa_2n_v1";
-
 
 // ======================================
 // 2) ESTADO GLOBAL
@@ -28,12 +25,15 @@ const TARIFA_CACHE_KEY = "tarifa_2n_v1";
 const appState = {
   user: null,
   loginError: "",
-  tarifas: null
+  tarifas: null,
+  lineasProyecto: []
 };
 
 const appRoot = document.getElementById("app");
 
-function clearApp() { appRoot.innerHTML = ""; }
+function clearApp() {
+  appRoot.innerHTML = "";
+}
 
 function el(tag, className, html) {
   const x = document.createElement(tag);
@@ -41,7 +41,6 @@ function el(tag, className, html) {
   if (html) x.innerHTML = html;
   return x;
 }
-
 
 // ======================================
 // 3) LOGIN GOOGLE
@@ -52,11 +51,15 @@ function renderLogin() {
   const box = el("div", "login-container");
   const title = el("div", "login-title", "Acceso 2N Presupuestos");
 
-  const content = el("div", null, `
+  const content = el(
+    "div",
+    null,
+    `
     <p style="font-size:0.9rem; margin-bottom:16px; text-align:center;">
       Inicia sesión con tu cuenta de Google 2N.
     </p>
-  `);
+  `
+  );
 
   const err = el(
     "div",
@@ -90,7 +93,6 @@ function renderLogin() {
 
   appRoot.appendChild(box);
 }
-
 
 // ======================================
 // 4) PANEL PRINCIPAL
@@ -131,13 +133,13 @@ function renderPanel() {
 
       <div class="card">
         <div class="card-header">2. Proyecto</div>
-        <p>Importar Excel del proyecto.</p>
+        <p>Importar Excel del proyecto y cruzar con tarifas.</p>
         <button class="btn btn-blue" id="goProyecto">Ir a proyectos</button>
       </div>
 
       <div class="card">
         <div class="card-header">3. Presupuesto</div>
-        <p>Generar presupuesto y exportar.</p>
+        <p>Generar presupuesto por rol y exportar.</p>
         <button class="btn btn-blue" id="goPresupuesto">Ir a presupuestos</button>
       </div>
 
@@ -161,9 +163,50 @@ function renderPanel() {
   document.getElementById("goDoc").onclick = renderDoc;
 }
 
+// ======================================
+// 5) UTILIDAD: CARGAR TARIFAS OPTIMIZADO
+// ======================================
+async function loadTarifasOnce() {
+  if (appState.tarifas && Object.keys(appState.tarifas).length > 0) {
+    return appState.tarifas;
+  }
+
+  try {
+    const cached = localStorage.getItem(TARIFA_CACHE_KEY);
+    if (cached) {
+      appState.tarifas = JSON.parse(cached);
+      return appState.tarifas;
+    }
+  } catch (e) {
+    console.warn("Error leyendo tarifas de localStorage", e);
+  }
+
+  try {
+    const snap = await db.collection("tarifas").doc("v1").get();
+    if (snap.exists) {
+      const data = snap.data();
+      const productos = data.productos || {};
+      appState.tarifas = productos;
+      try {
+        localStorage.setItem(TARIFA_CACHE_KEY, JSON.stringify(productos));
+      } catch (e) {
+        console.warn("No se pudieron cachear tarifas", e);
+      }
+      return productos;
+    } else {
+      console.warn("No existe tarifas/v1 en Firestore");
+      appState.tarifas = {};
+      return {};
+    }
+  } catch (e) {
+    console.error("Error cargando tarifas desde Firestore", e);
+    appState.tarifas = {};
+    return {};
+  }
+}
 
 // ======================================
-// 5) MÓDULO TARIFAS
+// 6) MÓDULO TARIFAS
 // ======================================
 function renderTarifas() {
   clearApp();
@@ -171,169 +214,4 @@ function renderTarifas() {
   const top = el("div", "topbar");
   top.innerHTML = `
     <div class="topbar-title">Tarifas 2N</div>
-    <button class="btn-logout" id="logoutBtn">Logout</button>
-  `;
-  top.querySelector("#logoutBtn").onclick = () => auth.signOut();
-
-  const card = el("div", "card");
-
-  card.innerHTML = `
-    <div class="card-header">Importar tarifa Excel → Firestore</div>
-
-    <p style="margin-bottom:10px;">
-      Selecciona el Excel oficial de 2N con la tabla de precios.
-    </p>
-
-    <input type="file" id="fileTarifa" accept=".xlsx,.xls" />
-
-    <button class="btn btn-blue" id="btnProcesar" style="margin-top:16px;">Procesar e importar</button>
-
-    <div id="resultado" style="margin-top:20px; font-size:0.9rem;"></div>
-
-    <button class="btn btn-grey" id="volver" style="margin-top:20px;">Volver al panel</button>
-  `;
-
-  appRoot.appendChild(top);
-  appRoot.appendChild(card);
-
-  document.getElementById("volver").onclick = renderPanel;
-  document.getElementById("btnProcesar").onclick = procesarTarifaExcel;
-}
-
-
-// ======================================
-// 6) PROCESAR TARIFA DESDE EXCEL
-// ======================================
-async function procesarTarifaExcel() {
-  const file = document.getElementById("fileTarifa").files[0];
-  const out = document.getElementById("resultado");
-
-  if (!file) {
-    out.innerHTML = `<span style="color:red;">Selecciona un archivo Excel.</span>`;
-    return;
-  }
-
-  out.innerHTML = "Procesando Excel...";
-
-  const reader = new FileReader();
-  reader.onload = async (e) => {
-    const data = new Uint8Array(e.target.result);
-    const workbook = XLSX.read(data, { type: "array" });
-
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json(sheet);
-
-    const productos = {};
-
-    rows.forEach((r) => {
-      const sku = r["2N SKU"] || r["SKU"] || r["Referencia"];
-      if (!sku) return;
-
-      productos[sku] = {
-        sku: sku,
-        nombre: r["Nombre"] || "",
-        pvp: r["SRP (EUR)"] || 0,
-        precio_distribuidor: r["Distributor Price (EUR)"] || 0,
-        precio_subdistribuidor: r["Recommended Reseller Price 1 (EUR)"] || 0,
-        precio_instalador: r["Recommended Reseller Price 2 (EUR)"] || 0,
-        precio_constructora: r["Recommended Reseller Price 2 (EUR)"] || 0,
-        precio_promotora: r["SRP (EUR)"] || 0,
-        ean: r["EAN"] || "",
-        hs_code: r["CUSTOMS TARIFF NUMBER (HS CODE)"] || "",
-        web: r["Página web"] || "",
-        eol: r["EOL"] || false
-      };
-    });
-
-    out.innerHTML = "Guardando en Firestore...";
-
-    await db.collection("tarifas").doc("v1").set({
-      ultima_actualizacion: new Date().toISOString(),
-      productos: productos
-    });
-
-    localStorage.setItem(TARIFA_CACHE_KEY, JSON.stringify(productos));
-
-    out.innerHTML = `<span style="color:green;">Tarifa importada correctamente.</span>`;
-  };
-
-  reader.readAsArrayBuffer(file);
-}
-
-
-// ======================================
-// 7) OTROS MÓDULOS (PLACEHOLDERS)
-// ======================================
-function renderProyecto() {
-  clearApp();
-  const top = el("div", "topbar");
-  top.innerHTML = `
-    <div class="topbar-title">Proyecto</div>
-    <button class="btn-logout" id="logoutBtn">Logout</button>
-  `;
-  top.querySelector("#logoutBtn").onclick = () => auth.signOut();
-
-  const card = el("div", "card");
-  card.innerHTML = `
-    <div class="card-header">Importar Excel de proyecto</div>
-    <p>Placeholder...</p>
-    <button class="btn btn-grey" onclick="renderPanel()">Volver</button>
-  `;
-
-  appRoot.appendChild(top);
-  appRoot.appendChild(card);
-}
-
-function renderPresupuesto() {
-  clearApp();
-  const top = el("div", "topbar");
-  top.innerHTML = `
-    <div class="topbar-title">Presupuesto</div>
-    <button class="btn-logout" id="logoutBtn">Logout</button>
-  `;
-  top.querySelector("#logoutBtn").onclick = () => auth.signOut();
-
-  const card = el("div", "card");
-  card.innerHTML = `
-    <div class="card-header">Generar presupuesto</div>
-    <p>Placeholder...</p>
-    <button class="btn btn-grey" onclick="renderPanel()">Volver</button>
-  `;
-
-  appRoot.appendChild(top);
-  appRoot.appendChild(card);
-}
-
-function renderDoc() {
-  clearApp();
-  const top = el("div", "topbar");
-  top.innerHTML = `
-    <div class="topbar-title">Documentación & BC3</div>
-    <button class="btn-logout" id="logoutBtn">Logout</button>
-  `;
-  top.querySelector("#logoutBtn").onclick = () => auth.signOut();
-
-  const card = el("div", "card");
-  card.innerHTML = `
-    <div class="card-header">Documentación</div>
-    <p>Placeholder...</p>
-    <button class="btn btn-grey" onclick="renderPanel()">Volver</button>
-  `;
-
-  appRoot.appendChild(top);
-  appRoot.appendChild(card);
-}
-
-
-// ======================================
-// 8) OBSERVADOR AUTH
-// ======================================
-auth.onAuthStateChanged((user) => {
-  if (user) {
-    appState.user = { email: user.email };
-    renderPanel();
-  } else {
-    appState.user = null;
-    renderLogin();
-  }
-});
+    <button class="btn-logout" i
