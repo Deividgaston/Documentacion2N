@@ -1,82 +1,90 @@
 // js/ui_shell.js
-// Shell principal del programa de PRESUPUESTOS 2N
-// NO modifica el HTML ni los estilos existentes.
-// Solo controla qué página se renderiza dentro del contenedor principal.
+// Layout principal + navegación superior del programa de PRESUPUESTOS
 
-if (!window.appState) {
-  window.appState = {};
+function setActiveTab(tab) {
+  appState.activeTab = tab;
+  renderShell();
 }
 
-if (!appState.currentPage) {
-  appState.currentPage = "proyecto";
-}
+function renderShell() {
+  clearApp();
 
-// Intenta encontrar el contenedor principal de contenido
-function getMainContentEl() {
-  return (
-    document.getElementById("mainContent") ||
-    document.getElementById("content") ||
-    document.getElementById("appContent") ||
-    document.getElementById("app") // último recurso
-  );
-}
+  const shell = el("div", "app-shell");
 
-// Marca la pestaña activa en la navegación, si existe
-function markActiveNav(page) {
-  document.querySelectorAll("[data-page]").forEach((btn) => {
-    btn.classList.toggle("nav-item-active", btn.dataset.page === page);
+  // ========== BARRA SUPERIOR ==========
+  const nav = el("div", "main-nav");
+
+  // IZQUIERDA: logo + tabs
+  const navLeft = el("div", "nav-left");
+
+  const brand = el("div", "nav-brand", "2N · Presupuestos");
+  navLeft.appendChild(brand);
+
+  const navTabs = el("div", "nav-tabs");
+
+  const tabs = [
+    { id: "proyecto", label: "Proyecto" },
+    { id: "presupuesto", label: "Presupuesto" },
+    { id: "tarifa", label: "Tarifa 2N" },
+    { id: "doc", label: "Documentación" },
+  ];
+
+  tabs.forEach((t) => {
+    const tabEl = el(
+      "div",
+      "nav-tab" + (appState.activeTab === t.id ? " active" : ""),
+      t.label
+    );
+    tabEl.addEventListener("click", () => setActiveTab(t.id));
+    navTabs.appendChild(tabEl);
   });
+
+  navLeft.appendChild(navTabs);
+
+  // DERECHA: información usuario (simple)
+  const navRight = el("div", "nav-right");
+  const userEmail = appState.user && appState.user.email ? appState.user.email : "Modo local";
+  navRight.appendChild(el("span", "", userEmail));
+
+  nav.appendChild(navLeft);
+  nav.appendChild(navRight);
+
+  // ========== MAIN CONTENT ==========
+  const main = el("div", "main-content");
+  main.id = "mainContent";
+
+  shell.appendChild(nav);
+  shell.appendChild(main);
+
+  appRoot.appendChild(shell);
+
+  renderActiveView();
 }
 
-// Función central para cambiar de página
-function renderShellContent(page) {
-  const contentEl = getMainContentEl();
-  if (!contentEl) {
-    console.error("[Shell] No se encontró contenedor para el contenido (mainContent/content/appContent/app)");
-    return;
-  }
+function renderActiveView() {
+  const c = document.getElementById("mainContent");
+  if (!c) return;
 
-  appState.currentPage = page;
-  markActiveNav(page);
+  c.innerHTML = "";
 
-  if (page === "proyecto") {
-    if (typeof renderProyecto === "function") {
-      renderProyecto(contentEl);
+  if (appState.activeTab === "proyecto") {
+    renderProyecto(c);
+  } else if (appState.activeTab === "presupuesto") {
+    renderPresupuesto(c);
+  } else if (appState.activeTab === "tarifa") {
+    if (typeof renderTarifas === "function") {
+      renderTarifas(c);
     } else {
-      console.error("[Shell] renderProyecto no está definida");
-      contentEl.innerHTML = "<p>Error: página Proyecto no disponible.</p>";
+      c.innerHTML = "<p>No hay vista de tarifas definida.</p>";
     }
-  } else if (page === "presupuesto") {
-    if (typeof renderPresupuesto === "function") {
-      renderPresupuesto(contentEl);
+  } else if (appState.activeTab === "doc") {
+    if (typeof renderDoc === "function") {
+      renderDoc(c);
     } else {
-      console.error("[Shell] renderPresupuesto no está definida");
-      contentEl.innerHTML = "<p>Error: página Presupuesto no disponible.</p>";
+      c.innerHTML = "<p>No hay vista de documentación definida.</p>";
     }
   } else {
-    // Fallback
-    if (typeof renderProyecto === "function") {
-      renderProyecto(contentEl);
-    } else {
-      contentEl.innerHTML = "<p>Error: página no disponible.</p>";
-    }
+    // fallback
+    renderProyecto(c);
   }
 }
-
-// Inicializa los listeners de navegación sin tocar el HTML
-function initShell() {
-  // Asignar eventos a los botones de menú que ya tengas en el HTML
-  document.querySelectorAll("[data-page]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const page = btn.dataset.page;
-      renderShellContent(page);
-    });
-  });
-
-  // Primera carga
-  renderShellContent(appState.currentPage || "proyecto");
-}
-
-document.addEventListener("DOMContentLoaded", () => {
-  initShell();
-});
