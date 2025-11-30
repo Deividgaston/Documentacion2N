@@ -1,7 +1,7 @@
 // js/main.js
-// Punto de entrada: escucha de autenticación
+// Arranque: escucha login de Firebase
 
-auth.onAuthStateChanged((user) => {
+auth.onAuthStateChanged(user => {
   if (user) {
     appState.user = user;
     renderShell();
