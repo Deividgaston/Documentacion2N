@@ -1,5 +1,16 @@
 // ======================================
-// 1) CONFIGURACIÓN FIREBASE (REAL)
+// 0) LOGO BASE64 2N NEGRO (PDF)
+// ======================================
+
+const LOGO_2N_BASE64 = `
+data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAOEAAADhCAYAAAAt5V9bAAAAAXNSR0IArs4c6QAA
+...(recortado para mensaje)... 
+`; 
+// IMPORTANTE: En el siguiente mensaje te paso el LOGO COMPLETO SIN RECORTAR
+// (Este campo es muy largo y se envía en bloque separado)
+
+// ======================================
+// 1) CONFIGURACIÓN FIREBASE
 // ======================================
 const firebaseConfig = {
   apiKey: "AIzaSyDzVSSaP2wNJenJov-5S9PsYWWUp-HITz0",
@@ -11,7 +22,6 @@ const firebaseConfig = {
 };
 
 firebase.initializeApp(firebaseConfig);
-
 const auth = firebase.auth();
 const db = firebase.firestore();
 const storage = firebase.storage();
@@ -28,17 +38,25 @@ const appState = {
   tarifas: null,
   lineasProyecto: [],
   activeTab: "dashboard",
-  rol: "pvp",             // Default sin márgenes
+
+  // CAMPOS DEL PRESUPUESTO
+  infoPresupuesto: {
+    cliente: "",
+    proyecto: "",
+    direccion: "",
+    contacto: "",
+    email: "",
+    telefono: "",
+    notas: "Para la alimentación de los equipos se requiere de un switch PoE acorde con el consumo de los dispositivos."
+  },
+
+  rol: "pvp",
   descuentoGlobal: 0,
   aplicarIVA: false
 };
 
-const appRoot = document.getElementById("app");
-
 // Helpers UI
-function clearApp() {
-  appRoot.innerHTML = "";
-}
+function clearApp() { appRoot.innerHTML = ""; }
 
 function el(tag, className, html) {
   const x = document.createElement(tag);
@@ -48,121 +66,15 @@ function el(tag, className, html) {
 }
 
 // ======================================
-// LOGIN GOOGLE
+// GENERAR NUMERACIÓN DEL PRESUPUESTO
 // ======================================
-function renderLogin() {
-  clearApp();
-  const box = el("div", "login-container");
-  const title = el("div", "login-title", "Acceso 2N Presupuestos");
-
-  const content = el("div", null, `
-    <p style="font-size:0.9rem; margin-bottom:16px; text-align:center;">
-      Inicia sesión con tu cuenta de Google 2N para generar presupuestos.
-    </p>
-  `);
-
-  const err = el("div", null,
-    appState.loginError
-      ? `<p style="color:#e74c3c; font-size:0.85rem; text-align:center;">${appState.loginError}</p>`
-      : ""
-  );
-
-  const btn = el("button", "btn btn-blue", "Entrar con Google");
-  btn.style.width = "100%";
-  btn.onclick = async () => {
-    appState.loginError = "";
-    renderLogin();
-    try {
-      await auth.signInWithPopup(googleProvider);
-    } catch (error) {
-      appState.loginError = "No se pudo iniciar sesión con Google";
-      renderLogin();
-    }
-  };
-
-  content.appendChild(err);
-  content.appendChild(btn);
-
-  box.appendChild(title);
-  box.appendChild(content);
-  appRoot.appendChild(box);
-}
-
-// ======================================
-// SHELL + NAV
-// ======================================
-function setActiveTab(tab) {
-  appState.activeTab = tab;
-  renderShell();
-}
-
-function renderShell() {
-  clearApp();
-  const shell = el("div", "app-shell");
-  const nav = el("div", "main-nav");
-
-  const navLeft = el("div", "nav-left");
-  const brand = el("div", "nav-brand", "Presupuestos 2N");
-
-  const tabs = el("div", "nav-tabs");
-  [
-    ["dashboard", "Dashboard"],
-    ["proyecto", "Proyecto"],
-    ["presupuesto", "Presupuesto"],
-    ["doc", "Documentación"],
-    ["tarifa", "Tarifa 2N"]
-  ].forEach(([id, label]) => {
-    const t = el(
-      "div",
-      "nav-tab" + (appState.activeTab === id ? " active" : ""),
-      label
-    );
-    t.onclick = () => setActiveTab(id);
-    tabs.appendChild(t);
-  });
-
-  navLeft.appendChild(brand);
-  navLeft.appendChild(tabs);
-
-  const navRight = el("div", "nav-right");
-  navRight.innerHTML = `
-    <span>${appState.user?.email || ""}</span>
-    <button class="btn-logout" id="btnLogout">Salir</button>
-  `;
-  nav.appendChild(navLeft);
-  nav.appendChild(navRight);
-
-  const main = el("div", "main-content");
-  main.id = "mainContent";
-
-  shell.appendChild(nav);
-  shell.appendChild(main);
-  appRoot.appendChild(shell);
-
-  document.getElementById("btnLogout").onclick = () => auth.signOut();
-
-  renderActiveView();
-}
-
-function renderActiveView() {
-  const c = document.getElementById("mainContent");
-  c.innerHTML = "";
-
-  if (appState.activeTab === "dashboard") renderDashboard(c);
-  else if (appState.activeTab === "proyecto") renderProyecto(c);
-  else if (appState.activeTab === "presupuesto") renderPresupuesto(c);
-  else if (appState.activeTab === "tarifa") renderTarifas(c);
-  else if (appState.activeTab === "doc") renderDoc(c);
-}
-
-// ======================================
-// DASHBOARD
-// ======================================
-function renderDashboard(container) {
-  container.innerHTML = `
-    <div class="page-title">Dashboard general</div>
-    <div class="page-subtitle">Resumen del estado del sistema.</div>
-  `;
+function generarCodigoPresupuesto() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth()+1).padStart(2,"0");
+  const d = String(now.getDate()).padStart(2,"0");
+  const rand = String(Math.floor(Math.random()*9999)).padStart(4,"0");
+  return `2N-${y}${m}${d}-${rand}`;
 }
 
 // ======================================
@@ -184,7 +96,6 @@ async function loadTarifasOnce() {
   } else {
     appState.tarifas = {};
   }
-
   return appState.tarifas;
 }
 
@@ -202,200 +113,71 @@ function findHeaderKey(keys, regexList) {
   }
   return null;
 }
-
 // ======================================
-// TARIFA 2N
+// PRESUPUESTO — UI COMPLETA
 // ======================================
-function renderTarifas(container) {
-  container.innerHTML = `
-    <div class="page-title">Tarifa 2N</div>
-    <div class="page-subtitle">Importa la tarifa oficial.</div>
 
-    <div class="card">
-      <div class="card-header">Actualizar tarifa</div>
-      <input type="file" id="fileTarifa" accept=".xlsx,.xls"/>
-      <button class="btn btn-blue" id="btnProcesar" style="margin-top:16px;">Importar tarifa</button>
-      <div id="resultado" style="margin-top:16px; font-size:0.9rem;"></div>
-    </div>
-  `;
-
-  document.getElementById("btnProcesar").onclick = procesarTarifaExcel;
-}
-
-async function procesarTarifaExcel() {
-  const file = document.getElementById("fileTarifa").files[0];
-  const out = document.getElementById("resultado");
-
-  if (!file) {
-    out.innerHTML = `<span style="color:red;">Selecciona un archivo.</span>`;
-    return;
-  }
-
-  out.innerHTML = "Procesando…";
-
-  const reader = new FileReader();
-  reader.onload = async (e) => {
-    const data = new Uint8Array(e.target.result);
-    const wb = XLSX.read(data, { type: "array" });
-
-    const sheet = wb.Sheets[wb.SheetNames[0]];
-    const matrix = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
-
-    let headerRow = -1;
-    for (let i = 0; i < matrix.length; i++) {
-      if (matrix[i].some(c => String(c).toLowerCase().includes("2n sku"))) {
-        headerRow = i;
-        break;
-      }
-    }
-
-    if (headerRow === -1) {
-      out.innerHTML = `<span style="color:red;">No se encontró columna 2N SKU.</span>`;
-      return;
-    }
-
-    const rows = XLSX.utils.sheet_to_json(sheet, {
-      range: headerRow,
-      defval: ""
-    });
-
-    const keys = Object.keys(rows[0]);
-
-    const skuKey = findHeaderKey(keys, [/sku/i]);
-    const nombreKey = findHeaderKey(keys, [/nombre/i]);
-    const msrpKey = findHeaderKey(keys, [/msrp/i, /pvp/i]);
-
-    const productos = {};
-    let count = 0;
-
-    rows.forEach(r => {
-      const sku = r[skuKey]?.toString().trim();
-      if (!sku) return;
-
-      productos[sku] = {
-        sku,
-        nombre: r[nombreKey] || "",
-        pvp: toNum(r[msrpKey]),
-        campos_originales: r
-      };
-
-      count++;
-    });
-
-    await db.collection("tarifas").doc("v1").set({
-      ultima_actualizacion: new Date().toISOString(),
-      total_productos: count,
-      productos
-    });
-
-    localStorage.setItem(TARIFA_CACHE_KEY, JSON.stringify(productos));
-    appState.tarifas = productos;
-
-    out.innerHTML = `<span style="color:green;">Tarifa importada (${count} productos).</span>`;
-  };
-
-  reader.readAsArrayBuffer(file);
-}
-
-// ======================================
-// PROYECTO
-// ======================================
-function renderProyecto(container) {
-  container.innerHTML = `
-    <div class="page-title">Proyecto</div>
-    <div class="page-subtitle">Importa el Excel del proyecto.</div>
-
-    <div class="card">
-      <div class="card-header">Importar proyecto</div>
-      <input type="file" id="fileProyecto" accept=".xlsx,.xls"/>
-      <button class="btn btn-blue" id="btnProyecto" style="margin-top:16px;">Procesar proyecto</button>
-      <div id="resProyecto" style="margin-top:16px; font-size:0.9rem;"></div>
-    </div>
-  `;
-
-  document.getElementById("btnProyecto").onclick = procesarProyectoExcel;
-}
-
-async function procesarProyectoExcel() {
-  const file = document.getElementById("fileProyecto").files[0];
-  const out = document.getElementById("resProyecto");
-
-  if (!file) {
-    out.innerHTML = `<span style="color:red;">Selecciona un archivo.</span>`;
-    return;
-  }
-
-  out.innerHTML = "Procesando…";
-
-  const tarifas = await loadTarifasOnce();
-
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    const data = new Uint8Array(e.target.result);
-    const wb = XLSX.read(data, { type: "array" });
-    const sheet = wb.Sheets[wb.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
-
-    const sample = rows[0];
-    const cols = Object.keys(sample);
-
-    const colRef = cols.find(c => /sku|ref|referencia/i.test(c));
-    const colQty = cols.find(c => /cant|qty/i.test(c));
-
-    const lineas = [];
-    let conTarifa = 0;
-    let sinTarifa = 0;
-
-    rows.forEach(r => {
-      const ref = r[colRef]?.toString().trim();
-      if (!ref) return;
-
-      const qty = Number(r[colQty] || 0);
-      const tarifa = tarifas[ref];
-
-      if (tarifa) conTarifa++;
-      else sinTarifa++;
-
-      lineas.push({
-        referencia: ref,
-        cantidad: qty,
-        nombreTarifa: tarifa ? tarifa.nombre : "",
-        pvp: tarifa ? tarifa.pvp : null
-      });
-    });
-
-    appState.lineasProyecto = lineas;
-
-    out.innerHTML = `
-      <p>
-        <strong>${lineas.length}</strong> líneas procesadas<br>
-        Con tarifa: <strong>${conTarifa}</strong><br>
-        Sin tarifa: <strong>${sinTarifa}</strong>
-      </p>
-    `;
-  };
-
-  reader.readAsArrayBuffer(file);
-}
-
-// ======================================
-// PRESUPUESTO (MÓDULO COMPLETO)
-// ======================================
 function renderPresupuesto(container) {
   container.innerHTML = `
     <div class="page-title">Presupuesto</div>
-    <div class="page-subtitle">Generador profesional basado en PVP.</div>
+    <div class="page-subtitle">Generador profesional — basado en PVP, descuento global e IVA opcional.</div>
 
+    <!-- FORMULARIO DE DATOS DEL PRESUPUESTO -->
     <div class="card">
-      <div class="card-header">Opciones</div>
+      <div class="card-header">Datos del presupuesto</div>
+
+      <div class="form-grid">
+        <div>
+          <label>Cliente</label>
+          <input type="text" id="p_cliente" class="input" value="${appState.infoPresupuesto.cliente}">
+        </div>
+
+        <div>
+          <label>Proyecto / Obra</label>
+          <input type="text" id="p_proyecto" class="input" value="${appState.infoPresupuesto.proyecto}">
+        </div>
+
+        <div>
+          <label>Dirección</label>
+          <input type="text" id="p_direccion" class="input" value="${appState.infoPresupuesto.direccion}">
+        </div>
+
+        <div>
+          <label>Persona de contacto</label>
+          <input type="text" id="p_contacto" class="input" value="${appState.infoPresupuesto.contacto}">
+        </div>
+
+        <div>
+          <label>Email del contacto</label>
+          <input type="email" id="p_email" class="input" value="${appState.infoPresupuesto.email}">
+        </div>
+
+        <div>
+          <label>Teléfono</label>
+          <input type="text" id="p_telefono" class="input" value="${appState.infoPresupuesto.telefono}">
+        </div>
+      </div>
+
+      <label style="margin-top:20px;">Notas adicionales:</label>
+      <textarea id="p_notas" class="input" style="height:100px;">${appState.infoPresupuesto.notas}</textarea>
+
+      <button class="btn btn-blue" style="margin-top:16px;" id="btnGuardarDatos">
+        Guardar datos
+      </button>
+    </div>
+
+
+    <!-- OPCIONES DE CÁLCULO -->
+    <div class="card" style="margin-top:20px;">
+      <div class="card-header">Opciones del cálculo</div>
 
       <label>Rol:</label>
       <select id="rolSelect" class="input">
-        <option value="pvp">PVP (sin márgenes)</option>
-        <option value="distribuidor">Distribuidor</option>
-        <option value="subdistribuidor">Subdistribuidor</option>
-        <option value="integrador">Integrador</option>
-        <option value="promotora">Promotora / constructora</option>
+        <option value="pvp" ${appState.rol==="pvp"?"selected":""}>PVP (sin márgenes)</option>
+        <option value="distribuidor" ${appState.rol==="distribuidor"?"selected":""}>Distribuidor</option>
+        <option value="subdistribuidor" ${appState.rol==="subdistribuidor"?"selected":""}>Subdistribuidor</option>
+        <option value="integrador" ${appState.rol==="integrador"?"selected":""}>Integrador</option>
+        <option value="promotora" ${appState.rol==="promotora"?"selected":""}>Promotora / Constructora</option>
       </select>
 
       <label style="margin-top:12px;">Descuento global (%):</label>
@@ -406,20 +188,42 @@ function renderPresupuesto(container) {
         Aplicar IVA (21%)
       </label>
 
-      <button class="btn btn-blue" style="margin-top:16px;" id="btnRecalcular">Recalcular</button>
+      <button class="btn btn-blue" style="margin-top:16px;" id="btnRecalcular">
+        Recalcular
+      </button>
     </div>
 
+
+    <!-- TABLA DEL PRESUPUESTO -->
     <div class="card" style="margin-top:20px;">
       <div class="card-header">Líneas del presupuesto</div>
       <div id="tablaPresupuesto"></div>
     </div>
 
+    <!-- TOTALES -->
     <div class="card" style="margin-top:20px;">
       <div class="card-header">Totales</div>
       <div id="totalesPresupuesto"></div>
+
+      <button class="btn btn-blue" id="btnPdf" style="margin-top:20px;">Exportar PDF</button>
+      <button class="btn btn-blue" id="btnExcel" style="margin-top:10px;">Exportar Excel</button>
     </div>
   `;
 
+  // Guardar datos de cabecera
+  document.getElementById("btnGuardarDatos").onclick = () => {
+    appState.infoPresupuesto.cliente = document.getElementById("p_cliente").value;
+    appState.infoPresupuesto.proyecto = document.getElementById("p_proyecto").value;
+    appState.infoPresupuesto.direccion = document.getElementById("p_direccion").value;
+    appState.infoPresupuesto.contacto = document.getElementById("p_contacto").value;
+    appState.infoPresupuesto.email = document.getElementById("p_email").value;
+    appState.infoPresupuesto.telefono = document.getElementById("p_telefono").value;
+    appState.infoPresupuesto.notas = document.getElementById("p_notas").value;
+
+    alert("Datos del presupuesto guardados.");
+  };
+
+  // Eventos de cálculo
   document.getElementById("btnRecalcular").onclick = () => {
     appState.rol = document.getElementById("rolSelect").value;
     appState.descuentoGlobal = Number(document.getElementById("descuentoGlobal").value || 0);
@@ -427,9 +231,18 @@ function renderPresupuesto(container) {
     recalcularPresupuesto();
   };
 
+  // Eventos exportación (se implementa en bloque 3)
+  document.getElementById("btnPdf").onclick = () => generarPDF();
+  document.getElementById("btnExcel").onclick = () => generarExcel();
+
   recalcularPresupuesto();
 }
 
+
+
+// ======================================
+// FUNCIONES DE CÁLCULO
+// ======================================
 function recalcularPresupuesto() {
   const contTabla = document.getElementById("tablaPresupuesto");
   const contTotales = document.getElementById("totalesPresupuesto");
@@ -440,6 +253,7 @@ function recalcularPresupuesto() {
     return;
   }
 
+  // TABLA
   let html = `
     <table class="table-simple">
       <thead>
@@ -458,13 +272,13 @@ function recalcularPresupuesto() {
 
   appState.lineasProyecto.forEach(l => {
     const pvp = Number(l.pvp || 0);
-    const totalLinea = l.cantidad * pvp;
+    const totalLinea = pvp * l.cantidad;
     subtotal += totalLinea;
 
     html += `
       <tr>
         <td>${l.referencia}</td>
-        <td>${l.nombreTarifa || ""}</td>
+        <td>${l.nombreTarifa}</td>
         <td class="text-right">${l.cantidad}</td>
         <td class="text-right">${pvp.toFixed(2)} €</td>
         <td class="text-right">${totalLinea.toFixed(2)} €</td>
@@ -475,11 +289,11 @@ function recalcularPresupuesto() {
   html += `</tbody></table>`;
   contTabla.innerHTML = html;
 
-  // DESCUENTO
+  // CÁLCULO DESCUENTO
   const descuentoEur = subtotal * (appState.descuentoGlobal / 100);
   const baseImponible = subtotal - descuentoEur;
 
-  // IVA opcional
+  // IVA
   let iva = 0;
   if (appState.aplicarIVA) iva = baseImponible * 0.21;
 
@@ -493,25 +307,175 @@ function recalcularPresupuesto() {
     <p style="font-size:1.1rem; margin-top:10px;">TOTAL: <strong>${totalFinal.toFixed(2)} €</strong></p>
   `;
 }
+// ======================================
+// BLOQUE 3 — EXPORTAR PDF + EXCEL
+// ======================================
+
+// LIBRERÍA jsPDF + autotable
+// Añade esto en tu index.html si no está ya:
+//
+// <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+// <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
 
 // ======================================
-// DOCUMENTACIÓN
+// GENERACIÓN DEL PDF PROFESIONAL (A4 landscape)
 // ======================================
-function renderDoc(container) {
-  container.innerHTML = `
-    <div class="page-title">Documentación</div>
-    <p>Pendiente de implementar.</p>
-  `;
+
+async function generarPDF() {
+  const { jsPDF } = window.jspdf;
+
+  const pdf = new jsPDF({
+    orientation: "landscape",
+    unit: "pt",
+    format: "a4"
+  });
+
+  // --------------------------
+  // CABECERA + LOGO
+  // --------------------------
+  const codigo = generarCodigoPresupuesto();
+
+  pdf.addImage(LOGO_2N_BASE64, "PNG", 40, 30, 140, 60);
+
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(18);
+  pdf.text("Presupuesto de Suministro de Videoportero IP y Control de Accesos 2N", 200, 60);
+
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(12);
+  pdf.text(`Código: ${codigo}`, 200, 80);
+
+  // --------------------------
+  // DATOS DEL PRESUPUESTO
+  // --------------------------
+  const d = appState.infoPresupuesto;
+
+  pdf.setFontSize(11);
+  pdf.text(`Cliente: ${d.cliente || "-"}`, 40, 120);
+  pdf.text(`Proyecto / Obra: ${d.proyecto || "-"}`, 40, 140);
+  pdf.text(`Dirección: ${d.direccion || "-"}`, 40, 160);
+  pdf.text(`Contacto: ${d.contacto || "-"}`, 300, 120);
+  pdf.text(`Email: ${d.email || "-"}`, 300, 140);
+  pdf.text(`Teléfono: ${d.telefono || "-"}`, 300, 160);
+
+  // --------------------------
+  // TABLA DE LÍNEAS
+  // --------------------------
+  const body = appState.lineasProyecto.map(l => ([
+    l.referencia,
+    l.nombreTarifa,
+    l.cantidad,
+    l.pvp.toFixed(2) + " €",
+    (l.cantidad * l.pvp).toFixed(2) + " €"
+  ]));
+
+  pdf.autoTable({
+    startY: 200,
+    head: [["Ref", "Descripción", "Cant.", "PVP", "Total línea"]],
+    body: body,
+    theme: "grid",
+    styles: { fontSize: 10, cellPadding: 4 },
+    headStyles: { fillColor: [0, 0, 0], textColor: 255 },
+  });
+
+  let finalY = pdf.lastAutoTable.finalY + 30;
+
+  // --------------------------
+  // TOTALES
+  // --------------------------
+  const subtotal = appState.lineasProyecto.reduce((acc, l) => acc + l.cantidad * l.pvp, 0);
+  const descEu = subtotal * (appState.descuentoGlobal / 100);
+  const baseImp = subtotal - descEu;
+  const iva = appState.aplicarIVA ? baseImp * 0.21 : 0;
+  const total = baseImp + iva;
+
+  pdf.setFontSize(12);
+  pdf.text(`Subtotal: ${subtotal.toFixed(2)} €`, 40, finalY);
+  pdf.text(`Descuento (${appState.descuentoGlobal}%): -${descEu.toFixed(2)} €`, 40, finalY + 20);
+  pdf.text(`Base imponible: ${baseImp.toFixed(2)} €`, 40, finalY + 40);
+  pdf.text(`IVA (21%): ${iva.toFixed(2)} €`, 300, finalY + 20);
+  pdf.setFont("helvetica", "bold");
+  pdf.text(`TOTAL: ${total.toFixed(2)} €`, 300, finalY + 50);
+  pdf.setFont("helvetica", "normal");
+
+  // --------------------------
+  // NOTAS
+  // --------------------------
+  finalY += 90;
+  pdf.setFontSize(11);
+  pdf.text("Notas:", 40, finalY);
+  pdf.setFontSize(10);
+  pdf.text(d.notas || "", 40, finalY + 20);
+
+  // --------------------------
+  // CONDICIONES COMERCIALES
+  // --------------------------
+  const condiciones = [
+    "• Presupuesto válido durante 30 días naturales.",
+    "• Precios sin IVA.",
+    "• Material sujeto a disponibilidad.",
+    "• Plazo estimado de entrega 2–4 semanas.",
+    "• Garantía estándar 36 meses.",
+    "• No incluye instalación ni puesta en marcha.",
+    "• Cualquier modificación puede afectar al precio final."
+  ];
+
+  pdf.setFontSize(11);
+  pdf.text("Condiciones generales:", 40, finalY + 80);
+  pdf.setFontSize(10);
+  let y = finalY + 100;
+
+  condiciones.forEach(c => {
+    pdf.text(c, 40, y);
+    y += 18;
+  });
+
+  pdf.save(`Presupuesto_${codigo}.pdf`);
 }
 
 // ======================================
-// OBSERVADOR LOGIN
+// EXPORTACIÓN A EXCEL
 // ======================================
-auth.onAuthStateChanged((user) => {
-  if (user) {
-    appState.user = user;
-    renderShell();
-  } else {
-    renderLogin();
-  }
-});
+function generarExcel() {
+  const codigo = generarCodigoPresupuesto();
+
+  const wb = XLSX.utils.book_new();
+
+  // Primera hoja: líneas
+  const rows = [
+    ["Ref", "Descripción", "Cantidad", "PVP", "Total línea"]
+  ];
+
+  appState.lineasProyecto.forEach(l => {
+    rows.push([
+      l.referencia,
+      l.nombreTarifa,
+      l.cantidad,
+      l.pvp,
+      l.cantidad * l.pvp
+    ]);
+  });
+
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  XLSX.utils.book_append_sheet(wb, ws, "Presupuesto");
+
+  // Hoja totales
+  const subtotal = appState.lineasProyecto.reduce((acc, l) => acc + l.cantidad * l.pvp, 0);
+  const descEu = subtotal * (appState.descuentoGlobal / 100);
+  const baseImp = subtotal - descEu;
+  const iva = appState.aplicarIVA ? baseImp * 0.21 : 0;
+  const total = baseImp + iva;
+
+  const rows2 = [
+    ["Subtotal", subtotal],
+    [`Descuento ${appState.descuentoGlobal}%`, -descEu],
+    ["Base imponible", baseImp],
+    ["IVA (21%)", iva],
+    ["TOTAL", total]
+  ];
+
+  const ws2 = XLSX.utils.aoa_to_sheet(rows2);
+  XLSX.utils.book_append_sheet(wb, ws2, "Totales");
+
+  XLSX.writeFile(wb, `Presupuesto_${codigo}.xlsx`);
+}
