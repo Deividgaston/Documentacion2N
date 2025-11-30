@@ -5,12 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>2N · Programa Presupuestos</title>
 
+    <!-- CSS principal -->
     <link rel="stylesheet" href="style.css" />
+
+    <!-- Favicon opcional -->
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
   </head>
 
   <body>
-    <!-- LOGIN PAGE -->
+    <!-- =========================================================
+         LOGIN PAGE
+    ========================================================== -->
     <div id="loginPage" class="login-page" style="display: none">
       <div class="login-card">
         <h2 class="login-title">Acceso</h2>
@@ -46,44 +51,41 @@
       </div>
     </div>
 
-    <!-- APP SHELL (DESPUÉS DE LOGIN) -->
+    <!-- =========================================================
+         APP SHELL (DESPUÉS DEL LOGIN)
+    ========================================================== -->
     <div id="appShell" class="app-shell" style="display: none">
-      <!-- BARRA SUPERIOR TIPO SALESFORCE LIGHTNING -->
+      <!-- ===== BARRA SUPERIOR TIPO SALESFORCE ===== -->
       <header class="app-topbar">
+        <!-- Título + Subtitle -->
         <div class="app-topbar-left">
           <div class="app-topbar-title">Programa Presupuestos 2N</div>
 
           <div id="currentViewSubtitle" class="app-topbar-subtitle">
-            Presupuestos 2N · Uso interno. Datos orientativos, validar siempre
-            con tarifa actualizada.
+            Presupuestos 2N · Uso interno · Validar siempre con tarifa actual.
           </div>
         </div>
 
-        <!-- MENÚ SUPERIOR (TABS) -->
+        <!-- ===== Tabs Superiores ===== -->
         <nav class="app-topbar-center">
           <a
             href="#"
             class="top-nav-link active"
             data-view="proyecto"
             id="navProyecto"
+            >Proyecto</a
           >
-            Proyecto
-          </a>
 
-          <a href="#" class="top-nav-link" data-view="presupuesto">
-            Presupuesto
-          </a>
+          <a href="#" class="top-nav-link" data-view="presupuesto"
+            >Presupuesto</a
+          >
 
-          <a href="#" class="top-nav-link" data-view="tarifa">
-            Tarifa 2N
-          </a>
+          <a href="#" class="top-nav-link" data-view="tarifa">Tarifa 2N</a>
 
-          <a href="#" class="top-nav-link" data-view="docs">
-            Documentación
-          </a>
+          <a href="#" class="top-nav-link" data-view="docs">Documentación</a>
         </nav>
 
-        <!-- USUARIO + LOGOUT -->
+        <!-- ===== Usuario + Logout ===== -->
         <div class="app-topbar-right">
           <span id="userBadge" class="badge-user">Usuario</span>
           <button id="btnLogout" class="btn btn-secondary btn-sm">
@@ -92,13 +94,13 @@
         </div>
       </header>
 
-      <!-- CONTENIDO DINÁMICO -->
+      <!-- ===== CONTENIDO CENTRAL ===== -->
       <main id="appContent" class="app-content"></main>
     </div>
 
-    <!-- ==========================
+    <!-- =========================================================
          LIBRERÍAS
-    =========================== -->
+    ========================================================== -->
 
     <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -106,12 +108,12 @@
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 
-    <!-- Excel -->
+    <!-- Excel (SheetJS) -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
-    <!-- ==========================
-         ARCHIVOS DEL PROYECTO
-    =========================== -->
+    <!-- =========================================================
+         ARCHIVOS PRINCIPALES DEL PROYECTO
+    ========================================================== -->
 
     <!-- Firebase config -->
     <script src="js/firebase.js"></script>
@@ -123,7 +125,7 @@
     <!-- Utilidades -->
     <script src="js/utils.js"></script>
 
-    <!-- UI -->
+    <!-- UI Components -->
     <script src="js/ui_login.js"></script>
     <script src="js/ui_shell.js"></script>
     <script src="js/ui_proyecto.js"></script>
@@ -131,10 +133,10 @@
     <script src="js/ui_tarifa.js"></script>
     <script src="js/ui_dashboard_doc.js"></script>
 
-    <!-- PDF / Excel -->
+    <!-- PDF y Excel export -->
     <script src="js/pdf_excel.js"></script>
 
-    <!-- Inicialización de la app -->
+    <!-- Core app -->
     <script src="app.js"></script>
     <script src="js/main.js"></script>
   </body>
