@@ -1,68 +1,92 @@
 // js/ui_shell.js
-// Shell principal con navbar tipo Salesforce
+// Shell principal + navegación
 
 function renderShell() {
-  const root = document.getElementById("app");
-  const user = auth.currentUser;
-  const nombre = user?.displayName || user?.email || "Usuario";
-  const inicial = (nombre || "?").charAt(0).toUpperCase();
+  clearApp();
 
-  root.innerHTML = `
-    <div>
-      <header class="navbar">
-        <div class="navbar-left">
-          <div class="navbar-title">Presupuestos 2N</div>
-          <nav class="navbar-tabs">
-            <div class="nav-tab" data-tab="proyecto">Proyecto</div>
-            <div class="nav-tab" data-tab="presupuesto">Presupuesto</div>
-            <div class="nav-tab" data-tab="tarifa">Tarifa 2N</div>
-            <div class="nav-tab" data-tab="docs">Documentación</div>
-          </nav>
-        </div>
-        <div class="navbar-right">
-          <div class="nav-avatar">${inicial}</div>
-          <div class="nav-username">${nombre}</div>
-          <div class="logout-link" id="logoutLink">Cerrar sesión</div>
-        </div>
-      </header>
+  const shell = el("div", "app-shell");
 
-      <main id="shellContent"></main>
-    </div>
-  `;
+  // NAVBAR
+  const nav = el("div", "main-nav");
 
-  // activar pestaña
-  document.querySelectorAll(".nav-tab").forEach(el => {
-    const tab = el.getAttribute("data-tab");
-    if (tab === appState.currentTab) {
-      el.classList.add("nav-tab-active");
-    }
-    el.onclick = () => {
-      appState.currentTab = tab;
-      renderShell();
+  const left = el("div", "nav-left");
+  const brand = el("div", "brand-pill", "2N · Presupuestos");
+  const title = el("div", "app-title", "Generador de presupuestos");
+
+  const tabs = el("div", "nav-tabs");
+
+  const tabsDef = [
+    { id: "proyecto", label: "Proyecto" },
+    { id: "presupuesto", label: "Presupuesto" },
+    { id: "tarifa", label: "Tarifa 2N" },
+    { id: "doc", label: "Documentación" }
+  ];
+
+  tabsDef.forEach((t) => {
+    const b = el("button", "nav-tab" + (appState.activeTab === t.id ? " active" : ""), t.label);
+    b.dataset.tab = t.id;
+    b.onclick = () => {
+      appState.activeTab = t.id;
+      document
+        .querySelectorAll(".nav-tab")
+        .forEach((x) => x.classList.toggle("active", x.dataset.tab === t.id));
+      renderShellContent(); // solo re-render del cuerpo
     };
+    tabs.appendChild(b);
   });
 
-  document.getElementById("logoutLink").onclick = () => {
-    auth.signOut().then(() => location.reload());
-  };
+  left.appendChild(brand);
+  left.appendChild(title);
+  left.appendChild(tabs);
+
+  const right = el("div", "nav-right");
+  const userChip = el(
+    "div",
+    "user-chip",
+    appState.user ? appState.user.email || appState.user.displayName || "Usuario" : "Invitado"
+  );
+  const btnLogout = el("button", "btn btn-outline btn-sm", "Cerrar sesión");
+  btnLogout.onclick = () => auth.signOut();
+
+  right.appendChild(userChip);
+  right.appendChild(btnLogout);
+
+  nav.appendChild(left);
+  nav.appendChild(right);
+
+  // MAIN CONTENT
+  const main = el("div", "app-main");
+  const inner = el("div", "app-inner");
+  inner.id = "appContent";
+  main.appendChild(inner);
+
+  // FOOTER
+  const footer = el(
+    "div",
+    "app-footer",
+    "Presupuestos 2N · Uso interno. Datos y precios orientativos, validar siempre con tarifa actualizada."
+  );
+
+  shell.appendChild(nav);
+  shell.appendChild(main);
+  shell.appendChild(footer);
+
+  appRoot.appendChild(shell);
 
   renderShellContent();
 }
 
 function renderShellContent() {
-  const content = document.getElementById("shellContent");
-  content.innerHTML = "";
+  const container = document.getElementById("appContent");
+  if (!container) return;
 
-  if (appState.currentTab === "proyecto") {
-    renderProyecto(content);
-  } else if (appState.currentTab === "presupuesto") {
-    renderPresupuesto(content);
-  } else if (appState.currentTab === "tarifa") {
-    renderTarifa(content);
-  } else {
-    content.innerHTML = `<p>Sección en preparación.</p>`;
+  if (appState.activeTab === "proyecto") {
+    renderProyecto(container);
+  } else if (appState.activeTab === "presupuesto") {
+    renderPresupuesto(container);
+  } else if (appState.activeTab === "tarifa") {
+    renderTarifa(container);
+  } else if (appState.activeTab === "doc") {
+    renderDashboardDoc(container);
   }
 }
-
-window.renderShell = renderShell;
-window.renderShellContent = renderShellContent;
