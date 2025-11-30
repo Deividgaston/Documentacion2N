@@ -1,5 +1,5 @@
 /* ===========================
-   RESET BÁSICO + BODY
+   RESET + BODY
    =========================== */
 * {
   margin: 0;
@@ -7,7 +7,8 @@
   box-sizing: border-box;
 }
 
-html, body {
+html,
+body {
   height: 100%;
 }
 
@@ -18,9 +19,8 @@ body {
 }
 
 /* ===========================
-   BOTONES GENÉRICOS
+   BOTONES
    =========================== */
-
 button {
   font-family: inherit;
   border: none;
@@ -51,20 +51,20 @@ button {
 
 .btn-blue:active {
   transform: translateY(0);
-  box-shadow: 0 4px 10px rgba(79,124,249,0.35);
+  box-shadow: 0 4px 10px rgba(79, 124, 249, 0.35);
 }
 
 .btn-logout {
   padding: 6px 12px;
   border-radius: 999px;
   background: transparent;
-  border: 1px solid rgba(255,255,255,0.5);
+  border: 1px solid rgba(255, 255, 255, 0.5);
   color: #ffffff;
   font-size: 0.8rem;
 }
 
 .btn-logout:hover {
-  background: rgba(255,255,255,0.12);
+  background: rgba(255, 255, 255, 0.12);
 }
 
 /* ===========================
@@ -88,7 +88,7 @@ button {
 }
 
 /* ===========================
-   SHELL + NAV
+   SHELL + NAV (estilo CRM 2N)
    =========================== */
 
 .app-shell {
@@ -102,9 +102,9 @@ button {
   align-items: center;
   justify-content: space-between;
   padding: 10px 32px;
-  background: #111827;
-  color: #ffffff;
-  box-shadow: 0 6px 16px rgba(15,23,42,0.45);
+  background: #ffffff;
+  color: #111827;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.12);
   position: sticky;
   top: 0;
   z-index: 10;
@@ -117,22 +117,23 @@ button {
 }
 
 .nav-brand {
-  font-size: 1.2rem;
-  font-weight: 600;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #2563eb;
   letter-spacing: 0.03em;
 }
 
 .nav-tabs {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 20px;
 }
 
 .nav-tab {
   position: relative;
   padding: 6px 4px;
   font-size: 0.95rem;
-  opacity: 0.75;
+  opacity: 0.7;
   cursor: pointer;
   transition: opacity 0.15s ease;
 }
@@ -149,10 +150,10 @@ button {
 .nav-tab.active::after {
   content: "";
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -6px;
-  height: 2px;
+  left: -6px;
+  right: -6px;
+  bottom: -8px;
+  height: 4px;
   border-radius: 999px;
   background: #4f7cf9;
 }
@@ -176,8 +177,8 @@ button {
 }
 
 .page-title {
-  font-size: 1.4rem;
-  font-weight: 600;
+  font-size: 1.6rem;
+  font-weight: 700;
   margin-bottom: 4px;
 }
 
@@ -195,14 +196,47 @@ button {
   background: #ffffff;
   border-radius: 18px;
   padding: 18px 20px 20px;
-  box-shadow: 0 12px 30px rgba(15,23,42,0.12);
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
   margin-bottom: 12px;
 }
 
 .card-header {
   font-size: 0.95rem;
   font-weight: 600;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
+}
+
+/* KPI dashboard */
+.card-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.kpi-card {
+  padding: 20px 22px;
+}
+
+.kpi-label {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #6b7280;
+  margin-bottom: 6px;
+}
+
+.kpi-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #111827;
+}
+
+.kpi-ok {
+  color: #14532d;
+}
+
+.kpi-bad {
+  color: #b91c1c;
 }
 
 /* ===========================
@@ -236,7 +270,7 @@ label {
 
 .input:focus {
   border-color: #4f7cf9;
-  box-shadow: 0 0 0 1px rgba(79,124,249,0.3);
+  box-shadow: 0 0 0 1px rgba(79, 124, 249, 0.3);
   background: #ffffff;
 }
 
@@ -279,8 +313,241 @@ label {
 }
 
 /* ===========================
-   RESPONSIVE BÁSICO
+   PRESUPUESTO LAYOUT BONITO
    =========================== */
+
+.page-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.summary-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 999px;
+  background: #111827;
+  color: #f9fafb;
+  padding: 6px 14px;
+  font-size: 0.8rem;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.4);
+  white-space: nowrap;
+}
+
+.summary-chip .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #22c55e;
+}
+
+.summary-chip.hidden {
+  display: none;
+}
+
+.layout-presupuesto {
+  display: grid;
+  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+  gap: 18px;
+}
+
+.presupuesto-side {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.presupuesto-main {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.card-soft {
+  background: linear-gradient(135deg, #ffffff, #f9fafb);
+}
+
+.card-highlight {
+  background: #111827;
+  color: #f9fafb;
+}
+
+.card-highlight .card-header {
+  color: #e5e7eb;
+}
+
+.card-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.badge-light {
+  font-size: 0.7rem;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.06);
+  color: #4b5563;
+}
+
+.subtext-lines {
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+.btn-full {
+  width: 100%;
+}
+
+.textarea-notas {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.form-inline {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  margin-top: 4px;
+}
+
+.checkbox-row {
+  padding-bottom: 4px;
+  font-size: 0.85rem;
+}
+
+/* Totales */
+.totales-grid {
+  margin-top: 6px;
+}
+
+.totales-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.9rem;
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.totales-row:last-child {
+  border-bottom: none;
+}
+
+.totales-row-total {
+  margin-top: 4px;
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+/* Botones exportar dentro del bloque oscuro */
+.export-buttons {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.btn-outline {
+  background: transparent;
+  box-shadow: none;
+  border: 1px solid rgba(248, 250, 252, 0.35);
+}
+
+.btn-outline:hover {
+  background: rgba(248, 250, 252, 0.08);
+}
+
+/* Tabla responsiva */
+.table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+}
+
+/* ===========================
+   KANBAN PIPELINE (tipo Salesforce)
+   =========================== */
+
+.kanban-board {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+  overflow-x: auto;
+}
+
+.kanban-column {
+  background: #f9fafb;
+  border-radius: 16px;
+  padding: 10px;
+  min-width: 220px;
+  max-height: 520px;
+  display: flex;
+  flex-direction: column;
+}
+
+.kanban-column-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.kanban-column-title {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #4b5563;
+}
+
+.kanban-count {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #e5edff;
+  color: #1d4ed8;
+}
+
+.kanban-column-body {
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.kanban-card {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 10px 10px 8px;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
+  margin-bottom: 8px;
+}
+
+.kanban-card-title {
+  font-size: 0.9rem;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.kanban-card-meta {
+  font-size: 0.75rem;
+  color: #9ca3af;
+}
+
+.kanban-empty {
+  font-size: 0.8rem;
+  color: #9ca3af;
+}
+
+/* ===========================
+   RESPONSIVE
+   =========================== */
+
+@media (max-width: 900px) {
+  .layout-presupuesto {
+    grid-template-columns: 1fr;
+  }
+}
 
 @media (max-width: 768px) {
   .main-nav {
@@ -300,5 +567,15 @@ label {
 
   .card {
     padding: 16px 14px 18px;
+  }
+
+  .kanban-board {
+    grid-template-columns: repeat(3, minmax(220px, 1fr));
+  }
+}
+
+@media (max-width: 550px) {
+  .kanban-board {
+    grid-template-columns: repeat(2, minmax(220px, 1fr));
   }
 }
