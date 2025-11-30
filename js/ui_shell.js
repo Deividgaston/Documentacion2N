@@ -1,76 +1,92 @@
 // js/ui_shell.js
-// Layout principal + navegación superior del programa de PRESUPUESTOS
-
-function setActiveTab(tab) {
-  appState.activeTab = tab;
-  renderShell();
-}
+// Shell principal + navegación
 
 function renderShell() {
   clearApp();
 
   const shell = el("div", "app-shell");
+
+  // NAVBAR
   const nav = el("div", "main-nav");
 
-  // IZQUIERDA: logo + tabs
-  const navLeft = el("div", "nav-left");
-  const brand = el("div", "nav-brand", "Presupuestos 2N");
+  const left = el("div", "nav-left");
+  const brand = el("div", "brand-pill", "2N · Presupuestos");
+  const title = el("div", "app-title", "Generador de presupuestos");
 
   const tabs = el("div", "nav-tabs");
-  const items = [
-    ["proyecto", "Proyecto"],
-    ["presupuesto", "Presupuesto"],
-    ["tarifa", "Tarifa 2N"],
-    ["doc", "Documentación"]
+
+  const tabsDef = [
+    { id: "proyecto", label: "Proyecto" },
+    { id: "presupuesto", label: "Presupuesto" },
+    { id: "tarifa", label: "Tarifa 2N" },
+    { id: "doc", label: "Documentación" }
   ];
 
-  items.forEach(([id, label]) => {
-    const t = el(
-      "div",
-      "nav-tab" + (appState.activeTab === id ? " active" : ""),
-      label
-    );
-    t.onclick = () => setActiveTab(id);
-    tabs.appendChild(t);
+  tabsDef.forEach((t) => {
+    const b = el("button", "nav-tab" + (appState.activeTab === t.id ? " active" : ""), t.label);
+    b.dataset.tab = t.id;
+    b.onclick = () => {
+      appState.activeTab = t.id;
+      document
+        .querySelectorAll(".nav-tab")
+        .forEach((x) => x.classList.toggle("active", x.dataset.tab === t.id));
+      renderShellContent(); // solo re-render del cuerpo
+    };
+    tabs.appendChild(b);
   });
 
-  navLeft.appendChild(brand);
-  navLeft.appendChild(tabs);
+  left.appendChild(brand);
+  left.appendChild(title);
+  left.appendChild(tabs);
 
-  // DERECHA: usuario + logout
-  const navRight = el("div", "nav-right");
-  navRight.innerHTML = `
-    <span>${appState.user?.email || ""}</span>
-    <button class="btn-logout" id="btnLogout">Salir</button>
-  `;
+  const right = el("div", "nav-right");
+  const userChip = el(
+    "div",
+    "user-chip",
+    appState.user ? appState.user.email || appState.user.displayName || "Usuario" : "Invitado"
+  );
+  const btnLogout = el("button", "btn btn-outline btn-sm", "Cerrar sesión");
+  btnLogout.onclick = () => auth.signOut();
 
-  nav.appendChild(navLeft);
-  nav.appendChild(navRight);
+  right.appendChild(userChip);
+  right.appendChild(btnLogout);
 
-  // CONTENIDO
-  const main = el("div", "main-content");
-  main.id = "mainContent";
+  nav.appendChild(left);
+  nav.appendChild(right);
+
+  // MAIN CONTENT
+  const main = el("div", "app-main");
+  const inner = el("div", "app-inner");
+  inner.id = "appContent";
+  main.appendChild(inner);
+
+  // FOOTER
+  const footer = el(
+    "div",
+    "app-footer",
+    "Presupuestos 2N · Uso interno. Datos y precios orientativos, validar siempre con tarifa actualizada."
+  );
 
   shell.appendChild(nav);
   shell.appendChild(main);
+  shell.appendChild(footer);
+
   appRoot.appendChild(shell);
 
-  document.getElementById("btnLogout").onclick = () => auth.signOut();
-
-  renderActiveView();
+  renderShellContent();
 }
 
-function renderActiveView() {
-  const c = document.getElementById("mainContent");
-  c.innerHTML = "";
+function renderShellContent() {
+  const container = document.getElementById("appContent");
+  if (!container) return;
 
   if (appState.activeTab === "proyecto") {
-    renderProyecto(c);
+    renderProyecto(container);
   } else if (appState.activeTab === "presupuesto") {
-    renderPresupuesto(c);
+    renderPresupuesto(container);
   } else if (appState.activeTab === "tarifa") {
-    renderTarifas(c);
+    renderTarifa(container);
   } else if (appState.activeTab === "doc") {
-    renderDoc(c);
+    renderDashboardDoc(container);
   }
 }
