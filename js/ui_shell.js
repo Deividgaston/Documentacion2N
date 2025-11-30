@@ -4,7 +4,8 @@ function setupShellNav() {
   const shell = document.getElementById("appShell");
   if (!shell) return;
 
-  const links = shell.querySelectorAll(".app-nav-link");
+  const links = shell.querySelectorAll(".top-nav-link");
+
   links.forEach((link) => {
     link.addEventListener("click", (ev) => {
       ev.preventDefault();
@@ -14,13 +15,13 @@ function setupShellNav() {
       // Cambiar vista
       selectView(view);
 
-      // Marcar activo en menú
+      // Marcar activo
       links.forEach((l) => l.classList.remove("active"));
       link.classList.add("active");
     });
   });
 
-  // Logout
+  // Botón logout SIEMPRE visible en la barra superior
   const btnLogout = document.getElementById("btnLogout");
   if (btnLogout) {
     btnLogout.addEventListener("click", async () => {
@@ -41,21 +42,25 @@ function selectView(view) {
     case "proyecto":
       renderProyectoView();
       break;
+
     case "presupuesto":
       if (typeof renderPresupuestoView === "function") {
         renderPresupuestoView();
       }
       break;
+
     case "tarifa":
       if (typeof renderTarifaView === "function") {
         renderTarifaView();
       }
       break;
+
     case "docs":
       if (typeof renderDocsView === "function") {
         renderDocsView();
       }
       break;
+
     default:
       renderProyectoView();
   }
