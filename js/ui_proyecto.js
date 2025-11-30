@@ -101,72 +101,114 @@ async function importarProyectoDesdeExcel(file) {
 
 // ======================================================
 // FUNCIÓN: Parseo flexible del Excel Project Designer
+//  - Usa la columna "Número de pedido" como referencia
+//  - Detecta secciones en filas en mayúsculas
 // ======================================================
 function parsearExcelProyectoDesigner(rows) {
   const lineas = [];
+  if (!rows || !rows.length) return lineas;
+
+  let headerRowIndex = -1;
+  let refCol = -1;
+  let descCol = -1;
+  let qtyCol = -1;
+
+  // Buscar cabecera y columnas dentro de las primeras 30 filas
+  const maxHeaderScan = Math.min(rows.length, 30);
+  for (let i = 0; i < maxHeaderScan; i++) {
+    const row = rows[i] || [];
+    for (let c = 0; c < row.length; c++) {
+      const val = (row[c] || "").toString().toLowerCase();
+
+      if (
+        refCol === -1 &&
+        (val.includes("numero de pedido") ||
+          val.includes("número de pedido") ||
+          val.includes("num pedido"))
+      ) {
+        headerRowIndex = i;
+        refCol = c;
+      }
+
+      if (
+        descCol === -1 &&
+        (val.includes("descripcion") ||
+          val.includes("descripción") ||
+          val.includes("producto"))
+      ) {
+        descCol = c;
+      }
+
+      if (
+        qtyCol === -1 &&
+        (val.includes("cantidad") ||
+          val.includes("qty") ||
+          val.includes("unidades"))
+      ) {
+        qtyCol = c;
+      }
+    }
+    if (headerRowIndex !== -1) break;
+  }
+
+  if (headerRowIndex === -1 || refCol === -1) {
+    console.warn("[Proyecto] No se encontró cabecera 'Número de pedido'. Se devuelve vacío.");
+    return lineas;
+  }
+
   let seccionActual = "";
 
-  // Sección: texto en mayúsculas en la primera columna y resto casi vacío
-  const esFilaSeccion = (values) => {
-    const col0 = (values[0] || "").trim();
-    if (!col0) return false;
-    if (col0.length < 3) return false;
-    // mayúsculas o números
-    const esMayus = col0 === col0.toUpperCase();
-    const restoVacio = values.slice(1).every((v) => !v || !v.trim());
-    return esMayus && restoVacio;
-  };
+  for (let i = headerRowIndex + 1; i < rows.length; i++) {
+    const rawRow = rows[i] || [];
+    const values = rawRow.map((c) => (c || "").toString().trim());
+    if (values.every((v) => v === "")) continue;
 
-  // Referencia típica 2N: 5-8 dígitos, opcional letra al final (ej. 9155011B)
-  const REGEX_REF = /^[0-9]{5,8}[A-Z]?$/;
+    const refCell = values[refCol];
 
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i] || [];
-    const values = row.map((c) => (c || "").toString().trim());
-
-    if (values.every((v) => v === "")) continue; // fila vacía
-
-    // -------- SECCIÓN --------
-    if (esFilaSeccion(values)) {
-      seccionActual = values[0];
-      console.log("[Proyecto] Sección detectada:", seccionActual, "(fila " + i + ")");
+    // Si la columna de ref está vacía, puede ser una fila de sección
+    if (!refCell) {
+      const firstNonEmpty = values.find((v) => v !== "");
+      if (
+        firstNonEmpty &&
+        firstNonEmpty.length >= 3 &&
+        firstNonEmpty === firstNonEmpty.toUpperCase()
+      ) {
+        seccionActual = firstNonEmpty;
+        console.log("[Proyecto] Sección detectada:", seccionActual, "(fila " + i + ")");
+        continue;
+      }
       continue;
     }
 
-    // -------- LÍNEA CON REFERENCIA --------
-    // Buscamos la primera celda que parezca una ref 2N
-    let refIndex = -1;
-    for (let c = 0; c < values.length; c++) {
-      if (REGEX_REF.test(values[c])) {
-        refIndex = c;
-        break;
-      }
-    }
-    if (refIndex === -1) continue; // sin referencia -> no es línea de producto
+    const ref = refCell;
 
-    const ref = values[refIndex];
-
-    // Descripción: primer texto no vacío después de la referencia
+    // Descripción
     let descripcion = "";
-    for (let c = refIndex + 1; c < values.length; c++) {
-      if (values[c] && values[c].length > 0) {
-        descripcion = values[c];
-        break;
-      }
+    if (descCol !== -1) {
+      descripcion = values[descCol] || "";
+    } else {
+      descripcion =
+        values.find((v, idx) => idx !== refCol && v !== "") || "";
     }
 
-    // Cantidad: último número significativo de la fila (si no, 1)
+    // Cantidad
     let cantidad = 1;
-    for (let c = values.length - 1; c > refIndex; c--) {
-      const raw = values[c].replace(",", ".");
+    if (qtyCol !== -1) {
+      const raw = (values[qtyCol] || "").replace(",", ".");
       const num = parseFloat(raw);
-      if (!isNaN(num) && num > 0) {
-        cantidad = num;
-        break;
+      if (!isNaN(num) && num > 0) cantidad = num;
+    } else {
+      for (let c = values.length - 1; c >= 0; c--) {
+        const rawN = (values[c] || "").replace(",", ".");
+        const num = parseFloat(rawN);
+        if (!isNaN(num) && num > 0) {
+          cantidad = num;
+          break;
+        }
       }
     }
 
-    const linea = {
+    lineas.push({
       ref,
       descripcion,
       seccion: seccionActual || "SIN SECCIÓN",
@@ -174,9 +216,7 @@ function parsearExcelProyectoDesigner(rows) {
       pvp: 0,
       importe: 0,
       ok: true,
-    };
-
-    lineas.push(linea);
+    });
   }
 
   return lineas;
