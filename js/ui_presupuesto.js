@@ -1,4 +1,4 @@
-// ui_presupuesto.js
+// js/ui_presupuesto.js
 // Presupuesto con:
 // - Secciones agrupadas y editables (título + comentario)
 // - Líneas importadas (solo unidades + incluir)
@@ -6,17 +6,61 @@
 // - Ref manual opcional; si coincide con tarifa, autocompleta descripción y precio
 // - Reordenación de secciones (subir / bajar bloque)
 
-// ===== Helper para buscar en tarifa en memoria (sin Firebase) =====
+if (!window.appState) {
+  window.appState = {};
+}
+if (!appState.infoPresupuesto) {
+  appState.infoPresupuesto = {
+    cliente: "",
+    proyecto: "",
+    direccion: "",
+    contacto: "",
+    email: "",
+    telefono: "",
+    notas: ""
+  };
+}
+if (!Array.isArray(appState.lineasProyecto)) {
+  appState.lineasProyecto = [];
+}
+if (typeof appState.descuentoGlobal !== "number") {
+  appState.descuentoGlobal = 0;
+}
+if (typeof appState.aplicarIVA !== "boolean") {
+  appState.aplicarIVA = true;
+}
+if (!appState.tarifas) {
+  appState.tarifas = {};
+}
+
+// Helper numérico simple (por si no existe toNum global)
+function toNum(v) {
+  if (typeof v === "number") return v;
+  if (v == null) return 0;
+  const s = String(v).trim().replace(/\./g, "").replace(",", ".");
+  const n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
+}
+
+// Helper moneda simple (por si no existe formatCurrency global)
+function formatCurrency(v) {
+  const n = toNum(v);
+  return n.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
+}
+
+// Helper: líneas seleccionadas (incluir === true)
+function getLineasSeleccionadas() {
+  return (appState.lineasProyecto || []).filter((l) => l.incluir !== false);
+}
+
+// Helper para buscar en tarifa en memoria (sin Firebase)
 function findTarifaItem(ref) {
   if (!ref) return null;
   let t = null;
 
-  // Si guardaste tarifas en appState.tarifas
-  if (typeof appState !== "undefined" && appState && appState.tarifas && appState.tarifas[ref]) {
+  if (appState.tarifas && appState.tarifas[ref]) {
     t = appState.tarifas[ref];
   }
-
-  // Si existiera un cache global tipo tarifasCache
   if (!t && typeof tarifasCache !== "undefined" && tarifasCache && tarifasCache[ref]) {
     t = tarifasCache[ref];
   }
@@ -150,11 +194,9 @@ function renderPresupuesto(container) {
     </div>
   `;
 
-  // Modales
   setupPresupuestoModalSeccion(container);
   setupManualLineaModal(container);
 
-  // Si no hay líneas, mensaje
   if (!appState.lineasProyecto || !appState.lineasProyecto.length) {
     const tbody = document.getElementById("tbodyPresupuesto");
     if (tbody) {
@@ -171,7 +213,6 @@ function renderPresupuesto(container) {
     rebuildPresupuestoTable();
   }
 
-  // Eventos datos cabecera
   document.getElementById("btnGuardarDatos").onclick = () => {
     appState.infoPresupuesto.cliente = document.getElementById("p_cliente").value.trim();
     appState.infoPresupuesto.proyecto = document.getElementById("p_proyecto").value.trim();
@@ -196,8 +237,8 @@ function renderPresupuesto(container) {
   };
 
   document.getElementById("btnRecalcular").onclick = () => recalcularPresupuesto();
-  document.getElementById("btnPDF").onclick = () => generarPDF();
-  document.getElementById("btnExcel").onclick = () => generarExcel();
+  document.getElementById("btnPDF").onclick = () => generarPDF && generarPDF();
+  document.getElementById("btnExcel").onclick = () => generarExcel && generarExcel();
 
   const filtroRef = document.getElementById("filtroRef");
   filtroRef.oninput = () => {
@@ -210,9 +251,7 @@ function renderPresupuesto(container) {
   recalcularPresupuesto();
 }
 
-/* ==========================
-   MODAL SECCIÓN (título + comentario)
-   ========================== */
+/* ========== MODAL SECCIÓN ========== */
 
 function setupPresupuestoModalSeccion(container) {
   if (container.querySelector("#modalSeccion")) {
@@ -292,13 +331,13 @@ function closeSeccionModal() {
 function saveSeccionModal() {
   if (!modalSeccionEl) return;
   const oldKey = modalSeccionEl.dataset.seccionKey;
-  if (oldKey === undefined || oldKey === "") {
+  if (!oldKey) {
     closeSeccionModal();
     return;
   }
 
   const nuevoTitulo = (modalSeccionEl.querySelector("#modal_seccion_titulo").value || "").trim();
-  const nuevoComentario = (modalSeccionEl.querySelector("#modal_seccion_comentario").value || "");
+  const nuevoComentario = modalSeccionEl.querySelector("#modal_seccion_comentario").value || "";
 
   const tituloFinal = nuevoTitulo || "SIN SECCIÓN";
 
@@ -318,9 +357,7 @@ function saveSeccionModal() {
   rebuildPresupuestoTable(filtro);
 }
 
-/* ==========================
-   MODAL LÍNEA MANUAL
-   ========================== */
+/* ========== MODAL LÍNEA MANUAL ========== */
 
 function setupManualLineaModal(container) {
   if (container.querySelector("#modalLineaManual")) {
@@ -386,7 +423,6 @@ function setupManualLineaModal(container) {
   btnCancelar.onclick = () => closeManualLineaModal();
   btnGuardar.onclick = () => saveManualLineaModal();
 
-  // Autocompletar desde tarifa cuando cambie la referencia
   const refInput = modalLineaManualEl.querySelector("#modalManual_ref");
   const descInput = modalLineaManualEl.querySelector("#modalManual_desc");
   const pvpInput = modalLineaManualEl.querySelector("#modalManual_pvp");
@@ -497,15 +533,12 @@ function saveManualLineaModal() {
   recalcularPresupuesto();
 }
 
-/* ==========================
-   REORDENAR SECCIONES
-   ========================== */
+/* ========== REORDENAR SECCIONES ========== */
 
 function moveSection(seccionKey, direction) {
   const lines = appState.lineasProyecto || [];
   if (!lines.length) return;
 
-  // Sacamos orden actual de secciones
   const sections = [];
   lines.forEach((l) => {
     const key = (l.seccion || "SIN SECCIÓN").trim();
@@ -537,9 +570,7 @@ function moveSection(seccionKey, direction) {
   rebuildPresupuestoTable(filtro);
 }
 
-/* ==========================
-   TABLA + CÁLCULOS
-   ========================== */
+/* ========== TABLA + CÁLCULO TOTALES ========== */
 
 function rebuildPresupuestoTable(filtroRefTexto) {
   const tbody = document.getElementById("tbodyPresupuesto");
