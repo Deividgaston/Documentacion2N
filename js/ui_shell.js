@@ -1,90 +1,166 @@
 // js/ui_shell.js
-// Layout principal + navegación superior del programa de PRESUPUESTOS
+// Shell principal de la app: barra superior + tabs + logout
 
-function setActiveTab(tab) {
-  appState.activeTab = tab;
-  renderShell();
-}
+if (!window.appState) window.appState = {};
+if (!appState.currentTab) appState.currentTab = "proyecto";
 
+// Render principal del shell
 function renderShell() {
-  clearApp();
+  const root = document.getElementById("app");
+  if (!root) return;
 
-  const shell = el("div", "app-shell");
+  const user = firebase.auth().currentUser;
+  const nombreUsuario = user?.displayName || user?.email || "Usuario";
+  const inicial = (nombreUsuario || "?").charAt(0).toUpperCase();
 
-  // ========== BARRA SUPERIOR ==========
-  const nav = el("div", "main-nav");
+  root.innerHTML = `
+    <div class="shell">
+      <!-- TOP BAR -->
+      <header class="topbar">
+        <div class="topbar-left">
+          <div class="brand">
+            <span class="brand-main">Presupuestos 2N</span>
+          </div>
 
-  // IZQUIERDA: logo + tabs
-  const navLeft = el("div", "nav-left");
+          <nav class="topnav">
+            <button id="navProyecto" class="topnav-item" data-tab="proyecto">
+              Proyecto
+            </button>
+            <button id="navPresupuesto" class="topnav-item" data-tab="presupuesto">
+              Presupuesto
+            </button>
+            <button id="navTarifa" class="topnav-item" data-tab="tarifa">
+              Tarifa 2N
+            </button>
+            <button id="navDocs" class="topnav-item" data-tab="docs">
+              Documentación
+            </button>
+          </nav>
+        </div>
 
-  const brand = el("div", "nav-brand", "2N · Presupuestos");
-  navLeft.appendChild(brand);
+        <div class="topbar-right">
+          <div class="user-chip">
+            <div class="user-avatar">${inicial}</div>
+            <div class="user-info">
+              <div class="user-name">${nombreUsuario}</div>
+              <button id="btnLogout" class="btn-link">Cerrar sesión</button>
+            </div>
+          </div>
+        </div>
+      </header>
 
-  const navTabs = el("div", "nav-tabs");
+      <!-- CONTENIDO -->
+      <main id="shellContent" class="shell-content"></main>
+    </div>
+  `;
 
-  const tabs = [
-    { id: "proyecto", label: "Proyecto" },
-    { id: "presupuesto", label: "Presupuesto" },
-    { id: "tarifa", label: "Tarifa 2N" },
-    { id: "doc", label: "Documentación" },
-  ];
-
-  tabs.forEach((t) => {
-    const tabEl = el(
-      "div",
-      "nav-tab" + (appState.activeTab === t.id ? " active" : ""),
-      t.label
-    );
-    tabEl.addEventListener("click", () => setActiveTab(t.id));
-    navTabs.appendChild(tabEl);
+  // Activar tab actual visualmente
+  const navIds = {
+    proyecto: "navProyecto",
+    presupuesto: "navPresupuesto",
+    tarifa: "navTarifa",
+    docs: "navDocs",
+  };
+  Object.entries(navIds).forEach(([tab, id]) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (appState.currentTab === tab) el.classList.add("active");
+    el.onclick = () => switchTab(tab);
   });
 
-  navLeft.appendChild(navTabs);
+  // Logout
+  const btnLogout = document.getElementById("btnLogout");
+  if (btnLogout) {
+    btnLogout.onclick = handleLogout;
+  }
 
-  // DERECHA: información usuario (simple)
-  const navRight = el("div", "nav-right");
-  const userEmail = appState.user && appState.user.email ? appState.user.email : "Modo local";
-  navRight.appendChild(el("span", "", userEmail));
-
-  nav.appendChild(navLeft);
-  nav.appendChild(navRight);
-
-  // ========== MAIN CONTENT ==========
-  const main = el("div", "main-content");
-  main.id = "mainContent";
-
-  shell.appendChild(nav);
-  shell.appendChild(main);
-
-  appRoot.appendChild(shell);
-
-  renderActiveView();
+  // Pintar contenido inicial
+  renderShellContent();
 }
 
-function renderActiveView() {
-  const c = document.getElementById("mainContent");
-  if (!c) return;
+// Cambiar de pestaña
+function switchTab(tab) {
+  appState.currentTab = tab;
+  // actualizar estado visual de los botones
+  document
+    .querySelectorAll(".topnav-item")
+    .forEach((btn) => btn.classList.remove("active"));
 
-  c.innerHTML = "";
+  const currentId =
+    tab === "proyecto"
+      ? "navProyecto"
+      : tab === "presupuesto"
+      ? "navPresupuesto"
+      : tab === "tarifa"
+      ? "navTarifa"
+      : "navDocs";
 
-  if (appState.activeTab === "proyecto") {
-    renderProyecto(c);
-  } else if (appState.activeTab === "presupuesto") {
-    renderPresupuesto(c);
-  } else if (appState.activeTab === "tarifa") {
-    if (typeof renderTarifas === "function") {
-      renderTarifas(c);
+  const currentBtn = document.getElementById(currentId);
+  if (currentBtn) currentBtn.classList.add("active");
+
+  renderShellContent();
+}
+
+// Render del contenido según la pestaña
+function renderShellContent() {
+  const content = document.getElementById("shellContent");
+  if (!content) return;
+
+  if (appState.currentTab === "proyecto") {
+    if (typeof renderProyecto === "function") {
+      renderProyecto(content);
     } else {
-      c.innerHTML = "<p>No hay vista de tarifas definida.</p>";
+      content.innerHTML = "<p>No se encontró la página de Proyecto.</p>";
     }
-  } else if (appState.activeTab === "doc") {
-    if (typeof renderDoc === "function") {
-      renderDoc(c);
+  } else if (appState.currentTab === "presupuesto") {
+    if (typeof renderPresupuesto === "function") {
+      renderPresupuesto(content);
     } else {
-      c.innerHTML = "<p>No hay vista de documentación definida.</p>";
+      content.innerHTML = "<p>No se encontró la página de Presupuesto.</p>";
+    }
+  } else if (appState.currentTab === "tarifa") {
+    if (typeof renderTarifa === "function") {
+      renderTarifa(content);
+    } else if (typeof renderTarifa2N === "function") {
+      renderTarifa2N(content);
+    } else {
+      content.innerHTML = "<p>No se encontró la página de Tarifa 2N.</p>";
+    }
+  } else if (appState.currentTab === "docs") {
+    if (typeof renderDocumentacion === "function") {
+      renderDocumentacion(content);
+    } else {
+      content.innerHTML = "<p>No se encontró la página de Documentación.</p>";
     }
   } else {
-    // fallback
-    renderProyecto(c);
+    content.innerHTML = "<p>Pestaña no reconocida.</p>";
   }
 }
+
+// Logout Firebase
+function handleLogout() {
+  firebase
+    .auth()
+    .signOut()
+    .then(() => {
+      // Opcional: limpiar estado local
+      appState.user = null;
+      // Puedes redirigir a una página de login si la tienes
+      // window.location.href = "login.html";
+      location.reload();
+    })
+    .catch((err) => {
+      console.error("Error al cerrar sesión:", err);
+      alert("No se pudo cerrar sesión. Revisa la consola.");
+    });
+}
+
+// Inicialización desde main.js:
+// firebase.auth().onAuthStateChanged(user => {
+//   if (user) {
+//     appState.user = user;
+//     renderShell();
+//   } else {
+//     // aquí muestras tu pantalla de login
+//   }
+// });
