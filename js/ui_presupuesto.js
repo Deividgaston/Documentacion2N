@@ -1,914 +1,384 @@
+// ===============================================
 // js/ui_presupuesto.js
-// Presupuesto 2N: secciones + líneas, calculando precios desde Firestore (tarifas)
+// Página: PRESUPUESTO (cabecera + líneas + totales)
+// ===============================================
 
-if (!window.appState) {
-  window.appState = {};
-}
-if (!appState.infoPresupuesto) {
-  appState.infoPresupuesto = {
+if (!window.appState) window.appState = {};
+if (!appState.lineasProyecto) appState.lineasProyecto = [];
+if (!appState.presupuestoCabecera) {
+  appState.presupuestoCabecera = {
     cliente: "",
     proyecto: "",
     direccion: "",
     contacto: "",
     email: "",
     telefono: "",
-    notas:
-      "Para la alimentación de los equipos se requiere de un switch PoE acorde con el consumo de los dispositivos."
+    notas: "",
   };
 }
-if (!Array.isArray(appState.lineasProyecto)) {
-  appState.lineasProyecto = [];
+if (!appState.presupuestoOpciones) {
+  appState.presupuestoOpciones = {
+    descuentoGlobal: 0,
+    aplicarIVA: false,
+  };
 }
-if (typeof appState.descuentoGlobal !== "number") {
-  appState.descuentoGlobal = 0;
-}
-if (typeof appState.aplicarIVA !== "boolean") {
-  appState.aplicarIVA = false;
-}
-if (!appState.tarifas) {
-  appState.tarifas = {};
-}
-
-// Utilidades que ya tienes en utils.js
-// toNum(valor) y formatCurrency(valor)
-
-function getLineasSeleccionadas() {
-  return (appState.lineasProyecto || []).filter(
-    (l) => l.incluir !== false && !l.isSectionPlaceholder
-  );
+if (!appState.presupuestoTotales) {
+  appState.presupuestoTotales = {
+    subtotal: 0,
+    descuento: 0,
+    base: 0,
+    iva: 0,
+    total: 0,
+  };
 }
 
-// ==== RELLENAR LÍNEAS CON PRECIOS/DESDE FIRESTORE ====
+// ===============================================
+// Render principal
+// ===============================================
+function renderPresupuesto(root) {
+  // recalcular importes + totales antes de pintar
+  recalcularPresupuestoCore();
 
-async function rellenarLineasDesdeTarifa() {
+  const cab = appState.presupuestoCabecera;
+  const opt = appState.presupuestoOpciones;
+  const tot = appState.presupuestoTotales;
   const lineas = appState.lineasProyecto || [];
-  if (!lineas.length) return;
 
-  // refs únicas
-  const refs = [...new Set(
-    lineas
-      .map(l => (l.ref || "").trim())
-      .filter(r => r && r.length > 0)
-  )];
+  root.innerHTML = `
+    <div class="presupuesto-grid">
 
-  if (!refs.length) return;
-
-  console.log("[Presupuesto] Necesito tarifas para refs:", refs);
-
-  // Hace SOLO las lecturas necesarias (las que no estén en cache)
-  if (typeof loadTarifasForRefs === "function") {
-    await loadTarifasForRefs(refs);
-  }
-
-  // Una vez cargadas, rellenamos descripción + pvp donde falte
-  lineas.forEach((l) => {
-    const ref = (l.ref || "").trim();
-    if (!ref) return;
-
-    const item = typeof findTarifaItem === "function"
-      ? findTarifaItem(ref)
-      : (appState.tarifas && appState.tarifas[ref]);
-
-    if (!item) return;
-
-    if (!l.descripcion || !l.descripcion.trim()) {
-      l.descripcion = item.descripcion || l.descripcion;
-    }
-
-    if (!l.pvp || Number(l.pvp) === 0) {
-      l.pvp = Number(item.pvp || 0);
-    }
-  });
-}
-
-// ==== MODALES Y VARIABLES ====
-
-let modalSeccionEl = null;
-let modalLineaManualEl = null;
-let draggedSectionKey = null;
-
-// ==== RENDER PRINCIPAL ====
-
-function renderPresupuesto(container) {
-  container.innerHTML = `
-    <div class="page-header-row">
-      <div>
-        <div class="page-title">Presupuesto</div>
-        <div class="page-subtitle">
-          Generador de presupuesto basado en PVP, descuento global e IVA opcional.
-        </div>
-      </div>
-      <div id="summaryChip" class="summary-chip hidden"></div>
-    </div>
-
-    <div class="layout-presupuesto">
-      <!-- COLUMNA IZQUIERDA -->
-      <div class="col-left">
+      <!-- Columna izquierda: cabecera + opciones -->
+      <div class="presupuesto-col-left">
         <div class="card">
-          <div class="card-header-row">
-            <span class="card-header">Datos del presupuesto</span>
-            <span class="badge-light">Cabecera</span>
-          </div>
+          <h3>Presupuesto</h3>
+          <p>Generador de presupuesto basado en PVP, descuento global e IVA opcional.</p>
 
-          <div class="form-grid">
-            <div>
-              <label>Cliente</label>
-              <input type="text" id="p_cliente" class="input" value="${appState.infoPresupuesto.cliente}">
-            </div>
-            <div>
-              <label>Proyecto / Obra</label>
-              <input type="text" id="p_proyecto" class="input" value="${appState.infoPresupuesto.proyecto}">
-            </div>
-            <div>
-              <label>Dirección</label>
-              <input type="text" id="p_direccion" class="input" value="${appState.infoPresupuesto.direccion}">
-            </div>
-            <div>
-              <label>Persona de contacto</label>
-              <input type="text" id="p_contacto" class="input" value="${appState.infoPresupuesto.contacto}">
-            </div>
-            <div>
-              <label>Email</label>
-              <input type="text" id="p_email" class="input" value="${appState.infoPresupuesto.email}">
-            </div>
-            <div>
-              <label>Teléfono</label>
-              <input type="text" id="p_telefono" class="input" value="${appState.infoPresupuesto.telefono}">
-            </div>
+          <h4 class="mt-3">Datos del presupuesto (cabecera)</h4>
+          <div class="mt-2">
+            <label>Cliente</label>
+            <input type="text" id="cab_cliente" value="${cab.cliente || ""}">
           </div>
-
-          <div style="margin-top:10px;">
+          <div class="mt-2">
+            <label>Proyecto / Obra</label>
+            <input type="text" id="cab_proyecto" value="${cab.proyecto || ""}">
+          </div>
+          <div class="mt-2">
+            <label>Dirección</label>
+            <input type="text" id="cab_direccion" value="${cab.direccion || ""}">
+          </div>
+          <div class="mt-2">
+            <label>Persona de contacto</label>
+            <input type="text" id="cab_contacto" value="${cab.contacto || ""}">
+          </div>
+          <div class="mt-2">
+            <label>Email</label>
+            <input type="text" id="cab_email" value="${cab.email || ""}">
+          </div>
+          <div class="mt-2">
+            <label>Teléfono</label>
+            <input type="text" id="cab_telefono" value="${cab.telefono || ""}">
+          </div>
+          <div class="mt-2">
             <label>Notas adicionales</label>
-            <textarea id="p_notas" class="input textarea-notas">${appState.infoPresupuesto.notas}</textarea>
+            <textarea id="cab_notas" rows="3">${cab.notas || ""}</textarea>
           </div>
 
-          <button class="btn btn-blue btn-full" style="margin-top:12px;" id="btnGuardarDatos">
-            Guardar cabecera
-          </button>
+          <div class="mt-3">
+            <button id="btnGuardarCabecera" class="btn-primary">Guardar cabecera</button>
+          </div>
         </div>
 
-        <div class="card card-soft">
-          <div class="card-header-row">
-            <span class="card-header">Opciones de cálculo</span>
-            <span class="badge-light">Totales</span>
+        <div class="card mt-3">
+          <h4>Opciones de cálculo</h4>
+          <div class="mt-2">
+            <label>Descuento global (%)</label>
+            <input type="number" id="opt_descuento" value="${opt.descuentoGlobal}" min="0" max="100" step="0.01">
           </div>
-
-          <div class="form-row" style="margin-bottom:8px;">
-            <div style="flex:1;">
-              <label>Descuento global (%)</label>
-              <input type="number" id="p_descuentoGlobal" class="input" value="${appState.descuentoGlobal}">
-            </div>
-            <label style="display:flex; align-items:center; gap:6px; margin-top:22px; font-size:0.8rem;">
-              <input type="checkbox" id="p_aplicarIVA" ${appState.aplicarIVA ? "checked" : ""} />
+          <div class="mt-2">
+            <label>
+              <input type="checkbox" id="opt_iva" ${opt.aplicarIVA ? "checked" : ""}>
               Aplicar IVA (21%)
             </label>
           </div>
 
-          <div class="totales-box" id="totalesBox"></div>
+          <div class="mt-3">
+            <div>Subtotal: ${tot.subtotal.toFixed(2)} €</div>
+            <div>Descuento: ${tot.descuento.toFixed(2)} €</div>
+            <div>Base imponible: ${tot.base.toFixed(2)} €</div>
+            <div>IVA: ${tot.iva.toFixed(2)} €</div>
+            <div><strong>Total: ${tot.total.toFixed(2)} €</strong></div>
+          </div>
 
-          <div style="display:flex; gap:8px; margin-top:12px;">
-            <button class="btn btn-outline btn-sm" id="btnRecalcular">Recalcular</button>
-            <button class="btn btn-outline btn-sm" id="btnPDF">Exportar PDF</button>
-            <button class="btn btn-outline btn-sm" id="btnExcel">Exportar Excel</button>
+          <div class="mt-3">
+            <button id="btnRecalcular" class="btn-secondary">Recalcular</button>
+            <button id="btnExportarPDF" class="btn-secondary">Exportar PDF</button>
+            <button id="btnExportarExcel" class="btn-secondary">Exportar Excel</button>
           </div>
         </div>
       </div>
 
-      <!-- COLUMNA DERECHA -->
-      <div class="col-right">
-        <div class="card card-table">
-          <div class="table-header-actions">
-            <div class="table-header-title">
-              Líneas del presupuesto
-              <span class="badge-light" id="linesInfo"></span>
+      <!-- Columna derecha: líneas del presupuesto -->
+      <div class="presupuesto-col-right">
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div>
+              <h3>Líneas del presupuesto</h3>
+              <p style="margin-bottom:0;">${lineas.length} líneas cargadas desde el proyecto</p>
             </div>
-            <div class="table-actions" style="gap:8px;">
-              <label>
-                Filtro ref:
-                <input type="text" id="filtroRef" class="input" style="width:140px; padding:4px 8px; font-size:0.75rem;">
-              </label>
-              <button class="btn btn-outline btn-sm" id="btnAddSection">
-                Añadir sección
-              </button>
-              <button class="btn btn-outline btn-sm" id="btnAddManual">
-                Añadir línea
-              </button>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <input type="text" id="filtroRef" placeholder="Filtrar por ref..." style="width:160px;">
+              <button id="btnAddSeccion" class="btn-secondary">Añadir sección</button>
+              <button id="btnAddLinea" class="btn-secondary">Añadir línea</button>
             </div>
           </div>
 
-          <div class="table-wrapper">
-            <table class="table">
-              <thead>
-                <tr>
-                  <th class="col-check">OK</th>
-                  <th class="col-ref">Ref.</th>
-                  <th>Sección</th>
-                  <th>Descripción</th>
-                  <th>Ud.</th>
-                  <th>PVP</th>
-                  <th>Importe</th>
-                </tr>
-              </thead>
-              <tbody id="tbodyPresupuesto"></tbody>
-            </table>
+          <div class="mt-3" style="overflow-x:auto;">
+            ${renderTablaLineasPresupuesto(lineas)}
           </div>
         </div>
       </div>
     </div>
   `;
 
-  setupPresupuestoModalSeccion(container);
-  setupManualLineaModal(container);
+  // Eventos cabecera
+  document.getElementById("btnGuardarCabecera").onclick = guardarCabeceraDesdeUI;
 
-  document.getElementById("btnGuardarDatos").onclick = () => {
-    appState.infoPresupuesto.cliente = document.getElementById("p_cliente").value.trim();
-    appState.infoPresupuesto.proyecto = document.getElementById("p_proyecto").value.trim();
-    appState.infoPresupuesto.direccion = document.getElementById("p_direccion").value.trim();
-    appState.infoPresupuesto.contacto = document.getElementById("p_contacto").value.trim();
-    appState.infoPresupuesto.email = document.getElementById("p_email").value.trim();
-    appState.infoPresupuesto.telefono = document.getElementById("p_telefono").value.trim();
-    appState.infoPresupuesto.notas = document.getElementById("p_notas").value;
+  // Eventos opciones
+  document.getElementById("btnRecalcular").onclick = () => {
+    leerOpcionesDesdeUI();
+    recalcularPresupuesto();
   };
-
-  const inDesc = document.getElementById("p_descuentoGlobal");
-  const cbIVA = document.getElementById("p_aplicarIVA");
-
-  inDesc.onchange = () => {
-    appState.descuentoGlobal = toNum(inDesc.value);
+  document.getElementById("opt_descuento").onchange = () => {
+    leerOpcionesDesdeUI();
+    recalcularPresupuesto();
+  };
+  document.getElementById("opt_iva").onchange = () => {
+    leerOpcionesDesdeUI();
     recalcularPresupuesto();
   };
 
-  cbIVA.onchange = () => {
-    appState.aplicarIVA = cbIVA.checked;
-    recalcularPresupuesto();
-  };
-
-  document.getElementById("btnRecalcular").onclick = () => recalcularPresupuesto();
-
-  document.getElementById("btnPDF").onclick = () => {
-    if (typeof generarPDF === "function") generarPDF();
-  };
-  document.getElementById("btnExcel").onclick = () => {
-    if (typeof generarExcel === "function") generarExcel();
-  };
-
-  const filtroRef = document.getElementById("filtroRef");
-  filtroRef.oninput = () => {
-    rebuildPresupuestoTable(filtroRef.value.trim().toLowerCase());
-  };
-
-  document.getElementById("btnAddManual").onclick = () => openManualLineaModalForNew();
-  document.getElementById("btnAddSection").onclick = () => openNewSectionModal();
-
-  // Pintamos tabla inicial (por si ya veníamos con líneas cargadas)
-  if (appState.lineasProyecto && appState.lineasProyecto.length) {
-    rebuildPresupuestoTable();
-  } else {
-    const tbody = document.getElementById("tbodyPresupuesto");
-    if (tbody) {
-      tbody.innerHTML = `
-        <tr>
-          <td colspan="7" style="font-size:0.85rem; color:#6b7280; padding:10px;">
-            No hay líneas de proyecto cargadas. Importa primero un Excel en la pestaña <strong>Proyecto</strong>
-            o añade líneas manuales.
-          </td>
-        </tr>
-      `;
+  // Export (placeholder, enlaza con tus funciones reales si las tienes)
+  document.getElementById("btnExportarPDF").onclick = () => {
+    if (window.exportarPresupuestoPDF) {
+      exportarPresupuestoPDF();
+    } else {
+      alert("Función PDF aún no conectada.");
     }
-  }
+  };
+  document.getElementById("btnExportarExcel").onclick = () => {
+    if (window.exportarPresupuestoExcel) {
+      exportarPresupuestoExcel();
+    } else {
+      alert("Función Excel aún no conectada.");
+    }
+  };
 
-  // Aquí es donde hacemos la MAGIA: cargar precios desde Firestore
-  (async () => {
-    await rellenarLineasDesdeTarifa();
-    const filtro = filtroRef.value.trim().toLowerCase();
-    rebuildPresupuestoTable(filtro);
-    recalcularPresupuesto();
-  })();
-}
+  // Filtro
+  const filtroRefInput = document.getElementById("filtroRef");
+  filtroRefInput.oninput = () => {
+    const val = filtroRefInput.value.trim().toLowerCase();
+    const filas = document.querySelectorAll(".fila-presupuesto");
+    filas.forEach((tr) => {
+      const ref = (tr.getAttribute("data-ref") || "").toLowerCase();
+      tr.style.display = !val || ref.includes(val) ? "" : "none";
+    });
+  };
 
-// ==== MODAL SECCIÓN (título + comentario) ====
-
-function setupPresupuestoModalSeccion(container) {
-  if (container.querySelector("#modalSeccion")) {
-    modalSeccionEl = container.querySelector("#modalSeccion");
-    return;
-  }
-
-  const overlay = document.createElement("div");
-  overlay.id = "modalSeccion";
-  overlay.className = "modal-overlay hidden";
-  overlay.innerHTML = `
-    <div class="modal">
-      <div class="modal-header">
-        <div class="modal-title">Editar sección del presupuesto</div>
-        <button class="modal-close" id="modalSeccionCerrarBtn" title="Cerrar">&times;</button>
-      </div>
-      <div class="modal-body">
-        <div>
-          <div class="field-label">Título de la sección</div>
-          <input type="text" id="modal_seccion_titulo" class="input" placeholder="Ej. Unidades de respuesta / MONITORES">
-        </div>
-        <div>
-          <div class="field-label">Comentario de la sección</div>
-          <textarea id="modal_seccion_comentario" class="input textarea-notas" placeholder="Texto que aparecerá debajo del título de la sección."></textarea>
-        </div>
-        <p class="info-text">
-          Al guardar, se actualizarán todas las líneas que pertenezcan a esta sección.
-        </p>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-outline btn-sm" id="modalSeccionCancelar">Cancelar</button>
-        <button class="btn btn-blue btn-sm" id="modalSeccionGuardar">Guardar sección</button>
-      </div>
-    </div>
-  `;
-
-  container.appendChild(overlay);
-  modalSeccionEl = overlay;
-
-  modalSeccionEl.querySelector("#modalSeccionCerrarBtn").onclick = closeSeccionModal;
-  modalSeccionEl.querySelector("#modalSeccionCancelar").onclick = closeSeccionModal;
-  modalSeccionEl.querySelector("#modalSeccionGuardar").onclick = saveSeccionModal;
-
-  overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) closeSeccionModal();
-  });
-}
-
-function openSeccionModal(seccionKey) {
-  if (!modalSeccionEl) return;
-
-  const lines = appState.lineasProyecto || [];
-  const lineaEjemplo = lines.find(
-    (l) => (l.seccion || "SIN SECCIÓN").trim() === seccionKey
-  );
-  const nota = lineaEjemplo ? (lineaEjemplo.seccionNota || "") : "";
-
-  modalSeccionEl.dataset.mode = "edit";
-  modalSeccionEl.dataset.seccionKey = seccionKey;
-  modalSeccionEl.querySelector("#modal_seccion_titulo").value =
-    seccionKey === "SIN SECCIÓN" ? "" : seccionKey;
-  modalSeccionEl.querySelector("#modal_seccion_comentario").value = nota;
-
-  modalSeccionEl.classList.remove("hidden");
-}
-
-function openNewSectionModal() {
-  if (!modalSeccionEl) return;
-
-  modalSeccionEl.dataset.mode = "new";
-  modalSeccionEl.dataset.seccionKey = "";
-  modalSeccionEl.querySelector("#modal_seccion_titulo").value = "";
-  modalSeccionEl.querySelector("#modal_seccion_comentario").value = "";
-
-  modalSeccionEl.classList.remove("hidden");
-}
-
-function closeSeccionModal() {
-  if (!modalSeccionEl) return;
-  modalSeccionEl.classList.add("hidden");
-  modalSeccionEl.dataset.seccionKey = "";
-  modalSeccionEl.dataset.mode = "";
-}
-
-function saveSeccionModal() {
-  if (!modalSeccionEl) return;
-  const mode = modalSeccionEl.dataset.mode || "edit";
-  const oldKey = modalSeccionEl.dataset.seccionKey || "";
-
-  const nuevoTitulo = (modalSeccionEl.querySelector("#modal_seccion_titulo").value || "").trim();
-  const nuevoComentario =
-    modalSeccionEl.querySelector("#modal_seccion_comentario").value || "";
-
-  if (!nuevoTitulo) {
-    closeSeccionModal();
-    return;
-  }
-
-  const tituloFinal = nuevoTitulo;
-
-  if (mode === "new") {
-    if (!Array.isArray(appState.lineasProyecto)) appState.lineasProyecto = [];
+  // Añadir sección / línea (versión simple)
+  document.getElementById("btnAddSeccion").onclick = () => {
+    const titulo = prompt("Título de la sección:");
+    if (!titulo) return;
     appState.lineasProyecto.push({
       ref: "",
       descripcion: "",
+      seccion: titulo.toUpperCase(),
       cantidad: 0,
       pvp: 0,
-      incluir: false,
-      seccion: tituloFinal,
-      seccionNota: nuevoComentario,
-      manual: true,
-      isSectionPlaceholder: true
+      importe: 0,
+      ok: true,
     });
-  } else {
-    const lines = appState.lineasProyecto || [];
-    lines.forEach((l) => {
-      const keyLinea = (l.seccion || "SIN SECCIÓN").trim();
-      if (keyLinea === oldKey) {
-        l.seccion = tituloFinal;
-        l.seccionNota = nuevoComentario;
-      }
+    recalcularPresupuesto();
+  };
+
+  document.getElementById("btnAddLinea").onclick = () => {
+    appState.lineasProyecto.push({
+      ref: "",
+      descripcion: "",
+      seccion: "NUEVA SECCIÓN",
+      cantidad: 1,
+      pvp: 0,
+      importe: 0,
+      ok: true,
     });
-  }
+    recalcularPresupuesto();
+  };
 
-  closeSeccionModal();
-
-  const filtroRef = document.getElementById("filtroRef");
-  const filtro = filtroRef ? filtroRef.value.trim().toLowerCase() : "";
-  rebuildPresupuestoTable(filtro);
+  // Eventos de edición en la tabla
+  enlazarEventosTabla();
 }
 
-// ==== MODAL LÍNEA MANUAL ====
-
-function setupManualLineaModal(container) {
-  if (container.querySelector("#modalLineaManual")) {
-    modalLineaManualEl = container.querySelector("#modalLineaManual");
-    return;
+// Render de la tabla
+function renderTablaLineasPresupuesto(lineas) {
+  if (!lineas || !lineas.length) {
+    return `<p>No hay líneas cargadas. Importa un proyecto desde la pestaña Proyecto.</p>`;
   }
 
-  const overlay = document.createElement("div");
-  overlay.id = "modalLineaManual";
-  overlay.className = "modal-overlay hidden";
-  overlay.innerHTML = `
-    <div class="modal">
-      <div class="modal-header">
-        <div class="modal-title">Línea manual de presupuesto</div>
-        <button class="modal-close" id="modalLineaManualCerrarBtn" title="Cerrar">&times;</button>
-      </div>
-      <div class="modal-body">
-        <div>
-          <div class="field-label">Sección</div>
-          <input type="text" id="modalManual_seccion" class="input" placeholder="Ej. Unidades de respuesta / MONITORES">
-        </div>
-        <div>
-          <div class="field-label">Referencia (opcional)</div>
-          <input type="text" id="modalManual_ref" class="input" placeholder="Código 2N o referencia propia">
-        </div>
-        <div>
-          <div class="field-label">Descripción</div>
-          <input type="text" id="modalManual_desc" class="input" placeholder="Descripción del concepto">
-        </div>
-        <div class="form-grid">
-          <div>
-            <div class="field-label">Unidades</div>
-            <input type="number" id="modalManual_ud" class="input" min="0" step="1" value="1">
-          </div>
-          <div>
-            <div class="field-label">PVP (€)</div>
-            <input type="number" id="modalManual_pvp" class="input" min="0" step="0.01" value="0">
-          </div>
-        </div>
-        <label style="display:flex; align-items:center; gap:8px; margin-top:4px; font-size:0.8rem;">
-          <input type="checkbox" id="modalManual_incluir" checked>
-          Incluir esta línea en el presupuesto
-        </label>
-        <p class="info-text" style="margin-top:6px;">
-          Si la referencia coincide con la tarifa de 2N, se rellenarán automáticamente la descripción y el precio.
-          Si no coincide, puedes escribirlos manualmente.
-        </p>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-outline btn-sm" id="modalManualCancelar">Cancelar</button>
-        <button class="btn btn-blue btn-sm" id="modalManualGuardar">Guardar línea</button>
-      </div>
-    </div>
+  let html = `
+    <table class="table-presupuesto">
+      <thead>
+        <tr>
+          <th>OK</th>
+          <th>Ref.</th>
+          <th>Sección</th>
+          <th>Descripción</th>
+          <th class="text-right">Ud.</th>
+          <th class="text-right">PVP</th>
+          <th class="text-right">Importe</th>
+        </tr>
+      </thead>
+      <tbody>
   `;
 
-  container.appendChild(overlay);
-  modalLineaManualEl = overlay;
-
-  modalLineaManualEl.querySelector("#modalLineaManualCerrarBtn").onclick = closeManualLineaModal;
-  modalLineaManualEl.querySelector("#modalManualCancelar").onclick = closeManualLineaModal;
-  modalLineaManualEl.querySelector("#modalManualGuardar").onclick = saveManualLineaModal;
-
-  const refInput = modalLineaManualEl.querySelector("#modalManual_ref");
-  const descInput = modalLineaManualEl.querySelector("#modalManual_desc");
-  const pvpInput = modalLineaManualEl.querySelector("#modalManual_pvp");
-
-  refInput.addEventListener("change", async () => {
-    const ref = refInput.value.trim();
-    if (!ref) return;
-
-    if (typeof loadTarifasForRefs === "function") {
-      await loadTarifasForRefs([ref]);
-    }
-
-    const item = typeof findTarifaItem === "function"
-      ? findTarifaItem(ref)
-      : (appState.tarifas && appState.tarifas[ref]);
-
-    if (item) {
-      if (!descInput.value.trim()) descInput.value = item.descripcion || "";
-      if (!pvpInput.value || Number(pvpInput.value) === 0) {
-        pvpInput.value = Number(item.pvp || 0);
-      }
-    }
+  lineas.forEach((l, idx) => {
+    html += `
+      <tr class="fila-presupuesto" data-index="${idx}" data-ref="${l.ref || ""}">
+        <td>
+          <input type="checkbox" class="ln_ok" ${l.ok !== false ? "checked" : ""}>
+        </td>
+        <td>
+          <input type="text" class="ln_ref" value="${l.ref || ""}" style="width:90px;">
+        </td>
+        <td>
+          <input type="text" class="ln_seccion" value="${l.seccion || ""}" style="width:140px;">
+        </td>
+        <td>
+          <input type="text" class="ln_desc" value="${l.descripcion || ""}" style="width:100%;">
+        </td>
+        <td class="text-right">
+          <input type="number" class="ln_cant" min="0" step="1" value="${l.cantidad || 1}" style="width:60px;">
+        </td>
+        <td class="text-right">
+          <input type="number" class="ln_pvp" step="0.01" value="${l.pvp || 0}" style="width:90px;">
+        </td>
+        <td class="text-right">
+          ${Number(l.importe || 0).toFixed(2)} €
+        </td>
+      </tr>
+    `;
   });
 
-  overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) closeManualLineaModal();
-  });
+  html += `
+      </tbody>
+    </table>
+  `;
+  return html;
 }
 
-function openManualLineaModalForNew() {
-  if (!modalLineaManualEl) return;
-  modalLineaManualEl.dataset.mode = "new";
-  modalLineaManualEl.dataset.index = "";
+// Leer cabecera desde UI
+function guardarCabeceraDesdeUI() {
+  const cab = appState.presupuestoCabecera;
+  cab.cliente = document.getElementById("cab_cliente").value.trim();
+  cab.proyecto = document.getElementById("cab_proyecto").value.trim();
+  cab.direccion = document.getElementById("cab_direccion").value.trim();
+  cab.contacto = document.getElementById("cab_contacto").value.trim();
+  cab.email = document.getElementById("cab_email").value.trim();
+  cab.telefono = document.getElementById("cab_telefono").value.trim();
+  cab.notas = document.getElementById("cab_notas").value.trim();
 
-  modalLineaManualEl.querySelector("#modalManual_seccion").value = "";
-  modalLineaManualEl.querySelector("#modalManual_ref").value = "";
-  modalLineaManualEl.querySelector("#modalManual_desc").value = "";
-  modalLineaManualEl.querySelector("#modalManual_ud").value = "1";
-  modalLineaManualEl.querySelector("#modalManual_pvp").value = "0";
-  modalLineaManualEl.querySelector("#modalManual_incluir").checked = true;
-
-  modalLineaManualEl.classList.remove("hidden");
+  alert("Cabecera guardada (en memoria local de la app).");
 }
 
-function openManualLineaModalForEdit(index) {
-  if (!modalLineaManualEl) return;
-  const linea = appState.lineasProyecto[index];
-  if (!linea || !linea.manual) return;
-
-  modalLineaManualEl.dataset.mode = "edit";
-  modalLineaManualEl.dataset.index = String(index);
-
-  modalLineaManualEl.querySelector("#modalManual_seccion").value = linea.seccion || "";
-  modalLineaManualEl.querySelector("#modalManual_ref").value = linea.ref || "";
-  modalLineaManualEl.querySelector("#modalManual_desc").value = linea.descripcion || "";
-  modalLineaManualEl.querySelector("#modalManual_ud").value = Number(linea.cantidad) || 0;
-  modalLineaManualEl.querySelector("#modalManual_pvp").value = Number(linea.pvp) || 0;
-  modalLineaManualEl.querySelector("#modalManual_incluir").checked = linea.incluir !== false;
-
-  modalLineaManualEl.classList.remove("hidden");
+// Leer opciones desde UI
+function leerOpcionesDesdeUI() {
+  const opt = appState.presupuestoOpciones;
+  const d = parseFloat(document.getElementById("opt_descuento").value.replace(",", "."));
+  opt.descuentoGlobal = isNaN(d) ? 0 : d;
+  opt.aplicarIVA = document.getElementById("opt_iva").checked;
 }
 
-function closeManualLineaModal() {
-  if (!modalLineaManualEl) return;
-  modalLineaManualEl.classList.add("hidden");
-  modalLineaManualEl.dataset.mode = "";
-  modalLineaManualEl.dataset.index = "";
-}
+// Recalcular importes y totales (núcleo)
+function recalcularPresupuestoCore() {
+  const lineas = appState.lineasProyecto || [];
+  const opt = appState.presupuestoOpciones;
+  const tot = appState.presupuestoTotales;
 
-function saveManualLineaModal() {
-  if (!modalLineaManualEl) return;
-
-  const mode = modalLineaManualEl.dataset.mode || "new";
-  const idxStr = modalLineaManualEl.dataset.index;
-
-  const seccion = (modalLineaManualEl.querySelector("#modalManual_seccion").value || "").trim();
-  const ref = (modalLineaManualEl.querySelector("#modalManual_ref").value || "").trim();
-  const desc = (modalLineaManualEl.querySelector("#modalManual_desc").value || "").trim();
-  let ud = toNum(modalLineaManualEl.querySelector("#modalManual_ud").value);
-  const pvp = toNum(modalLineaManualEl.querySelector("#modalManual_pvp").value);
-  const incluir = modalLineaManualEl.querySelector("#modalManual_incluir").checked;
-
-  if (!ud || ud < 0) ud = 1;
-
-  if (mode === "new") {
-    const nuevaLinea = {
-      ref,
-      descripcion: desc,
-      cantidad: ud,
-      pvp,
-      incluir,
-      seccion,
-      manual: true,
-      isSectionPlaceholder: false
-    };
-    appState.lineasProyecto.push(nuevaLinea);
-  } else if (mode === "edit" && idxStr !== undefined && idxStr !== "") {
-    const index = Number(idxStr);
-    const linea = appState.lineasProyecto[index];
-    if (linea && linea.manual) {
-      linea.ref = ref;
-      linea.descripcion = desc;
-      linea.cantidad = ud;
-      linea.pvp = pvp;
-      linea.incluir = incluir;
-      linea.seccion = seccion;
-    }
-  }
-
-  closeManualLineaModal();
-
-  const filtroRef = document.getElementById("filtroRef");
-  const filtro = filtroRef ? filtroRef.value.trim().toLowerCase() : "";
-  rebuildPresupuestoTable(filtro);
-  recalcularPresupuesto();
-}
-
-// ==== DRAG & DROP DE SECCIONES ====
-
-function moveSection(seccionKey, direction) {
-  const lines = appState.lineasProyecto || [];
-  if (!lines.length) return;
-
-  const sections = [];
-  lines.forEach((l) => {
-    const key = (l.seccion || "SIN SECCIÓN").trim();
-    if (!sections.includes(key)) sections.push(key);
-  });
-
-  const idx = sections.indexOf(seccionKey);
-  if (idx === -1) return;
-
-  const newIndex = idx + direction;
-  if (newIndex < 0 || newIndex >= sections.length) return;
-
-  const tmp = sections[idx];
-  sections[idx] = sections[newIndex];
-  sections[newIndex] = tmp;
-
-  const newLines = [];
-  sections.forEach((sec) => {
-    lines.forEach((l) => {
-      const key = (l.seccion || "SIN SECCIÓN").trim();
-      if (key === sec) newLines.push(l);
-    });
-  });
-
-  appState.lineasProyecto = newLines;
-
-  const filtroRef = document.getElementById("filtroRef");
-  const filtro = filtroRef ? filtroRef.value.trim().toLowerCase() : "";
-  rebuildPresupuestoTable(filtro);
-}
-
-function reorderSections(dragKey, targetKey) {
-  const lines = appState.lineasProyecto || [];
-  if (!lines.length) return;
-
-  const sections = [];
-  lines.forEach((l) => {
-    const key = (l.seccion || "SIN SECCIÓN").trim();
-    if (!sections.includes(key)) sections.push(key);
-  });
-
-  const dragIndex = sections.indexOf(dragKey);
-  const targetIndex = sections.indexOf(targetKey);
-  if (dragIndex === -1 || targetIndex === -1) return;
-
-  sections.splice(dragIndex, 1);
-  const newTargetIndex = sections.indexOf(targetKey);
-  sections.splice(newTargetIndex, 0, dragKey);
-
-  const newLines = [];
-  sections.forEach((sec) => {
-    lines.forEach((l) => {
-      const key = (l.seccion || "SIN SECCIÓN").trim();
-      if (key === sec) newLines.push(l);
-    });
-  });
-
-  appState.lineasProyecto = newLines;
-
-  const filtroRef = document.getElementById("filtroRef");
-  const filtro = filtroRef ? filtroRef.value.trim().toLowerCase() : "";
-  rebuildPresupuestoTable(filtro);
-}
-
-// ==== TABLA + TOTALES ====
-
-function rebuildPresupuestoTable(filtroRefTexto) {
-  const tbody = document.getElementById("tbodyPresupuesto");
-  if (!tbody) return;
-
-  const lines = appState.lineasProyecto || [];
-  const filtro = (filtroRefTexto || "").toLowerCase();
-
-  tbody.innerHTML = "";
-
-  const items = [];
-  lines.forEach((linea, idx) => {
-    const refLower = (linea.ref || "").toLowerCase();
-    if (filtro && !refLower.includes(filtro)) return;
-    items.push({ linea, idx });
-  });
-
-  let lastSeccionKey = null;
-
-  items.forEach(({ linea, idx }) => {
-    const seccionKey = (linea.seccion || "SIN SECCIÓN").trim();
-
-    // Cabecera de sección (draggable)
-    if (seccionKey !== lastSeccionKey) {
-      const trSec = document.createElement("tr");
-      trSec.className = "section-row";
-      trSec.draggable = true;
-
-      trSec.addEventListener("click", (e) => {
-        e.stopPropagation();
-        openSeccionModal(seccionKey);
-      });
-
-      trSec.addEventListener("dragstart", (e) => {
-        draggedSectionKey = seccionKey;
-        e.dataTransfer.effectAllowed = "move";
-      });
-
-      trSec.addEventListener("dragover", (e) => {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = "move";
-      });
-
-      trSec.addEventListener("drop", (e) => {
-        e.preventDefault();
-        if (!draggedSectionKey || draggedSectionKey === seccionKey) return;
-        reorderSections(draggedSectionKey, seccionKey);
-        draggedSectionKey = null;
-      });
-
-      trSec.addEventListener("dragend", () => {
-        draggedSectionKey = null;
-      });
-
-      const tdSec = document.createElement("td");
-      tdSec.colSpan = 7;
-
-      const headerRow = document.createElement("div");
-      headerRow.style.display = "flex";
-      headerRow.style.justifyContent = "space-between";
-      headerRow.style.alignItems = "center";
-      headerRow.style.gap = "8px";
-
-      const divTitulo = document.createElement("div");
-      divTitulo.textContent = seccionKey;
-
-      const controls = document.createElement("div");
-      controls.style.display = "flex";
-      controls.style.gap = "4px";
-
-      const btnUp = document.createElement("button");
-      btnUp.textContent = "↑";
-      btnUp.title = "Subir sección";
-      btnUp.style.border = "none";
-      btnUp.style.background = "transparent";
-      btnUp.style.cursor = "pointer";
-      btnUp.style.fontSize = "0.75rem";
-      btnUp.onclick = (e) => {
-        e.stopPropagation();
-        moveSection(seccionKey, -1);
-      };
-
-      const btnDown = document.createElement("button");
-      btnDown.textContent = "↓";
-      btnDown.title = "Bajar sección";
-      btnDown.style.border = "none";
-      btnDown.style.background = "transparent";
-      btnDown.style.cursor = "pointer";
-      btnDown.style.fontSize = "0.75rem";
-      btnDown.onclick = (e) => {
-        e.stopPropagation();
-        moveSection(seccionKey, 1);
-      };
-
-      controls.appendChild(btnUp);
-      controls.appendChild(btnDown);
-
-      headerRow.appendChild(divTitulo);
-      headerRow.appendChild(controls);
-
-      tdSec.appendChild(headerRow);
-
-      const nota = linea.seccionNota || "";
-      if (nota) {
-        const divNota = document.createElement("div");
-        divNota.className = "section-note";
-        divNota.textContent = nota;
-        tdSec.appendChild(divNota);
-      }
-
-      trSec.appendChild(tdSec);
-      tbody.appendChild(trSec);
-      lastSeccionKey = seccionKey;
-    }
-
-    // Línea placeholder (solo sección vacía) → no pinta producto
-    if (linea.isSectionPlaceholder) return;
-
-    const tr = document.createElement("tr");
-
-    if (linea.manual) {
-      tr.style.cursor = "pointer";
-      tr.onclick = () => {
-        openManualLineaModalForEdit(idx);
-      };
-    }
-
-    const tdCheck = document.createElement("td");
-    tdCheck.className = "col-check";
-    const chk = document.createElement("input");
-    chk.type = "checkbox";
-    chk.checked = linea.incluir !== false;
-    chk.onclick = (e) => e.stopPropagation();
-    chk.onchange = () => {
-      linea.incluir = chk.checked;
-      recalcularPresupuesto();
-    };
-    tdCheck.appendChild(chk);
-
-    const tdRef = document.createElement("td");
-    tdRef.className = "col-ref";
-    tdRef.textContent = linea.ref || "";
-
-    const tdSeccion = document.createElement("td");
-    tdSeccion.textContent = linea.seccion || "";
-
-    const tdDesc = document.createElement("td");
-    tdDesc.textContent = linea.descripcion || "";
-
-    const tdUd = document.createElement("td");
-    const inputUd = document.createElement("input");
-    inputUd.type = "number";
-    inputUd.min = "0";
-    inputUd.step = "1";
-    inputUd.value = linea.cantidad;
-    inputUd.onclick = (e) => e.stopPropagation();
-    inputUd.onchange = () => {
-      linea.cantidad = toNum(inputUd.value);
-      recalcularPresupuesto();
-      tdImporte.textContent = formatCurrency(
-        (Number(linea.cantidad) || 0) * (Number(linea.pvp) || 0)
-      );
-    };
-    tdUd.appendChild(inputUd);
-
-    const tdPvp = document.createElement("td");
-    tdPvp.textContent = formatCurrency(linea.pvp);
-
-    const tdImporte = document.createElement("td");
-    tdImporte.textContent = formatCurrency(
-      (Number(linea.cantidad) || 0) * (Number(linea.pvp) || 0)
-    );
-
-    tr.appendChild(tdCheck);
-    tr.appendChild(tdRef);
-    tr.appendChild(tdSeccion);
-    tr.appendChild(tdDesc);
-    tr.appendChild(tdUd);
-    tr.appendChild(tdPvp);
-    tr.appendChild(tdImporte);
-
-    tbody.appendChild(tr);
-  });
-
-  const linesInfo = document.getElementById("linesInfo");
-  if (linesInfo) {
-    linesInfo.textContent = `${appState.lineasProyecto.length} líneas cargadas desde el proyecto`;
-  }
-}
-
-function recalcularPresupuesto() {
-  const seleccionadas = getLineasSeleccionadas();
   let subtotal = 0;
 
-  seleccionadas.forEach((l) => {
-    subtotal += (Number(l.cantidad) || 0) * (Number(l.pvp) || 0);
+  lineas.forEach((l) => {
+    // aplicar tarifa si existe
+    if (l.ref && window.findTarifaItem) {
+      const t = findTarifaItem(l.ref);
+      if (t) {
+        if (!l.pvp || l.pvp === 0) l.pvp = t.pvp || 0;
+        if (!l.descripcion) l.descripcion = t.descripcion || l.descripcion;
+      }
+    }
+
+    const cant = Number(l.cantidad || 1);
+    const pvp = Number(l.pvp || 0);
+    const importe = (l.ok !== false ? cant * pvp : 0);
+    l.importe = importe;
+    subtotal += importe;
   });
 
-  const descuento = subtotal * (appState.descuentoGlobal / 100);
-  const baseImp = subtotal - descuento;
-  const iva = appState.aplicarIVA ? baseImp * 0.21 : 0;
-  const total = baseImp + iva;
+  const descuento = subtotal * (opt.descuentoGlobal / 100);
+  const base = subtotal - descuento;
+  const iva = opt.aplicarIVA ? base * 0.21 : 0;
+  const total = base + iva;
 
-  const totalesBox = document.getElementById("totalesBox");
-  if (totalesBox) {
-    totalesBox.innerHTML = `
-      <div class="totales-row">
-        <span>Subtotal</span>
-        <span>${formatCurrency(subtotal)}</span>
-      </div>
-      <div class="totales-row">
-        <span>Descuento (${appState.descuentoGlobal || 0}%)</span>
-        <span>-${formatCurrency(descuento)}</span>
-      </div>
-      <div class="totales-row">
-        <span>Base imponible</span>
-        <span>${formatCurrency(baseImp)}</span>
-      </div>
-      <div class="totales-row">
-        <span>IVA ${appState.aplicarIVA ? "21%" : "(no aplicado)"} </span>
-        <span>${formatCurrency(iva)}</span>
-      </div>
-      <div class="totales-row total">
-        <span>Total</span>
-        <span>${formatCurrency(total)}</span>
-      </div>
-    `;
-  }
-
-  const summaryChip = document.getElementById("summaryChip");
-  if (summaryChip) {
-    if (!appState.lineasProyecto.length) {
-      summaryChip.classList.add("hidden");
-    } else {
-      summaryChip.classList.remove("hidden");
-      summaryChip.innerHTML = `
-        <span>${appState.lineasProyecto.length} líneas</span>
-        <span class="dot"></span>
-        <span>Subtotal: ${subtotal.toFixed(0)} €</span>
-      `;
-    }
-  }
+  tot.subtotal = subtotal;
+  tot.descuento = descuento;
+  tot.base = base;
+  tot.iva = iva;
+  tot.total = total;
 }
+
+// Recalcular y repintar
+function recalcularPresupuesto() {
+  recalcularPresupuestoCore();
+  const root = document.getElementById("shellContent");
+  if (root) renderPresupuesto(root);
+}
+
+// Enlazar eventos de la tabla (edición inline)
+function enlazarEventosTabla() {
+  const filas = document.querySelectorAll(".fila-presupuesto");
+  filas.forEach((tr) => {
+    const idx = Number(tr.getAttribute("data-index"));
+    const linea = appState.lineasProyecto[idx];
+
+    const ck = tr.querySelector(".ln_ok");
+    const refInput = tr.querySelector(".ln_ref");
+    const secInput = tr.querySelector(".ln_seccion");
+    const descInput = tr.querySelector(".ln_desc");
+    const cantInput = tr.querySelector(".ln_cant");
+    const pvpInput = tr.querySelector(".ln_pvp");
+
+    ck.onchange = () => {
+      linea.ok = ck.checked;
+      recalcularPresupuesto();
+    };
+    refInput.onchange = () => {
+      linea.ref = refInput.value.trim();
+      recalcularPresupuesto();
+    };
+    secInput.onchange = () => {
+      linea.seccion = secInput.value.trim();
+    };
+    descInput.onchange = () => {
+      linea.descripcion = descInput.value.trim();
+    };
+    cantInput.onchange = () => {
+      linea.cantidad = Number(cantInput.value || 1);
+      recalcularPresupuesto();
+    };
+    pvpInput.onchange = () => {
+      linea.pvp = Number(pvpInput.value || 0);
+      recalcularPresupuesto();
+    };
+  });
+}
+
+// Expose
+window.renderPresupuesto = renderPresupuesto;
+window.recalcularPresupuesto = recalcularPresupuesto;
