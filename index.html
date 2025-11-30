@@ -59,7 +59,7 @@
             <ul class="app-nav">
 
                 <li class="app-nav-item">
-                    <a href="#" class="app-nav-link" data-view="proyecto">
+                    <a href="#" class="app-nav-link active" data-view="proyecto">
                         📁 Proyecto
                     </a>
                 </li>
@@ -72,7 +72,7 @@
 
                 <li class="app-nav-item">
                     <a href="#" class="app-nav-link" data-view="tarifa">
-                        💰 Tarifas 2N
+                        💰 Tarifa 2N
                     </a>
                 </li>
 
@@ -96,7 +96,9 @@
             <header class="app-topbar">
                 <div class="app-topbar-left">
                     <div class="app-topbar-title">Programa Presupuestos 2N</div>
-                    <div id="currentViewSubtitle" class="app-topbar-subtitle"></div>
+                    <div id="currentViewSubtitle" class="app-topbar-subtitle">
+                        Presupuestos 2N · Uso interno. Datos y precios orientativos, validar siempre con tarifa actualizada.
+                    </div>
                 </div>
 
                 <div class="app-topbar-right">
@@ -121,6 +123,9 @@
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+
+    <!-- Librería Excel (SheetJS) -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
     <!-- Config -->
     <script src="js/firebase.js"></script>
