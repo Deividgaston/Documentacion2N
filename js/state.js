@@ -1,33 +1,46 @@
 // js/state.js
-// Estado global y referencias base
+// Estado global de la app de presupuestos 2N
 
-const appRoot = document.getElementById("app");
+// Claves de caché en localStorage
+const TARIFA_CACHE_KEY = "tarifa_2n_cache_v1";
+const PROYECTO_CACHE_KEY = "proyecto_actual_v1";
+const PRESUPUESTO_CACHE_KEY = "presupuesto_actual_v1";
 
-// cache local de tarifa
-const TARIFA_CACHE_KEY = "tarifa_2n_v1";
+// Estado principal
+window.appState = window.appState || {};
 
-const appState = {
-  user: null,
-  loginError: "",
-  tarifas: null,          // Productos de la tarifa 2N (por referencia)
-  lineasProyecto: [],     // Líneas importadas desde el Excel del proyecto
+Object.assign(appState, {
+  currentView: appState.currentView || "proyecto",
 
-  // Pestaña activa del menú superior
-  activeTab: "proyecto",
+  user: appState.user || null,
 
-  // Descuento global aplicado sobre el subtotal
-  descuentoGlobal: 0,
-  aplicarIVA: false,
+  // Tarifa 2N completa (productos, precios, etc.)
+  tarifas: appState.tarifas || {},
 
-  // Datos de cabecera del presupuesto
-  infoPresupuesto: {
+  // Datos del proyecto importado desde Excel
+  proyecto: appState.proyecto || {
+    filas: [],           // [{ referencia, cantidad, descripcion }]
+    archivoNombre: null,
+    fechaImportacion: null,
+  },
+
+  // Datos del presupuesto generado a partir del proyecto + tarifa
+  presupuesto: appState.presupuesto || {
+    lineas: [],          // [{ referencia, descripcion, cantidad, pvp, dto, total }]
+    totales: {
+      base: 0,
+      dtoGlobal: 0,
+      iva: 0,
+      totalConIva: 0,
+    },
+    nombreProyecto: "",
     cliente: "",
-    proyecto: "",
-    direccion: "",
-    contacto: "",
-    email: "",
-    telefono: "",
-    notas:
-      "Para la alimentación de los equipos se requiere de un switch PoE acorde con el consumo de los dispositivos."
-  }
-};
+    fechaPresupuesto: null,
+  },
+
+  // Documentación / PDFs generados (si quieres usarlo luego)
+  docs: appState.docs || {
+    ultimaRutaPdf: null,
+    ultimaFechaGeneracion: null,
+  },
+});
