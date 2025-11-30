@@ -14,230 +14,286 @@ function renderPresupuesto(container) {
     </div>
 
     <div class="layout-presupuesto">
-      
-      <!-- COLUMNA IZQUIERDA -->
-      <div class="presupuesto-side">
+      <!-- COLUMNA IZQUIERDA: DATOS PRESUPUESTO -->
+      <div class="col-left">
+        <div class="card">
+          <div class="card-section-title">Datos del cliente / proyecto</div>
 
-        <!-- DATOS DEL PRESUPUESTO -->
-        <div class="card card-soft">
-          <div class="card-header-row">
-            <span class="card-header">Datos del presupuesto</span>
-            <span class="badge-light">Cabecera</span>
-          </div>
-
-          <div class="form-grid">
+          <div class="grid-2-equal" style="margin-bottom:10px;">
             <div>
-              <label>Cliente</label>
+              <div class="field-label">Cliente</div>
               <input type="text" id="p_cliente" class="input" value="${appState.infoPresupuesto.cliente}">
             </div>
             <div>
-              <label>Proyecto / Obra</label>
+              <div class="field-label">Proyecto</div>
               <input type="text" id="p_proyecto" class="input" value="${appState.infoPresupuesto.proyecto}">
             </div>
+          </div>
+
+          <div class="grid-2-equal" style="margin-bottom:10px;">
             <div>
-              <label>Dirección</label>
+              <div class="field-label">Dirección</div>
               <input type="text" id="p_direccion" class="input" value="${appState.infoPresupuesto.direccion}">
             </div>
             <div>
-              <label>Persona de contacto</label>
+              <div class="field-label">Contacto</div>
               <input type="text" id="p_contacto" class="input" value="${appState.infoPresupuesto.contacto}">
             </div>
+          </div>
+
+          <div class="grid-2-equal" style="margin-bottom:10px;">
             <div>
-              <label>Email del contacto</label>
-              <input type="email" id="p_email" class="input" value="${appState.infoPresupuesto.email}">
+              <div class="field-label">Email</div>
+              <input type="text" id="p_email" class="input" value="${appState.infoPresupuesto.email}">
             </div>
             <div>
-              <label>Teléfono</label>
+              <div class="field-label">Teléfono</div>
               <input type="text" id="p_telefono" class="input" value="${appState.infoPresupuesto.telefono}">
             </div>
           </div>
 
-          <label style="margin-top:16px;">Notas adicionales:</label>
-          <textarea id="p_notas" class="input textarea-notas">${appState.infoPresupuesto.notas}</textarea>
+          <div style="margin-top:8px;">
+            <div class="field-label">Notas adicionales</div>
+            <textarea id="p_notas" class="input textarea-notas">${appState.infoPresupuesto.notas}</textarea>
+          </div>
 
-          <button class="btn btn-blue btn-full" style="margin-top:16px;" id="btnGuardarDatos">
+          <button class="btn btn-blue btn-full" style="margin-top:12px;" id="btnGuardarDatos">
             Guardar datos
           </button>
         </div>
 
-        <!-- OPCIONES DE CÁLCULO -->
         <div class="card card-soft">
-          <div class="card-header-row">
-            <span class="card-header">Parámetros económicos</span>
-            <span class="badge-light">Cálculo</span>
+          <div class="card-section-title">Opciones de cálculo</div>
+
+          <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px;">
+            <div style="flex:1;">
+              <div class="field-label">Descuento global (%)</div>
+              <input type="number" id="p_descuentoGlobal" class="input" value="${appState.descuentoGlobal}">
+            </div>
+            <label style="display:flex; align-items:center; gap:6px; margin-top:18px; font-size:0.8rem;">
+              <input type="checkbox" id="p_aplicarIVA" ${appState.aplicarIVA ? "checked" : ""} />
+              Aplicar IVA (21%)
+            </label>
           </div>
 
-          <label>Rol (referencia interna):</label>
-          <select id="rolSelect" class="input">
-            <option value="pvp" ${appState.rol === "pvp" ? "selected" : ""}>PVP (sin márgenes)</option>
-            <option value="distribuidor" ${appState.rol === "distribuidor" ? "selected" : ""}>Distribuidor</option>
-            <option value="subdistribuidor" ${appState.rol === "subdistribuidor" ? "selected" : ""}>Subdistribuidor</option>
-            <option value="integrador" ${appState.rol === "integrador" ? "selected" : ""}>Integrador</option>
-            <option value="promotora" ${appState.rol === "promotora" ? "selected" : ""}>Promotora / Constructora</option>
-          </select>
+          <div class="totales-box" id="totalesBox"></div>
 
-          <div class="form-inline">
-            <div style="flex:1;">
-              <label style="margin-top:12px;">Descuento global (%):</label>
-              <input type="number" id="descuentoGlobal" class="input" value="${appState.descuentoGlobal}" />
+          <div style="display:flex; gap:8px; margin-top:12px;">
+            <button class="btn btn-outline btn-sm" id="btnRecalcular">Recalcular</button>
+            <button class="btn btn-outline btn-sm" id="btnPDF">Exportar PDF</button>
+            <button class="btn btn-outline btn-sm" id="btnExcel">Exportar Excel</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- COLUMNA DERECHA: TABLA LÍNEAS -->
+      <div class="col-right">
+        <div class="table-wrapper">
+          <div class="table-header-actions">
+            <div class="table-header-title">
+              Líneas del presupuesto
+              <span class="badge-light" id="linesInfo"></span>
             </div>
-            <div class="checkbox-row">
+            <div class="table-actions">
               <label>
-                <input type="checkbox" id="aplicarIVA" ${appState.aplicarIVA ? "checked" : ""}/>
-                Aplicar IVA (21%)
+                Filtro ref:
+                <input type="text" id="filtroRef" class="input" style="width:140px; padding:4px 8px; font-size:0.75rem;">
               </label>
             </div>
           </div>
 
-          <button class="btn btn-blue btn-full" style="margin-top:12px;" id="btnRecalcular">
-            Recalcular totales
-          </button>
-        </div>
-
-        <!-- TOTALES -->
-        <div class="card card-highlight">
-          <div class="card-header-row">
-            <span class="card-header">Resumen económico</span>
-          </div>
-          <div id="totalesPresupuesto" class="totales-grid"></div>
-
-          <div class="export-buttons">
-            <button class="btn btn-blue" id="btnPdf">Exportar PDF</button>
-            <button class="btn btn-blue btn-outline" id="btnExcel">Exportar Excel</button>
-          </div>
-        </div>
-
-      </div>
-
-      <!-- COLUMNA DERECHA: LÍNEAS -->
-      <div class="presupuesto-main">
-        <div class="card">
-          <div class="card-header-row">
-            <span class="card-header">Líneas del presupuesto</span>
-            <span class="subtext-lines" id="linesInfo"></span>
-          </div>
-          <div id="tablaPresupuesto"></div>
+          <table class="table">
+            <thead>
+              <tr>
+                <th class="col-check">OK</th>
+                <th class="col-ref">Ref.</th>
+                <th>Descripción</th>
+                <th>Ud.</th>
+                <th>PVP</th>
+                <th>Importe</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyPresupuesto"></tbody>
+          </table>
         </div>
       </div>
-
     </div>
   `;
 
+  // Si no hay líneas, simple aviso
+  if (!appState.lineasProyecto || !appState.lineasProyecto.length) {
+    const tbody = document.getElementById("tbodyPresupuesto");
+    if (tbody) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="6" style="font-size:0.85rem; color:#6b7280; padding:10px;">
+            No hay líneas de proyecto cargadas. Importa primero un Excel en la pestaña <strong>Proyecto</strong>.
+          </td>
+        </tr>
+      `;
+    }
+  } else {
+    rebuildPresupuestoTable();
+  }
+
+  // Eventos datos cabecera
   document.getElementById("btnGuardarDatos").onclick = () => {
-    appState.infoPresupuesto.cliente = document.getElementById("p_cliente").value;
-    appState.infoPresupuesto.proyecto = document.getElementById("p_proyecto").value;
-    appState.infoPresupuesto.direccion = document.getElementById("p_direccion").value;
-    appState.infoPresupuesto.contacto = document.getElementById("p_contacto").value;
-    appState.infoPresupuesto.email = document.getElementById("p_email").value;
-    appState.infoPresupuesto.telefono = document.getElementById("p_telefono").value;
+    appState.infoPresupuesto.cliente = document.getElementById("p_cliente").value.trim();
+    appState.infoPresupuesto.proyecto = document.getElementById("p_proyecto").value.trim();
+    appState.infoPresupuesto.direccion = document.getElementById("p_direccion").value.trim();
+    appState.infoPresupuesto.contacto = document.getElementById("p_contacto").value.trim();
+    appState.infoPresupuesto.email = document.getElementById("p_email").value.trim();
+    appState.infoPresupuesto.telefono = document.getElementById("p_telefono").value.trim();
     appState.infoPresupuesto.notas = document.getElementById("p_notas").value;
-    alert("Datos del presupuesto guardados.");
   };
 
-  document.getElementById("btnRecalcular").onclick = () => {
-    appState.rol = document.getElementById("rolSelect").value;
-    appState.descuentoGlobal = Number(
-      document.getElementById("descuentoGlobal").value || 0
-    );
-    appState.aplicarIVA = document.getElementById("aplicarIVA").checked;
+  const inDesc = document.getElementById("p_descuentoGlobal");
+  const cbIVA = document.getElementById("p_aplicarIVA");
+
+  inDesc.onchange = () => {
+    appState.descuentoGlobal = toNum(inDesc.value);
     recalcularPresupuesto();
   };
 
-  document.getElementById("btnPdf").onclick = () => generarPDF();
+  cbIVA.onchange = () => {
+    appState.aplicarIVA = cbIVA.checked;
+    recalcularPresupuesto();
+  };
+
+  document.getElementById("btnRecalcular").onclick = () => recalcularPresupuesto();
+  document.getElementById("btnPDF").onclick = () => generarPDF();
   document.getElementById("btnExcel").onclick = () => generarExcel();
+
+  const filtroRef = document.getElementById("filtroRef");
+  filtroRef.oninput = () => {
+    rebuildPresupuestoTable(filtroRef.value.trim().toLowerCase());
+  };
 
   recalcularPresupuesto();
 }
 
-function recalcularPresupuesto() {
-  const contTabla = document.getElementById("tablaPresupuesto");
-  const contTotales = document.getElementById("totalesPresupuesto");
-  const summaryChip = document.getElementById("summaryChip");
-  const linesInfo = document.getElementById("linesInfo");
+function rebuildPresupuestoTable(filtroRefTexto) {
+  const tbody = document.getElementById("tbodyPresupuesto");
+  if (!tbody) return;
 
-  if (!appState.lineasProyecto.length) {
-    contTabla.innerHTML = `<p style="color:#666;">No hay líneas importadas desde el proyecto.</p>`;
-    contTotales.innerHTML = "";
-    if (summaryChip) summaryChip.classList.add("hidden");
-    if (linesInfo) linesInfo.textContent = "";
-    return;
-  }
+  const lines = appState.lineasProyecto || [];
+  const filtro = (filtroRefTexto || "").toLowerCase();
 
-  let html = `
-    <div class="table-wrapper">
-      <table class="table-simple">
-        <thead>
-          <tr>
-            <th>Referencia</th>
-            <th>Descripción</th>
-            <th class="text-right">Cant.</th>
-            <th class="text-right">PVP</th>
-            <th class="text-right">Total línea</th>
-          </tr>
-        </thead>
-        <tbody>
-  `;
+  tbody.innerHTML = "";
 
-  let subtotal = 0;
+  lines.forEach((linea, idx) => {
+    if (filtro && !linea.ref.toLowerCase().includes(filtro)) return;
 
-  appState.lineasProyecto.forEach((l) => {
-    const pvp = Number(l.pvp || 0);
-    const totalLinea = pvp * l.cantidad;
-    subtotal += totalLinea;
+    const tr = document.createElement("tr");
 
-    html += `
-      <tr>
-        <td>${l.referencia}</td>
-        <td>${l.nombreTarifa}</td>
-        <td class="text-right">${l.cantidad}</td>
-        <td class="text-right">${pvp.toFixed(2)} €</td>
-        <td class="text-right">${totalLinea.toFixed(2)} €</td>
-      </tr>
-    `;
+    const tdCheck = document.createElement("td");
+    tdCheck.className = "col-check";
+    const chk = document.createElement("input");
+    chk.type = "checkbox";
+    chk.checked = linea.incluir !== false;
+    chk.onchange = () => {
+      linea.incluir = chk.checked;
+      recalcularPresupuesto();
+    };
+    tdCheck.appendChild(chk);
+
+    const tdRef = document.createElement("td");
+    tdRef.className = "col-ref";
+    tdRef.textContent = linea.ref;
+
+    const tdDesc = document.createElement("td");
+    tdDesc.textContent = linea.descripcion || "";
+
+    const tdUd = document.createElement("td");
+    const inputUd = document.createElement("input");
+    inputUd.type = "number";
+    inputUd.min = "0";
+    inputUd.step = "1";
+    inputUd.value = linea.cantidad;
+    inputUd.onchange = () => {
+      linea.cantidad = toNum(inputUd.value);
+      recalcularPresupuesto();
+      // actualizar subtotal fila
+      tdImporte.textContent = formatCurrency(
+        (Number(linea.cantidad) || 0) * (Number(linea.pvp) || 0)
+      );
+    };
+    tdUd.appendChild(inputUd);
+
+    const tdPvp = document.createElement("td");
+    tdPvp.textContent = formatCurrency(linea.pvp);
+
+    const tdImporte = document.createElement("td");
+    tdImporte.textContent = formatCurrency(
+      (Number(linea.cantidad) || 0) * (Number(linea.pvp) || 0)
+    );
+
+    tr.appendChild(tdCheck);
+    tr.appendChild(tdRef);
+    tr.appendChild(tdDesc);
+    tr.appendChild(tdUd);
+    tr.appendChild(tdPvp);
+    tr.appendChild(tdImporte);
+
+    tbody.appendChild(tr);
   });
 
-  html += `</tbody></table></div>`;
-  contTabla.innerHTML = html;
+  const linesInfo = document.getElementById("linesInfo");
+  if (linesInfo) {
+    linesInfo.textContent = `${appState.lineasProyecto.length} líneas cargadas desde el proyecto`;
+  }
+}
 
-  const descuentoEur = subtotal * (appState.descuentoGlobal / 100);
-  const baseImponible = subtotal - descuentoEur;
-  let iva = 0;
-  if (appState.aplicarIVA) iva = baseImponible * 0.21;
-  const totalFinal = baseImponible + iva;
+function recalcularPresupuesto() {
+  const seleccionadas = getLineasSeleccionadas();
+  let subtotal = 0;
 
-  contTotales.innerHTML = `
-    <div class="totales-row">
-      <span>Subtotal</span>
-      <span>${subtotal.toFixed(2)} €</span>
-    </div>
-    <div class="totales-row">
-      <span>Descuento (${appState.descuentoGlobal}%)</span>
-      <span>- ${descuentoEur.toFixed(2)} €</span>
-    </div>
-    <div class="totales-row">
-      <span>Base imponible</span>
-      <span>${baseImponible.toFixed(2)} €</span>
-    </div>
-    <div class="totales-row">
-      <span>IVA (21%)</span>
-      <span>${iva.toFixed(2)} €</span>
-    </div>
-    <div class="totales-row totales-row-total">
-      <span>TOTAL</span>
-      <span>${totalFinal.toFixed(2)} €</span>
-    </div>
-  `;
+  seleccionadas.forEach((l) => {
+    subtotal += (Number(l.cantidad) || 0) * (Number(l.pvp) || 0);
+  });
 
-  if (summaryChip) {
-    summaryChip.classList.remove("hidden");
-    summaryChip.innerHTML = `
-      <span>${appState.lineasProyecto.length} líneas</span>
-      <span class="dot"></span>
-      <span>Subtotal: ${subtotal.toFixed(0)} €</span>
+  const descuento = subtotal * (appState.descuentoGlobal / 100);
+  const baseImp = subtotal - descuento;
+  const iva = appState.aplicarIVA ? baseImp * 0.21 : 0;
+  const total = baseImp + iva;
+
+  const totalesBox = document.getElementById("totalesBox");
+  if (totalesBox) {
+    totalesBox.innerHTML = `
+      <div class="totales-row">
+        <span>Subtotal</span>
+        <span>${formatCurrency(subtotal)}</span>
+      </div>
+      <div class="totales-row">
+        <span>Descuento (${appState.descuentoGlobal || 0}%)</span>
+        <span>-${formatCurrency(descuento)}</span>
+      </div>
+      <div class="totales-row">
+        <span>Base imponible</span>
+        <span>${formatCurrency(baseImp)}</span>
+      </div>
+      <div class="totales-row">
+        <span>IVA ${appState.aplicarIVA ? "21%" : "(no aplicado)"}</span>
+        <span>${formatCurrency(iva)}</span>
+      </div>
+      <div class="totales-row total">
+        <span>Total</span>
+        <span>${formatCurrency(total)}</span>
+      </div>
     `;
   }
 
-  if (linesInfo) {
-    linesInfo.textContent = `${appState.lineasProyecto.length} líneas cargadas desde el Excel del proyecto`;
+  const summaryChip = document.getElementById("summaryChip");
+  if (summaryChip) {
+    if (!appState.lineasProyecto.length) {
+      summaryChip.classList.add("hidden");
+    } else {
+      summaryChip.classList.remove("hidden");
+      summaryChip.innerHTML = `
+        <span>${appState.lineasProyecto.length} líneas</span>
+        <span class="dot"></span>
+        <span>Subtotal: ${subtotal.toFixed(0)} €</span>
+      `;
+    }
   }
 }
