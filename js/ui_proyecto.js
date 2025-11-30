@@ -196,7 +196,7 @@ function parseProyectoFormatoNormal(rows, tarifas) {
  * - Las filas de productos tienen:
  *   nombre en una columna, código (número de pedido) y cantidad.
  *
- * Extraemos además la combinación de secciones:
+ * Extraemos además las secciones:
  *   p.ej. "intercomunicadores / PLACA DE CALLE"
  */
 function parseProyectoProjectDesigner(rows, tarifas) {
@@ -205,7 +205,7 @@ function parseProyectoProjectDesigner(rows, tarifas) {
   let sinTarifa = 0;
   let usadoFormato = false;
 
-  let currentTitles = []; // para acumular últimas 1-2 secciones/títulos
+  let currentTitles = []; // últimas 1-2 secciones
   let headerIdx = null;   // índices de Nombre, Ref, Cantidad
 
   const isEmpty = (val) =>
@@ -214,21 +214,21 @@ function parseProyectoProjectDesigner(rows, tarifas) {
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i] || [];
     const c0 = (r[0] || "").toString().trim();
-
-    // Detectar si es una fila "título/sección" (solo primera celda con texto)
     const restHasData = r.slice(1).some((v) => !isEmpty(v));
+
     const lower0 = c0.toLowerCase();
 
+    // Fila de título/sección (solo primera celda con texto)
     const isTitleRow =
       c0 &&
       !restHasData &&
       !/foto/i.test(c0) &&
-      !/nombre del producto/i.test(c0) &&
-      !/número de pedido/i.test(c0) &&
-      !/cantidad/i.test(c0);
+      !/nombre del producto/i.test(lower0) &&
+      !/número de pedido/i.test(lower0) &&
+      !/numero de pedido/i.test(lower0) &&
+      !/cantidad/i.test(lower0);
 
     if (isTitleRow) {
-      // Guardamos la sección. Solo mantenemos las dos últimas para combinar.
       currentTitles.push(c0);
       if (currentTitles.length > 2) currentTitles.shift();
       continue;
@@ -237,28 +237,44 @@ function parseProyectoProjectDesigner(rows, tarifas) {
     // Detectar fila cabecera de tabla de productos
     const rowLower = r.map((x) => String(x || "").toLowerCase());
     const isHeader =
-      rowLower.some((x) => x.includes("nombre del producto")) &&
-      rowLower.some((x) => x.includes("número de pedido")) &&
-      rowLower.some((x) => x.includes("cantidad"));
+      rowLower.some((x) => x.includes("nombre") && x.includes("producto")) &&
+      rowLower.some(
+        (x) =>
+          x.includes("número de pedido") ||
+          x.includes("numero de pedido") ||
+          (x.includes("pedido") && x.includes("número")) ||
+          (x.includes("pedido") && x.includes("numero"))
+      ) &&
+      rowLower.some(
+        (x) =>
+          x.includes("cantidad") ||
+          x.includes("qty") ||
+          x.includes("quantity")
+      );
 
     if (isHeader) {
       usadoFormato = true;
 
-      const idxName = r.findIndex((x) =>
-        String(x || "").toLowerCase().includes("nombre del producto")
+      const idxName = rowLower.findIndex((x) => x.includes("nombre") && x.includes("producto"));
+      const idxRef = rowLower.findIndex(
+        (x) =>
+          x.includes("número de pedido") ||
+          x.includes("numero de pedido") ||
+          (x.includes("pedido") && x.includes("número")) ||
+          (x.includes("pedido") && x.includes("numero"))
       );
-      const idxRef = r.findIndex((x) =>
-        String(x || "").toLowerCase().includes("número de pedido")
-      );
-      const idxQty = r.findIndex((x) =>
-        String(x || "").toLowerCase().includes("cantidad")
+      const idxQty = rowLower.findIndex(
+        (x) =>
+          x.includes("cantidad") ||
+          x.includes("qty") ||
+          x.includes("quantity")
       );
 
       headerIdx = { idxName, idxRef, idxQty };
       continue;
     }
 
-    // Si tenemos cabeceras detectadas, interpretamos las filas siguientes como posibles productos
+    // Si tenemos cabeceras detectadas, interpretamos como filas de productos
     if (headerIdx && headerIdx.idxRef >= 0 && headerIdx.idxQty >= 0) {
       const refRaw = r[headerIdx.idxRef];
       const qtyRaw = r[headerIdx.idxQty];
@@ -267,8 +283,7 @@ function parseProyectoProjectDesigner(rows, tarifas) {
       const qty = toNum(qtyRaw);
 
       if (!ref || !qty) {
-        // puede ser línea vacía o separador, lo ignoramos
-        continue;
+        continue; // fila vacía o separador
       }
 
       const descExcel =
