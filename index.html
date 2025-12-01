@@ -32,8 +32,8 @@
           Entrar
         </button>
 
-        <div class="text-center mt-2" style="font-size:0.78rem; color:#6b7280;">
-          o
+        <div class="text-center mt-2 text-small text-muted">
+          o continúa con
         </div>
 
         <button id="btnLoginGoogle" class="btn btn-secondary mt-2" style="width: 100%">
@@ -56,57 +56,56 @@
           <div id="currentViewSubtitle" class="app-topbar-subtitle"></div>
         </div>
 
-        <nav class="app-topbar-center">
-          <a href="#" class="top-nav-link active" data-view="proyecto" id="navProyecto">Proyecto</a>
-          <a href="#" class="top-nav-link" data-view="presupuesto">Presupuesto</a>
-          <a href="#" class="top-nav-link" data-view="tarifa">Tarifa 2N</a>
-          <a href="#" class="top-nav-link" data-view="docs">Documentación</a>
-        </nav>
-
         <div class="app-topbar-right">
-          <span id="userBadge" class="badge-user">Usuario</span>
-          <button id="btnLogout" class="btn btn-secondary btn-sm">Cerrar sesión</button>
+          <span id="userBadge" class="user-badge"></span>
         </div>
       </header>
 
-      <main id="appContent" class="app-content"></main>
-    </div>
+      <div class="app-layout">
+        <!-- Sidebar -->
+        <aside class="app-sidebar">
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">Documentación</div>
+            <button class="sidebar-item" data-view="dashboardDoc">
+              <span class="sidebar-item-dot"></span> Dashboard
+            </button>
+          </div>
 
-    <!-- =========================================================
-         LIBRERÍAS
-    ========================================================== -->
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">Proyectos</div>
+            <button class="sidebar-item" data-view="proyecto">
+              <span class="sidebar-item-dot"></span> Proyectos
+            </button>
+            <button class="sidebar-item" data-view="presupuesto">
+              <span class="sidebar-item-dot"></span> Presupuesto
+            </button>
+          </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+          <div class="sidebar-section">
+            <div class="sidebar-section-title">Tarifa</div>
+            <button class="sidebar-item" data-view="tarifa">
+              <span class="sidebar-item-dot"></span> Tarifa 2N
+            </button>
+          </div>
+        </aside>
 
-    <!-- =========================================================
-         ARCHIVOS JS DEL PROYECTO
-    ========================================================== -->
-
-    <!-- Firebase de tu proyecto, ahora como módulo (puede exportar db, auth, etc.) -->
-    <script type="module" src="js/firebase.js"></script>
-
-    <!-- ⚠️ YA NO CARGAMOS firebase_tarifa.js COMO SCRIPT NORMAL -->
-    <!-- <script src="js/firebase_tarifa.js"></script> -->
-
-    <script src="js/state.js"></script>
-    <script src="js/utils.js"></script>
-
-    <script src="js/ui_login.js"></script>
-    <script src="js/ui_shell.js"></script>
-    <script src="js/ui_proyecto.js"></script>
-    <script src="js/ui_presupuesto.js"></script>
-
-    <!-- Tarifa 2N como módulo: aquí es donde se hace el import de firebase_tarifa.js -->
-    <script type="module" src="js/ui_tarifa.js"></script>
-
-    <script src="js/ui_dashboard_doc.js"></script>
-
-    <script src="js/pdf_excel.js"></script>
-    <script src="app.js"></script>
-    <script src="js/main.js"></script>
-  </body>
-</html>
+        <!-- Contenido principal -->
+        <main class="app-main">
+          <!-- Vista: Dashboard documentación -->
+          <section id="view-dashboardDoc" class="view active">
+            <div class="card">
+              <div class="card-header">
+                <h2 class="card-title">Documentación 2N</h2>
+                <p class="card-subtitle">
+                  Selecciona el tipo de documentación que necesitas.
+                </p>
+              </div>
+              <div class="card-body">
+                <div class="grid-2">
+                  <button class="btn btn-outline" data-doc="ficha_producto">
+                    Ficha de producto
+                  </button>
+                  <button class="btn btn-outline" data-doc="memoria_calidades">
+                    Memoria de calidades
+                  </button>
+                  <button class="btn btn-outline" data-doc="presentacion"
