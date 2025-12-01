@@ -1,6 +1,8 @@
 // js/ui_tarifa.js
 // Pantalla TARIFA 2N: importar Excel de tarifa y cargarla en Firestore
 
+import { subirTarifaAFirestore, getTarifas } from "./firebase_tarifa.js";
+
 window.appState = window.appState || {};
 appState.tarifaUpload = appState.tarifaUpload || {
   productos: null,
@@ -58,7 +60,7 @@ function renderTarifaView() {
         </div>
       </div>
     </div>
-  `;
+  ";
 
   const btnLeer = document.getElementById("btnLeerTarifa");
   const btnSubir = document.getElementById("btnSubirTarifa");
@@ -241,8 +243,6 @@ function leerTarifaDesdeExcel(file) {
         }
 
         const headerRow = rows[headerRowIndex];
-
-        // 2) Determinar índices de columnas
         const headersNorm = headerRow.map((h) => normalizarTextoPlano(h));
 
         const colRef =
@@ -277,7 +277,6 @@ function leerTarifaDesdeExcel(file) {
 
         const productos = {};
 
-        // 3) Recorrer filas de datos (después de la fila de cabeceras)
         for (let i = headerRowIndex + 1; i < rows.length; i++) {
           const row = rows[i];
           if (!row || row.length === 0) continue;
@@ -293,7 +292,7 @@ function leerTarifaDesdeExcel(file) {
 
           if (!ref || !pvp || pvp <= 0) continue;
 
-          const desc = limpiarTexto ? limpiarTexto(rawName) : String(rawName || "").trim();
+          const desc = String(rawName || "").trim();
 
           productos[ref] = {
             pvp,
@@ -427,3 +426,6 @@ console.log(
   "%cUI Tarifa cargada (ui_tarifa.js)",
   "color:#4f46e5; font-weight:600;"
 );
+
+// Exponer la función para que el shell pueda llamarla
+window.renderTarifaView = renderTarifaView;
