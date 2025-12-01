@@ -119,8 +119,10 @@ async function generarPresupuesto() {
       ? tarifasWrapper.data
       : tarifasWrapper || {};
 
+  const proyecto = appState.proyecto || {};
   const lineasProyecto =
-    (appState.proyecto && appState.proyecto.lineas) || [];
+    (proyecto.lineas && proyecto.lineas.length ? proyecto.lineas : proyecto.filas) ||
+    [];
 
   console.log(
     "[Presupuesto] tarifas cargadas:",
@@ -152,16 +154,17 @@ async function generarPresupuesto() {
       ref = ref.slice(0, 7);
     }
 
-    // Candidatos de búsqueda por si la tarifa está en 7 u 8 dígitos
     const candidatos = [];
     if (refOriginal) candidatos.push(refOriginal.replace(/\s+/g, ""));
     if (ref) candidatos.push(ref);
+
     if (ref.length === 7) {
       candidatos.push(ref + "0");
       candidatos.push(ref + "00");
     } else if (ref.length === 8) {
       candidatos.push(ref.slice(0, 7));
     }
+
     const candidatosUnicos = [...new Set(candidatos)];
     // =====================================================
 
