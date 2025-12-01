@@ -32,8 +32,8 @@
           Entrar
         </button>
 
-        <div class="text-center mt-2 text-small text-muted">
-          o continúa con
+        <div class="text-center mt-2" style="font-size:0.78rem; color:#6b7280;">
+          o
         </div>
 
         <button id="btnLoginGoogle" class="btn btn-secondary mt-2" style="width: 100%">
@@ -56,221 +56,24 @@
           <div id="currentViewSubtitle" class="app-topbar-subtitle"></div>
         </div>
 
+        <nav class="app-topbar-center">
+          <a href="#" class="top-nav-link active" data-view="proyecto" id="navProyecto">Proyecto</a>
+          <a href="#" class="top-nav-link" data-view="presupuesto">Presupuesto</a>
+          <a href="#" class="top-nav-link" data-view="tarifa">Tarifa 2N</a>
+          <a href="#" class="top-nav-link" data-view="docs">Documentación</a>
+        </nav>
+
         <div class="app-topbar-right">
-          <span id="userBadge" class="user-badge"></span>
+          <span id="userBadge" class="badge-user">Usuario</span>
+          <button id="btnLogout" class="btn btn-secondary btn-sm">Cerrar sesión</button>
         </div>
       </header>
 
-      <div class="app-layout">
-        <!-- Sidebar -->
-        <aside class="app-sidebar">
-          <div class="sidebar-section">
-            <div class="sidebar-section-title">Documentación</div>
-            <button class="sidebar-item" data-view="dashboardDoc">
-              <span class="sidebar-item-dot"></span> Dashboard
-            </button>
-          </div>
-
-          <div class="sidebar-section">
-            <div class="sidebar-section-title">Proyectos</div>
-            <button class="sidebar-item" data-view="proyecto">
-              <span class="sidebar-item-dot"></span> Proyectos
-            </button>
-            <button class="sidebar-item" data-view="presupuesto">
-              <span class="sidebar-item-dot"></span> Presupuesto
-            </button>
-          </div>
-
-          <div class="sidebar-section">
-            <div class="sidebar-section-title">Tarifa</div>
-            <button class="sidebar-item" data-view="tarifa">
-              <span class="sidebar-item-dot"></span> Tarifa 2N
-            </button>
-          </div>
-        </aside>
-
-        <!-- Contenido principal -->
-        <main class="app-main">
-          <!-- Vista: Dashboard documentación -->
-          <section id="view-dashboardDoc" class="view active">
-            <div class="card">
-              <div class="card-header">
-                <h2 class="card-title">Documentación 2N</h2>
-                <p class="card-subtitle">
-                  Selecciona el tipo de documentación que necesitas.
-                </p>
-              </div>
-              <div class="card-body">
-                <div class="grid-2">
-                  <button class="btn btn-outline" data-doc="ficha_producto">
-                    Ficha de producto
-                  </button>
-                  <button class="btn btn-outline" data-doc="memoria_calidades">
-                    Memoria de calidades
-                  </button>
-                  <button class="btn btn-outline" data-doc="presentacion">
-                    Presentación comercial
-                  </button>
-                  <button class="btn btn-outline" data-doc="otros">
-                    Otros documentos
-                  </button>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <!-- Vista: Proyecto -->
-          <section id="view-proyecto" class="view" style="display: none">
-            <div class="card">
-              <div class="card-header">
-                <h2 class="card-title">Datos del proyecto</h2>
-                <p class="card-subtitle">
-                  Define la información básica del proyecto antes de generar el presupuesto.
-                </p>
-              </div>
-              <div class="card-body">
-                <div class="grid-2">
-                  <div class="form-group">
-                    <label>Nombre del proyecto</label>
-                    <input id="proyectoNombre" type="text" placeholder="Ej: Residencial Velázquez 94" />
-                  </div>
-
-                  <div class="form-group">
-                    <label>Cliente</label>
-                    <input id="proyectoCliente" type="text" placeholder="Promotora, ingeniería, etc." />
-                  </div>
-
-                  <div class="form-group">
-                    <label>Ciudad</label>
-                    <input id="proyectoCiudad" type="text" placeholder="Madrid, Málaga, Marbella..." />
-                  </div>
-
-                  <div class="form-group">
-                    <label>Tipo de proyecto</label>
-                    <select id="proyectoTipo">
-                      <option value="">Selecciona...</option>
-                      <option value="residencial_btr">Residencial BTR</option>
-                      <option value="residencial_bts">Residencial BTS</option>
-                      <option value="coliving">Coliving</option>
-                      <option value="hotel">Hotel</option>
-                      <option value="oficinas">Oficinas</option>
-                      <option value="mixto">Mixto</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div class="form-group mt-3">
-                  <label>Descripción / notas</label>
-                  <textarea
-                    id="proyectoNotas"
-                    rows="3"
-                    placeholder="Información relevante del proyecto, fases, particularidades de accesos, etc."
-                  ></textarea>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <!-- Vista: Presupuesto -->
-          <section id="view-presupuesto" class="view" style="display: none">
-            <div class="card">
-              <div class="card-header">
-                <h2 class="card-title">Presupuesto</h2>
-                <p class="card-subtitle">
-                  Importa el archivo con referencias y genera el presupuesto estructurado.
-                </p>
-              </div>
-              <div class="card-body">
-                <div class="toolbar">
-                  <label class="btn btn-outline">
-                    Importar Excel
-                    <input id="inputExcelPresupuesto" type="file" accept=".xlsx,.xls" hidden />
-                  </label>
-
-                </div>
-
-                <div id="tablaPresupuestoWrapper" class="table-wrapper mt-3">
-                  <table class="table">
-                    <thead>
-                      <tr>
-                        <th>Ref.</th>
-                        <th>Descripción</th>
-                        <th>Cant.</th>
-                        <th>PVP</th>
-                        <th>Dto. (%)</th>
-                        <th>Precio neto</th>
-                        <th>Total línea</th>
-                      </tr>
-                    </thead>
-                    <tbody id="tbodyPresupuesto">
-                      <!-- Filas generadas dinámicamente -->
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <!-- Vista: Tarifa -->
-          <section id="view-tarifa" class="view" style="display: none">
-            <div class="card">
-              <div class="card-header">
-                <h2 class="card-title">Tarifa 2N</h2>
-                <p class="card-subtitle">
-                  Consulta y filtra la tarifa de productos 2N y genera referencias para el presupuesto.
-                </p>
-              </div>
-              <div class="card-body">
-                <div class="grid-3">
-                  <div class="form-group">
-                    <label>Buscar referencia / descripción</label>
-                    <input id="tarifaBusqueda" type="text" placeholder="IP STYLE, 9155101, etc." />
-                  </div>
-
-                  <div class="form-group">
-                    <label>Familia</label>
-                    <select id="tarifaFamilia">
-                      <option value="">Todas</option>
-                      <option value="videoporteros">Videoporteros IP</option>
-                      <option value="accesos">Control de accesos</option>
-                      <option value="interiores">Unidades interiores</option>
-                    </select>
-                  </div>
-
-                  <div class="form-group">
-                    <label>Tipo de instalación</label>
-                    <select id="tarifaInstalacion">
-                      <option value="">Todas</option>
-                      <option value="nueva_obra">Nueva obra</option>
-                      <option value="rehabilitacion">Rehabilitación</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div id="tablaTarifaWrapper" class="table-wrapper mt-3">
-                  <table class="table">
-                    <thead>
-                      <tr>
-                        <th>Ref.</th>
-                        <th>Descripción</th>
-                        <th>Familia</th>
-                        <th>PVP</th>
-                      </tr>
-                    </thead>
-                    <tbody id="tbodyTarifa">
-                      <!-- Filas de tarifa generadas dinámicamente -->
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          </section>
-        </main>
-      </div>
+      <main id="appContent" class="app-content"></main>
     </div>
 
     <!-- =========================================================
-         LIBRERÍAS EXTERNAS
+         LIBRERÍAS
     ========================================================== -->
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
@@ -284,7 +87,7 @@
     ========================================================== -->
 
     <!-- Firebase de tu proyecto, ahora como módulo (puede exportar db, auth, etc.) -->
-    <script src="js/firebase.js"></script>
+    <script type="module" src="js/firebase.js"></script>
 
     <!-- ⚠️ YA NO CARGAMOS firebase_tarifa.js COMO SCRIPT NORMAL -->
     <!-- <script src="js/firebase_tarifa.js"></script> -->
