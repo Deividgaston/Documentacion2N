@@ -60,7 +60,7 @@ function renderTarifaView() {
         </div>
       </div>
     </div>
-  ";
+  `;
 
   const btnLeer = document.getElementById("btnLeerTarifa");
   const btnSubir = document.getElementById("btnSubirTarifa");
