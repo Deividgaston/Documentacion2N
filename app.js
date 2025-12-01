@@ -1,71 +1,122 @@
-// app.js
-// Núcleo de la app de presupuestos 2N
+// ==========================================
+// app.js · Inicialización Firebase + export
+// ==========================================
 
-// Estado global base
-window.appState = window.appState || {};
-appState.currentView = appState.currentView || "proyecto";
-appState.user = appState.user || null;
+// ⚠️ TU CONFIGURACIÓN DE FIREBASE (no modificar nombres)
+const firebaseConfig = {
+  apiKey: "AIzaSyB51403DF43zxqq4K3Ex65i5-Sqm-EkiTY",
+  authDomain: "crm-obras-2n.firebaseapp.com",
+  projectId: "crm-obras-2n",
+  storageBucket: "crm-obras-2n.firebasestorage.app",
+  messagingSenderId: "545667121262",
+  appId: "1:545667121262:web:9dd55a09bc7a7bb3e9a67f"
+};
 
-// Mostrar / ocultar login y app
-function showLogin() {
-  const loginPage = document.getElementById("loginPage");
-  const appShell = document.getElementById("appShell");
+// Inicializar Firebase
+const app = firebase.initializeApp(firebaseConfig);
 
-  if (loginPage) loginPage.style.display = "flex";
-  if (appShell) appShell.style.display = "none";
-}
+// Servicios Firebase
+const auth = firebase.auth();
+const db = firebase.firestore();
+const storage = firebase.storage();
 
-function showShell() {
-  const loginPage = document.getElementById("loginPage");
-  const appShell = document.getElementById("appShell");
+// Proveedor de Google para login
+const providerGoogle = new firebase.auth.GoogleAuthProvider();
 
-  if (loginPage) loginPage.style.display = "none";
-  if (appShell) appShell.style.display = "flex";
-}
+// ==========================================
+// LOGIN NORMAL (email / password)
+// ==========================================
 
-// Actualiza el badge de usuario en la esquina derecha
-function updateUserBadge() {
-  const badge = document.getElementById("userBadge");
-  if (!badge) return;
-
-  if (appState.user && appState.user.email) {
-    badge.textContent = appState.user.email;
-  } else {
-    badge.textContent = "Usuario";
+async function loginWithEmailPassword(email, password) {
+  try {
+    const userCred = await auth.signInWithEmailAndPassword(email, password);
+    return userCred.user;
+  } catch (error) {
+    console.error("Error login email/password:", error);
+    throw error;
   }
 }
 
-// Listener de cambios de autenticación
-function initOnAuthChange() {
-  if (typeof auth === "undefined") {
-    console.error("Firebase Auth no está inicializado.");
-    return;
+// ==========================================
+// LOGIN CON GOOGLE
+// ==========================================
+
+async function loginWithGoogle() {
+  try {
+    const result = await auth.signInWithPopup(providerGoogle);
+    return result.user;
+  } catch (error) {
+    console.error("Error login Google:", error);
+    throw error;
+  }
+}
+
+// ==========================================
+// OBTENER TARIFAS (LECTURA ÚNICA + CACHÉ)
+// ==========================================
+
+async function getTarifas() {
+  // Si ya está en caché → usarlo
+  if (appState.tarifas.data) {
+    return appState.tarifas.data;
   }
 
-  auth.onAuthStateChanged((user) => {
-    if (user) {
-      // Usuario logueado
-      appState.user = {
-        uid: user.uid,
-        email: user.email,
-      };
+  try {
+    const col = await db.collection("tarifas").get();
 
-      showShell();
-      updateUserBadge();
+    const tarifas = {};
+    col.forEach((doc) => {
+      const data = doc.data();
+      const ref = String(doc.id).trim();
+      tarifas[ref] = data.pvp || data.precio || data.price || 0;
+    });
 
-      // Configurar navegación superior (tabs)
-      if (typeof setupShellNav === "function") {
-        setupShellNav();
+    // Guardar en caché
+    appState.tarifas.data = tarifas;
+    appState.tarifas.lastLoaded = Date.now();
+
+    // Guardar caché local (opcional)
+    try {
+      localStorage.setItem(TARIFA_CACHE_KEY, JSON.stringify(tarifas));
+    } catch {}
+
+    console.log("%cTarifa cargada (1 lectura Firestore)", "color:#22c55e;");
+    return tarifas;
+
+  } catch (error) {
+    console.error("Error obteniendo tarifas:", error);
+
+    // Intentar recuperar desde localStorage si existe
+    try {
+      const cached = localStorage.getItem(TARIFA_CACHE_KEY);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        appState.tarifas.data = parsed;
+        return parsed;
       }
+    } catch {}
 
-      // Seleccionar vista inicial
-      if (typeof selectView === "function") {
-        selectView(appState.currentView || "proyecto");
-      }
-    } else {
-      // Usuario no logueado
-      appState.user = null;
-      showLogin();
-    }
+    return {};
+  }
+}
+
+// ==========================================
+// UTILIDADES GLOBALES
+// ==========================================
+
+function normalizarRef(ref) {
+  return String(ref).trim().replace(/\s+/g, "").toUpperCase();
+}
+
+function limpiarTexto(t) {
+  return String(t || "").trim();
+}
+
+function formatNumber(n) {
+  return Number(n).toLocaleString("es-ES", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
   });
 }
+
+console.log("%cFirebase inicializado (app.js)", "color:#0ea5e9; font-weight:600;");
