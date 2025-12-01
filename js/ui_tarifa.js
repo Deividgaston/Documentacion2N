@@ -58,7 +58,7 @@ function renderTarifaView() {
         </div>
       </div>
     </div>
-  ";
+  `;
 
   const btnLeer = document.getElementById("btnLeerTarifa");
   const btnSubir = document.getElementById("btnSubirTarifa");
@@ -198,7 +198,7 @@ function leerTarifaDesdeExcel(file) {
         const wsName = wb.SheetNames[0];
         const ws = wb.Sheets[wsName];
 
-        // Usamos la primera fila como cabecera
+        // Usamos la primera hoja y cabecera automática
         const json = XLSX.utils.sheet_to_json(ws, { defval: "" });
         if (!json || json.length === 0) {
           resolve({ productosMap: {}, meta: {} });
@@ -272,9 +272,8 @@ function leerTarifaDesdeExcel(file) {
 
           let pvpNum = 0;
           if (priceRaw != null && priceRaw !== "") {
-            // convertir "1.234,56" / "1234,56" / "1234.56" a número
             let s = String(priceRaw).trim();
-            // si tiene coma y punto, asumimos formato europeo "1.234,56"
+            // "1.234,56" -> "1234.56"
             if (s.includes(",") && s.includes(".")) {
               s = s.replace(/\./g, "").replace(",", ".");
             } else if (s.includes(",")) {
