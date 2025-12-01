@@ -1,14 +1,11 @@
 // js/firebase_tarifa.js
-// Funciones específicas para gestionar la TARIFA 2N en Firestore
+// Funciones específicas para gestionar la TARIFA 2N en Firestore (modo compat)
+//
+// Usa la instancia global de Firestore ya creada en firebase.js
+// y la API compat (db.collection(...), db.batch(), etc).
 
-import { db } from "./firebase.js";
-import {
-  collection,
-  doc,
-  getDocs,
-  writeBatch,
-  serverTimestamp,
-} from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
+// Instancia de Firestore (compat)
+const db = firebase.firestore();
 
 // Ruta base de la tarifa en Firestore:
 // /tarifas/v1/productos/{referencia}
@@ -33,14 +30,17 @@ export async function subirTarifaAFirestore(productosMap) {
   // 1) Asegurar documento padre /tarifas/v1
   // ================================
   try {
-    const tarifaVersionRef = doc(db, TARIFAS_COLLECTION, TARIFA_VERSION);
-    const batch0 = writeBatch(db);
+    const tarifaVersionRef = db
+      .collection(TARIFAS_COLLECTION)
+      .doc(TARIFA_VERSION);
+
+    const batch0 = db.batch();
 
     batch0.set(
       tarifaVersionRef,
       {
         version: TARIFA_VERSION,
-        updatedAt: serverTimestamp(),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       },
       { merge: true }
     );
@@ -55,28 +55,26 @@ export async function subirTarifaAFirestore(productosMap) {
   // ================================
   // 2) Subir productos en batches
   // ================================
-  const CHUNK_SIZE = 450;
+  const batchSize = 400;
   let totalEscritos = 0;
 
-  for (let i = 0; i < entries.length; i += CHUNK_SIZE) {
-    const chunk = entries.slice(i, i + CHUNK_SIZE);
-    const batch = writeBatch(db);
+  for (let i = 0; i < entries.length; i += batchSize) {
+    const chunk = entries.slice(i, i + batchSize);
+    const batch = db.batch();
 
     chunk.forEach(([ref, data]) => {
       // /tarifas/v1/productos/{ref}
-      const docRef = doc(
-        db,
-        TARIFAS_COLLECTION,
-        TARIFA_VERSION,
-        PRODUCTOS_SUBCOL,
-        String(ref)
-      );
+      const docRef = db
+        .collection(TARIFAS_COLLECTION)
+        .doc(TARIFA_VERSION)
+        .collection(PRODUCTOS_SUBCOL)
+        .doc(String(ref));
 
       const payload = {
         referencia: String(ref),
         descripcion: data.descripcion || "",
         pvp: Number(data.pvp) || 0,
-        updatedAt: serverTimestamp(),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       };
 
       batch.set(docRef, payload, { merge: true });
@@ -107,14 +105,12 @@ export async function subirTarifaAFirestore(productosMap) {
  * }
  */
 export async function getTarifas() {
-  const colRef = collection(
-    db,
-    TARIFAS_COLLECTION,
-    TARIFA_VERSION,
-    PRODUCTOS_SUBCOL
-  );
+  const colRef = db
+    .collection(TARIFAS_COLLECTION)
+    .doc(TARIFA_VERSION)
+    .collection(PRODUCTOS_SUBCOL);
 
-  const snap = await getDocs(colRef);
+  const snap = await colRef.get();
   const result = {};
 
   snap.forEach((docSnap) => {
