@@ -29,6 +29,32 @@ export async function subirTarifaAFirestore(productosMap) {
   const entries = Object.entries(productosMap || {});
   if (!entries.length) return 0;
 
+  // ================================
+  // 1) Asegurar documento padre /tarifas/v1
+  // ================================
+  try {
+    const tarifaVersionRef = doc(db, TARIFAS_COLLECTION, TARIFA_VERSION);
+    const batch0 = writeBatch(db);
+
+    batch0.set(
+      tarifaVersionRef,
+      {
+        version: TARIFA_VERSION,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
+
+    await batch0.commit();
+    console.log("%cDocumento padre /tarifas/v1 creado OK", "color:#22c55e;");
+  } catch (e) {
+    console.error("Error creando documento padre tarifas/v1:", e);
+    throw e;
+  }
+
+  // ================================
+  // 2) Subir productos en batches
+  // ================================
   const CHUNK_SIZE = 450;
   let totalEscritos = 0;
 
@@ -37,6 +63,7 @@ export async function subirTarifaAFirestore(productosMap) {
     const batch = writeBatch(db);
 
     chunk.forEach(([ref, data]) => {
+      // /tarifas/v1/productos/{ref}
       const docRef = doc(
         db,
         TARIFAS_COLLECTION,
