@@ -1,5 +1,5 @@
 // js/ui_login.js
-// Lógica de la pantalla de login (email+password y Google)
+// Lógica de la pantalla de login (email+password + Google)
 
 function initLoginUI() {
   const loginPage = document.getElementById("loginPage");
@@ -10,12 +10,12 @@ function initLoginUI() {
   const btnLoginGoogle = document.getElementById("btnLoginGoogle");
   const loginError = document.getElementById("loginError");
 
-  if (!loginPage || !appShell || !emailInput || !passInput || !btnLogin) {
-    console.error("Faltan elementos del login en el HTML.");
+  if (!loginPage || !appShell) {
+    console.error("Error: faltan elementos del login en HTML.");
     return;
   }
 
-  // Aseguramos estado inicial: se ve login, oculta app
+  // Estado inicial: login visible
   loginPage.style.display = "flex";
   appShell.style.display = "none";
 
@@ -31,7 +31,9 @@ function initLoginUI() {
     loginError.style.display = "none";
   }
 
-  // ----- LOGIN EMAIL + PASSWORD -----
+  // ============================================
+  // LOGIN EMAIL + PASSWORD
+  // ============================================
   async function manejarLogin() {
     limpiarError();
 
@@ -44,90 +46,62 @@ function initLoginUI() {
     }
 
     if (typeof auth === "undefined") {
-      mostrarError("Error interno de autenticación (auth no inicializado).");
-      console.error("Firebase auth no está definido.");
+      mostrarError("Error interno: auth no inicializado.");
       return;
     }
 
     try {
       await auth.signInWithEmailAndPassword(email, pass);
-      // El cambio de pantalla lo gestiona initOnAuthChange() en app.js
+      // initOnAuthChange() cambia la vista
     } catch (err) {
-      console.error("Error de login:", err);
-
+      console.error("Error login email:", err);
       let msg = "No se ha podido iniciar sesión.";
-      if (err.code === "auth/user-not-found") {
-        msg = "Usuario no encontrado.";
-      } else if (err.code === "auth/wrong-password") {
-        msg = "Contraseña incorrecta.";
-      } else if (err.code === "auth/invalid-email") {
-        msg = "Email no válido.";
-      }
-
+      if (err.code === "auth/user-not-found") msg = "Usuario no encontrado.";
+      if (err.code === "auth/wrong-password") msg = "Contraseña incorrecta.";
+      if (err.code === "auth/invalid-email") msg = "Email no válido.";
       mostrarError(msg);
     }
   }
 
-  // ----- LOGIN CON GOOGLE -----
+  // ============================================
+  // LOGIN GOOGLE
+  // ============================================
   async function manejarLoginGoogle() {
     limpiarError();
 
-    if (typeof firebase === "undefined" || !firebase.auth) {
-      mostrarError("Login con Google no disponible (Firebase no cargado).");
-      console.error("Firebase o firebase.auth no están disponibles.");
-      return;
-    }
-
-    if (typeof auth === "undefined") {
-      mostrarError("Error interno de autenticación (auth no inicializado).");
-      console.error("Firebase auth no está definido.");
-      return;
-    }
-
     try {
       const provider = new firebase.auth.GoogleAuthProvider();
-      // provider.setCustomParameters({ hd: "tuempresa.com" }); // opcional
-
       await auth.signInWithPopup(provider);
-      // initOnAuthChange() hará el resto
     } catch (err) {
-      console.error("Error login con Google:", err);
-
-      let msg = "No se ha podido iniciar sesión con Google.";
+      console.error("Error login Google:", err);
+      let msg = "Error iniciando sesión con Google.";
       if (err.code === "auth/popup-closed-by-user") {
-        msg =
-          "Se cerró la ventana de Google antes de completar el inicio de sesión.";
+        msg = "Cerraste la ventana de Google.";
       }
       mostrarError(msg);
     }
   }
 
-  // Click en botón email+password
-  btnLogin.addEventListener("click", function (e) {
+  // Eventos
+  btnLogin.addEventListener("click", (e) => {
     e.preventDefault();
     manejarLogin();
   });
 
-  // Click en botón Google
-  if (btnLoginGoogle) {
-    btnLoginGoogle.addEventListener("click", function (e) {
-      e.preventDefault();
-      manejarLoginGoogle();
-    });
-  }
+  btnLoginGoogle.addEventListener("click", (e) => {
+    e.preventDefault();
+    manejarLoginGoogle();
+  });
 
-  // Enter en inputs → login email/password
-  [emailInput, passInput].forEach(function (input) {
-    input.addEventListener("keydown", function (e) {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        manejarLogin();
-      }
+  // Enter para login rápido
+  [emailInput, passInput].forEach((input) => {
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") manejarLogin();
     });
   });
 }
 
 console.log(
-  "%cUI login inicializada (ui_login.js) con Google",
+  "%cUI Login cargada (Google OK)",
   "color:#1d4fd8; font-weight:600;"
 );
