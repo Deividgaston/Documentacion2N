@@ -104,20 +104,46 @@ function precargarDatosProyecto() {
 }
 
 // ===============================================
+// Carga directa de tarifas desde Firestore
+// (evito el wrapper que devuelve {data,lastLoaded})
+// ===============================================
+async function cargarTarifasDesdeFirestore() {
+  const db = firebase.firestore();
+  const snap = await db
+    .collection("tarifas")
+    .doc("v1")
+    .collection("productos")
+    .get();
+
+  const result = {};
+  snap.forEach((docSnap) => {
+    const d = docSnap.data();
+    if (!d) return;
+    const ref = docSnap.id;
+    const pvp = Number(d.pvp) || 0;
+    if (!pvp) return;
+    result[ref] = pvp;
+  });
+
+  console.log(
+    "%cTarifa · cargarTarifasDesdeFirestore() -> " +
+      Object.keys(result).length +
+      " referencias",
+    "color:#3b82f6;"
+  );
+
+  return result;
+}
+
+// ===============================================
 // Generación del presupuesto completo
 // ===============================================
 async function generarPresupuesto() {
   const msg = document.getElementById("presuMsg");
   if (msg) msg.style.display = "none";
 
-  // getTarifas puede devolver { data, lastLoaded } o directamente el mapa
-  const tarifasWrapper = await getTarifas();
-  const tarifas =
-    tarifasWrapper &&
-    typeof tarifasWrapper === "object" &&
-    tarifasWrapper.data
-      ? tarifasWrapper.data
-      : tarifasWrapper || {};
+  // TARIFA DIRECTA DE FIRESTORE
+  const tarifas = await cargarTarifasDesdeFirestore();
 
   const proyecto = appState.proyecto || {};
   const lineasProyecto =
@@ -125,7 +151,7 @@ async function generarPresupuesto() {
     [];
 
   console.log(
-    "[Presupuesto] tarifas cargadas:",
+    "[Presupuesto] tarifas cargadas (reales):",
     Object.keys(tarifas).length
   );
   console.log(
@@ -138,7 +164,10 @@ async function generarPresupuesto() {
   let totalNeto = 0;
 
   for (const item of lineasProyecto) {
-    if (!item || !item.ref) {
+    // En el proyecto el campo es "referencia" (no "ref")
+    const refCampo = item.ref || item.referencia;
+
+    if (!item || !refCampo) {
       console.warn("⚠ Línea sin referencia válida:", item);
       continue;
     }
@@ -146,7 +175,7 @@ async function generarPresupuesto() {
     // =====================================================
     // 🔧 NORMALIZACIÓN DE REFERENCIA 2N
     // =====================================================
-    const refOriginal = String(item.ref || "").trim();
+    const refOriginal = String(refCampo || "").trim();
     let ref = refOriginal.replace(/\s+/g, "");
 
     // Caso habitual Project Designer -> 8 dígitos, tarifa -> 7
@@ -188,7 +217,7 @@ async function generarPresupuesto() {
         refNormalizada: ref,
         candidatos: candidatosUnicos,
         cantidad,
-        desc: item.descripcion,
+        desc: item.descripcion || item.titulo,
       });
       continue;
     }
@@ -198,7 +227,7 @@ async function generarPresupuesto() {
 
     lineasPresupuesto.push({
       ref, // mostramos la ref normalizada
-      descripcion: item.descripcion || "",
+      descripcion: item.descripcion || item.titulo || "",
       cantidad,
       pvp,
       subtotal,
