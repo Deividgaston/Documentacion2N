@@ -1,46 +1,105 @@
-<div id="loginPage" class="login-page">
-  <div class="login-card">
-    <h2 class="login-title">Acceso</h2>
-    <p class="login-subtitle">
-      Inicia sesión para acceder a Presupuestos 2N.
-    </p>
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Presupuestos 2N</title>
 
-    <div class="form-group mb-2">
-      <label>Email</label>
-      <input
-        id="loginEmail"
-        type="email"
-        placeholder="nombre@empresa.com"
-      />
+    <link rel="stylesheet" href="style.css" />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  </head>
+
+  <body>
+    <!-- =========================================================
+         LOGIN (MODAL FLOTANTE)
+    ========================================================== -->
+    <div id="loginPage" class="login-page">
+      <div class="login-card">
+        <h2 class="login-title">Acceso</h2>
+        <p class="login-subtitle">Inicia sesión para acceder a Presupuestos 2N.</p>
+
+        <div class="form-group mb-2">
+          <label>Email</label>
+          <input id="loginEmail" type="email" placeholder="nombre@empresa.com" />
+        </div>
+
+        <div class="form-group mb-3">
+          <label>Contraseña</label>
+          <input id="loginPass" type="password" placeholder="••••••••" />
+        </div>
+
+        <button id="btnLogin" class="btn btn-primary" style="width: 100%">
+          Entrar
+        </button>
+
+        <div class="text-center mt-2" style="font-size:0.78rem; color:#6b7280;">
+          o
+        </div>
+
+        <button id="btnLoginGoogle" class="btn btn-secondary mt-2" style="width: 100%">
+          Acceder con Google
+        </button>
+
+        <div id="loginError" class="alert alert-error mt-2" style="display: none"></div>
+
+        <p class="login-footer">Presupuestos 2N</p>
+      </div>
     </div>
 
-    <div class="form-group mb-3">
-      <label>Contraseña</label>
-      <input id="loginPass" type="password" placeholder="••••••••" />
+    <!-- =========================================================
+         APLICACIÓN (OCULTA HASTA LOGIN)
+    ========================================================== -->
+    <div id="appShell" class="app-shell" style="display: none">
+      <header class="app-topbar">
+        <div class="app-topbar-left">
+          <div class="app-topbar-title">Presupuestos 2N</div>
+          <div id="currentViewSubtitle" class="app-topbar-subtitle"></div>
+        </div>
+
+        <nav class="app-topbar-center">
+          <a href="#" class="top-nav-link active" data-view="proyecto" id="navProyecto">Proyecto</a>
+          <a href="#" class="top-nav-link" data-view="presupuesto">Presupuesto</a>
+          <a href="#" class="top-nav-link" data-view="tarifa">Tarifa 2N</a>
+          <a href="#" class="top-nav-link" data-view="docs">Documentación</a>
+        </nav>
+
+        <div class="app-topbar-right">
+          <span id="userBadge" class="badge-user">Usuario</span>
+          <button id="btnLogout" class="btn btn-secondary btn-sm">Cerrar sesión</button>
+        </div>
+      </header>
+
+      <main id="appContent" class="app-content"></main>
     </div>
 
-    <button id="btnLogin" class="btn btn-primary" style="width: 100%">
-      Entrar
-    </button>
+    <!-- =========================================================
+         LIBRERÍAS
+    ========================================================== -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 
-    <div class="text-center mt-2" style="font-size:0.78rem; color:#6b7280;">
-      o
-    </div>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
-    <button
-      id="btnLoginGoogle"
-      class="btn btn-secondary mt-2"
-      style="width: 100%"
-    >
-      Acceder con Google
-    </button>
+    <!-- =========================================================
+         ARCHIVOS JS DEL PROYECTO
+    ========================================================== -->
+    <script src="js/firebase.js"></script>
+    <script src="js/firebase_tarifa.js"></script>
 
-    <div
-      id="loginError"
-      class="alert alert-error mt-2"
-      style="display: none"
-    ></div>
+    <script src="js/state.js"></script>
+    <script src="js/utils.js"></script>
 
-    <p class="login-footer">Presupuestos 2N</p>
-  </div>
-</div>
+    <script src="js/ui_login.js"></script>
+    <script src="js/ui_shell.js"></script>
+    <script src="js/ui_proyecto.js"></script>
+    <script src="js/ui_presupuesto.js"></script>
+    <script src="js/ui_tarifa.js"></script>
+    <script src="js/ui_dashboard_doc.js"></script>
+
+    <script src="js/pdf_excel.js"></script>
+    <script src="app.js"></script>
+    <script src="js/main.js"></script>
+  </body>
+</html>
