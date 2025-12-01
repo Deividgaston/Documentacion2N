@@ -28,9 +28,9 @@ function renderTarifaView() {
             <div class="form-group">
               <label>Archivo de tarifa (Excel)</label>
               <p style="font-size:0.78rem; color:#6b7280; margin-bottom:0.45rem;">
-                El archivo debe incluir al menos: 
-                <strong>Referencia</strong> (2N SKU / Número de pedido) 
-                y <strong>MSRP (EUR)</strong> o equivalente.
+                El archivo debe incluir al menos una columna con la <strong>referencia</strong> (2N SKU / Ordering Number)
+                y una columna con el <strong>precio</strong> (LIST PRICE, MSRP, Recommended Reseller Price, etc.).
+                El programa detecta automáticamente las cabeceras más habituales.
               </p>
               <input id="tarifaFileInput" type="file" accept=".xlsx,.xls,.csv" />
 
@@ -58,7 +58,7 @@ function renderTarifaView() {
         </div>
       </div>
     </div>
-  `;
+  ";
 
   const btnLeer = document.getElementById("btnLeerTarifa");
   const btnSubir = document.getElementById("btnSubirTarifa");
@@ -106,7 +106,7 @@ async function onLeerTarifaClick() {
       msg.style.display = "flex";
     }
 
-    const productosMap = await leerTarifaDesdeExcel(file);
+    const { productosMap, meta } = await leerTarifaDesdeExcel(file);
 
     const totalRefs = Object.keys(productosMap).length;
     appState.tarifaUpload = {
@@ -119,14 +119,23 @@ async function onLeerTarifaClick() {
         msg.className = "alert alert-warning mt-3";
         msg.textContent =
           "No se han encontrado referencias con precio. Revisa las cabeceras del archivo.";
+        msg.style.display = "flex";
       }
       if (btnSubir) btnSubir.disabled = true;
+      console.warn("Tarifa · No se encontraron productos. Meta:", meta);
       return;
     }
 
     if (msg) {
       msg.className = "alert alert-success mt-3";
-      msg.textContent = `Archivo leído correctamente: ${totalRefs} referencias con PVP encontradas.`;
+      msg.innerHTML = `
+        Archivo leído correctamente: <strong>${totalRefs}</strong> referencias con PVP.<br/>
+        <span style="font-size:0.78rem; color:#6b7280;">
+          Columna referencia: <strong>${meta.refField}</strong> ·
+          Columna precio: <strong>${meta.priceField}</strong> ·
+          Columna nombre: <strong>${meta.descField || "N/D"}</strong>
+        </span>
+      `;
       msg.style.display = "flex";
     }
 
@@ -135,6 +144,7 @@ async function onLeerTarifaClick() {
       `%cTarifa · Archivo preparado con ${totalRefs} referencias`,
       "color:#22c55e;"
     );
+    console.log("Meta detección cabeceras:", meta);
   } catch (error) {
     console.error("Error leyendo la tarifa desde Excel:", error);
     if (msg) {
@@ -147,8 +157,35 @@ async function onLeerTarifaClick() {
   }
 }
 
+// --------- helpers de detección de cabeceras ---------
+
+function normalizarCabecera(h) {
+  return String(h || "")
+    .toLowerCase()
+    .replace(/\r?\n/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function encontrarMejorCabecera(headers, candidatos) {
+  let mejor = null;
+  let mejorScore = -1;
+
+  headers.forEach((h) => {
+    const norm = normalizarCabecera(h);
+    candidatos.forEach((cand) => {
+      if (norm.includes(cand.token) && cand.score > mejorScore) {
+        mejor = h;
+        mejorScore = cand.score;
+      }
+    });
+  });
+
+  return mejor;
+}
+
 // Parser de tarifa desde Excel
-// Devuelve: { ref: { pvp, descripcion, rawRow }, ... }
+// Devuelve: { productosMap, meta }
 function leerTarifaDesdeExcel(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -161,60 +198,111 @@ function leerTarifaDesdeExcel(file) {
         const wsName = wb.SheetNames[0];
         const ws = wb.Sheets[wsName];
 
+        // Usamos la primera fila como cabecera
         const json = XLSX.utils.sheet_to_json(ws, { defval: "" });
+        if (!json || json.length === 0) {
+          resolve({ productosMap: {}, meta: {} });
+          return;
+        }
+
+        const headers = Object.keys(json[0] || {});
+
+        // Detectar campo de referencia
+        const refField =
+          encontrarMejorCabecera(headers, [
+            { token: "2n sku", score: 10 },
+            { token: "ordering number", score: 9 },
+            { token: "ordering no", score: 9 },
+            { token: "order number", score: 8 },
+            { token: "sku", score: 7 },
+            { token: "número de pedido", score: 7 },
+            { token: "numero de pedido", score: 7 },
+            { token: "referencia", score: 6 },
+            { token: "item no", score: 5 },
+            { token: "part number", score: 5 },
+          ]) || headers[0]; // fallback
+
+        // Detectar campo de precio
+        const priceField =
+          encontrarMejorCabecera(headers, [
+            { token: "msrp (eur", score: 10 },
+            { token: "msrp", score: 9 },
+            { token: "pvp", score: 9 },
+            { token: "list price (€", score: 9 },
+            { token: "list price", score: 8 },
+            { token: "recommended reseller price 1", score: 8 },
+            { token: "recommended reseller price 2", score: 8 },
+            { token: "recommended reseller price", score: 7 },
+            { token: "price (eur", score: 7 },
+            { token: "retail price", score: 7 },
+            { token: "distributor price", score: 6 },
+          ]) || null;
+
+        // Detectar campo de descripción
+        const descField =
+          encontrarMejorCabecera(headers, [
+            { token: "product name", score: 10 },
+            { token: "nombre del producto", score: 9 },
+            { token: "nombre", score: 7 },
+            { token: "descripción", score: 7 },
+            { token: "descripcion", score: 7 },
+          ]) || null;
+
+        if (!priceField) {
+          console.warn(
+            "No se detectó claramente una columna de precio. Cabeceras:",
+            headers
+          );
+        }
 
         const productos = {};
 
         json.forEach((row) => {
-          // Referencia: soportamos varios nombres de columna
-          const refRaw =
-            row["2N SKU"] ||
-            row["SKU"] ||
-            row["Referencia"] ||
-            row["Número de pedido"] ||
-            row["Numero de pedido"] ||
-            row["Referencia 2N"] ||
-            row["Referencia_2N"] ||
-            row["Ref"] ||
-            "";
+          const refRaw = row[refField];
+          const priceRaw = priceField ? row[priceField] : null;
+          const descRaw = descField ? row[descField] : "";
 
-          // Precio: columnas típicas
-          const pvpRaw =
-            row["MSRP (EUR)"] ||
-            row["MSRP EUR"] ||
-            row["MSRP"] ||
-            row["PVP"] ||
-            row["PVP (EUR)"] ||
-            "";
-
-          const descRaw =
-            row["Nombre del producto"] ||
-            row["Product Name"] ||
-            row["Nombre producto"] ||
-            row["Descripción"] ||
-            row["Descripcion"] ||
-            "";
-
-          const ref = String(refRaw)
+          let ref = String(refRaw || "")
             .trim()
             .replace(/\s+/g, "")
             .replace(/\./g, "")
             .toUpperCase();
 
-          const pvp = Number(pvpRaw) || 0;
+          if (!ref || ref.toLowerCase() === "nan") return;
 
-          if (!ref || pvp <= 0) {
-            return; // ignoramos filas sin ref o sin precio
+          let pvpNum = 0;
+          if (priceRaw != null && priceRaw !== "") {
+            // convertir "1.234,56" / "1234,56" / "1234.56" a número
+            let s = String(priceRaw).trim();
+            // si tiene coma y punto, asumimos formato europeo "1.234,56"
+            if (s.includes(",") && s.includes(".")) {
+              s = s.replace(/\./g, "").replace(",", ".");
+            } else if (s.includes(",")) {
+              s = s.replace(",", ".");
+            }
+            const parsed = Number(s);
+            if (!isNaN(parsed)) pvpNum = parsed;
+          }
+
+          if (!pvpNum || pvpNum <= 0) {
+            return; // ignoramos filas sin precio
           }
 
           productos[ref] = {
-            pvp,
+            pvp: pvpNum,
             descripcion: limpiarTexto(descRaw),
             rawRow: row,
           };
         });
 
-        resolve(productos);
+        const meta = {
+          refField,
+          priceField,
+          descField,
+          headers,
+        };
+
+        resolve({ productosMap: productos, meta });
       } catch (err) {
         reject(err);
       }
@@ -311,7 +399,7 @@ async function actualizarEstadoTarifaFirebase() {
 
     estado.innerHTML = `
       <div class="metric-card">
-        <span class="metric-label">Referencias con PVP</span>
+        <span class="metric-label">REFERENCIAS CON PVP</span>
         <span class="metric-value">${totalRefs}</span>
       </div>
       <p class="mt-2" style="font-size:0.82rem; color:#4b5563;">
