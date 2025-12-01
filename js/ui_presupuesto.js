@@ -67,8 +67,7 @@ function renderPresupuestoView() {
                 <div class="form-group">
                   <label>Descuento global (%)</label>
                   <input id="presupuestoDtoGlobal" type="number" min="0" max="100" step="0.1"
-                    value="${(p.totales && p.totales.dtoGlobal > 0) ? 
-                      (100 * p.totales.dtoGlobal / (p.totales.base || 1)).toFixed(1) : 0}">
+                    value="0">
                 </div>
               </div>
 
@@ -160,17 +159,24 @@ async function onGenerarPresupuestoClick() {
   // Obtener tarifas optimizadas (usa caché, 1 lectura a Firestore máx.)
   const tarifas = await getTarifas();
 
-  // Construir líneas de presupuesto
+  if (!tarifas || Object.keys(tarifas).length === 0) {
+    if (msg) {
+      msg.className = "alert alert-error mt-2";
+      msg.textContent =
+        "No se pudieron cargar las tarifas desde Firebase. Revisa la conexión o la colección de tarifas.";
+      msg.style.display = "flex";
+    }
+    return;
+  }
+
+  // Construir líneas de presupuesto a partir del proyecto importado
   const lineas = proyecto.filas.map((fila) => {
     const ref = normalizarRef(fila.referencia);
     const cantidad = Number(fila.cantidad) || 0;
     const desc = fila.descripcion || "";
 
-    // Sección / título: pueden venir por fila (Project Designer) o como metadatos de proyecto
-    const seccion =
-      fila.seccion || proyecto.seccion || "";
-    const titulo =
-      fila.titulo || proyecto.titulo || "";
+    const seccion = fila.seccion || proyecto.seccion || "";
+    const titulo = fila.titulo || proyecto.titulo || "";
 
     let infoTarifa = tarifas[ref];
     let pvp = 0;
@@ -178,7 +184,6 @@ async function onGenerarPresupuestoClick() {
     if (typeof infoTarifa === "number") {
       pvp = infoTarifa;
     } else if (infoTarifa && typeof infoTarifa === "object") {
-      // Intentar campos típicos
       pvp =
         Number(infoTarifa.pvp) ||
         Number(infoTarifa.precio) ||
@@ -199,7 +204,7 @@ async function onGenerarPresupuestoClick() {
     };
   });
 
-  // Filtro: quitar líneas sin precio o sin cantidad
+  // Quitamos líneas sin precio o sin cantidad
   const lineasValidas = lineas.filter((l) => l.cantidad > 0 && l.pvp > 0);
 
   const totales = calcularTotalesPresupuesto(lineasValidas, dtoGlobalPorc);
@@ -230,6 +235,25 @@ async function onGenerarPresupuestoClick() {
 
   pintarResumenPresupuesto();
   pintarTablaPresupuesto();
+}
+
+// ====================
+// CÁLCULO TOTALES
+// ====================
+
+function calcularTotalesPresupuesto(lineas, dtoGlobalPorc) {
+  const base = lineas.reduce((acc, l) => acc + (l.total || 0), 0);
+  const dtoImporte = base * (dtoGlobalPorc / 100);
+  const baseNeta = base - dtoImporte;
+  const iva = baseNeta * 0.21;
+  const totalConIva = baseNeta + iva;
+
+  return {
+    base: Math.round(base * 100) / 100,
+    dtoGlobal: Math.round(dtoImporte * 100) / 100,
+    iva: Math.round(iva * 100) / 100,
+    totalConIva: Math.round(totalConIva * 100) / 100,
+  };
 }
 
 // ====================
