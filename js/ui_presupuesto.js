@@ -5,6 +5,7 @@ window.appState = window.appState || {};
 appState.presupuesto = appState.presupuesto || {
   lineas: [],
   resumen: {},
+  notas: "",
 };
 
 // ===============================================
@@ -15,67 +16,85 @@ function renderPresupuestoView() {
   if (!container) return;
 
   container.innerHTML = `
-    <div class="presupuesto-layout">
+    <div class="presupuesto-layout grid-2">
 
-      <div class="card">
-        <div class="card-header">
-          <div>
-            <div class="card-title">Datos del presupuesto</div>
-            <div class="card-subtitle">Revisa los datos del proyecto y genera el presupuesto.</div>
+      <!-- COLUMNA IZQUIERDA: datos + notas + resumen -->
+      <div>
+        <!-- DATOS DEL PRESUPUESTO + NOTAS -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Datos del presupuesto</div>
+              <div class="card-subtitle">
+                Revisa los datos del proyecto, añade notas y genera el presupuesto.
+              </div>
+            </div>
+            <span class="badge-step">Paso 2 de 3</span>
           </div>
-          <span class="badge-step">Paso 2 de 3</span>
+
+          <div class="card-body">
+            <div class="form-grid">
+
+              <div class="form-group">
+                <label>Nombre del proyecto</label>
+                <input id="presuNombre" type="text" />
+              </div>
+
+              <div class="form-group">
+                <label>Cliente (opcional)</label>
+                <input id="presuCliente" type="text" />
+              </div>
+
+              <div class="form-group">
+                <label>Fecha presupuesto</label>
+                <input id="presuFecha" type="date" />
+              </div>
+
+              <div class="form-group">
+                <label>Descuento global (%)</label>
+                <input id="presuDto" type="number" min="0" max="90" value="0" />
+              </div>
+            </div>
+
+            <div class="form-group mt-3">
+              <label>Notas del presupuesto</label>
+              <textarea id="presuNotas" rows="3"></textarea>
+              <p style="font-size:0.78rem; color:#6b7280; margin-top:0.25rem;">
+                Estas notas se usarán como observaciones del presupuesto
+                (ej. requisitos de red, alimentación, alcances, exclusiones...).
+              </p>
+            </div>
+
+            <button id="btnGenerarPresupuesto" class="btn btn-primary w-full mt-3">
+              Generar / Recalcular presupuesto
+            </button>
+
+            <div id="presuMsg" class="alert alert-success mt-3" style="display:none;">
+              Presupuesto generado correctamente
+            </div>
+          </div>
         </div>
 
-        <div class="card-body">
-          <div class="form-grid">
-
-            <div class="form-group">
-              <label>Nombre del proyecto</label>
-              <input id="presuNombre" type="text" />
-            </div>
-
-            <div class="form-group">
-              <label>Cliente (opcional)</label>
-              <input id="presuCliente" type="text" />
-            </div>
-
-            <div class="form-group">
-              <label>Fecha presupuesto</label>
-              <input id="presuFecha" type="date" />
-            </div>
-
-            <div class="form-group">
-              <label>Descuento global (%)</label>
-              <input id="presuDto" type="number" min="0" max="90" value="0" />
-            </div>
-
+        <!-- RESUMEN ECONÓMICO -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Resumen económico</div>
           </div>
-
-          <button id="btnGenerarPresupuesto" class="btn btn-primary w-full mt-3">
-            Generar / Recalcular presupuesto
-          </button>
-
-          <div id="presuMsg" class="alert alert-success mt-3" style="display:none;">
-            Presupuesto generado correctamente
+          <div class="card-body" id="presuResumen">
+            No se ha generado todavía el presupuesto.
           </div>
         </div>
       </div>
 
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title">Resumen económico</div>
-        </div>
-        <div class="card-body" id="presuResumen">
-          No se ha generado todavía el presupuesto.
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title">Detalle del presupuesto</div>
-        </div>
-        <div class="card-body" id="presuDetalle">
-          No hay líneas de presupuesto generadas.
+      <!-- COLUMNA DERECHA: DETALLE DEL PRESUPUESTO -->
+      <div>
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Detalle del presupuesto</div>
+          </div>
+          <div class="card-body" id="presuDetalle">
+            No hay líneas de presupuesto generadas.
+          </div>
         </div>
       </div>
 
@@ -94,18 +113,26 @@ function renderPresupuestoView() {
 // ===============================================
 function precargarDatosProyecto() {
   const p = appState.proyecto || {};
+  const presu = appState.presupuesto || {};
 
   document.getElementById("presuNombre").value =
-    p.nombre || "Proyecto sin nombre";
-  document.getElementById("presuCliente").value = p.cliente || "";
+    p.nombre || presu.nombre || "Proyecto sin nombre";
+  document.getElementById("presuCliente").value =
+    p.cliente || presu.cliente || "";
   document.getElementById("presuFecha").value =
-    p.fecha || new Date().toISOString().split("T")[0];
-  document.getElementById("presuDto").value = p.dto || 0;
+    p.fecha ||
+    presu.fecha ||
+    new Date().toISOString().split("T")[0];
+  document.getElementById("presuDto").value = presu.resumen?.dto || p.dto || 0;
+
+  const notasPorDefecto =
+    "se requiere de switch poe para alimentar los equipos";
+  document.getElementById("presuNotas").value =
+    presu.notas || p.notas || notasPorDefecto;
 }
 
 // ===============================================
 // Carga directa de tarifas desde Firestore
-// (evito el wrapper que devuelve {data,lastLoaded})
 // ===============================================
 async function cargarTarifasDesdeFirestore() {
   const db = firebase.firestore();
@@ -142,7 +169,6 @@ async function generarPresupuesto() {
   const msg = document.getElementById("presuMsg");
   if (msg) msg.style.display = "none";
 
-  // TARIFA DIRECTA DE FIRESTORE
   const tarifas = await cargarTarifasDesdeFirestore();
 
   const proyecto = appState.proyecto || {};
@@ -164,7 +190,6 @@ async function generarPresupuesto() {
   let totalNeto = 0;
 
   for (const item of lineasProyecto) {
-    // En el proyecto el campo es "referencia" (no "ref")
     const refCampo = item.ref || item.referencia;
 
     if (!item || !refCampo) {
@@ -178,7 +203,6 @@ async function generarPresupuesto() {
     const refOriginal = String(refCampo || "").trim();
     let ref = refOriginal.replace(/\s+/g, "");
 
-    // Caso habitual Project Designer -> 8 dígitos, tarifa -> 7
     if (/^9\d{7}$/.test(ref)) {
       ref = ref.slice(0, 7);
     }
@@ -226,7 +250,7 @@ async function generarPresupuesto() {
     totalBruto += subtotal;
 
     lineasPresupuesto.push({
-      ref, // mostramos la ref normalizada
+      ref,
       descripcion: item.descripcion || item.titulo || "",
       cantidad,
       pvp,
@@ -234,13 +258,13 @@ async function generarPresupuesto() {
     });
   }
 
-  // Calcular descuento global
   const dto = Number(document.getElementById("presuDto").value) || 0;
   const factorDto = dto > 0 ? 1 - dto / 100 : 1;
 
   totalNeto = totalBruto * factorDto;
 
-  // Guardar en estado
+  const notas = document.getElementById("presuNotas").value || "";
+
   appState.presupuesto = {
     lineas: lineasPresupuesto,
     resumen: {
@@ -248,9 +272,13 @@ async function generarPresupuesto() {
       dto,
       totalNeto,
     },
+    notas,
+    nombre: document.getElementById("presuNombre").value || "",
+    cliente: document.getElementById("presuCliente").value || "",
+    fecha: document.getElementById("presuFecha").value || "",
   };
 
-  renderResultados(lineasPresupuesto, totalBruto, totalNeto);
+  renderResultados(lineasPresupuesto, totalBruto, totalNeto, dto);
 
   if (msg) {
     msg.textContent = `Presupuesto generado: ${lineasPresupuesto.length} líneas con precio.`;
@@ -261,7 +289,7 @@ async function generarPresupuesto() {
 // ===============================================
 // Mostrar resultados en pantalla
 // ===============================================
-function renderResultados(lineas, totalBruto, totalNeto) {
+function renderResultados(lineas, totalBruto, totalNeto, dto) {
   const detalle = document.getElementById("presuDetalle");
   const resumen = document.getElementById("presuResumen");
 
@@ -302,16 +330,30 @@ function renderResultados(lineas, totalBruto, totalNeto) {
   html += "</tbody></table>";
   detalle.innerHTML = html;
 
+  const subtotal = totalNeto; // base imponible después de dto
+  const iva = subtotal * 0.21;
+  const totalConIva = subtotal + iva;
+
   resumen.innerHTML = `
     <div class="metric-card">
-      <span class="metric-label">TOTAL BRUTO</span>
-      <span class="metric-value">${totalBruto.toFixed(2)} €</span>
+      <span class="metric-label">SUBTOTAL (base imponible)</span>
+      <span class="metric-value">${subtotal.toFixed(2)} €</span>
     </div>
 
     <div class="metric-card">
-      <span class="metric-label">TOTAL NETO</span>
-      <span class="metric-value">${totalNeto.toFixed(2)} €</span>
+      <span class="metric-label">IVA 21%</span>
+      <span class="metric-value">${iva.toFixed(2)} €</span>
     </div>
+
+    <div class="metric-card">
+      <span class="metric-label">TOTAL CON IVA</span>
+      <span class="metric-value">${totalConIva.toFixed(2)} €</span>
+    </div>
+
+    <p style="font-size:0.8rem; color:#6b7280; margin-top:0.5rem;">
+      Total bruto sin descuento: <strong>${totalBruto.toFixed(2)} €</strong> ·
+      Descuento global aplicado: <strong>${dto}%</strong>
+    </p>
   `;
 }
 
