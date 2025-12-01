@@ -1,7 +1,7 @@
 // ==========================================
 // firebase_tarifa.js
 // Gestión de tarifas 2N desde Firestore
-// Estructura: /tarifas/v1/productos/{ref}/campos_originales
+// Estructura principal: /tarifas/v1/productos/{ref}
 // ==========================================
 
 window.appState = window.appState || {};
@@ -10,19 +10,19 @@ appState.tarifas = appState.tarifas || {
   lastLoaded: null,
 };
 
-// TARIFA_CACHE_KEY está definido en state.js
+// TARIFA_CACHE_KEY definido en state.js
 // const TARIFA_CACHE_KEY = "presupuestos2n_tarifa";
 
 // ==========================================
-// OBTENER TARIFAS DESDE /tarifas/v1 (1 lectura + caché)
+// OBTENER TARIFAS (1 lectura + caché)
 // ==========================================
 async function getTarifas() {
-  // 1) Si ya está en memoria, no volvemos a Firestore
+  // 1) Si ya está en memoria, usarlo
   if (appState.tarifas && appState.tarifas.data) {
     return appState.tarifas.data;
   }
 
-  // 2) Intentar cargar desde localStorage (offline / segunda visita)
+  // 2) Intentar localStorage primero
   try {
     const cached = localStorage.getItem(TARIFA_CACHE_KEY);
     if (cached) {
@@ -43,7 +43,7 @@ async function getTarifas() {
     console.warn("No se pudo leer la tarifa desde localStorage:", e);
   }
 
-  // 3) Lectura ÚNICA desde Firestore: /tarifas/v1
+  // 3) Lectura única desde Firestore: /tarifas/v1
   try {
     const docSnap = await db.collection("tarifas").doc("v1").get();
 
@@ -57,30 +57,29 @@ async function getTarifas() {
 
     const tarifas = {};
 
-    // productos = { "916020": { campos_originales: { "MSRP (EUR)": 11, ... } }, ... }
+    // productos = { "916020": { pvp, descripcion, campos_originales: {...} }, ... }
     Object.keys(productos).forEach((refRaw) => {
       const prod = productos[refRaw] || {};
-      const campos = prod.campos_originales || prod;
+      const campos = prod.campos_originales || {};
 
       const pvp =
+        Number(prod.pvp) ||
         Number(campos["MSRP (EUR)"]) ||
         Number(campos["Distributor Price (EUR)"]) ||
         Number(campos["NFR Distributor (EUR)"]) ||
         0;
 
       if (pvp > 0) {
-        const ref = String(refRaw).trim(); // la referencia es la clave del mapa
+        const ref = String(refRaw).trim();
         tarifas[ref] = pvp;
       }
     });
 
-    // Guardar en memoria
     appState.tarifas = {
       data: tarifas,
       lastLoaded: Date.now(),
     };
 
-    // Guardar en localStorage para siguientes visitas
     try {
       localStorage.setItem(TARIFA_CACHE_KEY, JSON.stringify(tarifas));
     } catch (e) {
@@ -97,6 +96,57 @@ async function getTarifas() {
     console.error("Error obteniendo tarifas desde Firestore:", error);
     return {};
   }
+}
+
+// ==========================================
+// SUBIR TARIFA A FIRESTORE DESDE LA PÁGINA TARIFA 2N
+// productosMap: { ref: { pvp, descripcion, rawRow } }
+// ==========================================
+async function subirTarifaAFirestore(productosMap) {
+  if (!productosMap || Object.keys(productosMap).length === 0) {
+    throw new Error("No hay productos para subir.");
+  }
+
+  const docRef = db.collection("tarifas").doc("v1");
+  const entries = Object.entries(productosMap);
+
+  const CHUNK_SIZE = 150; // para no hacer payloads enormes
+  let subidos = 0;
+
+  for (let i = 0; i < entries.length; i += CHUNK_SIZE) {
+    const slice = entries.slice(i, i + CHUNK_SIZE);
+    const updateData = {};
+
+    slice.forEach(([ref, info]) => {
+      updateData[`productos.${ref}`] = {
+        pvp: Number(info.pvp) || 0,
+        descripcion: info.descripcion || "",
+        campos_originales: info.rawRow || {},
+      };
+    });
+
+    // Usamos set con merge para no machacar todo el doc
+    await docRef.set(updateData, { merge: true });
+    subidos += slice.length;
+    console.log(
+      `%cTarifa · Subidos ${subidos}/${entries.length} productos`,
+      "color:#0ea5e9;"
+    );
+  }
+
+  // Invalidar caché en memoria y localStorage
+  appState.tarifas.data = null;
+  appState.tarifas.lastLoaded = null;
+  try {
+    localStorage.removeItem(TARIFA_CACHE_KEY);
+  } catch {}
+
+  console.log(
+    `%cTarifa actualizada en Firestore (${entries.length} referencias)`,
+    "color:#16a34a; font-weight:600;"
+  );
+
+  return entries.length;
 }
 
 console.log(
