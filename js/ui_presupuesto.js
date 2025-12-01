@@ -23,7 +23,9 @@ function renderPresupuestoView() {
           <div class="card-header">
             <div>
               <div class="card-title">Datos del presupuesto</div>
-              <div class="card-subtitle">Revisa los datos del proyecto y genera el presupuesto.</div>
+              <div class="card-subtitle">
+                Revisa los datos del proyecto y genera el presupuesto.
+              </div>
             </div>
             <span class="badge-step">Paso 2 de 3</span>
           </div>
@@ -116,14 +118,16 @@ async function generarPresupuesto() {
   const msg = document.getElementById("presuMsg");
   if (msg) msg.style.display = "none";
 
-  // getTarifas puede devolver { data, lastLoaded } o solo el mapa
+  // getTarifas puede devolver { data, lastLoaded } o directamente el mapa
   const tarifasWrapper = await getTarifas();
   const tarifas =
-    tarifasWrapper && typeof tarifasWrapper === "object" && tarifasWrapper.data
+    tarifasWrapper &&
+    typeof tarifasWrapper === "object" &&
+    tarifasWrapper.data
       ? tarifasWrapper.data
-      : tarifasWrapper;
+      : tarifasWrapper || {};
 
-  const lineasProyecto = appState.proyecto.lineas || [];
+  const lineasProyecto = (appState.proyecto && appState.proyecto.lineas) || [];
 
   let lineasPresupuesto = [];
   let totalBruto = 0;
@@ -138,12 +142,26 @@ async function generarPresupuesto() {
     // =====================================================
     // 🔧 NORMALIZACIÓN DE REFERENCIA 2N
     // =====================================================
-    let ref = String(item.ref || "").trim().replace(/\s+/g, "");
+    const refOriginal = String(item.ref || "").trim();
+    let ref = refOriginal.replace(/\s+/g, "");
 
     // Caso habitual Project Designer -> 8 dígitos, tarifa -> 7
     if (/^9\d{7}$/.test(ref)) {
       ref = ref.slice(0, 7);
     }
+
+    // Probamos varias variantes por si la tarifa está en 7 u 8 dígitos
+    const candidatos = [];
+    if (refOriginal) candidatos.push(refOriginal.replace(/\s+/g, ""));
+    if (ref) candidatos.push(ref);
+    if (ref.length === 7) {
+      candidatos.push(ref + "0");
+      candidatos.push(ref + "00");
+    } else if (ref.length === 8) {
+      candidatos.push(ref.slice(0, 7));
+    }
+
+    const candidatosUnicos = [...new Set(candidatos)];
     // =====================================================
 
     const cantidad = Number(item.cantidad || 1);
@@ -152,11 +170,19 @@ async function generarPresupuesto() {
       continue;
     }
 
-    const pvp = Number(tarifas && tarifas[ref]) || 0;
+    let pvp = 0;
+    for (const key of candidatosUnicos) {
+      if (tarifas[key] != null) {
+        pvp = Number(tarifas[key]) || 0;
+        if (pvp) break;
+      }
+    }
+
     if (!pvp) {
       console.warn("⚠ Línea sin precio o cantidad inválida", {
-        refOriginal: item.ref,
-        ref,
+        refOriginal,
+        refNormalizada: ref,
+        candidatos: candidatosUnicos,
         cantidad,
         desc: item.descripcion,
       });
@@ -167,7 +193,7 @@ async function generarPresupuesto() {
     totalBruto += subtotal;
 
     lineasPresupuesto.push({
-      ref,
+      ref, // mostramos la ref normalizada
       descripcion: item.descripcion || "",
       cantidad,
       pvp,
