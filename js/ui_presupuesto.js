@@ -66,8 +66,7 @@ function renderPresupuestoView() {
               <div class="form-row">
                 <div class="form-group">
                   <label>Descuento global (%)</label>
-                  <input id="presupuestoDtoGlobal" type="number" min="0" max="100" step="0.1"
-                    value="0">
+                  <input id="presupuestoDtoGlobal" type="number" min="0" max="100" step="0.1" value="0">
                 </div>
               </div>
 
@@ -116,7 +115,7 @@ function renderPresupuestoView() {
     btnGenerar.addEventListener("click", onGenerarPresupuestoClick);
   }
 
-  // Si ya hay un presupuesto previo, reflejarlo
+  // Si ya hay presupuesto previo, lo pintamos
   if (p.lineas && p.lineas.length > 0) {
     pintarResumenPresupuesto();
     pintarTablaPresupuesto();
@@ -128,6 +127,7 @@ function renderPresupuestoView() {
 // ====================
 
 async function onGenerarPresupuestoClick() {
+  console.log("➡ [Presupuesto] Botón Generar pulsado");
   const msg = document.getElementById("presupuestoMensaje");
   if (msg) {
     msg.style.display = "none";
@@ -135,6 +135,8 @@ async function onGenerarPresupuestoClick() {
   }
 
   const proyecto = appState.proyecto;
+  console.log("➡ [Presupuesto] Proyecto en memoria:", proyecto);
+
   if (!proyecto || !Array.isArray(proyecto.filas) || proyecto.filas.length === 0) {
     if (msg) {
       msg.className = "alert alert-error mt-2";
@@ -158,12 +160,13 @@ async function onGenerarPresupuestoClick() {
 
   // Obtener tarifas optimizadas (usa caché, 1 lectura a Firestore máx.)
   const tarifas = await getTarifas();
+  console.log("➡ [Presupuesto] Tarifas cargadas:", tarifas);
 
   if (!tarifas || Object.keys(tarifas).length === 0) {
     if (msg) {
       msg.className = "alert alert-error mt-2";
       msg.textContent =
-        "No se pudieron cargar las tarifas desde Firebase. Revisa la conexión o la colección de tarifas.";
+        "No se pudieron cargar las tarifas desde Firebase. Revisa la colección 'tarifas/v1'.";
       msg.style.display = "flex";
     }
     return;
@@ -171,27 +174,33 @@ async function onGenerarPresupuestoClick() {
 
   // Construir líneas de presupuesto a partir del proyecto importado
   const lineas = proyecto.filas.map((fila) => {
-    const ref = normalizarRef(fila.referencia);
-    const cantidad = Number(fila.cantidad) || 0;
+    const refOriginal = String(fila.referencia || "").trim();
+
+    // Normalizar fuerte para que coincida con las claves del mapa productos
+    const ref = refOriginal
+      .replace(/\s+/g, "")
+      .replace(/\./g, "")
+      .toUpperCase();
+
+    const cantidad = Number(fila.cantidad || 0);
     const desc = fila.descripcion || "";
 
     const seccion = fila.seccion || proyecto.seccion || "";
     const titulo = fila.titulo || proyecto.titulo || "";
 
-    let infoTarifa = tarifas[ref];
     let pvp = 0;
-
-    if (typeof infoTarifa === "number") {
-      pvp = infoTarifa;
-    } else if (infoTarifa && typeof infoTarifa === "object") {
-      pvp =
-        Number(infoTarifa.pvp) ||
-        Number(infoTarifa.precio) ||
-        Number(infoTarifa.price) ||
-        0;
+    if (tarifas[ref] != null) {
+      pvp = Number(tarifas[ref]) || 0;
     }
 
     const total = pvp * cantidad;
+
+    if (!pvp || cantidad <= 0) {
+      console.log(
+        "⚠ Línea sin precio o cantidad inválida",
+        { refOriginal, ref, cantidad, desc }
+      );
+    }
 
     return {
       seccion,
@@ -204,8 +213,12 @@ async function onGenerarPresupuestoClick() {
     };
   });
 
-  // Quitamos líneas sin precio o sin cantidad
+  // Filtrar solo líneas válidas
   const lineasValidas = lineas.filter((l) => l.cantidad > 0 && l.pvp > 0);
+
+  console.log(
+    `✅ [Presupuesto] Generado con ${lineasValidas.length} líneas válidas de ${lineas.length} totales`
+  );
 
   const totales = calcularTotalesPresupuesto(lineasValidas, dtoGlobalPorc);
 
