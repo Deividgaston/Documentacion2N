@@ -1,89 +1,77 @@
 // js/ui_shell.js
-// Navegación principal (tabs superiores + logout)
+// Shell de la app: navegación superior + logout + selección de vistas
 
-function setupShellNav() {
-  const shell = document.getElementById("appShell");
-  if (!shell) {
-    console.error("No se encuentra #appShell en el DOM.");
+window.appState = window.appState || {};
+
+// Inicializar shell (se llama tras login correcto)
+function initShellUI() {
+  const loginPage = document.getElementById("loginPage");
+  const appShell = document.getElementById("appShell");
+  const btnLogout = document.getElementById("btnLogout");
+
+  if (!loginPage || !appShell) {
+    console.error("Faltan loginPage o appShell en el HTML.");
     return;
   }
 
-  const links = shell.querySelectorAll(".top-nav-link");
-  const btnLogout = document.getElementById("btnLogout");
+  // Mostrar app, ocultar login
+  loginPage.style.display = "none";
+  appShell.style.display = "flex";
 
-  // Listeners de tabs
-  links.forEach((link) => {
-    link.addEventListener("click", (ev) => {
-      ev.preventDefault();
-
+  // Listeners de navegación
+  document.querySelectorAll(".top-nav-link").forEach((link) => {
+    link.addEventListener("click", (e) => {
+      e.preventDefault();
       const view = link.getAttribute("data-view");
-      if (!view) return;
-
-      // Cambiar vista
-      selectView(view);
-
-      // Marcar tab activa
-      links.forEach((l) => l.classList.remove("active"));
-      link.classList.add("active");
+      if (view) {
+        selectView(view);
+      }
     });
   });
 
-  // Logout (siempre visible)
+  // Logout
   if (btnLogout) {
     btnLogout.addEventListener("click", async () => {
       try {
         await auth.signOut();
-      } catch (err) {
-        console.error("Error al cerrar sesión:", err);
+      } catch (e) {
+        console.error("Error al cerrar sesión:", e);
       }
     });
   }
+
+  // Vista inicial: Proyecto (si no hay otra lógica)
+  selectView("proyecto");
 }
 
-// Cambia la vista actual según la tab seleccionada
-function selectView(view) {
-  appState.currentView = view;
+// Cambiar de vista y marcar pestaña activa
+function selectView(viewName) {
+  // 1. Render de la vista
+  if (viewName === "proyecto" && typeof renderProyectoView === "function") {
+    renderProyectoView();
+  } else if (
+    viewName === "presupuesto" &&
+    typeof renderPresupuestoView === "function"
+  ) {
+    renderPresupuestoView();
+  } else if (viewName === "tarifa" && typeof renderTarifaView === "function") {
+    renderTarifaView();
+  } else if (viewName === "docs" && typeof renderDocumentacionView === "function") {
+    renderDocumentacionView();
+  }
 
-  switch (view) {
-    case "proyecto":
-      if (typeof renderProyectoView === "function") {
-        renderProyectoView();
-      }
-      break;
+  // 2. Actualizar pestañas activas
+  document.querySelectorAll(".top-nav-link").forEach((el) => {
+    el.classList.remove("active");
+  });
 
-    case "presupuesto":
-      if (typeof renderPresupuestoView === "function") {
-        renderPresupuestoView();
-      } else {
-        console.warn("renderPresupuestoView no está definida.");
-      }
-      break;
-
-    case "tarifa":
-      if (typeof renderTarifaView === "function") {
-        renderTarifaView();
-      } else {
-        console.warn("renderTarifaView no está definida.");
-      }
-      break;
-
-    case "docs":
-      if (typeof renderDocsView === "function") {
-        renderDocsView();
-      } else {
-        console.warn("renderDocsView no está definida.");
-      }
-      break;
-
-    default:
-      if (typeof renderProyectoView === "function") {
-        renderProyectoView();
-      }
-      break;
+  const activeTab = document.querySelector(`.top-nav-link[data-view="${viewName}"]`);
+  if (activeTab) {
+    activeTab.classList.add("active");
   }
 }
 
 console.log(
-  "%cUI shell (tabs + logout) cargada (ui_shell.js)",
-  "color:#0f766e; font-weight:600;"
+  "%cUI Shell inicializada (ui_shell.js)",
+  "color:#4f46e5; font-weight:600;"
 );
