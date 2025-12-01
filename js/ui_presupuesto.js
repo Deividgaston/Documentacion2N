@@ -29,76 +29,83 @@ function renderPresupuestoView() {
   const fecha = p.fechaPresupuesto || new Date().toISOString();
 
   container.innerHTML = `
-    <div class="proyecto-layout">
+    <div class="presupuesto-layout-grid">
 
-      <!-- Card parámetros -->
-      <div class="card">
-        <div class="card-header">
-          <div>
-            <div class="card-title">Datos del presupuesto</div>
-            <div class="card-subtitle">
-              Revisa los datos del proyecto y genera el presupuesto.
+      <!-- Columna izquierda: datos + resumen -->
+      <div class="presupuesto-left">
+
+        <!-- Card parámetros -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Datos del presupuesto</div>
+              <div class="card-subtitle">
+                Revisa los datos del proyecto y genera el presupuesto.
+              </div>
+            </div>
+            <span class="chip">Paso 2 de 3</span>
+          </div>
+
+          <div class="card-body">
+            <div class="form-grid">
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Nombre del proyecto</label>
+                  <input id="presupuestoNombreProyecto" type="text" value="${nombreProyecto}" />
+                </div>
+                <div class="form-group">
+                  <label>Cliente (opcional)</label>
+                  <input id="presupuestoCliente" type="text" value="${cliente}" />
+                </div>
+                <div class="form-group">
+                  <label>Fecha presupuesto</label>
+                  <input id="presupuestoFecha" type="date" value="${fecha.slice(0,10)}" />
+                </div>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Descuento global (%)</label>
+                  <input id="presupuestoDtoGlobal" type="number" min="0" max="100" step="0.1"
+                    value="${(p.totales && p.totales.dtoGlobal > 0) ? 
+                      (100 * p.totales.dtoGlobal / (p.totales.base || 1)).toFixed(1) : 0}">
+                </div>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <button id="btnGenerarPresupuesto" class="btn btn-primary">
+                    Generar / Recalcular presupuesto
+                  </button>
+                </div>
+              </div>
+
+              <div id="presupuestoMensaje" class="alert alert-info mt-2" style="display:none;"></div>
             </div>
           </div>
-          <span class="chip">Paso 2 de 3</span>
         </div>
 
-        <div class="card-body">
-          <div class="form-grid">
-            <div class="form-row">
-              <div class="form-group">
-                <label>Nombre del proyecto</label>
-                <input id="presupuestoNombreProyecto" type="text" value="${nombreProyecto}" />
-              </div>
-              <div class="form-group">
-                <label>Cliente (opcional)</label>
-                <input id="presupuestoCliente" type="text" value="${cliente}" />
-              </div>
-              <div class="form-group">
-                <label>Fecha presupuesto</label>
-                <input id="presupuestoFecha" type="date" value="${fecha.slice(0,10)}" />
-              </div>
-            </div>
-
-            <div class="form-row">
-              <div class="form-group">
-                <label>Descuento global (%)</label>
-                <input id="presupuestoDtoGlobal" type="number" min="0" max="100" step="0.1"
-                  value="${(p.totales && p.totales.dtoGlobal > 0) ? 
-                    (100 * p.totales.dtoGlobal / (p.totales.base || 1)).toFixed(1) : 0}">
-              </div>
-            </div>
-
-            <div class="form-row">
-              <div class="form-group">
-                <button id="btnGenerarPresupuesto" class="btn btn-primary">
-                  Generar / Recalcular presupuesto
-                </button>
-              </div>
-            </div>
-
-            <div id="presupuestoMensaje" class="alert alert-info mt-2" style="display:none;"></div>
+        <!-- Card resumen -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Resumen económico</div>
+          </div>
+          <div class="card-body" id="presupuestoResumen">
+            No se ha generado todavía el presupuesto.
           </div>
         </div>
+
       </div>
 
-      <!-- Card resumen -->
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title">Resumen económico</div>
-        </div>
-        <div class="card-body" id="presupuestoResumen">
-          No se ha generado todavía el presupuesto.
-        </div>
-      </div>
-
-      <!-- Card detalle líneas -->
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title">Detalle del presupuesto</div>
-        </div>
-        <div class="card-body" id="presupuestoTablaWrapper">
-          No hay líneas de presupuesto generadas.
+      <!-- Columna derecha: tabla detalle -->
+      <div class="presupuesto-right">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Detalle del presupuesto</div>
+          </div>
+          <div class="card-body" id="presupuestoTablaWrapper">
+            No hay líneas de presupuesto generadas.
+          </div>
         </div>
       </div>
 
@@ -150,7 +157,7 @@ async function onGenerarPresupuestoClick() {
   const fecha = inputFecha?.value || new Date().toISOString().slice(0, 10);
   const dtoGlobalPorc = Number(inputDtoGlobal?.value || 0) || 0;
 
-  // Obtener tarifas optimizadas
+  // Obtener tarifas optimizadas (usa caché, 1 lectura a Firestore máx.)
   const tarifas = await getTarifas();
 
   // Construir líneas de presupuesto
@@ -158,6 +165,12 @@ async function onGenerarPresupuestoClick() {
     const ref = normalizarRef(fila.referencia);
     const cantidad = Number(fila.cantidad) || 0;
     const desc = fila.descripcion || "";
+
+    // Sección / título: pueden venir por fila (Project Designer) o como metadatos de proyecto
+    const seccion =
+      fila.seccion || proyecto.seccion || "";
+    const titulo =
+      fila.titulo || proyecto.titulo || "";
 
     let infoTarifa = tarifas[ref];
     let pvp = 0;
@@ -176,15 +189,17 @@ async function onGenerarPresupuestoClick() {
     const total = pvp * cantidad;
 
     return {
-      referencia: ref,
+      seccion,
+      titulo,
       descripcion: desc,
+      referencia: ref,
       cantidad,
       pvp,
       total,
     };
   });
 
-  // Filtro: quitar líneas sin precio y sin total
+  // Filtro: quitar líneas sin precio o sin cantidad
   const lineasValidas = lineas.filter((l) => l.cantidad > 0 && l.pvp > 0);
 
   const totales = calcularTotalesPresupuesto(lineasValidas, dtoGlobalPorc);
@@ -280,8 +295,10 @@ function pintarTablaPresupuesto() {
     .map((l) => {
       return `
         <tr>
-          <td>${l.referencia}</td>
+          <td>${l.seccion || ""}</td>
+          <td>${l.titulo || ""}</td>
           <td>${l.descripcion || ""}</td>
+          <td>${l.referencia}</td>
           <td class="text-right">${l.cantidad}</td>
           <td class="text-right">${formatNumber(l.pvp)} €</td>
           <td class="text-right">${formatNumber(l.total)} €</td>
@@ -295,8 +312,10 @@ function pintarTablaPresupuesto() {
       <table class="table">
         <thead>
           <tr>
+            <th>Sección</th>
+            <th>Título</th>
+            <th>Nombre producto</th>
             <th>Referencia</th>
-            <th>Descripción</th>
             <th>Cant.</th>
             <th>PVP</th>
             <th>Total</th>
@@ -311,6 +330,6 @@ function pintarTablaPresupuesto() {
 }
 
 console.log(
-  "%cUI Presupuesto cargada (ui_presupuesto.js)",
+  "%cUI Presupuesto cargada (ui_presupuesto.js · tabla derecha + PVP)",
   "color:#22c55e; font-weight:600;"
 );
