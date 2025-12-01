@@ -1,5 +1,5 @@
 // js/ui_login.js
-// Lógica de la pantalla de login
+// Lógica de la pantalla de login (email+password y Google)
 
 function initLoginUI() {
   const loginPage = document.getElementById("loginPage");
@@ -7,6 +7,7 @@ function initLoginUI() {
   const emailInput = document.getElementById("loginEmail");
   const passInput = document.getElementById("loginPass");
   const btnLogin = document.getElementById("btnLogin");
+  const btnLoginGoogle = document.getElementById("btnLoginGoogle");
   const loginError = document.getElementById("loginError");
 
   if (!loginPage || !appShell || !emailInput || !passInput || !btnLogin) {
@@ -30,6 +31,7 @@ function initLoginUI() {
     loginError.style.display = "none";
   }
 
+  // ----- LOGIN EMAIL + PASSWORD -----
   async function manejarLogin() {
     limpiarError();
 
@@ -60,13 +62,43 @@ function initLoginUI() {
     }
   }
 
-  // Click en botón
+  // ----- LOGIN CON GOOGLE -----
+  async function manejarLoginGoogle() {
+    limpiarError();
+
+    try {
+      const provider = new firebase.auth.GoogleAuthProvider();
+      // Si quieres limitar a dominio de empresa, aquí se podría configurar:
+      // provider.setCustomParameters({ hd: "tuempresa.com" });
+
+      await auth.signInWithPopup(provider);
+      // initOnAuthChange() hará el resto
+    } catch (err) {
+      console.error("Error login con Google:", err);
+
+      let msg = "No se ha podido iniciar sesión con Google.";
+      if (err.code === "auth/popup-closed-by-user") {
+        msg = "Se cerró la ventana de Google antes de completar el inicio de sesión.";
+      }
+      mostrarError(msg);
+    }
+  }
+
+  // Click en botón email+password
   btnLogin.addEventListener("click", (e) => {
     e.preventDefault();
     manejarLogin();
   });
 
-  // Enter en inputs
+  // Click en botón Google
+  if (btnLoginGoogle) {
+    btnLoginGoogle.addEventListener("click", (e) => {
+      e.preventDefault();
+      manejarLoginGoogle();
+    });
+  }
+
+  // Enter en inputs → login email/password
   [emailInput, passInput].forEach((input) => {
     input.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
@@ -78,6 +110,6 @@ function initLoginUI() {
 }
 
 console.log(
-  "%cUI login inicializada (ui_login.js)",
+  "%cUI login inicializada (ui_login.js) con Google",
   "color:#1d4fd8; font-weight:600;"
 );
