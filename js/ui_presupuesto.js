@@ -15,75 +15,67 @@ function renderPresupuestoView() {
   if (!container) return;
 
   container.innerHTML = `
-    <div class="presupuesto-layout grid-2">
+    <div class="presupuesto-layout">
 
-      <!-- COLUMNA IZQUIERDA: datos + resumen -->
-      <div>
-        <div class="card">
-          <div class="card-header">
-            <div>
-              <div class="card-title">Datos del presupuesto</div>
-              <div class="card-subtitle">
-                Revisa los datos del proyecto y genera el presupuesto.
-              </div>
-            </div>
-            <span class="badge-step">Paso 2 de 3</span>
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Datos del presupuesto</div>
+            <div class="card-subtitle">Revisa los datos del proyecto y genera el presupuesto.</div>
           </div>
-
-          <div class="card-body">
-            <div class="form-grid">
-
-              <div class="form-group">
-                <label>Nombre del proyecto</label>
-                <input id="presuNombre" type="text" />
-              </div>
-
-              <div class="form-group">
-                <label>Cliente (opcional)</label>
-                <input id="presuCliente" type="text" />
-              </div>
-
-              <div class="form-group">
-                <label>Fecha presupuesto</label>
-                <input id="presuFecha" type="date" />
-              </div>
-
-              <div class="form-group">
-                <label>Descuento global (%)</label>
-                <input id="presuDto" type="number" min="0" max="90" value="0" />
-              </div>
-
-            </div>
-
-            <button id="btnGenerarPresupuesto" class="btn btn-primary w-full mt-3">
-              Generar / Recalcular presupuesto
-            </button>
-
-            <div id="presuMsg" class="alert alert-success mt-3" style="display:none;">
-              Presupuesto generado correctamente
-            </div>
-          </div>
+          <span class="badge-step">Paso 2 de 3</span>
         </div>
 
-        <div class="card">
-          <div class="card-header">
-            <div class="card-title">Resumen económico</div>
+        <div class="card-body">
+          <div class="form-grid">
+
+            <div class="form-group">
+              <label>Nombre del proyecto</label>
+              <input id="presuNombre" type="text" />
+            </div>
+
+            <div class="form-group">
+              <label>Cliente (opcional)</label>
+              <input id="presuCliente" type="text" />
+            </div>
+
+            <div class="form-group">
+              <label>Fecha presupuesto</label>
+              <input id="presuFecha" type="date" />
+            </div>
+
+            <div class="form-group">
+              <label>Descuento global (%)</label>
+              <input id="presuDto" type="number" min="0" max="90" value="0" />
+            </div>
+
           </div>
-          <div class="card-body" id="presuResumen">
-            No se ha generado todavía el presupuesto.
+
+          <button id="btnGenerarPresupuesto" class="btn btn-primary w-full mt-3">
+            Generar / Recalcular presupuesto
+          </button>
+
+          <div id="presuMsg" class="alert alert-success mt-3" style="display:none;">
+            Presupuesto generado correctamente
           </div>
         </div>
       </div>
 
-      <!-- COLUMNA DERECHA: detalle del presupuesto -->
-      <div>
-        <div class="card">
-          <div class="card-header">
-            <div class="card-title">Detalle del presupuesto</div>
-          </div>
-          <div class="card-body" id="presuDetalle">
-            No hay líneas de presupuesto generadas.
-          </div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Resumen económico</div>
+        </div>
+        <div class="card-body" id="presuResumen">
+          No se ha generado todavía el presupuesto.
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Detalle del presupuesto</div>
+        </div>
+        <div class="card-body" id="presuDetalle">
+          No hay líneas de presupuesto generadas.
         </div>
       </div>
 
@@ -127,7 +119,17 @@ async function generarPresupuesto() {
       ? tarifasWrapper.data
       : tarifasWrapper || {};
 
-  const lineasProyecto = (appState.proyecto && appState.proyecto.lineas) || [];
+  const lineasProyecto =
+    (appState.proyecto && appState.proyecto.lineas) || [];
+
+  console.log(
+    "[Presupuesto] tarifas cargadas:",
+    Object.keys(tarifas).length
+  );
+  console.log(
+    "[Presupuesto] líneas de proyecto:",
+    lineasProyecto.length
+  );
 
   let lineasPresupuesto = [];
   let totalBruto = 0;
@@ -150,7 +152,7 @@ async function generarPresupuesto() {
       ref = ref.slice(0, 7);
     }
 
-    // Probamos varias variantes por si la tarifa está en 7 u 8 dígitos
+    // Candidatos de búsqueda por si la tarifa está en 7 u 8 dígitos
     const candidatos = [];
     if (refOriginal) candidatos.push(refOriginal.replace(/\s+/g, ""));
     if (ref) candidatos.push(ref);
@@ -160,7 +162,6 @@ async function generarPresupuesto() {
     } else if (ref.length === 8) {
       candidatos.push(ref.slice(0, 7));
     }
-
     const candidatosUnicos = [...new Set(candidatos)];
     // =====================================================
 
