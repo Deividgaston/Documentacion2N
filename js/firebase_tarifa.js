@@ -1,155 +1,110 @@
-// ==========================================
-// firebase_tarifa.js
-// Gestión de tarifas 2N desde Firestore
-// Estructura principal: /tarifas/v1/productos/{ref}
-// ==========================================
+// js/firebase_tarifa.js
+// Funciones específicas para gestionar la TARIFA 2N en Firestore
 
-window.appState = window.appState || {};
-appState.tarifas = appState.tarifas || {
-  data: null,
-  lastLoaded: null,
-};
+import { db } from "./firebase.js";
+import {
+  collection,
+  doc,
+  getDocs,
+  writeBatch,
+  serverTimestamp,
+} from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
 
-// TARIFA_CACHE_KEY definido en state.js
-// const TARIFA_CACHE_KEY = "presupuestos2n_tarifa";
+// Ruta base de la tarifa en Firestore:
+// /tarifas/v1/productos/{referencia}
+const TARIFAS_COLLECTION = "tarifas";
+const TARIFA_VERSION = "v1";
+const PRODUCTOS_SUBCOL = "productos";
 
-// ==========================================
-// OBTENER TARIFAS (1 lectura + caché)
-// ==========================================
-async function getTarifas() {
-  // 1) Si ya está en memoria, usarlo
-  if (appState.tarifas && appState.tarifas.data) {
-    return appState.tarifas.data;
-  }
+/**
+ * Sube la tarifa a Firestore usando batches (máx. 450 docs por batch)
+ * productosMap: {
+ *   "916020": { pvp: 833.0, descripcion: "2N IP Style ..." },
+ *   ...
+ * }
+ *
+ * Devuelve el número total de referencias subidas.
+ */
+export async function subirTarifaAFirestore(productosMap) {
+  const entries = Object.entries(productosMap || {});
+  if (!entries.length) return 0;
 
-  // 2) Intentar localStorage primero
-  try {
-    const cached = localStorage.getItem(TARIFA_CACHE_KEY);
-    if (cached) {
-      const parsed = JSON.parse(cached);
-      if (parsed && typeof parsed === "object") {
-        appState.tarifas = {
-          data: parsed,
-          lastLoaded: Date.now(),
-        };
-        console.log(
-          "%cTarifa cargada desde localStorage",
-          "color:#22c55e; font-weight:600;"
-        );
-        return parsed;
-      }
-    }
-  } catch (e) {
-    console.warn("No se pudo leer la tarifa desde localStorage:", e);
-  }
-
-  // 3) Lectura única desde Firestore: /tarifas/v1
-  try {
-    const docSnap = await db.collection("tarifas").doc("v1").get();
-
-    if (!docSnap.exists) {
-      console.error("El documento tarifas/v1 no existe.");
-      return {};
-    }
-
-    const data = docSnap.data() || {};
-    const productos = data.productos || {};
-
-    const tarifas = {};
-
-    // productos = { "916020": { pvp, descripcion, campos_originales: {...} }, ... }
-    Object.keys(productos).forEach((refRaw) => {
-      const prod = productos[refRaw] || {};
-      const campos = prod.campos_originales || {};
-
-      const pvp =
-        Number(prod.pvp) ||
-        Number(campos["MSRP (EUR)"]) ||
-        Number(campos["Distributor Price (EUR)"]) ||
-        Number(campos["NFR Distributor (EUR)"]) ||
-        0;
-
-      if (pvp > 0) {
-        const ref = String(refRaw).trim();
-        tarifas[ref] = pvp;
-      }
-    });
-
-    appState.tarifas = {
-      data: tarifas,
-      lastLoaded: Date.now(),
-    };
-
-    try {
-      localStorage.setItem(TARIFA_CACHE_KEY, JSON.stringify(tarifas));
-    } catch (e) {
-      console.warn("No se pudo guardar la tarifa en localStorage:", e);
-    }
-
-    console.log(
-      `%cTarifa cargada desde Firestore: ${Object.keys(tarifas).length} referencias`,
-      "color:#22c55e; font-weight:600;"
-    );
-
-    return tarifas;
-  } catch (error) {
-    console.error("Error obteniendo tarifas desde Firestore:", error);
-    return {};
-  }
-}
-
-// ==========================================
-// SUBIR TARIFA A FIRESTORE DESDE LA PÁGINA TARIFA 2N
-// productosMap: { ref: { pvp, descripcion, rawRow } }
-// ==========================================
-async function subirTarifaAFirestore(productosMap) {
-  if (!productosMap || Object.keys(productosMap).length === 0) {
-    throw new Error("No hay productos para subir.");
-  }
-
-  const docRef = db.collection("tarifas").doc("v1");
-  const entries = Object.entries(productosMap);
-
-  const CHUNK_SIZE = 150; // para no hacer payloads enormes
-  let subidos = 0;
+  const CHUNK_SIZE = 450;
+  let totalEscritos = 0;
 
   for (let i = 0; i < entries.length; i += CHUNK_SIZE) {
-    const slice = entries.slice(i, i + CHUNK_SIZE);
-    const updateData = {};
+    const chunk = entries.slice(i, i + CHUNK_SIZE);
+    const batch = writeBatch(db);
 
-    slice.forEach(([ref, info]) => {
-      updateData[`productos.${ref}`] = {
-        pvp: Number(info.pvp) || 0,
-        descripcion: info.descripcion || "",
-        campos_originales: info.rawRow || {},
+    chunk.forEach(([ref, data]) => {
+      const docRef = doc(
+        db,
+        TARIFAS_COLLECTION,
+        TARIFA_VERSION,
+        PRODUCTOS_SUBCOL,
+        String(ref)
+      );
+
+      const payload = {
+        referencia: String(ref),
+        descripcion: data.descripcion || "",
+        pvp: Number(data.pvp) || 0,
+        updatedAt: serverTimestamp(),
       };
+
+      batch.set(docRef, payload, { merge: true });
     });
 
-    // Usamos set con merge para no machacar todo el doc
-    await docRef.set(updateData, { merge: true });
-    subidos += slice.length;
+    await batch.commit();
+    totalEscritos += chunk.length;
     console.log(
-      `%cTarifa · Subidos ${subidos}/${entries.length} productos`,
-      "color:#0ea5e9;"
+      `%cTarifa · Batch subido (${i + chunk.length}/${entries.length})`,
+      "color:#22c55e;"
     );
   }
 
-  // Invalidar caché en memoria y localStorage
-  appState.tarifas.data = null;
-  appState.tarifas.lastLoaded = null;
-  try {
-    localStorage.removeItem(TARIFA_CACHE_KEY);
-  } catch {}
-
   console.log(
-    `%cTarifa actualizada en Firestore (${entries.length} referencias)`,
+    `%cTarifa · Subida completa: ${totalEscritos} referencias`,
     "color:#16a34a; font-weight:600;"
   );
 
-  return entries.length;
+  return totalEscritos;
 }
 
-console.log(
-  "%cMódulo de tarifas inicializado (firebase_tarifa.js)",
-  "color:#0ea5e9; font-weight:600;"
-);
+/**
+ * Lee la tarifa actual desde Firestore.
+ * Devuelve un objeto:
+ * {
+ *   "916020": { pvp: 833.0, descripcion: "2N IP Style ..." },
+ *   ...
+ * }
+ */
+export async function getTarifas() {
+  const colRef = collection(
+    db,
+    TARIFAS_COLLECTION,
+    TARIFA_VERSION,
+    PRODUCTOS_SUBCOL
+  );
+
+  const snap = await getDocs(colRef);
+  const result = {};
+
+  snap.forEach((docSnap) => {
+    const d = docSnap.data();
+    if (!d) return;
+    const ref = docSnap.id;
+    const pvp = Number(d.pvp) || 0;
+    const descripcion = d.descripcion || "";
+    if (!pvp) return;
+
+    result[ref] = { pvp, descripcion };
+  });
+
+  console.log(
+    `%cTarifa · getTarifas() -> ${Object.keys(result).length} referencias`,
+    "color:#3b82f6;"
+  );
+
+  return result;
+}
