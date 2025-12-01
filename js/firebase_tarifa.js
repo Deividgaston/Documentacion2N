@@ -14,7 +14,7 @@ const TARIFA_VERSION = "v1";
 const PRODUCTOS_SUBCOL = "productos";
 
 /**
- * Sube la tarifa a Firestore usando batches (máx. 450 docs por batch)
+ * Sube la tarifa a Firestore usando batches (máx. ~400 docs por batch)
  * productosMap: {
  *   "916020": { pvp: 833.0, descripcion: "2N IP Style ..." },
  *   ...
@@ -72,8 +72,9 @@ export async function subirTarifaAFirestore(productosMap) {
 
       const payload = {
         referencia: String(ref),
-        descripcion: data.descripcion || "",
+        // guardamos el PVP como número
         pvp: Number(data.pvp) || 0,
+        descripcion: data.descripcion || "",
         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       };
 
@@ -98,11 +99,15 @@ export async function subirTarifaAFirestore(productosMap) {
 
 /**
  * Lee la tarifa actual desde Firestore.
+ *
  * Devuelve un objeto:
  * {
- *   "916020": { pvp: 833.0, descripcion: "2N IP Style ..." },
+ *   "916020": 833.0,
+ *   "9155101": 1299.0,
  *   ...
  * }
+ *
+ * (solo número, para encajar con ui_presupuesto.js)
  */
 export async function getTarifas() {
   const colRef = db
@@ -116,12 +121,13 @@ export async function getTarifas() {
   snap.forEach((docSnap) => {
     const d = docSnap.data();
     if (!d) return;
+
     const ref = docSnap.id;
     const pvp = Number(d.pvp) || 0;
-    const descripcion = d.descripcion || "";
     if (!pvp) return;
 
-    result[ref] = { pvp, descripcion };
+    // Mapa simple ref -> número
+    result[ref] = pvp;
   });
 
   console.log(
