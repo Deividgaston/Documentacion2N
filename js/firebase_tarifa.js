@@ -1,63 +1,105 @@
-// js/firebase_tarifa.js
-// Gestión opcional de la tarifa 2N en Firebase (subidas / mantenimiento)
+// ==========================================
+// firebase_tarifa.js
+// Gestión de tarifas 2N desde Firestore
+// Estructura: /tarifas/v1/productos/{ref}/campos_originales
+// ==========================================
 
-/* ============================================================
-   SUBIR TARIFA A FIRESTORE (por ejemplo desde Excel)
-   ============================================================ */
+window.appState = window.appState || {};
+appState.tarifas = appState.tarifas || {
+  data: null,
+  lastLoaded: null,
+};
 
-async function guardarTarifaEnFirebase(productos) {
-  if (!productos || typeof productos !== "object") {
-    console.error("Formato incorrecto para productos:", productos);
-    return false;
+// TARIFA_CACHE_KEY está definido en state.js
+// const TARIFA_CACHE_KEY = "presupuestos2n_tarifa";
+
+// ==========================================
+// OBTENER TARIFAS DESDE /tarifas/v1 (1 lectura + caché)
+// ==========================================
+async function getTarifas() {
+  // 1) Si ya está en memoria, no volvemos a Firestore
+  if (appState.tarifas && appState.tarifas.data) {
+    return appState.tarifas.data;
   }
 
+  // 2) Intentar cargar desde localStorage (offline / segunda visita)
   try {
-    await db.collection("tarifas").doc("v1").set(
-      {
-        productos: productos,
-        fechaActualizacion: new Date().toISOString(),
-      },
-      { merge: true }
-    );
+    const cached = localStorage.getItem(TARIFA_CACHE_KEY);
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (parsed && typeof parsed === "object") {
+        appState.tarifas = {
+          data: parsed,
+          lastLoaded: Date.now(),
+        };
+        console.log(
+          "%cTarifa cargada desde localStorage",
+          "color:#22c55e; font-weight:600;"
+        );
+        return parsed;
+      }
+    }
+  } catch (e) {
+    console.warn("No se pudo leer la tarifa desde localStorage:", e);
+  }
+
+  // 3) Lectura ÚNICA desde Firestore: /tarifas/v1
+  try {
+    const docSnap = await db.collection("tarifas").doc("v1").get();
+
+    if (!docSnap.exists) {
+      console.error("El documento tarifas/v1 no existe.");
+      return {};
+    }
+
+    const data = docSnap.data() || {};
+    const productos = data.productos || {};
+
+    const tarifas = {};
+
+    // productos = { "916020": { campos_originales: { "MSRP (EUR)": 11, ... } }, ... }
+    Object.keys(productos).forEach((refRaw) => {
+      const prod = productos[refRaw] || {};
+      const campos = prod.campos_originales || prod;
+
+      const pvp =
+        Number(campos["MSRP (EUR)"]) ||
+        Number(campos["Distributor Price (EUR)"]) ||
+        Number(campos["NFR Distributor (EUR)"]) ||
+        0;
+
+      if (pvp > 0) {
+        const ref = String(refRaw).trim(); // la referencia es la clave del mapa
+        tarifas[ref] = pvp;
+      }
+    });
+
+    // Guardar en memoria
+    appState.tarifas = {
+      data: tarifas,
+      lastLoaded: Date.now(),
+    };
+
+    // Guardar en localStorage para siguientes visitas
+    try {
+      localStorage.setItem(TARIFA_CACHE_KEY, JSON.stringify(tarifas));
+    } catch (e) {
+      console.warn("No se pudo guardar la tarifa en localStorage:", e);
+    }
 
     console.log(
-      "%cTarifa actualizada correctamente en Firebase",
-      "color:#1d4fd8; font-weight:600;"
+      `%cTarifa cargada desde Firestore: ${Object.keys(tarifas).length} referencias`,
+      "color:#22c55e; font-weight:600;"
     );
 
-    // Actualizar cache local
-    localStorage.setItem(TARIFA_CACHE_KEY, JSON.stringify(productos));
-
-    // Actualizar estado en memoria
-    appState.tarifas = productos;
-
-    return true;
-  } catch (err) {
-    console.error("Error guardando tarifa:", err);
-    return false;
+    return tarifas;
+  } catch (error) {
+    console.error("Error obteniendo tarifas desde Firestore:", error);
+    return {};
   }
 }
 
-/* ============================================================
-   LEER TARIFA DIRECTAMENTE DE FIRESTORE (modo mantenimiento)
-   ============================================================ */
-
-async function leerTarifaDirectoFirebase() {
-  try {
-    const snap = await db.collection("tarifas").doc("v1").get();
-
-    if (!snap.exists) {
-      console.warn("No existe tarifas/v1");
-      return null;
-    }
-
-    const data = snap.data()?.productos || {};
-
-    console.log(
-      "%cTarifa leída directamente desde Firestore",
-      "color:#6b7280;"
-    );
-
-    return data;
-  } catch (err) {
-    console.error("Error leyendo ta
+console.log(
+  "%cMódulo de tarifas inicializado (firebase_tarifa.js)",
+  "color:#0ea5e9; font-weight:600;"
+);
