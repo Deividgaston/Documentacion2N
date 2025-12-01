@@ -171,10 +171,8 @@ function parseNumeroEuro(value) {
   let s = String(value || "").trim();
   if (!s) return 0;
 
-  // quitar espacios
   s = s.replace(/\s+/g, "");
 
-  // "1.234,56" -> "1234.56"
   if (s.includes(",") && s.includes(".")) {
     s = s.replace(/\./g, "").replace(",", ".");
   } else if (s.includes(",")) {
@@ -188,15 +186,12 @@ function parseNumeroEuro(value) {
 function esReferencia2N(val) {
   const s = String(val || "").trim();
   if (!s) return false;
-  // la mayoría de SKUs son numéricos de 5–8 dígitos, a veces con letras
   if (s.length < 4) return false;
-  // evitar títulos tipo "Access Control"
   if (/[a-zA-Z]/.test(s) && !/\d/.test(s)) return false;
   return true;
 }
 
 // Parser de tarifa desde Excel usando header:1 (array de filas)
-// Devuelve: { productosMap, meta }
 function leerTarifaDesdeExcel(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -209,14 +204,12 @@ function leerTarifaDesdeExcel(file) {
         const wsName = wb.SheetNames[0];
         const ws = wb.Sheets[wsName];
 
-        // Obtenemos todas las filas como arrays
         const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
         if (!rows || rows.length === 0) {
           resolve({ productosMap: {}, meta: {} });
           return;
         }
 
-        // 1) Buscar la fila que contenga "2N SKU" (cabeceras reales)
         let headerRowIndex = -1;
         for (let i = 0; i < rows.length; i++) {
           const row = rows[i];
@@ -365,7 +358,6 @@ async function onSubirTarifaClick() {
       msg.style.display = "flex";
     }
 
-    // Refrescar estado de tarifa desde Firestore
     actualizarEstadoTarifaFirebase();
   } catch (error) {
     console.error("Error subiendo tarifa a Firestore:", error);
@@ -427,5 +419,4 @@ console.log(
   "color:#4f46e5; font-weight:600;"
 );
 
-// Exponer la función para que el shell pueda llamarla
 window.renderTarifaView = renderTarifaView;
