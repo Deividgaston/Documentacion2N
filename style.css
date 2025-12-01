@@ -527,3 +527,61 @@ textarea {
     transform: translateY(0) scale(1);
   }
 }
+/* ===========================
+   MODAL FLOTANTE · CONFIRMACIÓN PROYECTO
+   =========================== */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  display: none; /* se activa por JS */
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(10px);
+  z-index: 40;
+}
+
+.modal-card {
+  width: 100%;
+  max-width: 420px;
+  background: rgba(255, 255, 255, 0.98);
+  border-radius: 1.1rem;
+  padding: 1.2rem 1.3rem;
+  box-shadow:
+    0 28px 70px rgba(15, 23, 42, 0.45),
+    0 0 0 1px rgba(226, 232, 240, 0.95);
+  animation: modalFloatIn 200ms ease-out;
+}
+
+.modal-title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 0.4rem;
+  color: #111827;
+}
+
+.modal-text {
+  font-size: 0.85rem;
+  color: #4b5563;
+  margin-bottom: 0.9rem;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+/* Animación */
+
+@keyframes modalFloatIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
