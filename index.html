@@ -59,6 +59,8 @@
         <nav class="app-topbar-center">
           <a href="#" class="top-nav-link active" data-view="proyecto" id="navProyecto">Proyecto</a>
           <a href="#" class="top-nav-link" data-view="presupuesto">Presupuesto</a>
+          <!-- 🔹 NUEVA PESTAÑA SIMULADOR -->
+          <a href="#" class="top-nav-link" data-view="simulador">Simulador</a>
           <a href="#" class="top-nav-link" data-view="tarifa">Tarifa 2N</a>
           <a href="#" class="top-nav-link" data-view="docs">Documentación</a>
         </nav>
@@ -87,7 +89,7 @@
     ========================================================== -->
 
     <!-- Firebase de tu proyecto, ahora como módulo (puede exportar db, auth, etc.) -->
-   <script src="js/firebase.js"></script>
+    <script src="js/firebase.js"></script>
 
     <!-- ⚠️ YA NO CARGAMOS firebase_tarifa.js COMO SCRIPT NORMAL -->
     <!-- <script src="js/firebase_tarifa.js"></script> -->
@@ -99,6 +101,8 @@
     <script src="js/ui_shell.js"></script>
     <script src="js/ui_proyecto.js"></script>
     <script src="js/ui_presupuesto.js"></script>
+    <!-- 🔹 NUEVO: UI del simulador -->
+    <script src="js/ui_simulador.js"></script>
 
     <!-- Tarifa 2N como módulo: aquí es donde se hace el import de firebase_tarifa.js -->
     <script type="module" src="js/ui_tarifa.js"></script>
