@@ -1285,7 +1285,7 @@ function recalcularResumenDesdeSeleccion(lineasVisibles, dto) {
 }
 
 // ===============================================
-// EXPORTAR A EXCEL (XLSX) – con estilos tipo plantilla
+// EXPORTAR A EXCEL (XLSX) CON FORMATO
 // ===============================================
 function exportarPresupuestoExcel() {
   const presu = appState.presupuesto || {};
@@ -1302,7 +1302,7 @@ function exportarPresupuestoExcel() {
     typeof presu.incluirIVA === "boolean" ? presu.incluirIVA : true;
   const dto = presu.resumen?.dto || 0;
 
-  // Recalcular totales sobre TODAS las líneas
+  // Totales sobre TODAS las líneas
   let totalBruto = 0;
   presu.lineas.forEach((l) => {
     totalBruto += l.subtotal || l.pvp * l.cantidad || 0;
@@ -1322,20 +1322,25 @@ function exportarPresupuestoExcel() {
   // ===== Construimos AOA (Array of Arrays) =====
   const rows = [];
 
-  // Cabecera / datos de empresa
+  // TÍTULO (fila 1)
   rows.push(["PRESUPUESTO VIDEO PORTERO Y CONTROL DE ACCESOS"]);
   rows.push([]);
+
+  // Datos empresa
   rows.push(["Empresa", COMPANY_INFO.nombre]);
   rows.push(["Dirección", COMPANY_INFO.direccion]);
   rows.push(["NIF", COMPANY_INFO.nif]);
   rows.push(["Teléfono", COMPANY_INFO.telefono]);
   rows.push(["Email", COMPANY_INFO.email]);
   rows.push([]);
+
+  // Datos proyecto
   rows.push(["Proyecto", nombreProyecto]);
   rows.push(["Cliente", cliente]);
   rows.push(["Fecha", fechaHoy]);
   rows.push([]);
 
+  // Observaciones generales
   rows.push(["Observaciones"]);
   rows.push([presu.notas || ""]);
   rows.push([]);
@@ -1350,6 +1355,8 @@ function exportarPresupuestoExcel() {
     "NETO TOTAL",
   ]);
 
+  const filaCabeceraTabla = rows.length; // índice 1-based de la cabecera tabla
+
   // Agrupar por sección para respetar el orden del presupuesto
   const secciones = presu.sectionOrder || [];
   const mapSec = {};
@@ -1363,7 +1370,7 @@ function exportarPresupuestoExcel() {
       l["SECCION"] ||
       l["Grupo"] ||
       l["Apartado"] ||
-      "Sin sección";
+      "SIN SECCIÓN";
     if (!mapSec[sec]) mapSec[sec] = [];
     mapSec[sec].push(l);
   });
@@ -1372,111 +1379,148 @@ function exportarPresupuestoExcel() {
     const list = mapSec[sec];
     if (!list || !list.length) return;
 
-    // Línea separadora de sección
+    // Fila de sección (una sola celda con el texto)
     rows.push([]);
     rows.push([sec.toUpperCase()]);
+    const filaSeccion = rows.length; // por si quisieras estilar después
 
     list.forEach((l) => {
-      const importeBruto = l.subtotal || l.pvp * l.cantidad || 0;
-      const importeNeto = importeBruto * factorDto;
       rows.push([
         l.ref || "",
         l.descripcion || "",
         l.cantidad || 0,
         (l.pvp || 0).toFixed(2),
-        importeBruto.toFixed(2),
-        importeNeto.toFixed(2),
+        (l.subtotal || l.pvp * l.cantidad || 0).toFixed(2),
+        (l.subtotal || l.pvp * l.cantidad || 0).toFixed(2),
       ]);
     });
   });
 
   rows.push([]);
+  const filaSubtotal = rows.length + 1;
   rows.push(["Subtotal (base imponible)", "", "", "", "", base.toFixed(2)]);
+  const filaIVA = rows.length + 1;
   rows.push(["IVA 21%", "", "", "", "", iva.toFixed(2)]);
+  const filaTotal = rows.length + 1;
   rows.push(["TOTAL OFERTA", "", "", "", "", total.toFixed(2)]);
   rows.push([]);
   rows.push(["Información fiscal", textoIVAEstado]);
   rows.push(["Validez de la oferta", textoValidez]);
 
-  // Crear workbook + hoja
+  // ===== Crear hoja y aplicar formato =====
   const ws = XLSX.utils.aoa_to_sheet(rows);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Presupuesto");
 
-  // --------- Estilos y formato visual ----------
-  // (algunas versiones de XLSX ignoran estilos al escribir; si pasa,
-  //  habría que usar una librería con soporte de estilos como xlsx-style)
+  // Helper para aplicar estilo a una celda
+  function styleCell(ref, style) {
+    if (!ws[ref]) return;
+    ws[ref].s = Object.assign(ws[ref].s || {}, style);
+  }
 
-  // Anchos de columnas tipo plantilla
+  // Column widths
   ws["!cols"] = [
     { wch: 14 }, // REF
     { wch: 55 }, // DESCRIPCIÓN
-    { wch: 8 },  // UD
+    { wch: 6 },  // UD
     { wch: 12 }, // PVPR UD
-    { wch: 14 }, // PVPR TOTAL
+    { wch: 12 }, // PVPR TOTAL
     { wch: 14 }, // NETO TOTAL
   ];
 
-  ws["!rows"] = ws["!rows"] || [];
-  ws["!rows"][0] = { hpt: 20 }; // fila título
-
-  // Helper para aplicar estilo
-  function styleCell(address, style) {
-    if (!ws[address]) return;
-    ws[address].s = Object.assign({}, ws[address].s || {}, style);
-  }
-
-  // Título grande en negro, centrado y fusionado (fila 1, columnas A–F)
+  // Merges: título en A1:F1
   ws["!merges"] = ws["!merges"] || [];
-  ws["!merges"].push({ s: { r: 0, c: 0 }, e: { r: 0, c: 5 } });
-  styleCell("A1", {
-    font: { bold: true, sz: 16, color: { rgb: "FFFFFFFF" } },
-    alignment: { horizontal: "center", vertical: "center" },
-    fill: { fgColor: { rgb: "00000000" } },
+  ws["!merges"].push({
+    s: { r: 0, c: 0 }, // A1
+    e: { r: 0, c: 5 }, // F1
   });
 
-  // Poner en negrita las etiquetas de datos de empresa y proyecto
-  for (let r = 3; r <= 7; r++) {
-    const addr = "A" + r;
-    styleCell(addr, { font: { bold: true } });
-  }
-  for (let r = 9; r <= 11; r++) {
-    const addr = "A" + r;
-    styleCell(addr, { font: { bold: true } });
+  // Estilos base
+  const borderThin = {
+    top: { style: "thin", color: { rgb: "FFDDDDDD" } },
+    bottom: { style: "thin", color: { rgb: "FFDDDDDD" } },
+    left: { style: "thin", color: { rgb: "FFDDDDDD" } },
+    right: { style: "thin", color: { rgb: "FFDDDDDD" } },
+  };
+
+  const titleStyle = {
+    font: { bold: true, sz: 14, color: { rgb: "FFFFFFFF" } },
+    fill: { fgColor: { rgb: "FF111827" } },
+    alignment: { horizontal: "center", vertical: "center" },
+  };
+
+  const labelBold = {
+    font: { bold: true },
+  };
+
+  const tableHeaderStyle = {
+    font: { bold: true, color: { rgb: "FFFFFFFF" } },
+    fill: { fgColor: { rgb: "FF111827" } },
+    alignment: { horizontal: "center" },
+    border: borderThin,
+  };
+
+  const sectionStyle = {
+    font: { bold: true, color: { rgb: "FF111827" } },
+    fill: { fgColor: { rgb: "FFE5E7EB" } },
+  };
+
+  const totalRowStyle = {
+    font: { bold: true },
+    fill: { fgColor: { rgb: "FFF3F4F6" } },
+    border: borderThin,
+  };
+
+  // Aplicar estilo título (A1)
+  styleCell("A1", titleStyle);
+
+  // Labels empresa / proyecto / observaciones
+  const labels = ["A3", "A4", "A5", "A6", "A7", "A9", "A10", "A11", "A13"];
+  labels.forEach((ref) => styleCell(ref, labelBold));
+
+  // Cabecera de tabla (filaCabeceraTabla)
+  const cabRow = filaCabeceraTabla; // 1-based
+  const cabIdx = cabRow - 1;        // 0-based para convertir a letras
+  const headerCols = ["A", "B", "C", "D", "E", "F"];
+  headerCols.forEach((col) => {
+    const ref = col + cabRow;
+    styleCell(ref, tableHeaderStyle);
+  });
+
+  // Bordes en todas las filas de detalle (desde cabecera hasta antes de Subtotal)
+  const filaPrimeraDetalle = cabRow + 1;
+  const filaAntesSubtotal = filaSubtotal - 2; // fila en blanco previa
+  for (let r = filaPrimeraDetalle; r <= filaAntesSubtotal; r++) {
+    headerCols.forEach((col) => {
+      const ref = col + r;
+      if (!ws[ref]) return;
+      ws[ref].s = Object.assign(ws[ref].s || {}, { border: borderThin });
+    });
+
+    // Si la fila es una fila de sección (solo texto en A y vacío en resto),
+    // aplica estilo de sección
+    const aRef = "A" + r;
+    const bRef = "B" + r;
+    if (ws[aRef] && (!ws[bRef] || !ws[bRef].v)) {
+      styleCell(aRef, sectionStyle);
+    }
   }
 
-  // Cabecera de tabla (fila donde empieza REF / DESCRIPCIÓN / ...)
-  const headerRowIndex = rows.findIndex(
-    (r) => r[0] === "REF" && r[1] === "DESCRIPCIÓN"
+  // Estilo totales
+  ["A" + filaSubtotal, "A" + filaIVA, "A" + filaTotal].forEach((ref) =>
+    styleCell(ref, labelBold)
   );
-  if (headerRowIndex >= 0) {
-    const excelRow = headerRowIndex + 1; // 1-based
-    ["A", "B", "C", "D", "E", "F"].forEach((col) => {
-      styleCell(col + excelRow, {
-        font: { bold: true, color: { rgb: "FFFFFFFF" } },
-        alignment: { horizontal: "center", vertical: "center" },
-        fill: { fgColor: { rgb: "00000000" } },
-        border: {
-          top: { style: "thin", color: { rgb: "FFFFFFFF" } },
-          bottom: { style: "thin", color: { rgb: "FFFFFFFF" } },
-        },
-      });
-    });
-  }
+  ["E" + filaSubtotal, "F" + filaSubtotal].forEach((ref) =>
+    styleCell(ref, totalRowStyle)
+  );
+  ["E" + filaIVA, "F" + filaIVA].forEach((ref) =>
+    styleCell(ref, totalRowStyle)
+  );
+  ["E" + filaTotal, "F" + filaTotal].forEach((ref) =>
+    styleCell(ref, totalRowStyle)
+  );
 
-  // Total oferta en negrita
-  const totalRowIndex = rows.findIndex((r) => r[0] === "TOTAL OFERTA");
-  if (totalRowIndex >= 0) {
-    const excelRow = totalRowIndex + 1;
-    styleCell("A" + excelRow, {
-      font: { bold: true },
-      border: { top: { style: "medium", color: { rgb: "00000000" } } },
-    });
-    styleCell("F" + excelRow, {
-      font: { bold: true },
-      border: { top: { style: "medium", color: { rgb: "00000000" } } },
-    });
-  }
+  // ===== Crear workbook y descargar =====
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Presupuesto");
 
   const fileName =
     "Presupuesto_" +
@@ -1487,6 +1531,7 @@ function exportarPresupuestoExcel() {
 
   XLSX.writeFile(wb, fileName);
 }
+
 
 // ===============================================
 // EXPORTAR A PDF (ventana nueva + print -> PDF)
