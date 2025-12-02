@@ -334,20 +334,27 @@ function leerProyectoDesdeExcel(file) {
   });
 }
 
-// Intenta detectar y parsear formato Project Designer 2N
+// ====================
+// NUEVA VERSIÓN: Project Designer con múltiples secciones y títulos
+// ====================
 function intentarParsearProjectDesigner(hojaArray) {
   if (!Array.isArray(hojaArray) || hojaArray.length === 0) return null;
 
-  // Buscar fila de cabecera: donde aparezcan "Nombre del producto" y "Número de pedido"
-  let headerIndex = -1;
   let idxNombre = -1;
   let idxRef = -1;
   let idxCant = -1;
+  let headerDetectado = false;
 
-  for (let i = 0; i < hojaArray.length; i++) {
-    const row = hojaArray[i];
-    if (!Array.isArray(row)) continue;
+  let currentSection = "";
+  let currentTitle = "";
+  let firstSection = "";
+  let firstTitle = "";
 
+  const filas = [];
+
+  // Helper: detectar si una fila es cabecera (Nombre del producto / Número de pedido / Cantidad)
+  function esFilaCabecera(row) {
+    if (!Array.isArray(row)) return null;
     const lowerRow = row.map((c) => String(c).toLowerCase().trim());
 
     const iNombre = lowerRow.findIndex((c) =>
@@ -359,50 +366,66 @@ function intentarParsearProjectDesigner(hojaArray) {
     const iCant = lowerRow.findIndex((c) => c === "cantidad");
 
     if (iNombre !== -1 && iRef !== -1 && iCant !== -1) {
-      headerIndex = i;
-      idxNombre = iNombre;
-      idxRef = iRef;
-      idxCant = iCant;
-      break;
+      return { iNombre, iRef, iCant };
     }
-  }
-
-  if (headerIndex === -1) {
-    // No parece ser formato Project Designer
     return null;
   }
 
-  // Sección y título: filas no vacías inmediatamente anteriores a la cabecera
-  let seccion = "";
-  let titulo = "";
-
-  const prevRows = hojaArray.slice(0, headerIndex).filter((row) =>
-    Array.isArray(row)
-      ? row.some((c) => String(c).trim() !== "")
-      : false
-  );
-
-  if (prevRows.length >= 1) {
-    const tituloRow = prevRows[prevRows.length - 1];
-    titulo =
-      (tituloRow.find((c) => String(c).trim() !== "") || "").toString().trim();
-  }
-  if (prevRows.length >= 2) {
-    const seccionRow = prevRows[prevRows.length - 2];
-    seccion =
-      (seccionRow.find((c) => String(c).trim() !== "") || "").toString().trim();
-  }
-
-  const filas = [];
-  for (let i = headerIndex + 1; i < hojaArray.length; i++) {
+  for (let i = 0; i < hojaArray.length; i++) {
     const row = hojaArray[i];
     if (!Array.isArray(row)) continue;
+
+    // ¿Es una cabecera de bloque?
+    const infoCabecera = esFilaCabecera(row);
+    if (infoCabecera) {
+      headerDetectado = true;
+      idxNombre = infoCabecera.iNombre;
+      idxRef = infoCabecera.iRef;
+      idxCant = infoCabecera.iCant;
+
+      // Buscar hacia arriba la fila de título (gris) y la fila de sección (azul)
+      let seccion = "";
+      let titulo = "";
+
+      for (let j = i - 1; j >= 0 && (titulo === "" || seccion === ""); j--) {
+        const prev = hojaArray[j];
+        if (!Array.isArray(prev)) continue;
+
+        const textoCeldas = prev
+          .map((c) => String(c).trim())
+          .filter((t) => t !== "");
+        if (!textoCeldas.length) continue;
+
+        const valor = textoCeldas[0];
+
+        if (titulo === "") {
+          titulo = valor;
+        } else if (seccion === "") {
+          seccion = valor;
+          break;
+        }
+      }
+
+      currentSection = limpiarTexto(seccion);
+      currentTitle = limpiarTexto(titulo);
+
+      if (!firstSection) firstSection = currentSection;
+      if (!firstTitle) firstTitle = currentTitle;
+
+      // continuamos al siguiente row (las líneas de productos empiezan después)
+      continue;
+    }
+
+    // Si aún no hemos detectado ninguna cabecera, no procesamos líneas
+    if (!headerDetectado || idxNombre === -1 || idxRef === -1 || idxCant === -1) {
+      continue;
+    }
 
     const nombre = row[idxNombre] || "";
     const ref = row[idxRef] || "";
     const cant = row[idxCant] || "";
 
-    // Fin de tabla: si todo está vacío
+    // Fila completamente vacía → la saltamos
     if (
       String(nombre).trim() === "" &&
       String(ref).trim() === "" &&
@@ -413,24 +436,23 @@ function intentarParsearProjectDesigner(hojaArray) {
 
     const referencia = normalizarRef(ref);
     const cantidad = Number(cant) || 0;
-
     if (!referencia || cantidad <= 0) continue;
 
     filas.push({
-      seccion: limpiarTexto(seccion),
-      titulo: limpiarTexto(titulo),
+      seccion: currentSection,
+      titulo: currentTitle,
       descripcion: limpiarTexto(nombre),
       referencia,
       cantidad,
     });
   }
 
-  if (filas.length === 0) return null;
+  if (!headerDetectado || filas.length === 0) return null;
 
   return {
     filas,
-    seccion: limpiarTexto(seccion),
-    titulo: limpiarTexto(titulo),
+    seccion: firstSection,
+    titulo: firstTitle,
   };
 }
 
