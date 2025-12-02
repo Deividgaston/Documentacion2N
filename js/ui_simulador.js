@@ -1,14 +1,14 @@
 // js/ui_simulador.js
-// SIMULADOR de tarifas por rol a partir del presupuesto actual
+// SIMULADOR de tarifas/ descuentos a partir del presupuesto actual
 
 window.appState = window.appState || {};
 appState.simulador = appState.simulador || {
-  rol: "PVP",
-  dtoExtra: 0,          // descuento adicional global sobre el rol elegido
-  lineasSimuladas: [],  // cache de resultado
+  tarifaDefecto: "PVP",
+  dtoGlobal: 0,           // descuento adicional global sobre tarifa
+  lineasSimuladas: [],    // último resultado
 };
 
-appState.tarifasRolCache = appState.tarifasRolCache || null;
+appState.tarifasBaseSimCache = appState.tarifasBaseSimCache || null;
 
 // Si existen helpers del presupuesto, los usamos
 const getPresupuestoActual =
@@ -16,29 +16,99 @@ const getPresupuestoActual =
     ? window.getPresupuestoActual
     : null;
 
-// ===============================
-// CONFIGURACIÓN DE ROLES
-// ===============================
-const ROLES_TARIFA = [
-  { id: "PVP", label: "PVP público" },
-  { id: "INSTALADOR", label: "Instalador" },
-  { id: "PARTNER", label: "Partner / Integrador" },
-  { id: "PROMOTOR", label: "Promotor / BTR" },
+/**
+ * TARIFAS DEFINIDAS
+ * Aquí configuras las tarifas reales que tenéis y el % de descuento
+ * que aplica cada una sobre el PVP base de tarifa.
+ *
+ * Puedes cambiar nombres y descuentos sin tocar el resto del código.
+ */
+const TARIFAS_2N = [
+  { id: "PVP", label: "Tarifa PVP (0%)", dto: 0 },
+  { id: "DIST", label: "Distribuidor (-20%)", dto: 20 },
+  { id: "INST", label: "Instalador (-30%)", dto: 30 },
+  { id: "PROMO", label: "Promoción Obra (-35%)", dto: 35 },
 ];
 
-// Mapeo de campos que habrá en Firestore para cada rol
-// Ajusta estos nombres a tu estructura real de Firestore
-const ROL_FIELD_MAP = {
-  PVP: "pvp_pvp",             // o simplemente "pvp" si quieres
-  INSTALADOR: "pvp_instalador",
-  PARTNER: "pvp_partner",
-  PROMOTOR: "pvp_promotor",
-};
+// Mapa rápido de tarifa por id
+const TARIFAS_MAP = TARIFAS_2N.reduce((acc, t) => {
+  acc[t.id] = t;
+  return acc;
+}, {});
 
 console.log(
-  "%cUI Simulador · v1 · roles de tarifa",
+  "%cUI Simulador · v2 · tarifas + descuentos línea",
   "color:#22c55e; font-weight:bold;"
 );
+
+// ===============================
+// Helper: clave única por línea
+// ===============================
+function buildLineaKey(baseLinea, index) {
+  return (
+    (baseLinea.ref || "") +
+    "§" +
+    (baseLinea.seccion || "") +
+    "§" +
+    (baseLinea.titulo || "") +
+    "§" +
+    index
+  );
+}
+
+// ===============================
+// Cargar tarifas base (PVP) desde Firestore
+// Reutiliza cargarTarifasDesdeFirestore() del presupuesto
+// ===============================
+async function getTarifasBase2N() {
+  if (appState.tarifasBaseSimCache) {
+    console.log(
+      "%cSimulador · tarifas base desde caché (" +
+        Object.keys(appState.tarifasBaseSimCache).length +
+        " refs)",
+      "color:#16a34a;"
+    );
+    return appState.tarifasBaseSimCache;
+  }
+
+  if (typeof cargarTarifasDesdeFirestore !== "function") {
+    console.warn(
+      "[Simulador] cargarTarifasDesdeFirestore no está disponible. Devuelvo objeto vacío."
+    );
+    appState.tarifasBaseSimCache = {};
+    return appState.tarifasBaseSimCache;
+  }
+
+  const tarifas = await cargarTarifasDesdeFirestore();
+  appState.tarifasBaseSimCache = tarifas || {};
+  return appState.tarifasBaseSimCache;
+}
+
+// ===============================
+// Leer configuración de líneas desde el DOM (tarifa + dto línea)
+// para mantener los cambios del usuario entre recalculados
+// ===============================
+function leerConfigLineasDesdeDOM() {
+  const detalle = document.getElementById("simDetalle");
+  const config = {};
+  if (!detalle) return config;
+
+  detalle.querySelectorAll("tr[data-key]").forEach((row) => {
+    const key = row.dataset.key;
+    if (!key) return;
+
+    const selTarifa = row.querySelector(".sim-tarifa-line");
+    const inpDtoLinea = row.querySelector(".sim-dto-line");
+
+    const tarifaId =
+      (selTarifa && selTarifa.value) || appState.simulador.tarifaDefecto || "PVP";
+    const dtoLinea = Number(inpDtoLinea && inpDtoLinea.value) || 0;
+
+    config[key] = { tarifaId, dtoLinea };
+  });
+
+  return config;
+}
 
 // ===============================
 // RENDER PRINCIPAL
@@ -57,7 +127,7 @@ function renderSimuladorView() {
             <div>
               <div class="card-title">Simulador de tarifas</div>
               <div class="card-subtitle">
-                Compara cómo cambia el presupuesto según el rol y descuentos adicionales.
+                Ajusta tarifas y descuentos sobre las líneas del presupuesto actual.
               </div>
             </div>
             <span class="badge-step">Paso 3 de 3</span>
@@ -67,31 +137,30 @@ function renderSimuladorView() {
             <div class="form-group">
               <label>Fuente de líneas</label>
               <p style="font-size:0.8rem; color:#6b7280; margin-top:0.25rem;">
-                Se utilizan las líneas del <strong>presupuesto actual</strong> (ref, descripción y cantidades).
+                Se utilizan las líneas del <strong>presupuesto actual</strong>: referencias, descripciones y cantidades.
               </p>
             </div>
 
             <div class="form-grid">
               <div class="form-group">
-                <label>Rol de tarifa</label>
-                <select id="simRol" class="input">
-                  ${ROLES_TARIFA.map(
-                    (r) =>
-                      `<option value="${r.id}">${
-                        r.label
-                      }</option>`
+                <label>Tarifa por defecto</label>
+                <select id="simTarifaDefecto" class="input">
+                  ${TARIFAS_2N.map(
+                    (t) =>
+                      `<option value="${t.id}">${t.label}</option>`
                   ).join("")}
                 </select>
                 <p style="font-size:0.75rem; color:#6b7280; margin-top:0.25rem;">
-                  Cada rol usa su precio específico desde la base de datos (tarifas 2N por rol).
+                  Esta tarifa se aplica por defecto a todas las líneas (luego podrás cambiarla línea a línea).
                 </p>
               </div>
 
               <div class="form-group">
-                <label>Descuento adicional (%)</label>
-                <input id="simDtoExtra" type="number" min="0" max="90" value="0" />
+                <label>Descuento global adicional (%)</label>
+                <input id="simDtoGlobal" type="number" min="0" max="90" value="0" />
                 <p style="font-size:0.75rem; color:#6b7280; margin-top:0.25rem;">
-                  Se aplica sobre el precio del rol seleccionado (ej. promo especial de proyecto).
+                  Se aplica a todas las líneas <strong>además</strong> del descuento propio de cada tarifa
+                  (y además del descuento extra por línea).
                 </p>
               </div>
             </div>
@@ -128,15 +197,16 @@ function renderSimuladorView() {
     </div>
   `;
 
-  // Inicializar UI con estado guardado
-  const rolSelect = document.getElementById("simRol");
-  const dtoExtraInput = document.getElementById("simDtoExtra");
+  // Inicializar UI con el estado que hubiera
+  const selTarifaDefecto = document.getElementById("simTarifaDefecto");
+  const inpDtoGlobal = document.getElementById("simDtoGlobal");
 
-  if (rolSelect) {
-    rolSelect.value = appState.simulador.rol || "PVP";
+  if (selTarifaDefecto) {
+    selTarifaDefecto.value =
+      appState.simulador.tarifaDefecto || "PVP";
   }
-  if (dtoExtraInput) {
-    dtoExtraInput.value = appState.simulador.dtoExtra || 0;
+  if (inpDtoGlobal) {
+    inpDtoGlobal.value = appState.simulador.dtoGlobal || 0;
   }
 
   const btnRecalc = document.getElementById("btnSimRecalcular");
@@ -146,67 +216,8 @@ function renderSimuladorView() {
     });
   }
 
-  // Primera carga automática
+  // Primera carga
   recalcularSimulador();
-}
-
-// ===============================
-// Cargar tarifas con precios por rol
-// (una sola lectura a Firestore, cache global)
-// ===============================
-async function cargarTarifasPorRolDesdeFirestore() {
-  if (appState.tarifasRolCache) {
-    console.log(
-      "%cSimulador · tarifasRol desde caché (" +
-        Object.keys(appState.tarifasRolCache).length +
-        " refs)",
-      "color:#16a34a;"
-    );
-    return appState.tarifasRolCache;
-  }
-
-  const db = firebase.firestore();
-  const snap = await db
-    .collection("tarifas")
-    .doc("v1")
-    .collection("productos")
-    .get();
-
-  const result = {};
-
-  snap.forEach((docSnap) => {
-    const d = docSnap.data();
-    if (!d) return;
-
-    const ref = docSnap.id.replace(/\s+/g, "");
-    const basePvp = Number(d.pvp) || 0;
-
-    result[ref] = {
-      base: basePvp,
-      // Si el campo específico de rol no existe, se cae al base
-      PVP: Number(d[ROL_FIELD_MAP.PVP]) || basePvp,
-      INSTALADOR: Number(d[ROL_FIELD_MAP.INSTALADOR]) || basePvp,
-      PARTNER: Number(d[ROL_FIELD_MAP.PARTNER]) || basePvp,
-      PROMOTOR: Number(d[ROL_FIELD_MAP.PROMOTOR]) || basePvp,
-      descripcion:
-        d.descripcion ||
-        d.desc ||
-        d.nombre ||
-        d.title ||
-        d.titulo ||
-        "",
-    };
-  });
-
-  console.log(
-    "%cSimulador · tarifasRol cargadas (" +
-      Object.keys(result).length +
-      " refs)",
-    "color:#3b82f6;"
-  );
-
-  appState.tarifasRolCache = result;
-  return result;
 }
 
 // ===============================
@@ -218,7 +229,7 @@ async function recalcularSimulador() {
   const countLabel = document.getElementById("simLineCount");
   if (!detalle || !resumenMini) return;
 
-  // 1) Obtenemos el presupuesto actual como fuente de referencias
+  // 1) Leemos presupuesto
   const presu =
     (typeof getPresupuestoActual === "function" &&
       getPresupuestoActual()) ||
@@ -235,66 +246,90 @@ async function recalcularSimulador() {
     return;
   }
 
-  // 2) Parámetros de simulación desde la UI
-  const rolSelect = document.getElementById("simRol");
-  const dtoExtraInput = document.getElementById("simDtoExtra");
+  // 2) Parámetros globales
+  const selTarifaDefecto = document.getElementById("simTarifaDefecto");
+  const inpDtoGlobal = document.getElementById("simDtoGlobal");
 
-  const rol = (rolSelect && rolSelect.value) || "PVP";
-  const dtoExtra = Number(dtoExtraInput && dtoExtraInput.value) || 0;
+  const tarifaDefecto =
+    (selTarifaDefecto && selTarifaDefecto.value) || "PVP";
+  const dtoGlobal = Number(inpDtoGlobal && inpDtoGlobal.value) || 0;
 
-  appState.simulador.rol = rol;
-  appState.simulador.dtoExtra = dtoExtra;
+  appState.simulador.tarifaDefecto = tarifaDefecto;
+  appState.simulador.dtoGlobal = dtoGlobal;
 
-  // 3) Cargar tarifas por rol (con caché)
-  const tarifasRol = await cargarTarifasPorRolDesdeFirestore();
+  // 3) Config de líneas ya modificadas por el usuario (si existe DOM previo)
+  const configPrev = leerConfigLineasDesdeDOM();
 
-  // 4) Generar líneas simuladas
-  let totalBaseRol = 0;
+  // 4) Cargar tarifas base 2N (PVP) desde Firestore
+  const tarifasBase = await getTarifasBase2N();
+
+  // 5) Construir nuevas líneas simuladas
+  let totalBaseTarifa = 0;
   let totalFinal = 0;
 
-  const lineasSim = lineasBase.map((lBase) => {
+  const lineasSim = lineasBase.map((lBase, index) => {
+    const key = buildLineaKey(lBase, index);
+
     const refNorm = String(lBase.ref || "")
       .trim()
       .replace(/\s+/g, "");
-    const info = tarifasRol[refNorm] || {};
 
-    // Precio base del rol: si no hay para ese rol, usamos base o el PVP del presupuesto
-    const precioRol =
-      info[rol] != null && !Number.isNaN(info[rol])
-        ? Number(info[rol])
-        : info.base != null && !Number.isNaN(info.base)
-        ? Number(info.base)
-        : Number(lBase.pvp || 0);
+    const infoTarifa = tarifasBase[refNorm] || {};
+    const basePvp =
+      Number(infoTarifa.pvp) ||
+      Number(lBase.pvp || 0) ||
+      0;
 
     const cantidad = Number(lBase.cantidad || 0) || 0;
 
-    const baseRolSubtotal = precioRol * cantidad;
-    totalBaseRol += baseRolSubtotal;
+    // Tarifa/dto línea: si ya existe en configPrev, se respeta; si no, tarifa por defecto y dto línea 0
+    const cfg = configPrev[key] || {};
+    const tarifaId = cfg.tarifaId || tarifaDefecto;
+    const dtoLinea = Number(cfg.dtoLinea || 0) || 0;
 
-    const factorExtra = dtoExtra > 0 ? 1 - dtoExtra / 100 : 1;
-    const precioFinalUd = precioRol * factorExtra;
-    const subtotalFinal = precioFinalUd * cantidad;
+    const objTarifa = TARIFAS_MAP[tarifaId] || TARIFAS_MAP["PVP"];
+    const dtoTarifa = objTarifa ? objTarifa.dto || 0 : 0;
+
+    // Descuentos combinados (multiplicativo)
+    const factorTarifa = 1 - dtoTarifa / 100;
+    const factorGlobal = 1 - dtoGlobal / 100;
+    const factorLinea = 1 - dtoLinea / 100;
+
+    const factorTotal = factorTarifa * factorGlobal * factorLinea;
+
+    const pvpTarifaUd = basePvp * factorTarifa; // precio tras tarifa (sin dto global/ línea)
+    const pvpFinalUd = basePvp * factorTotal;
+    const subtotalTarifa = pvpTarifaUd * cantidad;
+    const subtotalFinal = pvpFinalUd * cantidad;
+
+    totalBaseTarifa += subtotalTarifa;
     totalFinal += subtotalFinal;
 
     return {
+      key,
       ref: refNorm || lBase.ref || "-",
       descripcion:
         lBase.descripcion ||
-        info.descripcion ||
+        infoTarifa.descripcion ||
         "Producto sin descripción",
       seccion: lBase.seccion || "",
       titulo: lBase.titulo || "",
       cantidad,
-      precioRol,
-      precioFinalUd,
+      basePvp,
+      tarifaId,
+      dtoTarifa,
+      dtoGlobal,
+      dtoLinea,
+      pvpTarifaUd,
+      pvpFinalUd,
+      subtotalTarifa,
       subtotalFinal,
-      baseRolSubtotal,
     };
   });
 
   appState.simulador.lineasSimuladas = lineasSim;
 
-  // 5) Pintar tabla
+  // 6) Pintar tabla
   if (countLabel) {
     countLabel.textContent = `${lineasSim.length} líneas simuladas`;
   }
@@ -303,13 +338,15 @@ async function recalcularSimulador() {
     <table class="table">
       <thead>
         <tr>
-          <th style="width:14%;">Ref.</th>
+          <th style="width:12%;">Ref.</th>
           <th>Descripción</th>
-          <th style="width:10%;">Ud.</th>
-          <th style="width:12%;">Precio ${rol}</th>
-          <th style="width:12%;">Dto extra</th>
-          <th style="width:12%;">Precio final</th>
-          <th style="width:14%;">Importe final</th>
+          <th style="width:8%;">Ud.</th>
+          <th style="width:15%;">Tarifa</th>
+          <th style="width:9%;">Dto tarifa</th>
+          <th style="width:10%;">Dto línea</th>
+          <th style="width:10%;">PVP base</th>
+          <th style="width:12%;">PVP final ud.</th>
+          <th style="width:12%;">Importe final</th>
         </tr>
       </thead>
       <tbody>
@@ -317,7 +354,7 @@ async function recalcularSimulador() {
 
   lineasSim.forEach((l) => {
     html += `
-      <tr>
+      <tr data-key="${l.key}">
         <td>${l.ref}</td>
         <td>
           ${l.descripcion}
@@ -332,9 +369,39 @@ async function recalcularSimulador() {
           }
         </td>
         <td>${l.cantidad}</td>
-        <td>${l.precioRol.toFixed(2)} €</td>
-        <td>${dtoExtra.toFixed(1)} %</td>
-        <td>${l.precioFinalUd.toFixed(2)} €</td>
+
+        <td>
+          <select
+            class="input sim-tarifa-line"
+            data-key="${l.key}"
+            style="font-size:0.78rem; padding:0.15rem 0.25rem;"
+          >
+            ${TARIFAS_2N.map(
+              (t) =>
+                `<option value="${t.id}" ${
+                  t.id === l.tarifaId ? "selected" : ""
+                }>${t.label}</option>`
+            ).join("")}
+          </select>
+        </td>
+
+        <td>${l.dtoTarifa.toFixed(1)} %</td>
+
+        <td>
+          <input
+            type="number"
+            class="input sim-dto-line"
+            data-key="${l.key}"
+            min="0"
+            max="90"
+            step="0.5"
+            value="${l.dtoLinea.toFixed(1)}"
+            style="width:80px; font-size:0.78rem; padding:0.15rem 0.25rem;"
+          />
+        </td>
+
+        <td>${l.basePvp.toFixed(2)} €</td>
+        <td>${l.pvpFinalUd.toFixed(2)} €</td>
         <td>${l.subtotalFinal.toFixed(2)} €</td>
       </tr>
     `;
@@ -347,32 +414,45 @@ async function recalcularSimulador() {
 
   detalle.innerHTML = html;
 
-  // 6) Resumen mini
-  const diff = totalFinal - totalBaseRol;
-  const diffPct =
-    totalBaseRol > 0 ? (diff / totalBaseRol) * 100 : 0;
+  // 7) Listeners por línea (cambio de tarifa o dto línea)
+  detalle.querySelectorAll(".sim-tarifa-line").forEach((sel) => {
+    sel.addEventListener("change", () => {
+      // Recalcular preservando todo lo que haya en DOM
+      recalcularSimulador();
+    });
+  });
 
-  const rolLabel =
-    ROLES_TARIFA.find((r) => r.id === rol)?.label || rol;
+  detalle.querySelectorAll(".sim-dto-line").forEach((input) => {
+    input.addEventListener("change", () => {
+      recalcularSimulador();
+    });
+  });
+
+  // 8) Resumen mini
+  const diff = totalFinal - totalBaseTarifa;
+  const diffPct =
+    totalBaseTarifa > 0 ? (diff / totalBaseTarifa) * 100 : 0;
+
+  const tarifaLabel =
+    TARIFAS_MAP[tarifaDefecto]?.label || tarifaDefecto;
 
   resumenMini.innerHTML = `
     <div style="margin-bottom:0.35rem;">
-      <strong>Rol seleccionado:</strong> ${rolLabel}
+      <strong>Tarifa por defecto:</strong> ${tarifaLabel}<br/>
+      <strong>Dto global adicional:</strong> ${dtoGlobal.toFixed(1)} %
     </div>
     <div>
-      Importe total a precios de rol (sin descuento extra):
-      <strong>${totalBaseRol.toFixed(2)} €</strong>
+      Importe total a precios de tarifa (sin dto línea):
+      <strong>${totalBaseTarifa.toFixed(2)} €</strong>
     </div>
     <div>
-      Importe total con descuento adicional (${dtoExtra.toFixed(
-        1
-      )}%):
+      Importe total final (tarifa + dto global + dto por línea):
       <strong>${totalFinal.toFixed(2)} €</strong>
     </div>
     <div style="margin-top:0.35rem; font-size:0.8rem; color:${
-      diff >= 0 ? "#16a34a" : "#b91c1c"
+      diff <= 0 ? "#16a34a" : "#b91c1c"
     };">
-      Diferencia vs. precio de rol: 
+      Diferencia vs. solo tarifa: 
       <strong>${diff.toFixed(2)} € (${diffPct.toFixed(1)} %)</strong>
     </div>
   `;
