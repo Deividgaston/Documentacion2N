@@ -10,8 +10,10 @@ appState.presupuesto = appState.presupuesto || {
   extraSections: [], // secciones manuales añadidas desde la UI
 };
 
+appState.presupuestoFiltroRef = appState.presupuestoFiltroRef || "";
+
 console.log(
-  "%cUI Presupuesto · versión DAVID-01-12",
+  "%cUI Presupuesto · versión DAVID-01-12-EXT",
   "color:#22c55e; font-weight:bold;"
 );
 
@@ -139,6 +141,25 @@ function renderPresupuestoView() {
   if (btnAddLinea) {
     btnAddLinea.addEventListener("click", () => {
       alert("Función 'Añadir línea' pendiente de implementar.");
+    });
+  }
+
+  // Filtro por referencia / texto
+  const filtroRefInput = document.getElementById("presuFiltroRef");
+  if (filtroRefInput) {
+    filtroRefInput.value = appState.presupuestoFiltroRef || "";
+    filtroRefInput.addEventListener("input", () => {
+      appState.presupuestoFiltroRef =
+        filtroRefInput.value.trim().toLowerCase();
+      const presu = appState.presupuesto || {};
+      if (presu.lineas && presu.lineas.length) {
+        renderResultados(
+          presu.lineas,
+          presu.resumen?.totalBruto || 0,
+          presu.resumen?.totalNeto || 0,
+          presu.resumen?.dto || 0
+        );
+      }
     });
   }
 
@@ -342,7 +363,7 @@ async function generarPresupuesto() {
   const notas = document.getElementById("presuNotas").value || "";
 
   const prevSectionNotes = appState.presupuesto.sectionNotes || {};
-  const prevExtraSections = appState.presupuesto.extraSections || [];
+  const prevExtraSections = appState.presupuesto.extraSections || {};
 
   appState.presupuesto = {
     lineas: lineasPresupuesto,
@@ -402,22 +423,40 @@ function onAddManualSection() {
 // ===============================================
 function renderResultados(lineas, totalBruto, totalNeto, dto) {
   const detalle = document.getElementById("presuDetalle");
-  const resumen = document.getElementById("presuResumen");
   const presu = appState.presupuesto || {};
+  const resumen = document.getElementById("presuResumen");
   const sectionNotes = presu.sectionNotes || {};
   const extraSections = presu.extraSections || [];
 
-  if (!detalle) return;
+  if (!detalle || !resumen) return;
+
+  // Filtro actual
+  const filtro = (appState.presupuestoFiltroRef || "").toLowerCase();
+
+  const lineasFiltradas = filtro
+    ? lineas.filter((l) => {
+        const ref = String(l.ref || "").toLowerCase();
+        const desc = String(l.descripcion || "").toLowerCase();
+        const sec = String(l.seccion || "").toLowerCase();
+        const tit = String(l.titulo || "").toLowerCase();
+        return (
+          ref.includes(filtro) ||
+          desc.includes(filtro) ||
+          sec.includes(filtro) ||
+          tit.includes(filtro)
+        );
+      })
+    : lineas;
 
   // Actualizar contador en cabecera derecha
   const countLabel = document.getElementById("presuLineCount");
   if (countLabel) {
     countLabel.textContent = `${
-      lineas ? lineas.length : 0
+      lineasFiltradas ? lineasFiltradas.length : 0
     } líneas cargadas desde el proyecto`;
   }
 
-  if (!lineas || lineas.length === 0) {
+  if (!lineasFiltradas || lineasFiltradas.length === 0) {
     detalle.textContent = "No hay líneas de presupuesto generadas.";
     resumen.textContent = "No se ha generado todavía el presupuesto.";
     return;
@@ -442,8 +481,7 @@ function renderResultados(lineas, totalBruto, totalNeto, dto) {
   let currentSection = null;
   let currentTitle = null;
 
-  for (const l of lineas) {
-    // === NUEVA LÓGICA FLEXIBLE DE SECCIÓN/TÍTULO ===
+  for (const l of lineasFiltradas) {
     const sec =
       l.seccion ||
       l.section ||
@@ -508,7 +546,7 @@ function renderResultados(lineas, totalBruto, totalNeto, dto) {
     htmlDetalle += `
       <tr>
         <td>
-          <input type="checkbox" checked />
+          <input type="checkbox" class="presu-line-check" checked />
         </td>
         <td>${l.ref}</td>
         <td>${sec}</td>
@@ -575,17 +613,49 @@ function renderResultados(lineas, totalBruto, totalNeto, dto) {
   detalle.querySelectorAll(".section-note-extra").forEach((ta) => {
     ta.addEventListener("input", (e) => {
       const id = e.target.dataset.id;
-      const presu = appState.presupuesto || {};
-      presu.extraSections = presu.extraSections || [];
-      const found = presu.extraSections.find((s) => s.id === id);
+      const presu2 = appState.presupuesto || {};
+      presu2.extraSections = presu2.extraSections || [];
+      const found = presu2.extraSections.find((s) => s.id === id);
       if (found) {
         found.nota = e.target.value;
       }
     });
   });
 
-  // ===== Resumen económico con IVA =====
-  const subtotal = totalNeto;
+  // Listeners de checkboxes para recalcular totales
+  detalle.querySelectorAll(".presu-line-check").forEach((cb) => {
+    cb.addEventListener("change", () => {
+      recalcularResumenDesdeSeleccion(lineasFiltradas, dto);
+    });
+  });
+
+  // Cálculo inicial
+  recalcularResumenDesdeSeleccion(lineasFiltradas, dto);
+}
+
+// ===============================================
+// Recalcular resumen económico según selección
+// ===============================================
+function recalcularResumenDesdeSeleccion(lineasVisibles, dto) {
+  const resumen = document.getElementById("presuResumen");
+  const detalle = document.getElementById("presuDetalle");
+  if (!resumen || !detalle) return;
+
+  const checks = detalle.querySelectorAll(".presu-line-check");
+
+  let totalBrutoSel = 0;
+  let lineasSel = 0;
+
+  lineasVisibles.forEach((l, idx) => {
+    const cb = checks[idx];
+    if (!cb || !cb.checked) return;
+    const importe = l.subtotal || l.pvp * l.cantidad || 0;
+    totalBrutoSel += importe;
+    lineasSel += 1;
+  });
+
+  const factorDto = dto > 0 ? 1 - dto / 100 : 1;
+  const subtotal = totalBrutoSel * factorDto;
   const iva = subtotal * 0.21;
   const totalConIva = subtotal + iva;
 
@@ -606,7 +676,10 @@ function renderResultados(lineas, totalBruto, totalNeto, dto) {
     </div>
 
     <p style="font-size:0.8rem; color:#6b7280; margin-top:0.5rem;">
-      Total bruto sin descuento: <strong>${totalBruto.toFixed(2)} €</strong> ·
+      Líneas seleccionadas: <strong>${lineasSel}</strong><br/>
+      Total bruto sin descuento (seleccionadas): <strong>${totalBrutoSel.toFixed(
+        2
+      )} €</strong> ·
       Descuento global aplicado: <strong>${dto}%</strong>
     </p>
   `;
