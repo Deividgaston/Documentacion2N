@@ -25,7 +25,7 @@ const COMPANY_INFO = {
 };
 
 console.log(
-  "%cUI Presupuesto · versión EXPORT-EXCEL-PDF + IVA",
+  "%cUI Presupuesto · versión EXPORT-EXCEL-PDF · IVA TEXT",
   "color:#22c55e; font-weight:bold;"
 );
 
@@ -39,7 +39,7 @@ function renderPresupuestoView() {
   container.innerHTML = `
     <div class="presupuesto-layout">
 
-      <!-- COLUMNA IZQUIERDA: datos + notas + resumen -->
+      <!-- COLUMNA IZQUIERDA -->
       <div class="presupuesto-left-column">
         <div class="card">
           <div class="card-header">
@@ -80,8 +80,7 @@ function renderPresupuestoView() {
               <label>Notas del presupuesto</label>
               <textarea id="presuNotas" rows="3"></textarea>
               <p style="font-size:0.78rem; color:#6b7280; margin-top:0.25rem;">
-                Estas notas se usarán como observaciones generales
-                (ej. requisitos de red, alimentación, alcances, exclusiones...).
+                Observaciones generales del suministro, exclusiones, requisitos, etc.
               </p>
             </div>
 
@@ -95,7 +94,7 @@ function renderPresupuestoView() {
           </div>
         </div>
 
-        <!-- RESUMEN ECONÓMICO -->
+        <!-- RESUMEN -->
         <div class="card">
           <div class="card-header">
             <div class="card-title">Resumen económico</div>
@@ -106,7 +105,7 @@ function renderPresupuestoView() {
         </div>
       </div>
 
-      <!-- COLUMNA DERECHA: DETALLE DEL PRESUPUESTO (SECCIONES) -->
+      <!-- COLUMNA DERECHA -->
       <div class="presupuesto-right-column">
         <div class="card">
           <div class="card-header" style="display:flex; align-items:center; justify-content:space-between; gap:1rem;">
@@ -119,14 +118,11 @@ function renderPresupuestoView() {
             <div class="presu-header-actions" style="display:flex; align-items:center; gap:0.5rem; font-size:0.8rem;">
               <span>Filtro ref:</span>
               <input id="presuFiltroRef" type="text" class="input" style="width:130px;" />
-              <button id="btnAddLinea" class="btn btn-secondary">
-                Añadir línea
-              </button>
-              <button id="btnAddSection" class="btn btn-secondary">
-                Añadir sección
-              </button>
+              <button id="btnAddLinea" class="btn btn-secondary">Añadir línea</button>
+              <button id="btnAddSection" class="btn btn-secondary">Añadir sección</button>
             </div>
           </div>
+
           <div class="card-body" id="presuDetalle">
             No hay líneas de presupuesto generadas.
           </div>
@@ -135,35 +131,38 @@ function renderPresupuestoView() {
 
     </div>
 
-    <!-- MODAL: Añadir línea manual -->
+    <!-- MODAL LÍNEA -->
     <div id="presuLineaOverlay" class="modal-overlay" style="display:none;">
       <div class="modal-card">
         <div class="modal-title">Añadir línea al presupuesto</div>
+        
         <div class="modal-text">
           <div class="form-group">
             <label>Sección</label>
-            <input id="lineaSeccion" type="text" placeholder="Ej: CONTROL DE ACCESOS VIVIENDAS" />
+            <input id="lineaSeccion" type="text" placeholder="Ej: CONTROL DE ACCESOS" />
           </div>
+
           <div class="form-group">
             <label>Título (opcional)</label>
             <input id="lineaTitulo" type="text" placeholder="Ej: Cerraduras electrónicas" />
           </div>
+
           <div class="form-group">
             <label>Referencia (opcional)</label>
             <div style="display:flex; gap:0.5rem;">
               <input id="lineaRef" type="text" style="flex:1;" placeholder="Ej: 9155101" />
-              <button id="btnLineaBuscarRef" class="btn btn-secondary btn-sm">
-                Buscar ref
-              </button>
+              <button id="btnLineaBuscarRef" class="btn btn-secondary btn-sm">Buscar ref</button>
             </div>
             <p style="font-size:0.75rem; color:#6b7280; margin-top:0.25rem;">
               Si la referencia existe en la tarifa, se rellenarán automáticamente la descripción y el PVP.
             </p>
           </div>
+
           <div class="form-group">
             <label>Descripción</label>
             <textarea id="lineaDesc" rows="2" placeholder="Descripción del producto"></textarea>
           </div>
+
           <div class="form-grid">
             <div class="form-group">
               <label>Cantidad</label>
@@ -175,51 +174,39 @@ function renderPresupuestoView() {
             </div>
           </div>
         </div>
+
         <div class="modal-actions">
           <button id="btnLineaCancelar" class="btn btn-secondary btn-sm">Cancelar</button>
           <button id="btnLineaGuardar" class="btn btn-primary btn-sm">Añadir línea</button>
         </div>
       </div>
     </div>
-  ";
+  `;
 
-  // Botón generar
+  // ==== LISTENERS ====
   const btnGenerar = document.getElementById("btnGenerarPresupuesto");
-  if (btnGenerar) {
-    btnGenerar.addEventListener("click", generarPresupuesto);
-  }
+  if (btnGenerar) btnGenerar.addEventListener("click", generarPresupuesto);
 
-  // Botón añadir sección manual
   const btnAddSection = document.getElementById("btnAddSection");
-  if (btnAddSection) {
-    btnAddSection.addEventListener("click", onAddManualSection);
-  }
+  if (btnAddSection) btnAddSection.addEventListener("click", onAddManualSection);
 
-  // Botón añadir línea: abrir modal
   const btnAddLinea = document.getElementById("btnAddLinea");
-  if (btnAddLinea) {
-    btnAddLinea.addEventListener("click", abrirModalLinea);
-  }
+  if (btnAddLinea) btnAddLinea.addEventListener("click", abrirModalLinea);
 
-  // Filtro ref / texto
+  // Filtro ref
   const filtroRefInput = document.getElementById("presuFiltroRef");
   if (filtroRefInput) {
     filtroRefInput.value = appState.presupuestoFiltroRef || "";
     filtroRefInput.addEventListener("input", () => {
       appState.presupuestoFiltroRef = filtroRefInput.value.trim().toLowerCase();
-      const presu = appState.presupuesto || {};
-      if (presu.lineas && presu.lineas.length && presu.resumen) {
-        renderResultados(
-          presu.lineas,
-          presu.resumen.totalBruto || 0,
-          presu.resumen.totalNeto || 0,
-          presu.resumen.dto || 0
-        );
+      const p = appState.presupuesto;
+      if (p.lineas && p.lineas.length && p.resumen) {
+        renderResultados(p.lineas, p.resumen.totalBruto, p.resumen.totalNeto, p.resumen.dto);
       }
     });
   }
 
-  // Eventos del modal de línea
+  // Modal
   const overlay = document.getElementById("presuLineaOverlay");
   const btnCancelarLinea = document.getElementById("btnLineaCancelar");
   const btnGuardarLinea = document.getElementById("btnLineaGuardar");
@@ -241,7 +228,6 @@ function renderPresupuestoView() {
 
   precargarDatosProyecto();
 }
-
 // ===============================================
 // Modal línea manual
 // ===============================================
@@ -249,14 +235,11 @@ function abrirModalLinea() {
   const overlay = document.getElementById("presuLineaOverlay");
   if (!overlay) return;
 
-  // Rellenar sección por defecto con la última usada si existe
   const presu = appState.presupuesto || {};
-  const ultLinea = presu.lineas && presu.lineas.length
-    ? presu.lineas[presu.lineas.length - 1]
-    : null;
+  const ult = presu.lineas && presu.lineas.length ? presu.lineas[presu.lineas.length - 1] : null;
 
-  document.getElementById("lineaSeccion").value = ultLinea?.seccion || "";
-  document.getElementById("lineaTitulo").value = ultLinea?.titulo || "";
+  document.getElementById("lineaSeccion").value = ult?.seccion || "";
+  document.getElementById("lineaTitulo").value = ult?.titulo || "";
   document.getElementById("lineaRef").value = "";
   document.getElementById("lineaDesc").value = "";
   document.getElementById("lineaCantidad").value = "1";
@@ -265,16 +248,19 @@ function abrirModalLinea() {
   overlay.style.display = "flex";
 }
 
+// ===============================================
+// Buscar producto en tarifa desde modal
+// ===============================================
 async function autofillLineaDesdeTarifa() {
   const refInput = document.getElementById("lineaRef");
   const descInput = document.getElementById("lineaDesc");
   const pvpInput = document.getElementById("lineaPvp");
-  if (!refInput || !pvpInput || !descInput) return;
+  if (!refInput) return;
 
-  const refRaw = (refInput.value || "").trim();
-  if (!refRaw) return;
+  const ref = refInput.value.trim();
+  if (!ref) return;
 
-  const producto = await buscarProductoEnTarifa(refRaw);
+  const producto = await buscarProductoEnTarifa(ref);
   if (!producto) {
     alert("No se ha encontrado esta referencia en la tarifa.");
     return;
@@ -286,16 +272,20 @@ async function autofillLineaDesdeTarifa() {
   pvpInput.value = (Number(producto.pvp) || 0).toFixed(2);
 }
 
+// ===============================================
+// Guardar línea manual
+// ===============================================
 async function guardarLineaManual() {
   const overlay = document.getElementById("presuLineaOverlay");
+
   const seccion = (document.getElementById("lineaSeccion").value || "").trim() || "Sección manual";
   const titulo = (document.getElementById("lineaTitulo").value || "").trim();
   const refRaw = (document.getElementById("lineaRef").value || "").trim();
   const desc = (document.getElementById("lineaDesc").value || "").trim();
-  const cantVal = Number(document.getElementById("lineaCantidad").value) || 0;
+  const cantidad = Number(document.getElementById("lineaCantidad").value) || 0;
   const pvpVal = Number(document.getElementById("lineaPvp").value) || 0;
 
-  if (!cantVal) {
+  if (!cantidad) {
     alert("La cantidad es obligatoria.");
     return;
   }
@@ -303,135 +293,110 @@ async function guardarLineaManual() {
   let pvp = pvpVal;
   let descripcion = desc;
 
-  // Si hay referencia y no hay pvp, intentamos buscar en la tarifa
   if (!pvp && refRaw) {
     const prod = await buscarProductoEnTarifa(refRaw);
     if (prod) {
       pvp = Number(prod.pvp) || 0;
-      if (!descripcion && prod.descripcion) {
-        descripcion = prod.descripcion;
-      }
+      if (!descripcion && prod.descripcion) descripcion = prod.descripcion;
     }
   }
 
-  const refNormalizada = refRaw ? refRaw.replace(/\s+/g, "") : "";
+  const ref = refRaw ? refRaw.replace(/\s+/g, "") : "-";
+  const subtotal = pvp * cantidad;
 
-  const subtotal = pvp * cantVal;
-
-  const presu = appState.presupuesto || { lineas: [], resumen: {} };
-  presu.lineas = presu.lineas || [];
-
+  const presu = appState.presupuesto;
   presu.lineas.push({
-    ref: refNormalizada || "-", // puede ir sin referencia real
+    ref,
     descripcion: descripcion || refRaw || "Línea sin referencia",
-    cantidad: cantVal,
+    cantidad,
     pvp,
     subtotal,
     seccion,
     titulo,
   });
 
-  // Actualizar orden de secciones
-  presu.sectionOrder = presu.sectionOrder || [];
   if (!presu.sectionOrder.includes(seccion)) {
     presu.sectionOrder.push(seccion);
   }
 
-  // Recalcular resumen (sin tocar IVA aquí)
   const dto = Number(document.getElementById("presuDto").value) || 0;
   let totalBruto = 0;
-  presu.lineas.forEach((l) => {
-    totalBruto += (l.subtotal || l.pvp * l.cantidad || 0);
-  });
+
+  presu.lineas.forEach(l => totalBruto += l.subtotal);
   const factorDto = dto > 0 ? 1 - dto / 100 : 1;
-  const totalNeto = totalBruto * factorDto;
 
   presu.resumen = {
     totalBruto,
     dto,
-    totalNeto,
+    totalNeto: totalBruto * factorDto,
   };
 
   appState.presupuesto = presu;
 
-  renderResultados(presu.lineas, totalBruto, totalNeto, dto);
+  renderResultados(
+    presu.lineas,
+    presu.resumen.totalBruto,
+    presu.resumen.totalNeto,
+    presu.resumen.dto
+  );
 
-  if (overlay) overlay.style.display = "none";
+  overlay.style.display = "none";
 }
 
 // ===============================================
-// Precargar datos del proyecto en el formulario
+// Precargar datos del proyecto
 // ===============================================
 function precargarDatosProyecto() {
   const p = appState.proyecto || {};
   const presu = appState.presupuesto || {};
 
-  document.getElementById("presuNombre").value =
-    p.nombre || presu.nombre || "Proyecto sin nombre";
-  document.getElementById("presuCliente").value =
-    p.cliente || presu.cliente || "";
-  document.getElementById("presuFecha").value =
-    p.fecha || presu.fecha || new Date().toISOString().split("T")[0];
+  document.getElementById("presuNombre").value = p.nombre || presu.nombre || "Proyecto sin nombre";
+  document.getElementById("presuCliente").value = p.cliente || presu.cliente || "";
+  document.getElementById("presuFecha").value = p.fecha || presu.fecha || new Date().toISOString().split("T")[0];
   document.getElementById("presuDto").value = presu.resumen?.dto || p.dto || 0;
 
-  const notasPorDefecto =
-    "Se requiere de switch PoE para alimentar los equipos.";
   document.getElementById("presuNotas").value =
-    presu.notas || p.notas || notasPorDefecto;
+    presu.notas || p.notas || "Se requiere switch PoE para alimentación de equipos.";
 }
 
 // ===============================================
-// Carga directa de tarifas desde Firestore (con caché)
+// Cargar tarifa desde Firestore con caché
 // ===============================================
 async function cargarTarifasDesdeFirestore() {
   if (appState.tarifasCache) {
-    console.log(
-      "%cTarifa · usar caché (" +
-        Object.keys(appState.tarifasCache).length +
-        " refs)",
-      "color:#16a34a;"
-    );
+    console.log("%cTarifa · desde caché", "color:#22c55e;");
     return appState.tarifasCache;
   }
 
   const db = firebase.firestore();
-  const snap = await db
-    .collection("tarifas")
-    .doc("v1")
-    .collection("productos")
-    .get();
+  const snap = await db.collection("tarifas").doc("v1").collection("productos").get();
 
   const result = {};
-  snap.forEach((docSnap) => {
-    const d = docSnap.data();
-    if (!d) return;
-    const ref = docSnap.id;
-    const pvp = Number(d.pvp) || 0;
+  snap.forEach(d => {
+    const obj = d.data();
+    const pvp = Number(obj.pvp) || 0;
     if (!pvp) return;
-    result[ref] = {
+
+    result[d.id] = {
       pvp,
       descripcion:
-        d.descripcion ||
-        d.desc ||
-        d.nombre ||
-        d.title ||
-        d.titulo ||
-        "",
+        obj.descripcion || obj.desc || obj.nombre || obj.titulo || "",
     };
   });
 
+  appState.tarifasCache = result;
+
   console.log(
-    "%cTarifa · cargarTarifasDesdeFirestore() -> " +
-      Object.keys(result).length +
-      " referencias",
+    "%cTarifa cargada · " + Object.keys(result).length + " referencias",
     "color:#3b82f6;"
   );
 
-  appState.tarifasCache = result;
   return result;
 }
 
-// Buscar un producto en la tarifa normalizando la referencia
+// ===============================================
+// Buscar referencia en tarifa
+// ===============================================
 async function buscarProductoEnTarifa(refRaw) {
   const tarifas = await cargarTarifasDesdeFirestore();
   if (!tarifas) return null;
@@ -439,34 +404,22 @@ async function buscarProductoEnTarifa(refRaw) {
   const refOriginal = String(refRaw || "").trim();
   let ref = refOriginal.replace(/\s+/g, "");
 
-  if (/^9\d{7}$/.test(ref)) {
-    ref = ref.slice(0, 7);
-  }
+  if (/^9\d{7}$/.test(ref)) ref = ref.slice(0, 7);
 
-  const candidatos = [];
-  if (refOriginal) candidatos.push(refOriginal.replace(/\s+/g, ""));
-  if (ref) candidatos.push(ref);
+  const candidatos = [refOriginal, ref];
+  if (ref.length === 7) candidatos.push(ref + "0", ref + "00");
+  if (ref.length === 8) candidatos.push(ref.slice(0, 7));
 
-  if (ref.length === 7) {
-    candidatos.push(ref + "0");
-    candidatos.push(ref + "00");
-  } else if (ref.length === 8) {
-    candidatos.push(ref.slice(0, 7));
-  }
+  const únicos = [...new Set(candidatos.map(c => c.replace(/\s+/g, "")))];
 
-  const candidatosUnicos = [...new Set(candidatos)];
-
-  for (const key of candidatosUnicos) {
-    if (tarifas[key]) {
-      return tarifas[key];
-    }
+  for (const c of únicos) {
+    if (tarifas[c]) return tarifas[c];
   }
 
   return null;
 }
-
 // ===============================================
-// Generación del presupuesto completo
+// Generación del presupuesto completo desde PROYECTO
 // ===============================================
 async function generarPresupuesto() {
   const msg = document.getElementById("presuMsg");
@@ -488,9 +441,10 @@ async function generarPresupuesto() {
 
   let lineasPresupuesto = [];
   let totalBruto = 0;
-  let totalNeto = 0;
 
   for (const item of lineasProyecto) {
+    if (!item) continue;
+
     const refCampo =
       item.ref ||
       item.referencia ||
@@ -500,7 +454,7 @@ async function generarPresupuesto() {
       item.orderingNumber ||
       item["Ordering Number"];
 
-    if (!item || !refCampo) {
+    if (!refCampo) {
       console.warn("⚠ Línea sin referencia válida:", item);
       continue;
     }
@@ -508,9 +462,7 @@ async function generarPresupuesto() {
     const refOriginal = String(refCampo || "").trim();
     let ref = refOriginal.replace(/\s+/g, "");
 
-    if (/^9\d{7}$/.test(ref)) {
-      ref = ref.slice(0, 7);
-    }
+    if (/^9\d{7}$/.test(ref)) ref = ref.slice(0, 7);
 
     const candidatos = [];
     if (refOriginal) candidatos.push(refOriginal.replace(/\s+/g, ""));
@@ -567,7 +519,6 @@ async function generarPresupuesto() {
     const subtotal = pvp * cantidad;
     totalBruto += subtotal;
 
-    // === sección y título procedentes del Excel/proyecto ===
     const seccion =
       item.seccion ||
       item.section ||
@@ -609,8 +560,7 @@ async function generarPresupuesto() {
 
   const dto = Number(document.getElementById("presuDto").value) || 0;
   const factorDto = dto > 0 ? 1 - dto / 100 : 1;
-
-  totalNeto = totalBruto * factorDto;
+  const totalNeto = totalBruto * factorDto;
 
   const notas = document.getElementById("presuNotas").value || "";
 
@@ -665,7 +615,7 @@ async function generarPresupuesto() {
 }
 
 // ===============================================
-// Añadir sección manual (sin líneas) desde la UI
+// Añadir sección manual (solo notas / bloque)
 // ===============================================
 function onAddManualSection() {
   const nombre = prompt("Nombre de la nueva sección:");
@@ -673,8 +623,9 @@ function onAddManualSection() {
 
   const titulo = prompt("Título dentro de la sección (opcional):") || "";
 
-  const presu = appState.presupuesto || {};
+  const presu = appState.presupuesto;
   presu.extraSections = presu.extraSections || [];
+
   presu.extraSections.push({
     id: Date.now().toString(),
     seccion: nombre,
@@ -698,9 +649,8 @@ function onAddManualSection() {
     );
   }
 }
-
 // ===============================================
-// Mostrar resultados en pantalla (detalle tipo tabla proyecto)
+// Pintar resultados en pantalla (detalle + resumen)
 // ===============================================
 function renderResultados(lineas, totalBruto, totalNeto, dto) {
   const detalle = document.getElementById("presuDetalle");
@@ -730,7 +680,7 @@ function renderResultados(lineas, totalBruto, totalNeto, dto) {
       })
     : lineas;
 
-  // Actualizar contador en cabecera derecha
+  // Contador en cabecera
   const countLabel = document.getElementById("presuLineCount");
   if (countLabel) {
     countLabel.textContent = `${
@@ -786,14 +736,14 @@ function renderResultados(lineas, totalBruto, totalNeto, dto) {
       <tbody>
   `;
 
-  // Render según orden de secciones
+  // Pintar secciones según sectionOrder
   presu.sectionOrder.forEach((sec) => {
     const lineasSec = seccionesMap[sec];
     if (!lineasSec || !lineasSec.length) return;
 
     let currentTitle = null;
 
-    // Fila de sección (DRAGGABLE)
+    // Fila de sección (drag & drop)
     htmlDetalle += `
       <tr class="presu-section-row" data-section="${sec}" draggable="true">
         <td colspan="7" style="background:#eef2ff; font-weight:600; text-transform:uppercase; cursor:move;">
@@ -822,7 +772,6 @@ function renderResultados(lineas, totalBruto, totalNeto, dto) {
         l["TITULO"] ||
         "";
 
-      // Título gris
       if (tit && tit !== currentTitle) {
         currentTitle = tit;
         htmlDetalle += `
@@ -857,7 +806,7 @@ function renderResultados(lineas, totalBruto, totalNeto, dto) {
     </table>
   `;
 
-  // Secciones adicionales (solo notas)
+  // Secciones extra (solo notas)
   if (extraSections.length) {
     htmlDetalle += `
       <div style="border-top:1px solid #e5e7eb; margin-top:1rem; padding-top:1rem;">
@@ -893,9 +842,8 @@ function renderResultados(lineas, totalBruto, totalNeto, dto) {
 
   detalle.innerHTML = htmlDetalle;
 
-  // Guardar notas de sección en estado
-  const currentSectionNotes = (appState.presupuesto.sectionNotes =
-    sectionNotes);
+  // Sincronizar notas de sección
+  const currentSectionNotes = (appState.presupuesto.sectionNotes = sectionNotes);
 
   detalle.querySelectorAll(".section-note").forEach((ta) => {
     ta.addEventListener("input", (e) => {
@@ -907,19 +855,17 @@ function renderResultados(lineas, totalBruto, totalNeto, dto) {
   detalle.querySelectorAll(".section-note-extra").forEach((ta) => {
     ta.addEventListener("input", (e) => {
       const id = e.target.dataset.id;
-      const presu2 = appState.presupuesto || {};
-      presu2.extraSections = presu2.extraSections || [];
-      const found = presu2.extraSections.find((s) => s.id === id);
-      if (found) {
-        found.nota = e.target.value;
-      }
+      const p2 = appState.presupuesto || {};
+      p2.extraSections = p2.extraSections || [];
+      const found = p2.extraSections.find((s) => s.id === id);
+      if (found) found.nota = e.target.value;
     });
   });
 
-  // Drag & Drop de secciones
+  // Drag & drop secciones
   inicializarDragSecciones();
 
-  // Listeners de checkboxes para recalcular totales
+  // Escuchar cambios en checkboxes para recalcular resumen
   detalle.querySelectorAll(".presu-line-check").forEach((cb) => {
     cb.addEventListener("change", () => {
       recalcularResumenDesdeSeleccion(lineasFiltradas, dto);
@@ -929,7 +875,6 @@ function renderResultados(lineas, totalBruto, totalNeto, dto) {
   // Cálculo inicial
   recalcularResumenDesdeSeleccion(lineasFiltradas, dto);
 }
-
 // ===============================================
 // Drag & Drop de secciones (reordenar bloques)
 // ===============================================
@@ -970,7 +915,6 @@ function inicializarDragSecciones() {
       const tgtIdx = order.indexOf(targetSection);
       if (srcIdx === -1 || tgtIdx === -1) return;
 
-      // mover sección
       const [moved] = order.splice(srcIdx, 1);
       order.splice(tgtIdx, 0, moved);
 
@@ -1023,13 +967,12 @@ function recalcularResumenDesdeSeleccion(lineasVisibles, dto) {
   const iva = incluirIVA ? subtotal * 0.21 : 0;
   const totalConIva = subtotal + iva;
 
-  const leyendaIVA = incluirIVA
-    ? "Los precios indicados incluyen IVA (21%) en el total mostrado."
-    : "Los precios indicados no incluyen IVA. El IVA se añadirá según la legislación vigente.";
+  const textoIVAEstado = incluirIVA
+    ? "Este presupuesto muestra el TOTAL con IVA (21%) incluido."
+    : "Este presupuesto muestra el TOTAL sin IVA. El IVA se añadirá aparte en la factura.";
 
-  const textoEstadoIVA = incluirIVA
-    ? "IVA incluido en el total del presupuesto."
-    : "IVA NO incluido en el total del presupuesto.";
+  const leyendaValidez =
+    "Este presupuesto tiene una validez de 60 días desde la fecha de emisión, salvo indicación contraria por escrito.";
 
   resumen.innerHTML = `
     <div style="display:flex; gap:0.5rem; margin-bottom:0.75rem;">
@@ -1048,7 +991,7 @@ function recalcularResumenDesdeSeleccion(lineasVisibles, dto) {
     </div>
 
     <div class="metric-card">
-      <span class="metric-label">TOTAL ${incluirIVA ? "CON IVA" : "SIN IVA"}</span>
+      <span class="metric-label">TOTAL</span>
       <span class="metric-value">${totalConIva.toFixed(2)} €</span>
     </div>
 
@@ -1057,10 +1000,10 @@ function recalcularResumenDesdeSeleccion(lineasVisibles, dto) {
         <input type="checkbox" id="presuIncluirIVA" ${
           incluirIVA ? "checked" : ""
         } />
-        Incluir IVA (21%) en el total
+        Incluir IVA (21%) en el total mostrado
       </label>
-      <p id="presuIVAEstado" style="margin-top:0.25rem; font-size:0.78rem; color:#4b5563;">
-        Estado: <strong>${textoEstadoIVA}</strong>
+      <p style="margin-top:0.25rem; color:#4b5563;">
+        <strong>${textoIVAEstado}</strong>
       </p>
     </div>
 
@@ -1073,11 +1016,11 @@ function recalcularResumenDesdeSeleccion(lineasVisibles, dto) {
     </p>
 
     <p style="font-size:0.8rem; color:#4b5563; margin-top:0.5rem;">
-      Este presupuesto tiene una validez de <strong>60 días</strong> desde la fecha de emisión,
-      salvo indicación contraria por escrito. ${leyendaIVA}
+      ${leyendaValidez}
     </p>
   `;
 
+  // Checkbox IVA -> actualizar estado y recalcular
   const chkIVA = document.getElementById("presuIncluirIVA");
   if (chkIVA) {
     chkIVA.addEventListener("change", (e) => {
@@ -1088,12 +1031,12 @@ function recalcularResumenDesdeSeleccion(lineasVisibles, dto) {
     });
   }
 
+  // Botones exportar
   const btnExcel = document.getElementById("btnExportExcel");
   const btnPDF = document.getElementById("btnExportPDF");
   if (btnExcel) btnExcel.addEventListener("click", exportarPresupuestoExcel);
   if (btnPDF) btnPDF.addEventListener("click", exportarPresupuestoPDF);
 }
-
 // ===============================================
 // EXPORTAR A EXCEL (XLSX)
 // ===============================================
@@ -1122,14 +1065,17 @@ function exportarPresupuestoExcel() {
   const iva = incluirIVA ? base * 0.21 : 0;
   const total = base + iva;
 
-  const textoEstadoIVA = incluirIVA
-    ? "IVA incluido en el total del presupuesto."
-    : "IVA NO incluido en el total del presupuesto. El IVA se añadirá según la legislación vigente.";
+  const textoIVAEstado = incluirIVA
+    ? "Este presupuesto incluye IVA (21%) en el total indicado."
+    : "Este presupuesto NO incluye IVA. El IVA se añadirá aparte según la legislación vigente.";
+
+  const textoValidez =
+    "Este presupuesto tiene una validez de 60 días desde la fecha de emisión, salvo indicación contraria por escrito.";
 
   // ===== Construimos AOA (Array of Arrays) =====
   const rows = [];
 
-  // Cabecera / título
+  // Cabecera / datos de empresa
   rows.push(["PRESUPUESTO 2N"]);
   rows.push([]);
   rows.push(["Empresa", COMPANY_INFO.nombre]);
@@ -1142,10 +1088,12 @@ function exportarPresupuestoExcel() {
   rows.push(["Cliente", cliente]);
   rows.push(["Fecha", fechaHoy]);
   rows.push([]);
-  rows.push(["Descripción", ""]);
-  rows.push([presu.notas || ""]);
 
+  rows.push(["Descripción general"]);
+  rows.push([presu.notas || ""]);
   rows.push([]);
+
+  // Cabecera de tabla
   rows.push([
     "Sección",
     "Título",
@@ -1156,7 +1104,8 @@ function exportarPresupuestoExcel() {
     "Importe (€)",
   ]);
 
-  // Agrupar por sección
+  // Agrupar por sección para respetar el orden del presupuesto
+  const secciones = presu.sectionOrder || [];
   const mapSec = {};
   presu.lineas.forEach((l) => {
     const sec =
@@ -1175,17 +1124,14 @@ function exportarPresupuestoExcel() {
     mapSec[sec].push(l);
   });
 
-  const secciones =
-    presu.sectionOrder && presu.sectionOrder.length
-      ? presu.sectionOrder
-      : Object.keys(mapSec);
-
   secciones.forEach((sec) => {
     const list = mapSec[sec];
     if (!list || !list.length) return;
-    // Fila de sección (separador)
+
+    // Línea separadora de sección
     rows.push([]);
     rows.push([sec.toUpperCase()]);
+
     list.forEach((l) => {
       rows.push([
         sec,
@@ -1201,12 +1147,27 @@ function exportarPresupuestoExcel() {
 
   rows.push([]);
   rows.push(["Subtotal (base imponible)", "", "", "", "", "", base.toFixed(2)]);
-  rows.push(["IVA 21%", "", "", "", "", "", iva.toFixed(2)]);
-  rows.push(["TOTAL", "", "", "", "", "", total.toFixed(2)]);
-
-  // 👉 Texto claro de IVA al final (opción A)
+  rows.push([
+    "IVA 21%",
+    "",
+    "",
+    "",
+    "",
+    "",
+    iva.toFixed(2),
+  ]);
+  rows.push([
+    "TOTAL OFERTA",
+    "",
+    "",
+    "",
+    "",
+    "",
+    total.toFixed(2),
+  ]);
   rows.push([]);
-  rows.push([textoEstadoIVA]);
+  rows.push(["Información fiscal", textoIVAEstado]);
+  rows.push(["Validez de la oferta", textoValidez]);
 
   // Crear workbook
   const ws = XLSX.utils.aoa_to_sheet(rows);
@@ -1222,7 +1183,6 @@ function exportarPresupuestoExcel() {
 
   XLSX.writeFile(wb, fileName);
 }
-
 // ===============================================
 // EXPORTAR A PDF (ventana nueva + print -> PDF)
 // ===============================================
@@ -1241,6 +1201,7 @@ function exportarPresupuestoPDF() {
     typeof presu.incluirIVA === "boolean" ? presu.incluirIVA : true;
   const dto = presu.resumen?.dto || 0;
 
+  // Totales sobre TODAS las líneas
   let totalBruto = 0;
   presu.lineas.forEach((l) => {
     totalBruto += l.subtotal || l.pvp * l.cantidad || 0;
@@ -1250,11 +1211,15 @@ function exportarPresupuestoPDF() {
   const iva = incluirIVA ? base * 0.21 : 0;
   const total = base + iva;
 
-  const textoEstadoIVA = incluirIVA
-    ? "IVA incluido en el total del presupuesto."
-    : "IVA NO incluido en el total del presupuesto. El IVA se añadirá según la legislación vigente.";
+  const textoIVAEstado = incluirIVA
+    ? "Este presupuesto incluye IVA (21%) en el total indicado."
+    : "Este presupuesto NO incluye IVA. El IVA se añadirá aparte según la legislación vigente.";
 
-  // Agrupar por sección
+  const textoValidez =
+    "Este presupuesto tiene una validez de 60 días desde la fecha de emisión, salvo indicación contraria por escrito.";
+
+  // Agrupar por sección respetando el orden del presupuesto
+  const secciones = presu.sectionOrder || [];
   const mapSec = {};
   presu.lineas.forEach((l) => {
     const sec =
@@ -1273,11 +1238,6 @@ function exportarPresupuestoPDF() {
     mapSec[sec].push(l);
   });
 
-  const secciones =
-    presu.sectionOrder && presu.sectionOrder.length
-      ? presu.sectionOrder
-      : Object.keys(mapSec);
-
   const win = window.open("", "_blank");
   if (!win) {
     alert("El navegador ha bloqueado la ventana emergente. Permite pop-ups para exportar a PDF.");
@@ -1293,7 +1253,7 @@ function exportarPresupuestoPDF() {
       .brand { font-size:12px; text-transform:uppercase; letter-spacing:0.08em; color:#1d4ed8; font-weight:600; }
       .company-name { font-size:16px; font-weight:700; }
       .company-block, .client-block { font-size:11px; line-height:1.3; }
-      .pill { padding:4px 10px; border-radius:999px; font-size:10px; background:#e0ecff; color:#1d4ed8; font-weight:600; }
+      .pill { padding:4px 10px; border-radius:999px; font-size:10px; background:#e0ecff; color:#1d4ed8; }
       table { width:100%; border-collapse:collapse; margin-top:10px; font-size:11px; }
       th, td { border-bottom:1px solid #e5e7eb; padding:6px 4px; text-align:left; vertical-align:top; }
       th { background:#f3f4f6; font-weight:600; }
@@ -1416,11 +1376,6 @@ function exportarPresupuestoPDF() {
           </tr>
         </table>
 
-        <!-- 👉 Texto claro de estado IVA (opción A) -->
-        <p style="margin-top:6px; font-size:10px; color:#111827;">
-          Estado IVA: <strong>${textoEstadoIVA}</strong>
-        </p>
-
         <div class="notes">
           ${
             presu.notas
@@ -1432,12 +1387,8 @@ function exportarPresupuestoPDF() {
         </div>
 
         <div class="footer">
-          Este presupuesto tiene una validez de <strong>60 días</strong> desde la fecha de emisión,
-          salvo indicación contraria por escrito. ${
-            incluirIVA
-              ? "Los precios indicados incluyen IVA (21%) en el total mostrado."
-              : "Los precios indicados no incluyen IVA. El IVA se añadirá según la legislación vigente."
-          }<br/>
+          ${textoValidez}<br/>
+          ${textoIVAEstado}<br/>
           La presente oferta no incluye instalación, cableado ni obra civil salvo que se indique expresamente.
         </div>
       </body>
