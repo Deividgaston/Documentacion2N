@@ -1285,7 +1285,7 @@ function recalcularResumenDesdeSeleccion(lineasVisibles, dto) {
 }
 
 // ===============================================
-// EXPORTAR A EXCEL (XLSX) CON FORMATO BONITO (EXCELJS)
+// EXPORTAR A EXCEL (XLSX) CON FORMATO Y FILAS AUTO
 // ===============================================
 async function exportarPresupuestoExcel() {
   const presu = appState.presupuesto || {};
@@ -1327,26 +1327,22 @@ async function exportarPresupuestoExcel() {
     pageSetup: {
       paperSize: 9, // A4
       orientation: "portrait",
-      fitToPage: true,
-      fitToWidth: 1,
-      fitToHeight: 0,
       margins: { left: 0.5, right: 0.5, top: 0.75, bottom: 0.75 },
     },
-    views: [{ state: "normal" }],
   });
 
-  // Columnas (anchos)
+  // Columnas con ancho fijo (dejamos a Excel que ajuste la altura de filas)
   ws.columns = [
-    { key: "A", width: 18 },
-    { key: "B", width: 45 },
-    { key: "C", width: 10 },
-    { key: "D", width: 14 },
-    { key: "E", width: 16 },
-    { key: "F", width: 16 },
-    { key: "G", width: 16 },
+    { width: 18 }, // A
+    { width: 45 }, // B
+    { width: 10 }, // C
+    { width: 40 }, // D
+    { width: 10 }, // E
+    { width: 14 }, // F
+    { width: 16 }, // G
   ];
 
-  const colorBlue = "FF111827"; // azul casi negro
+  const colorBlue = "FF111827";
   const colorBlueLight = "FF1D4ED8";
   const colorHeaderBg = "FF111827";
   const colorTableHeaderBg = "FF111827";
@@ -1366,8 +1362,8 @@ async function exportarPresupuestoExcel() {
   // ==========================
   // CABECERA PRINCIPAL
   // ==========================
-  ws.mergeCells(`A${rowIdx}:G${rowIdx}`);
-  const titleCell = ws.getCell(`A${rowIdx}`);
+  ws.mergeCells(rowIdx, 1, rowIdx, 7);
+  const titleCell = ws.getCell(rowIdx, 1);
   titleCell.value = "PRESUPUESTO VIDEO PORTERO Y CONTROL DE ACCESOS";
   titleCell.font = {
     name: "Calibri",
@@ -1382,7 +1378,6 @@ async function exportarPresupuestoExcel() {
     fgColor: { argb: colorHeaderBg },
   };
   titleCell.border = thinBorder;
-  ws.getRow(rowIdx).height = 24;
   rowIdx += 2;
 
   // ==========================
@@ -1390,12 +1385,12 @@ async function exportarPresupuestoExcel() {
   // ==========================
   function labelValueRow(label, value) {
     const r = ws.getRow(rowIdx);
-    r.getCell("A").value = label;
-    r.getCell("A").font = { bold: true, size: 11, color: { argb: colorBlue } };
-    r.getCell("B").value = value;
-    r.getCell("B").font = { size: 11 };
-    r.getCell("A").alignment = { vertical: "middle" };
-    r.getCell("B").alignment = { vertical: "middle" };
+    r.getCell(1).value = label;
+    r.getCell(1).font = { bold: true, size: 11, color: { argb: colorBlue } };
+    r.getCell(2).value = value;
+    r.getCell(2).font = { size: 11 };
+    r.getCell(1).alignment = { vertical: "middle" };
+    r.getCell(2).alignment = { vertical: "middle" };
     rowIdx++;
   }
 
@@ -1413,20 +1408,21 @@ async function exportarPresupuestoExcel() {
 
   rowIdx++;
 
-  // Observaciones (nota general del presupuesto, un poco más grande)
-  ws.getCell(`A${rowIdx}`).value = "Observaciones";
-  ws.getCell(`A${rowIdx}`).font = {
+  // Observaciones (nota general)
+  ws.getCell(rowIdx, 1).value = "Observaciones";
+  ws.getCell(rowIdx, 1).font = {
     bold: true,
     size: 11,
     color: { argb: colorBlue },
   };
-  ws.getCell(`A${rowIdx}`).alignment = { vertical: "top" };
-  ws.mergeCells(`B${rowIdx}:G${rowIdx + 2}`);
-  const obsCell = ws.getCell(`B${rowIdx}`);
-  obsCell.value = presu.notas || "Se requiere switch PoE para alimentación de equipos.";
+  ws.getCell(rowIdx, 1).alignment = { vertical: "top" };
+
+  ws.mergeCells(rowIdx, 2, rowIdx + 2, 7);
+  const obsCell = ws.getCell(rowIdx, 2);
+  obsCell.value =
+    presu.notas || "Se requiere switch PoE para alimentación de equipos.";
   obsCell.font = { size: 11 };
   obsCell.alignment = { wrapText: true, vertical: "top" };
-  ws.getRow(rowIdx).height = 30;
   rowIdx += 4;
 
   // ==========================
@@ -1459,8 +1455,6 @@ async function exportarPresupuestoExcel() {
     };
     cell.border = thinBorder;
   });
-
-  ws.getRow(rowIdx).height = 18;
   rowIdx++;
 
   // ==========================
@@ -1489,10 +1483,9 @@ async function exportarPresupuestoExcel() {
     const list = mapSec[sec];
     if (!list || !list.length) return;
 
-    // Fila de sección (bloque gris claro)
-    const secRow = ws.getRow(rowIdx);
-    ws.mergeCells(`A${rowIdx}:G${rowIdx}`);
-    const secCell = secRow.getCell("A");
+    // Fila de sección (gris claro)
+    ws.mergeCells(rowIdx, 1, rowIdx, 7);
+    const secCell = ws.getCell(rowIdx, 1);
     secCell.value = sec;
     secCell.font = { bold: true, size: 11, color: { argb: colorBlue } };
     secCell.alignment = { vertical: "middle" };
@@ -1502,35 +1495,38 @@ async function exportarPresupuestoExcel() {
       fgColor: { argb: colorSectionBg },
     };
     secCell.border = thinBorder;
-    ws.getRow(rowIdx).height = 18;
     rowIdx++;
 
     list.forEach((l) => {
       const row = ws.getRow(rowIdx);
       const importe = l.subtotal || l.pvp * l.cantidad || 0;
 
-      row.getCell("A").value = sec;
-      row.getCell("B").value =
+      const tituloLinea =
         l.titulo ||
         l.title ||
         l.subseccion ||
         l["Título"] ||
         l["TITULO"] ||
         "";
-      row.getCell("C").value = l.ref || "";
-      row.getCell("D").value = l.descripcion || "";
-      row.getCell("E").value = l.cantidad || 0;
-      row.getCell("F").value = Number(l.pvp || 0);
-      row.getCell("G").value = Number(importe);
 
-      row.getCell("E").numFmt = "0";
-      row.getCell("F").numFmt = "#,##0.00";
-      row.getCell("G").numFmt = "#,##0.00";
+      row.getCell(1).value = sec;
+      row.getCell(2).value = tituloLinea;
+      row.getCell(3).value = l.ref || "";
+      row.getCell(4).value = l.descripcion || "";
+      row.getCell(5).value = l.cantidad || 0;
+      row.getCell(6).value = Number(l.pvp || 0);
+      row.getCell(7).value = Number(importe);
 
-      ["A", "B", "C", "D"].forEach((c) => {
+      row.getCell(5).numFmt = "0";
+      row.getCell(6).numFmt = "#,##0.00";
+      row.getCell(7).numFmt = "#,##0.00";
+
+      // Texto con ajuste automático de altura
+      [1, 2, 3, 4].forEach((c) => {
         row.getCell(c).alignment = { vertical: "top", wrapText: true };
       });
-      ["E", "F", "G"].forEach((c) => {
+      // Números alineados a la derecha
+      [5, 6, 7].forEach((c) => {
         row.getCell(c).alignment = {
           vertical: "middle",
           horizontal: "right",
@@ -1541,11 +1537,11 @@ async function exportarPresupuestoExcel() {
         cell.border = thinBorder;
       });
 
-      ws.getRow(rowIdx).height = 18;
+      // ¡SIN row.height! => Excel ajusta la altura según wrapText
       rowIdx++;
     });
 
-    rowIdx++; // pequeño espacio entre secciones
+    rowIdx++; // separación entre secciones
   });
 
   // ==========================
@@ -1553,75 +1549,60 @@ async function exportarPresupuestoExcel() {
   // ==========================
   rowIdx++;
   const subtotalRow = ws.getRow(rowIdx);
-  ws.mergeCells(`A${rowIdx}:F${rowIdx}`);
-  subtotalRow.getCell("A").value = "Subtotal (base imponible)";
-  subtotalRow.getCell("A").font = { bold: true, size: 11 };
-  subtotalRow.getCell("G").value = base;
-  subtotalRow.getCell("G").numFmt = "#,##0.00";
-  subtotalRow.getCell("G").font = { bold: true, size: 11 };
-  subtotalRow.getCell("G").alignment = {
-    horizontal: "right",
-    vertical: "middle",
-  };
-  subtotalRow.eachCell((cell) => {
-    cell.border = thinBorder;
-  });
+  ws.mergeCells(rowIdx, 1, rowIdx, 6);
+  subtotalRow.getCell(1).value = "Subtotal (base imponible)";
+  subtotalRow.getCell(1).font = { bold: true, size: 11 };
+  subtotalRow.getCell(7).value = base;
+  subtotalRow.getCell(7).numFmt = "#,##0.00";
+  subtotalRow.getCell(7).font = { bold: true, size: 11 };
+  subtotalRow.getCell(7).alignment = { horizontal: "right", vertical: "middle" };
+  subtotalRow.eachCell((cell) => (cell.border = thinBorder));
   rowIdx++;
 
   const ivaRow = ws.getRow(rowIdx);
-  ws.mergeCells(`A${rowIdx}:F${rowIdx}`);
-  ivaRow.getCell("A").value = "IVA 21%";
-  ivaRow.getCell("A").font = { bold: true, size: 11 };
-  ivaRow.getCell("G").value = iva;
-  ivaRow.getCell("G").numFmt = "#,##0.00";
-  ivaRow.getCell("G").alignment = {
-    horizontal: "right",
-    vertical: "middle",
-  };
-  ivaRow.eachCell((cell) => {
-    cell.border = thinBorder;
-  });
+  ws.mergeCells(rowIdx, 1, rowIdx, 6);
+  ivaRow.getCell(1).value = "IVA 21%";
+  ivaRow.getCell(1).font = { bold: true, size: 11 };
+  ivaRow.getCell(7).value = iva;
+  ivaRow.getCell(7).numFmt = "#,##0.00";
+  ivaRow.getCell(7).alignment = { horizontal: "right", vertical: "middle" };
+  ivaRow.eachCell((cell) => (cell.border = thinBorder));
   rowIdx++;
 
   const totalRow = ws.getRow(rowIdx);
-  ws.mergeCells(`A${rowIdx}:F${rowIdx}`);
-  totalRow.getCell("A").value = "TOTAL OFERTA";
-  totalRow.getCell("A").font = {
+  ws.mergeCells(rowIdx, 1, rowIdx, 6);
+  totalRow.getCell(1).value = "TOTAL OFERTA";
+  totalRow.getCell(1).font = {
     bold: true,
     size: 12,
     color: { argb: colorBlueLight },
   };
-  totalRow.getCell("G").value = total;
-  totalRow.getCell("G").numFmt = "#,##0.00";
-  totalRow.getCell("G").font = {
+  totalRow.getCell(7).value = total;
+  totalRow.getCell(7).numFmt = "#,##0.00";
+  totalRow.getCell(7).font = {
     bold: true,
     size: 12,
     color: { argb: colorBlueLight },
   };
-  totalRow.getCell("G").alignment = {
-    horizontal: "right",
-    vertical: "middle",
-  };
-  totalRow.eachCell((cell) => {
-    cell.border = thinBorder;
-  });
+  totalRow.getCell(7).alignment = { horizontal: "right", vertical: "middle" };
+  totalRow.eachCell((cell) => (cell.border = thinBorder));
   rowIdx += 2;
 
   // ==========================
-  // TEXTOS FINALES (IVA + VALIDEZ)
+  // TEXTOS FINALES
   // ==========================
-  ws.getCell(`A${rowIdx}`).value = "Información fiscal";
-  ws.getCell(`A${rowIdx}`).font = { bold: true, size: 10 };
-  ws.mergeCells(`B${rowIdx}:G${rowIdx}`);
-  ws.getCell(`B${rowIdx}`).value = textoIVAEstado;
-  ws.getCell(`B${rowIdx}`).alignment = { wrapText: true };
+  ws.getCell(rowIdx, 1).value = "Información fiscal";
+  ws.getCell(rowIdx, 1).font = { bold: true, size: 10 };
+  ws.mergeCells(rowIdx, 2, rowIdx, 7);
+  ws.getCell(rowIdx, 2).value = textoIVAEstado;
+  ws.getCell(rowIdx, 2).alignment = { wrapText: true };
   rowIdx++;
 
-  ws.getCell(`A${rowIdx}`).value = "Validez de la oferta";
-  ws.getCell(`A${rowIdx}`).font = { bold: true, size: 10 };
-  ws.mergeCells(`B${rowIdx}:G${rowIdx}`);
-  ws.getCell(`B${rowIdx}`).value = textoValidez;
-  ws.getCell(`B${rowIdx}`).alignment = { wrapText: true };
+  ws.getCell(rowIdx, 1).value = "Validez de la oferta";
+  ws.getCell(rowIdx, 1).font = { bold: true, size: 10 };
+  ws.mergeCells(rowIdx, 2, rowIdx, 7);
+  ws.getCell(rowIdx, 2).value = textoValidez;
+  ws.getCell(rowIdx, 2).alignment = { wrapText: true };
 
   // ==========================
   // GUARDAR ARCHIVO
@@ -1639,7 +1620,6 @@ async function exportarPresupuestoExcel() {
   });
   saveAs(blob, fileName);
 }
-
 
 // ===============================================
 // EXPORTAR A PDF (ventana nueva + print -> PDF)
