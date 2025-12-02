@@ -118,7 +118,7 @@ function renderPresupuestoView() {
       </div>
 
     </div>
-  ";
+  `;
 
   // Botón generar
   const btnGenerar = document.getElementById("btnGenerarPresupuesto");
@@ -482,7 +482,7 @@ function renderResultados(lineas, totalBruto, totalNeto, dto) {
     // ===== Fila de producto =====
     const importe = l.subtotal || l.pvp * l.cantidad || 0;
 
-    // 👉 NUEVO: la columna "Sección" usa el TÍTULO del bloque (o, si no hay, la sección)
+    // la celda de sección muestra el título del bloque (o la sección si no hay título)
     const seccionCelda = l.titulo || sec || "";
 
     htmlDetalle += `
