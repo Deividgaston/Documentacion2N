@@ -90,11 +90,23 @@ function renderPresupuestoView() {
       <!-- COLUMNA DERECHA: DETALLE DEL PRESUPUESTO (SECCIONES) -->
       <div class="presupuesto-right-column">
         <div class="card">
-          <div class="card-header" style="display:flex; align-items:center; justify-content:space-between;">
-            <div class="card-title">Detalle del presupuesto</div>
-            <button id="btnAddSection" class="btn btn-secondary">
-              Añadir sección
-            </button>
+          <div class="card-header" style="display:flex; align-items:center; justify-content:space-between; gap:1rem;">
+            <div class="card-title">
+              Líneas del presupuesto
+              <span id="presuLineCount" style="font-size:0.8rem; color:#6b7280; font-weight:400;">
+                0 líneas cargadas desde el proyecto
+              </span>
+            </div>
+            <div class="presu-header-actions" style="display:flex; align-items:center; gap:0.5rem; font-size:0.8rem;">
+              <span>Filtro ref:</span>
+              <input id="presuFiltroRef" type="text" class="input" style="width:130px;" />
+              <button id="btnAddLinea" class="btn btn-secondary">
+                Añadir línea
+              </button>
+              <button id="btnAddSection" class="btn btn-secondary">
+                Añadir sección
+              </button>
+            </div>
           </div>
           <div class="card-body" id="presuDetalle">
             No hay líneas de presupuesto generadas.
@@ -103,15 +115,26 @@ function renderPresupuestoView() {
       </div>
 
     </div>
-  `; // <<--- AQUÍ ESTABA EL ERROR, ahora cierra con backtick y punto y coma
+  `;
 
-  document
-    .getElementById("btnGenerarPresupuesto")
-    .addEventListener("click", generarPresupuesto);
+  // Botón generar
+  const btnGenerar = document.getElementById("btnGenerarPresupuesto");
+  if (btnGenerar) {
+    btnGenerar.addEventListener("click", generarPresupuesto);
+  }
 
+  // Botón añadir sección (ya implementado)
   const btnAddSection = document.getElementById("btnAddSection");
   if (btnAddSection) {
     btnAddSection.addEventListener("click", onAddManualSection);
+  }
+
+  // Botón añadir línea (de momento solo stub para no romper nada)
+  const btnAddLinea = document.getElementById("btnAddLinea");
+  if (btnAddLinea) {
+    btnAddLinea.addEventListener("click", () => {
+      alert("Función 'Añadir línea' pendiente de implementar.");
+    });
   }
 
   precargarDatosProyecto();
@@ -380,6 +403,12 @@ function renderResultados(lineas, totalBruto, totalNeto, dto) {
   const extraSections = presu.extraSections || [];
 
   if (!detalle) return;
+
+  // Actualizar contador en cabecera derecha
+  const countLabel = document.getElementById("presuLineCount");
+  if (countLabel) {
+    countLabel.textContent = `${lineas ? lineas.length : 0} líneas cargadas desde el proyecto`;
+  }
 
   if (!lineas || lineas.length === 0) {
     detalle.textContent = "No hay líneas de presupuesto generadas.";
