@@ -238,7 +238,7 @@ function renderSimuladorView() {
       </div>
 
     </div>
-  ";
+  `;
 
   // Inicializar UI con el estado previo
   const selTarifaDefecto = document.getElementById("simTarifaDefecto");
