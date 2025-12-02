@@ -306,28 +306,6 @@ async function generarPresupuesto() {
 }
 
 // ===============================================
-// Agrupar líneas por sección y título
-// ===============================================
-function agruparPorSeccionYTitulo(lineas) {
-  const mapa = {};
-
-  for (const l of lineas) {
-    const sec = l.seccion || "Sin sección";
-    const tit = l.titulo || "Sin título";
-
-    if (!mapa[sec]) {
-      mapa[sec] = {};
-    }
-    if (!mapa[sec][tit]) {
-      mapa[sec][tit] = [];
-    }
-    mapa[sec][tit].push(l);
-  }
-
-  return mapa;
-}
-
-// ===============================================
 // Añadir sección manual (sin líneas) desde la UI
 // ===============================================
 function onAddManualSection() {
@@ -359,6 +337,7 @@ function onAddManualSection() {
 
 // ===============================================
 // Mostrar resultados en pantalla (secciones + resumen)
+// Mantiene el ORDEN de las líneas importadas
 // ===============================================
 function renderResultados(lineas, totalBruto, totalNeto, dto) {
   const detalle = document.getElementById("presuDetalle");
@@ -375,69 +354,87 @@ function renderResultados(lineas, totalBruto, totalNeto, dto) {
     return;
   }
 
-  const secciones = agruparPorSeccionYTitulo(lineas);
-
   let htmlDetalle = "";
+  let currentSection = null;
+  let currentTitle = null;
 
-  // Secciones importadas del proyecto
-  Object.keys(secciones).forEach((secNombre) => {
-    const titulos = secciones[secNombre];
+  // Recorremos las líneas en el MISMO orden que vienen del proyecto
+  for (const l of lineas) {
+    const sec = l.seccion || "Sin sección";
+    const tit = l.titulo || "Sin título";
 
-    htmlDetalle += `
-      <div class="section-block" style="margin-bottom:1.5rem;">
-        <div class="section-header" style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.5rem;">
-          <div style="font-weight:600; font-size:0.95rem;">${secNombre}</div>
+    // Cambio de sección → cerramos la anterior y abrimos bloque nuevo
+    if (sec !== currentSection) {
+      // cerrar sección previa
+      if (currentSection !== null) {
+        htmlDetalle += `
+            </tbody>
+          </table>
         </div>
+        `;
+      }
 
-        <div class="form-group" style="margin-bottom:0.75rem;">
-          <label style="font-size:0.8rem; color:#6b7280;">Notas de la sección</label>
-          <textarea class="section-note" data-section="${secNombre}" rows="2"
-            style="width:100%;">${sectionNotes[secNombre] || ""}</textarea>
-        </div>
+      currentSection = sec;
+      currentTitle = null;
 
-        <table class="table">
-          <thead>
-            <tr>
-              <th>Ref.</th>
-              <th>Descripción</th>
-              <th>Cant.</th>
-              <th>PVP</th>
-              <th>Total</th>
-            </tr>
-          </thead>
-          <tbody>
-    `;
+      htmlDetalle += `
+        <div class="section-block" style="margin-bottom:1.5rem;">
+          <div class="section-header" style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.5rem;">
+            <div style="font-weight:600; font-size:0.95rem;">${sec}</div>
+          </div>
 
-    Object.keys(titulos).forEach((titNombre) => {
-      const filas = titulos[titNombre];
+          <div class="form-group" style="margin-bottom:0.75rem;">
+            <label style="font-size:0.8rem; color:#6b7280;">Notas de la sección</label>
+            <textarea class="section-note" data-section="${sec}" rows="2"
+              style="width:100%;">${sectionNotes[sec] || ""}</textarea>
+          </div>
 
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Ref.</th>
+                <th>Descripción</th>
+                <th>Cant.</th>
+                <th>PVP</th>
+                <th>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+      `;
+    }
+
+    // Cambio de título dentro de la sección → fila gris
+    if (tit !== currentTitle) {
+      currentTitle = tit;
       htmlDetalle += `
         <tr>
           <td colspan="5" style="background:#f3f4f6; font-weight:500;">
-            ${titNombre}
+            ${tit}
           </td>
         </tr>
       `;
+    }
 
-      for (const l of filas) {
-        htmlDetalle += `
-          <tr>
-            <td>${l.ref}</td>
-            <td>${l.descripcion}</td>
-            <td>${l.cantidad}</td>
-            <td>${l.pvp.toFixed(2)} €</td>
-            <td>${l.subtotal.toFixed(2)} €</td>
-          </tr>
-        `;
-      }
-    });
+    // Línea de producto
+    htmlDetalle += `
+      <tr>
+        <td>${l.ref}</td>
+        <td>${l.descripcion}</td>
+        <td>${l.cantidad}</td>
+        <td>${l.pvp.toFixed(2)} €</td>
+        <td>${l.subtotal.toFixed(2)} €</td>
+      </tr>
+    `;
+  }
 
+  // Cerrar última sección si existía
+  if (currentSection !== null) {
     htmlDetalle += `
           </tbody>
         </table>
       </div>
     `;
-  });
+  }
 
   // Secciones manuales extra (sin líneas, solo bloque y nota)
   if (extraSections.length) {
