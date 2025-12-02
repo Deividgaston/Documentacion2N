@@ -8,12 +8,14 @@ appState.presupuesto = appState.presupuesto || {
   notas: "",
   sectionNotes: {}, // notas por sección
   extraSections: [], // secciones manuales añadidas desde la UI
+  sectionOrder: [], // orden de secciones para drag & drop
 };
 
+appState.tarifasCache = appState.tarifasCache || null; // cache de tarifas en memoria
 appState.presupuestoFiltroRef = appState.presupuestoFiltroRef || "";
 
 console.log(
-  "%cUI Presupuesto · versión DAVID-01-12-EXT",
+  "%cUI Presupuesto · versión DRAG&LINEAS-02-12",
   "color:#22c55e; font-weight:bold;"
 );
 
@@ -122,6 +124,53 @@ function renderPresupuestoView() {
       </div>
 
     </div>
+
+    <!-- MODAL: Añadir línea manual -->
+    <div id="presuLineaOverlay" class="modal-overlay" style="display:none;">
+      <div class="modal-card">
+        <div class="modal-title">Añadir línea al presupuesto</div>
+        <div class="modal-text">
+          <div class="form-group">
+            <label>Sección</label>
+            <input id="lineaSeccion" type="text" placeholder="Ej: CONTROL DE ACCESOS VIVIENDAS" />
+          </div>
+          <div class="form-group">
+            <label>Título (opcional)</label>
+            <input id="lineaTitulo" type="text" placeholder="Ej: Cerraduras electrónicas" />
+          </div>
+          <div class="form-group">
+            <label>Referencia</label>
+            <div style="display:flex; gap:0.5rem;">
+              <input id="lineaRef" type="text" style="flex:1;" placeholder="Ej: 9155101" />
+              <button id="btnLineaBuscarRef" class="btn btn-secondary btn-sm">
+                Buscar ref
+              </button>
+            </div>
+            <p style="font-size:0.75rem; color:#6b7280; margin-top:0.25rem;">
+              Si la referencia existe en la tarifa, se rellenarán automáticamente la descripción y el PVP.
+            </p>
+          </div>
+          <div class="form-group">
+            <label>Descripción</label>
+            <textarea id="lineaDesc" rows="2" placeholder="Descripción del producto"></textarea>
+          </div>
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Cantidad</label>
+              <input id="lineaCantidad" type="number" min="1" value="1" />
+            </div>
+            <div class="form-group">
+              <label>PVP unidad (€)</label>
+              <input id="lineaPvp" type="number" min="0" step="0.01" value="0" />
+            </div>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button id="btnLineaCancelar" class="btn btn-secondary btn-sm">Cancelar</button>
+          <button id="btnLineaGuardar" class="btn btn-primary btn-sm">Añadir línea</button>
+        </div>
+      </div>
+    </div>
   `;
 
   // Botón generar
@@ -136,34 +185,168 @@ function renderPresupuestoView() {
     btnAddSection.addEventListener("click", onAddManualSection);
   }
 
-  // Botón añadir línea (stub)
+  // Botón añadir línea: abrir modal
   const btnAddLinea = document.getElementById("btnAddLinea");
   if (btnAddLinea) {
-    btnAddLinea.addEventListener("click", () => {
-      alert("Función 'Añadir línea' pendiente de implementar.");
-    });
+    btnAddLinea.addEventListener("click", abrirModalLinea);
   }
 
-  // Filtro por referencia / texto
+  // Filtro ref / texto
   const filtroRefInput = document.getElementById("presuFiltroRef");
   if (filtroRefInput) {
     filtroRefInput.value = appState.presupuestoFiltroRef || "";
     filtroRefInput.addEventListener("input", () => {
-      appState.presupuestoFiltroRef =
-        filtroRefInput.value.trim().toLowerCase();
+      appState.presupuestoFiltroRef = filtroRefInput.value.trim().toLowerCase();
       const presu = appState.presupuesto || {};
-      if (presu.lineas && presu.lineas.length) {
+      if (presu.lineas && presu.lineas.length && presu.resumen) {
         renderResultados(
           presu.lineas,
-          presu.resumen?.totalBruto || 0,
-          presu.resumen?.totalNeto || 0,
-          presu.resumen?.dto || 0
+          presu.resumen.totalBruto || 0,
+          presu.resumen.totalNeto || 0,
+          presu.resumen.dto || 0
         );
       }
     });
   }
 
+  // Eventos del modal de línea
+  const overlay = document.getElementById("presuLineaOverlay");
+  const btnCancelarLinea = document.getElementById("btnLineaCancelar");
+  const btnGuardarLinea = document.getElementById("btnLineaGuardar");
+  const btnBuscarRef = document.getElementById("btnLineaBuscarRef");
+
+  if (btnCancelarLinea && overlay) {
+    btnCancelarLinea.addEventListener("click", () => {
+      overlay.style.display = "none";
+    });
+  }
+
+  if (btnGuardarLinea && overlay) {
+    btnGuardarLinea.addEventListener("click", guardarLineaManual);
+  }
+
+  if (btnBuscarRef) {
+    btnBuscarRef.addEventListener("click", autofillLineaDesdeTarifa);
+  }
+
   precargarDatosProyecto();
+}
+
+// ===============================================
+// Modal línea manual
+// ===============================================
+function abrirModalLinea() {
+  const overlay = document.getElementById("presuLineaOverlay");
+  if (!overlay) return;
+
+  // Rellenar sección por defecto con la última usada si existe
+  const presu = appState.presupuesto || {};
+  const ultLinea = presu.lineas && presu.lineas.length
+    ? presu.lineas[presu.lineas.length - 1]
+    : null;
+
+  document.getElementById("lineaSeccion").value = ultLinea?.seccion || "";
+  document.getElementById("lineaTitulo").value = ultLinea?.titulo || "";
+  document.getElementById("lineaRef").value = "";
+  document.getElementById("lineaDesc").value = "";
+  document.getElementById("lineaCantidad").value = "1";
+  document.getElementById("lineaPvp").value = "0";
+
+  overlay.style.display = "flex";
+}
+
+async function autofillLineaDesdeTarifa() {
+  const refInput = document.getElementById("lineaRef");
+  const descInput = document.getElementById("lineaDesc");
+  const pvpInput = document.getElementById("lineaPvp");
+  if (!refInput || !pvpInput || !descInput) return;
+
+  const refRaw = (refInput.value || "").trim();
+  if (!refRaw) return;
+
+  const producto = await buscarProductoEnTarifa(refRaw);
+  if (!producto) {
+    alert("No se ha encontrado esta referencia en la tarifa.");
+    return;
+  }
+
+  if (producto.descripcion && !descInput.value) {
+    descInput.value = producto.descripcion;
+  }
+  pvpInput.value = (Number(producto.pvp) || 0).toFixed(2);
+}
+
+async function guardarLineaManual() {
+  const overlay = document.getElementById("presuLineaOverlay");
+  const seccion = (document.getElementById("lineaSeccion").value || "").trim() || "Sección manual";
+  const titulo = (document.getElementById("lineaTitulo").value || "").trim();
+  const refRaw = (document.getElementById("lineaRef").value || "").trim();
+  const desc = (document.getElementById("lineaDesc").value || "").trim();
+  const cantVal = Number(document.getElementById("lineaCantidad").value) || 0;
+  const pvpVal = Number(document.getElementById("lineaPvp").value) || 0;
+
+  if (!refRaw || !cantVal) {
+    alert("Referencia y cantidad son obligatorias.");
+    return;
+  }
+
+  let pvp = pvpVal;
+  let descripcion = desc;
+
+  // Si no hay pvp, intentamos buscar en la tarifa
+  if (!pvp) {
+    const prod = await buscarProductoEnTarifa(refRaw);
+    if (prod) {
+      pvp = Number(prod.pvp) || 0;
+      if (!descripcion && prod.descripcion) {
+        descripcion = prod.descripcion;
+      }
+    }
+  }
+
+  const refNormalizada = refRaw.replace(/\s+/g, "");
+
+  const subtotal = pvp * cantVal;
+
+  const presu = appState.presupuesto || { lineas: [], resumen: {} };
+  presu.lineas = presu.lineas || [];
+
+  presu.lineas.push({
+    ref: refNormalizada,
+    descripcion: descripcion || refRaw,
+    cantidad: cantVal,
+    pvp,
+    subtotal,
+    seccion,
+    titulo,
+  });
+
+  // Actualizar orden de secciones
+  presu.sectionOrder = presu.sectionOrder || [];
+  if (!presu.sectionOrder.includes(seccion)) {
+    presu.sectionOrder.push(seccion);
+  }
+
+  // Recalcular resumen
+  const dto = Number(document.getElementById("presuDto").value) || 0;
+  let totalBruto = 0;
+  presu.lineas.forEach((l) => {
+    totalBruto += (l.subtotal || l.pvp * l.cantidad || 0);
+  });
+  const factorDto = dto > 0 ? 1 - dto / 100 : 1;
+  const totalNeto = totalBruto * factorDto;
+
+  presu.resumen = {
+    totalBruto,
+    dto,
+    totalNeto,
+  };
+
+  appState.presupuesto = presu;
+
+  renderResultados(presu.lineas, totalBruto, totalNeto, dto);
+
+  if (overlay) overlay.style.display = "none";
 }
 
 // ===============================================
@@ -188,9 +371,19 @@ function precargarDatosProyecto() {
 }
 
 // ===============================================
-// Carga directa de tarifas desde Firestore
+// Carga directa de tarifas desde Firestore (con caché)
 // ===============================================
 async function cargarTarifasDesdeFirestore() {
+  if (appState.tarifasCache) {
+    console.log(
+      "%cTarifa · usar caché (" +
+        Object.keys(appState.tarifasCache).length +
+        " refs)",
+      "color:#16a34a;"
+    );
+    return appState.tarifasCache;
+  }
+
   const db = firebase.firestore();
   const snap = await db
     .collection("tarifas")
@@ -205,7 +398,16 @@ async function cargarTarifasDesdeFirestore() {
     const ref = docSnap.id;
     const pvp = Number(d.pvp) || 0;
     if (!pvp) return;
-    result[ref] = pvp;
+    result[ref] = {
+      pvp,
+      descripcion:
+        d.descripcion ||
+        d.desc ||
+        d.nombre ||
+        d.title ||
+        d.titulo ||
+        "",
+    };
   });
 
   console.log(
@@ -215,7 +417,42 @@ async function cargarTarifasDesdeFirestore() {
     "color:#3b82f6;"
   );
 
+  appState.tarifasCache = result;
   return result;
+}
+
+// Buscar un producto en la tarifa normalizando la referencia
+async function buscarProductoEnTarifa(refRaw) {
+  const tarifas = await cargarTarifasDesdeFirestore();
+  if (!tarifas) return null;
+
+  const refOriginal = String(refRaw || "").trim();
+  let ref = refOriginal.replace(/\s+/g, "");
+
+  if (/^9\d{7}$/.test(ref)) {
+    ref = ref.slice(0, 7);
+  }
+
+  const candidatos = [];
+  if (refOriginal) candidatos.push(refOriginal.replace(/\s+/g, ""));
+  if (ref) candidatos.push(ref);
+
+  if (ref.length === 7) {
+    candidatos.push(ref + "0");
+    candidatos.push(ref + "00");
+  } else if (ref.length === 8) {
+    candidatos.push(ref.slice(0, 7));
+  }
+
+  const candidatosUnicos = [...new Set(candidatos)];
+
+  for (const key of candidatosUnicos) {
+    if (tarifas[key]) {
+      return tarifas[key];
+    }
+  }
+
+  return null;
 }
 
 // ===============================================
@@ -291,9 +528,13 @@ async function generarPresupuesto() {
     }
 
     let pvp = 0;
+    let descTarifa = "";
+
     for (const key of candidatosUnicos) {
-      if (tarifas[key] != null) {
-        pvp = Number(tarifas[key]) || 0;
+      const prod = tarifas[key];
+      if (prod && prod.pvp) {
+        pvp = Number(prod.pvp) || 0;
+        descTarifa = prod.descripcion || "";
         if (pvp) break;
       }
     }
@@ -342,6 +583,7 @@ async function generarPresupuesto() {
       item["Nombre del producto"] ||
       item.nombreProducto ||
       item.titulo ||
+      descTarifa ||
       "";
 
     lineasPresupuesto.push({
@@ -363,7 +605,25 @@ async function generarPresupuesto() {
   const notas = document.getElementById("presuNotas").value || "";
 
   const prevSectionNotes = appState.presupuesto.sectionNotes || {};
-  const prevExtraSections = appState.presupuesto.extraSections || {};
+  const prevExtraSections = appState.presupuesto.extraSections || [];
+
+  // Orden de secciones según aparecen
+  const sectionOrder = [];
+  lineasPresupuesto.forEach((l) => {
+    const sec =
+      l.seccion ||
+      l.section ||
+      l.apartado ||
+      l.grupo ||
+      l["Sección"] ||
+      l["SECCION"] ||
+      l["Grupo"] ||
+      l["Apartado"] ||
+      l.titulo ||
+      l.title ||
+      "Sin sección";
+    if (!sectionOrder.includes(sec)) sectionOrder.push(sec);
+  });
 
   appState.presupuesto = {
     lineas: lineasPresupuesto,
@@ -378,6 +638,7 @@ async function generarPresupuesto() {
     fecha: document.getElementById("presuFecha").value || "",
     sectionNotes: prevSectionNotes,
     extraSections: prevExtraSections,
+    sectionOrder,
   };
 
   renderResultados(lineasPresupuesto, totalBruto, totalNeto, dto);
@@ -406,6 +667,11 @@ function onAddManualSection() {
     nota: "",
   });
 
+  presu.sectionOrder = presu.sectionOrder || [];
+  if (!presu.sectionOrder.includes(nombre)) {
+    presu.sectionOrder.push(nombre);
+  }
+
   appState.presupuesto = presu;
 
   if (presu.lineas && presu.resumen) {
@@ -423,10 +689,11 @@ function onAddManualSection() {
 // ===============================================
 function renderResultados(lineas, totalBruto, totalNeto, dto) {
   const detalle = document.getElementById("presuDetalle");
-  const presu = appState.presupuesto || {};
   const resumen = document.getElementById("presuResumen");
+  const presu = appState.presupuesto || {};
   const sectionNotes = presu.sectionNotes || {};
   const extraSections = presu.extraSections || [];
+  presu.sectionOrder = presu.sectionOrder || [];
 
   if (!detalle || !resumen) return;
 
@@ -462,6 +729,32 @@ function renderResultados(lineas, totalBruto, totalNeto, dto) {
     return;
   }
 
+  // Agrupar por sección
+  const seccionesMap = {};
+  lineasFiltradas.forEach((l) => {
+    const sec =
+      l.seccion ||
+      l.section ||
+      l.apartado ||
+      l.grupo ||
+      l["Sección"] ||
+      l["SECCION"] ||
+      l["Grupo"] ||
+      l["Apartado"] ||
+      l.titulo ||
+      l.title ||
+      "Sin sección";
+    if (!seccionesMap[sec]) seccionesMap[sec] = [];
+    seccionesMap[sec].push(l);
+  });
+
+  // Asegurar que todas las secciones están en el orden
+  Object.keys(seccionesMap).forEach((sec) => {
+    if (!presu.sectionOrder.includes(sec)) {
+      presu.sectionOrder.push(sec);
+    }
+  });
+
   let htmlDetalle = `
     <table class="table">
       <thead>
@@ -478,92 +771,78 @@ function renderResultados(lineas, totalBruto, totalNeto, dto) {
       <tbody>
   `;
 
-  let currentSection = null;
-  let currentTitle = null;
+  // Render según orden de secciones
+  presu.sectionOrder.forEach((sec) => {
+    const lineasSec = seccionesMap[sec];
+    if (!lineasSec || !lineasSec.length) return;
 
-  for (const l of lineasFiltradas) {
-    const sec =
-      l.seccion ||
-      l.section ||
-      l.apartado ||
-      l.grupo ||
-      l["Sección"] ||
-      l["SECCION"] ||
-      l["Grupo"] ||
-      l["Apartado"] ||
-      l.titulo ||
-      l.title ||
-      "Sin sección";
+    let currentTitle = null;
 
-    const tit =
-      l.titulo ||
-      l.title ||
-      l.subseccion ||
-      l["Título"] ||
-      l["TITULO"] ||
-      "";
-
-    // ===== Fila de SECCIÓN (azul) + nota de sección =====
-    if (sec !== currentSection) {
-      currentSection = sec;
-      currentTitle = null;
-
-      htmlDetalle += `
-        <tr>
-          <td colspan="7" style="background:#eef2ff; font-weight:600; text-transform:uppercase;">
-            ${sec}
-          </td>
-        </tr>
-        <tr>
-          <td colspan="7">
-            <textarea
-              class="section-note"
-              data-section="${sec}"
-              rows="2"
-              style="width:100%; font-size:0.78rem; resize:vertical;"
-              placeholder="Notas de la sección (opcional)"
-            >${sectionNotes[sec] || ""}</textarea>
-          </td>
-        </tr>
-      `;
-    }
-
-    // ===== Fila de TÍTULO (gris), solo si tenemos valor distinto =====
-    if (tit && tit !== currentTitle) {
-      currentTitle = tit;
-      htmlDetalle += `
-        <tr>
-          <td colspan="7" style="background:#f3f4f6; font-weight:500;">
-            ${tit}
-          </td>
-        </tr>
-      `;
-    }
-
-    // ===== Fila de producto =====
-    const importe = l.subtotal || l.pvp * l.cantidad || 0;
-
+    // Fila de sección (DRAGGABLE)
     htmlDetalle += `
-      <tr>
-        <td>
-          <input type="checkbox" class="presu-line-check" checked />
+      <tr class="presu-section-row" data-section="${sec}" draggable="true">
+        <td colspan="7" style="background:#eef2ff; font-weight:600; text-transform:uppercase; cursor:move;">
+          <span style="margin-right:0.5rem;">↕</span>${sec}
         </td>
-        <td>${l.ref}</td>
-        <td>${sec}</td>
-        <td>${l.descripcion}</td>
-        <td>${l.cantidad}</td>
-        <td>${l.pvp.toFixed(2)} €</td>
-        <td>${importe.toFixed(2)} €</td>
+      </tr>
+      <tr>
+        <td colspan="7">
+          <textarea
+            class="section-note"
+            data-section="${sec}"
+            rows="2"
+            style="width:100%; font-size:0.78rem; resize:vertical;"
+            placeholder="Notas de la sección (opcional)"
+          >${sectionNotes[sec] || ""}</textarea>
+        </td>
       </tr>
     `;
-  }
+
+    lineasSec.forEach((l) => {
+      const tit =
+        l.titulo ||
+        l.title ||
+        l.subseccion ||
+        l["Título"] ||
+        l["TITULO"] ||
+        "";
+
+      // Título gris
+      if (tit && tit !== currentTitle) {
+        currentTitle = tit;
+        htmlDetalle += `
+          <tr>
+            <td colspan="7" style="background:#f3f4f6; font-weight:500;">
+              ${tit}
+            </td>
+          </tr>
+        `;
+      }
+
+      const importe = l.subtotal || l.pvp * l.cantidad || 0;
+
+      htmlDetalle += `
+        <tr>
+          <td>
+            <input type="checkbox" class="presu-line-check" checked />
+          </td>
+          <td>${l.ref}</td>
+          <td>${sec}</td>
+          <td>${l.descripcion}</td>
+          <td>${l.cantidad}</td>
+          <td>${l.pvp.toFixed(2)} €</td>
+          <td>${importe.toFixed(2)} €</td>
+        </tr>
+      `;
+    });
+  });
 
   htmlDetalle += `
       </tbody>
     </table>
   `;
 
-  // ===== Secciones adicionales creadas desde la UI =====
+  // Secciones adicionales (solo notas)
   if (extraSections.length) {
     htmlDetalle += `
       <div style="border-top:1px solid #e5e7eb; margin-top:1rem; padding-top:1rem;">
@@ -622,6 +901,9 @@ function renderResultados(lineas, totalBruto, totalNeto, dto) {
     });
   });
 
+  // Drag & Drop de secciones
+  inicializarDragSecciones();
+
   // Listeners de checkboxes para recalcular totales
   detalle.querySelectorAll(".presu-line-check").forEach((cb) => {
     cb.addEventListener("change", () => {
@@ -630,13 +912,76 @@ function renderResultados(lineas, totalBruto, totalNeto, dto) {
   });
 
   // Cálculo inicial
-  recalcularResumenDesdeSeleccion(lineasFiltradas, dto);
+  recalcularResumenDesdeSeleccion(lineasFiltradas, dto, totalBruto);
+}
+
+// ===============================================
+// Drag & Drop de secciones (reordenar bloques)
+// ===============================================
+function inicializarDragSecciones() {
+  const presu = appState.presupuesto || {};
+  presu.sectionOrder = presu.sectionOrder || [];
+
+  const rows = document.querySelectorAll(".presu-section-row");
+  if (!rows.length) return;
+
+  let dragSrcSection = null;
+
+  rows.forEach((row) => {
+    row.addEventListener("dragstart", (e) => {
+      dragSrcSection = row.dataset.section;
+      row.classList.add("dragging");
+      e.dataTransfer.effectAllowed = "move";
+    });
+
+    row.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      row.classList.add("drag-over");
+    });
+
+    row.addEventListener("dragleave", () => {
+      row.classList.remove("drag-over");
+    });
+
+    row.addEventListener("drop", (e) => {
+      e.preventDefault();
+      row.classList.remove("drag-over");
+      const targetSection = row.dataset.section;
+      if (!dragSrcSection || dragSrcSection === targetSection) return;
+
+      const order = presu.sectionOrder || [];
+      const srcIdx = order.indexOf(dragSrcSection);
+      const tgtIdx = order.indexOf(targetSection);
+      if (srcIdx === -1 || tgtIdx === -1) return;
+
+      // mover sección
+      const [moved] = order.splice(srcIdx, 1);
+      order.splice(tgtIdx, 0, moved);
+
+      presu.sectionOrder = order;
+      appState.presupuesto = presu;
+
+      // Re-render
+      const p = appState.presupuesto;
+      renderResultados(
+        p.lineas,
+        p.resumen.totalBruto || 0,
+        p.resumen.totalNeto || 0,
+        p.resumen.dto || 0
+      );
+    });
+
+    row.addEventListener("dragend", () => {
+      row.classList.remove("dragging");
+    });
+  });
 }
 
 // ===============================================
 // Recalcular resumen económico según selección
 // ===============================================
-function recalcularResumenDesdeSeleccion(lineasVisibles, dto) {
+function recalcularResumenDesdeSeleccion(lineasVisibles, dto, totalBrutoOriginal) {
   const resumen = document.getElementById("presuResumen");
   const detalle = document.getElementById("presuDetalle");
   if (!resumen || !detalle) return;
