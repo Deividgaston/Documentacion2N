@@ -25,7 +25,7 @@ const COMPANY_INFO = {
 };
 
 console.log(
-  "%cUI Presupuesto · versión EXPORT-EXCEL-PDF",
+  "%cUI Presupuesto · versión EXPORT-EXCEL-PDF + IVA",
   "color:#22c55e; font-weight:bold;"
 );
 
@@ -181,7 +181,7 @@ function renderPresupuestoView() {
         </div>
       </div>
     </div>
-  `;
+  ";
 
   // Botón generar
   const btnGenerar = document.getElementById("btnGenerarPresupuesto");
@@ -1027,6 +1027,10 @@ function recalcularResumenDesdeSeleccion(lineasVisibles, dto) {
     ? "Los precios indicados incluyen IVA (21%) en el total mostrado."
     : "Los precios indicados no incluyen IVA. El IVA se añadirá según la legislación vigente.";
 
+  const textoEstadoIVA = incluirIVA
+    ? "IVA incluido en el total del presupuesto."
+    : "IVA NO incluido en el total del presupuesto.";
+
   resumen.innerHTML = `
     <div style="display:flex; gap:0.5rem; margin-bottom:0.75rem;">
       <button id="btnExportExcel" class="btn btn-secondary btn-sm">Exportar a Excel</button>
@@ -1044,7 +1048,7 @@ function recalcularResumenDesdeSeleccion(lineasVisibles, dto) {
     </div>
 
     <div class="metric-card">
-      <span class="metric-label">TOTAL CON IVA</span>
+      <span class="metric-label">TOTAL ${incluirIVA ? "CON IVA" : "SIN IVA"}</span>
       <span class="metric-value">${totalConIva.toFixed(2)} €</span>
     </div>
 
@@ -1055,6 +1059,9 @@ function recalcularResumenDesdeSeleccion(lineasVisibles, dto) {
         } />
         Incluir IVA (21%) en el total
       </label>
+      <p id="presuIVAEstado" style="margin-top:0.25rem; font-size:0.78rem; color:#4b5563;">
+        Estado: <strong>${textoEstadoIVA}</strong>
+      </p>
     </div>
 
     <p style="font-size:0.8rem; color:#6b7280; margin-top:0.5rem;">
@@ -1115,10 +1122,14 @@ function exportarPresupuestoExcel() {
   const iva = incluirIVA ? base * 0.21 : 0;
   const total = base + iva;
 
+  const textoEstadoIVA = incluirIVA
+    ? "IVA incluido en el total del presupuesto."
+    : "IVA NO incluido en el total del presupuesto. El IVA se añadirá según la legislación vigente.";
+
   // ===== Construimos AOA (Array of Arrays) =====
   const rows = [];
 
-  // Cabecera azul / título
+  // Cabecera / título
   rows.push(["PRESUPUESTO 2N"]);
   rows.push([]);
   rows.push(["Empresa", COMPANY_INFO.nombre]);
@@ -1131,10 +1142,7 @@ function exportarPresupuestoExcel() {
   rows.push(["Cliente", cliente]);
   rows.push(["Fecha", fechaHoy]);
   rows.push([]);
-  rows.push([
-    "Descripción",
-    "",
-  ]);
+  rows.push(["Descripción", ""]);
   rows.push([presu.notas || ""]);
 
   rows.push([]);
@@ -1148,8 +1156,7 @@ function exportarPresupuestoExcel() {
     "Importe (€)",
   ]);
 
-  // Ordenar por sección + título
-  const secciones = presu.sectionOrder || [];
+  // Agrupar por sección
   const mapSec = {};
   presu.lineas.forEach((l) => {
     const sec =
@@ -1167,6 +1174,11 @@ function exportarPresupuestoExcel() {
     if (!mapSec[sec]) mapSec[sec] = [];
     mapSec[sec].push(l);
   });
+
+  const secciones =
+    presu.sectionOrder && presu.sectionOrder.length
+      ? presu.sectionOrder
+      : Object.keys(mapSec);
 
   secciones.forEach((sec) => {
     const list = mapSec[sec];
@@ -1189,24 +1201,12 @@ function exportarPresupuestoExcel() {
 
   rows.push([]);
   rows.push(["Subtotal (base imponible)", "", "", "", "", "", base.toFixed(2)]);
-  rows.push([
-    "IVA 21%",
-    "",
-    "",
-    "",
-    "",
-    "",
-    iva.toFixed(2),
-  ]);
-  rows.push([
-    "TOTAL",
-    "",
-    "",
-    "",
-    "",
-    "",
-    total.toFixed(2),
-  ]);
+  rows.push(["IVA 21%", "", "", "", "", "", iva.toFixed(2)]);
+  rows.push(["TOTAL", "", "", "", "", "", total.toFixed(2)]);
+
+  // 👉 Texto claro de IVA al final (opción A)
+  rows.push([]);
+  rows.push([textoEstadoIVA]);
 
   // Crear workbook
   const ws = XLSX.utils.aoa_to_sheet(rows);
@@ -1250,8 +1250,11 @@ function exportarPresupuestoPDF() {
   const iva = incluirIVA ? base * 0.21 : 0;
   const total = base + iva;
 
+  const textoEstadoIVA = incluirIVA
+    ? "IVA incluido en el total del presupuesto."
+    : "IVA NO incluido en el total del presupuesto. El IVA se añadirá según la legislación vigente.";
+
   // Agrupar por sección
-  const secciones = presu.sectionOrder || [];
   const mapSec = {};
   presu.lineas.forEach((l) => {
     const sec =
@@ -1270,6 +1273,11 @@ function exportarPresupuestoPDF() {
     mapSec[sec].push(l);
   });
 
+  const secciones =
+    presu.sectionOrder && presu.sectionOrder.length
+      ? presu.sectionOrder
+      : Object.keys(mapSec);
+
   const win = window.open("", "_blank");
   if (!win) {
     alert("El navegador ha bloqueado la ventana emergente. Permite pop-ups para exportar a PDF.");
@@ -1285,7 +1293,7 @@ function exportarPresupuestoPDF() {
       .brand { font-size:12px; text-transform:uppercase; letter-spacing:0.08em; color:#1d4ed8; font-weight:600; }
       .company-name { font-size:16px; font-weight:700; }
       .company-block, .client-block { font-size:11px; line-height:1.3; }
-      .pill { padding:4px 10px; border-radius:999px; font-size:10px; background:#e0ecff; color:#1d4ed8; }
+      .pill { padding:4px 10px; border-radius:999px; font-size:10px; background:#e0ecff; color:#1d4ed8; font-weight:600; }
       table { width:100%; border-collapse:collapse; margin-top:10px; font-size:11px; }
       th, td { border-bottom:1px solid #e5e7eb; padding:6px 4px; text-align:left; vertical-align:top; }
       th { background:#f3f4f6; font-weight:600; }
@@ -1407,6 +1415,11 @@ function exportarPresupuestoPDF() {
             <td style="text-align:right;">${total.toFixed(2)} €</td>
           </tr>
         </table>
+
+        <!-- 👉 Texto claro de estado IVA (opción A) -->
+        <p style="margin-top:6px; font-size:10px; color:#111827;">
+          Estado IVA: <strong>${textoEstadoIVA}</strong>
+        </p>
 
         <div class="notes">
           ${
