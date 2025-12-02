@@ -143,7 +143,8 @@ async function getTarifasBase2N() {
 }
 
 // ===============================
-// Helper: leer tarifa + dto línea que hay en el DOM
+// Leer configuración de líneas desde el DOM
+// (tarifa + dto línea)
 // ===============================
 function leerConfigLineasDesdeDOM() {
   const detalle = document.getElementById("simDetalle");
@@ -273,7 +274,7 @@ function renderSimuladorView() {
       </div>
 
     </div>
-  ";
+  `;
 
   // Inicializar UI con el estado que hubiera
   const selTarifaDefecto = document.getElementById("simTarifaDefecto");
