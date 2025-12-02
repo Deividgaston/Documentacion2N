@@ -103,7 +103,7 @@ function renderPresupuestoView() {
       </div>
 
     </div>
-  ";
+  `; // <<--- AQUÍ ESTABA EL ERROR, ahora cierra con backtick y punto y coma
 
   document
     .getElementById("btnGenerarPresupuesto")
@@ -199,7 +199,6 @@ async function generarPresupuesto() {
   let totalNeto = 0;
 
   for (const item of lineasProyecto) {
-    // 1) REFERENCIA (varios posibles campos)
     const refCampo =
       item.ref ||
       item.referencia ||
@@ -214,11 +213,9 @@ async function generarPresupuesto() {
       continue;
     }
 
-    // Normalización referencia 2N
     const refOriginal = String(refCampo || "").trim();
     let ref = refOriginal.replace(/\s+/g, "");
 
-    // Project Designer -> 8 dígitos, tarifa -> 7
     if (/^9\d{7}$/.test(ref)) {
       ref = ref.slice(0, 7);
     }
@@ -236,7 +233,6 @@ async function generarPresupuesto() {
 
     const candidatosUnicos = [...new Set(candidatos)];
 
-    // 2) CANTIDAD
     const cantidad =
       Number(item.cantidad) ||
       Number(item.qty) ||
@@ -249,7 +245,6 @@ async function generarPresupuesto() {
       continue;
     }
 
-    // 3) PRECIO DESDE TARIFA
     let pvp = 0;
     for (const key of candidatosUnicos) {
       if (tarifas[key] != null) {
@@ -276,7 +271,6 @@ async function generarPresupuesto() {
     const subtotal = pvp * cantidad;
     totalBruto += subtotal;
 
-    // 4) SECCIÓN y TÍTULO
     const seccion =
       item.seccion ||
       item.section ||
@@ -294,7 +288,6 @@ async function generarPresupuesto() {
       item.descripcionTitulo ||
       "";
 
-    // 5) DESCRIPCIÓN
     const descripcion =
       item.descripcion ||
       item["Nombre del producto"] ||
@@ -320,7 +313,6 @@ async function generarPresupuesto() {
 
   const notas = document.getElementById("presuNotas").value || "";
 
-  // preservamos notas por sección y secciones extra
   const prevSectionNotes = appState.presupuesto.sectionNotes || {};
   const prevExtraSections = appState.presupuesto.extraSections || [];
 
@@ -379,7 +371,6 @@ function onAddManualSection() {
 
 // ===============================================
 // Mostrar resultados en pantalla (detalle tipo tabla proyecto)
-// Mantiene el ORDEN de las líneas importadas
 // ===============================================
 function renderResultados(lineas, totalBruto, totalNeto, dto) {
   const detalle = document.getElementById("presuDetalle");
@@ -415,17 +406,14 @@ function renderResultados(lineas, totalBruto, totalNeto, dto) {
   let currentSection = null;
   let currentTitle = null;
 
-  // Recorremos las líneas en el MISMO orden que vienen del proyecto
   for (const l of lineas) {
     const sec = l.seccion || "Sin sección";
     const tit = l.titulo || "Sin título";
 
-    // Cambio de sección -> fila de cabecera + notas
     if (sec !== currentSection) {
       currentSection = sec;
       currentTitle = null;
 
-      // fila cabecera sección (tipo barra gris PLACA DE CALLE)
       htmlDetalle += `
         <tr>
           <td colspan="7" style="background:#eef2ff; font-weight:600; text-transform:uppercase;">
@@ -446,7 +434,6 @@ function renderResultados(lineas, totalBruto, totalNeto, dto) {
       `;
     }
 
-    // Cambio de título dentro de la sección -> fila gris como subtítulo
     if (tit && tit !== currentTitle) {
       currentTitle = tit;
       htmlDetalle += `
@@ -460,7 +447,6 @@ function renderResultados(lineas, totalBruto, totalNeto, dto) {
 
     const importe = l.subtotal || l.pvp * l.cantidad || 0;
 
-    // Fila de producto, columnas como en la imagen
     htmlDetalle += `
       <tr>
         <td>
@@ -481,7 +467,6 @@ function renderResultados(lineas, totalBruto, totalNeto, dto) {
     </table>
   `;
 
-  // Secciones manuales extra (sin líneas, solo bloque y nota)
   if (extraSections.length) {
     htmlDetalle += `
       <div style="border-top:1px solid #e5e7eb; margin-top:1rem; padding-top:1rem;">
@@ -517,7 +502,6 @@ function renderResultados(lineas, totalBruto, totalNeto, dto) {
 
   detalle.innerHTML = htmlDetalle;
 
-  // Guardar notas por sección en appState al escribir
   const currentSectionNotes = (appState.presupuesto.sectionNotes =
     sectionNotes);
 
@@ -528,7 +512,6 @@ function renderResultados(lineas, totalBruto, totalNeto, dto) {
     });
   });
 
-  // Notas de secciones manuales
   detalle.querySelectorAll(".section-note-extra").forEach((ta) => {
     ta.addEventListener("input", (e) => {
       const id = e.target.dataset.id;
@@ -541,8 +524,7 @@ function renderResultados(lineas, totalBruto, totalNeto, dto) {
     });
   });
 
-  // ==== RESUMEN ECONÓMICO ====
-  const subtotal = totalNeto; // base imponible después de dto
+  const subtotal = totalNeto;
   const iva = subtotal * 0.21;
   const totalConIva = subtotal + iva;
 
