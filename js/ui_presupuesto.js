@@ -9,15 +9,23 @@ appState.presupuesto = appState.presupuesto || {
   sectionNotes: {}, // notas por sección
   extraSections: [], // secciones manuales añadidas desde la UI
   sectionOrder: [], // orden de secciones para drag & drop
-  tarifaNombre: "PVP",
   incluirIVA: true,
 };
 
 appState.tarifasCache = appState.tarifasCache || null; // cache de tarifas en memoria
 appState.presupuestoFiltroRef = appState.presupuestoFiltroRef || "";
 
+// Datos de la empresa para el presupuesto (puedes cambiarlos aquí)
+const COMPANY_INFO = {
+  nombre: "2N TELEKOMUNIKACE a.s.",
+  direccion: "Modřanská 621/143, 143 01 Praha 4, CZ",
+  nif: "CZ26183960",
+  telefono: "660204003",
+  email: "gaston@2n.com",
+};
+
 console.log(
-  "%cUI Presupuesto · versión DRAG&LINEAS-IVA-02-12",
+  "%cUI Presupuesto · versión EXPORT-EXCEL-PDF",
   "color:#22c55e; font-weight:bold;"
 );
 
@@ -65,19 +73,6 @@ function renderPresupuestoView() {
               <div class="form-group">
                 <label>Descuento global (%)</label>
                 <input id="presuDto" type="number" min="0" max="90" value="0" />
-              </div>
-
-              <div class="form-group">
-                <label>Tarifa 2N para este presupuesto</label>
-                <select id="presuTarifa" class="input">
-                  <option value="PVP">PVP 2N (por defecto)</option>
-                  <option value="Distribuidor">Tarifa Distribuidor</option>
-                  <option value="Integrador">Tarifa Integrador / Instalador</option>
-                  <option value="Especial">Tarifa especial / Proyecto</option>
-                </select>
-                <p style="font-size:0.75rem; color:#6b7280; margin-top:0.25rem;">
-                  Solo cambia el nombre de la tarifa a efectos de documento entregado.
-                </p>
               </div>
             </div>
 
@@ -380,14 +375,9 @@ function precargarDatosProyecto() {
   document.getElementById("presuDto").value = presu.resumen?.dto || p.dto || 0;
 
   const notasPorDefecto =
-    "se requiere de switch poe para alimentar los equipos";
+    "Se requiere de switch PoE para alimentar los equipos.";
   document.getElementById("presuNotas").value =
     presu.notas || p.notas || notasPorDefecto;
-
-  const tarifaSelect = document.getElementById("presuTarifa");
-  if (tarifaSelect) {
-    tarifaSelect.value = presu.tarifaNombre || "PVP";
-  }
 }
 
 // ===============================================
@@ -623,11 +613,13 @@ async function generarPresupuesto() {
   totalNeto = totalBruto * factorDto;
 
   const notas = document.getElementById("presuNotas").value || "";
-  const tarifaSelect = document.getElementById("presuTarifa");
-  const tarifaNombre = tarifaSelect ? tarifaSelect.value : "PVP";
 
   const prevSectionNotes = appState.presupuesto.sectionNotes || {};
   const prevExtraSections = appState.presupuesto.extraSections || [];
+  const incluirIVA =
+    appState.presupuesto && typeof appState.presupuesto.incluirIVA === "boolean"
+      ? appState.presupuesto.incluirIVA
+      : true;
 
   // Orden de secciones según aparecen
   const sectionOrder = [];
@@ -647,12 +639,6 @@ async function generarPresupuesto() {
     if (!sectionOrder.includes(sec)) sectionOrder.push(sec);
   });
 
-  // mantener configuración de IVA anterior si existe (por defecto true)
-  const incluirIVA =
-    appState.presupuesto && typeof appState.presupuesto.incluirIVA === "boolean"
-      ? appState.presupuesto.incluirIVA
-      : true;
-
   appState.presupuesto = {
     lineas: lineasPresupuesto,
     resumen: {
@@ -667,7 +653,6 @@ async function generarPresupuesto() {
     sectionNotes: prevSectionNotes,
     extraSections: prevExtraSections,
     sectionOrder,
-    tarifaNombre,
     incluirIVA,
   };
 
@@ -684,418 +669,4 @@ async function generarPresupuesto() {
 // ===============================================
 function onAddManualSection() {
   const nombre = prompt("Nombre de la nueva sección:");
-  if (!nombre) return;
-
-  const titulo = prompt("Título dentro de la sección (opcional):") || "";
-
-  const presu = appState.presupuesto || {};
-  presu.extraSections = presu.extraSections || [];
-  presu.extraSections.push({
-    id: Date.now().toString(),
-    seccion: nombre,
-    titulo,
-    nota: "",
-  });
-
-  presu.sectionOrder = presu.sectionOrder || [];
-  if (!presu.sectionOrder.includes(nombre)) {
-    presu.sectionOrder.push(nombre);
-  }
-
-  appState.presupuesto = presu;
-
-  if (presu.lineas && presu.resumen) {
-    renderResultados(
-      presu.lineas,
-      presu.resumen.totalBruto || 0,
-      presu.resumen.totalNeto || 0,
-      presu.resumen.dto || 0
-    );
-  }
-}
-
-// ===============================================
-// Mostrar resultados en pantalla (detalle tipo tabla proyecto)
-// ===============================================
-function renderResultados(lineas, totalBruto, totalNeto, dto) {
-  const detalle = document.getElementById("presuDetalle");
-  const resumen = document.getElementById("presuResumen");
-  const presu = appState.presupuesto || {};
-  const sectionNotes = presu.sectionNotes || {};
-  const extraSections = presu.extraSections || [];
-  presu.sectionOrder = presu.sectionOrder || [];
-
-  if (!detalle || !resumen) return;
-
-  // Filtro actual
-  const filtro = (appState.presupuestoFiltroRef || "").toLowerCase();
-
-  const lineasFiltradas = filtro
-    ? lineas.filter((l) => {
-        const ref = String(l.ref || "").toLowerCase();
-        const desc = String(l.descripcion || "").toLowerCase();
-        const sec = String(l.seccion || "").toLowerCase();
-        const tit = String(l.titulo || "").toLowerCase();
-        return (
-          ref.includes(filtro) ||
-          desc.includes(filtro) ||
-          sec.includes(filtro) ||
-          tit.includes(filtro)
-        );
-      })
-    : lineas;
-
-  // Actualizar contador en cabecera derecha
-  const countLabel = document.getElementById("presuLineCount");
-  if (countLabel) {
-    countLabel.textContent = `${
-      lineasFiltradas ? lineasFiltradas.length : 0
-    } líneas cargadas desde el proyecto`;
-  }
-
-  if (!lineasFiltradas || lineasFiltradas.length === 0) {
-    detalle.textContent = "No hay líneas de presupuesto generadas.";
-    resumen.textContent = "No se ha generado todavía el presupuesto.";
-    return;
-  }
-
-  // Agrupar por sección
-  const seccionesMap = {};
-  lineasFiltradas.forEach((l) => {
-    const sec =
-      l.seccion ||
-      l.section ||
-      l.apartado ||
-      l.grupo ||
-      l["Sección"] ||
-      l["SECCION"] ||
-      l["Grupo"] ||
-      l["Apartado"] ||
-      l.titulo ||
-      l.title ||
-      "Sin sección";
-    if (!seccionesMap[sec]) seccionesMap[sec] = [];
-    seccionesMap[sec].push(l);
-  });
-
-  // Asegurar que todas las secciones están en el orden
-  Object.keys(seccionesMap).forEach((sec) => {
-    if (!presu.sectionOrder.includes(sec)) {
-      presu.sectionOrder.push(sec);
-    }
-  });
-
-  let htmlDetalle = `
-    <table class="table">
-      <thead>
-        <tr>
-          <th style="width:48px;">OK</th>
-          <th>Ref.</th>
-          <th>Sección</th>
-          <th>Descripción</th>
-          <th style="width:70px;">Ud.</th>
-          <th style="width:90px;">PVP</th>
-          <th style="width:110px;">Importe</th>
-        </tr>
-      </thead>
-      <tbody>
-  `;
-
-  // Render según orden de secciones
-  presu.sectionOrder.forEach((sec) => {
-    const lineasSec = seccionesMap[sec];
-    if (!lineasSec || !lineasSec.length) return;
-
-    let currentTitle = null;
-
-    // Fila de sección (DRAGGABLE)
-    htmlDetalle += `
-      <tr class="presu-section-row" data-section="${sec}" draggable="true">
-        <td colspan="7" style="background:#eef2ff; font-weight:600; text-transform:uppercase; cursor:move;">
-          <span style="margin-right:0.5rem;">↕</span>${sec}
-        </td>
-      </tr>
-      <tr>
-        <td colspan="7">
-          <textarea
-            class="section-note"
-            data-section="${sec}"
-            rows="2"
-            style="width:100%; font-size:0.78rem; resize:vertical;"
-            placeholder="Notas de la sección (opcional)"
-          >${sectionNotes[sec] || ""}</textarea>
-        </td>
-      </tr>
-    `;
-
-    lineasSec.forEach((l) => {
-      const tit =
-        l.titulo ||
-        l.title ||
-        l.subseccion ||
-        l["Título"] ||
-        l["TITULO"] ||
-        "";
-
-      // Título gris
-      if (tit && tit !== currentTitle) {
-        currentTitle = tit;
-        htmlDetalle += `
-          <tr>
-            <td colspan="7" style="background:#f3f4f6; font-weight:500;">
-              ${tit}
-            </td>
-          </tr>
-        `;
-      }
-
-      const importe = l.subtotal || l.pvp * l.cantidad || 0;
-
-      htmlDetalle += `
-        <tr>
-          <td>
-            <input type="checkbox" class="presu-line-check" checked />
-          </td>
-          <td>${l.ref}</td>
-          <td>${sec}</td>
-          <td>${l.descripcion}</td>
-          <td>${l.cantidad}</td>
-          <td>${l.pvp.toFixed(2)} €</td>
-          <td>${importe.toFixed(2)} €</td>
-        </tr>
-      `;
-    });
-  });
-
-  htmlDetalle += `
-      </tbody>
-    </table>
-  `;
-
-  // Secciones adicionales (solo notas)
-  if (extraSections.length) {
-    htmlDetalle += `
-      <div style="border-top:1px solid #e5e7eb; margin-top:1rem; padding-top:1rem;">
-        <div style="font-size:0.85rem; color:#6b7280; margin-bottom:0.5rem;">
-          Secciones adicionales
-        </div>
-    `;
-
-    extraSections.forEach((sec) => {
-      htmlDetalle += `
-        <div class="section-block" style="margin-bottom:1rem;">
-          <div style="font-weight:600; font-size:0.9rem; margin-bottom:0.25rem;">
-            ${sec.seccion}
-          </div>
-          ${
-            sec.titulo
-              ? `<div style="background:#f3f4f6; padding:0.25rem 0.5rem; font-size:0.8rem; margin-bottom:0.25rem;">
-                  ${sec.titulo}
-                 </div>`
-              : ""
-          }
-          <div class="form-group">
-            <label style="font-size:0.8rem; color:#6b7280;">Notas de la sección</label>
-            <textarea class="section-note-extra" data-id="${sec.id}" rows="2"
-              style="width:100%;">${sec.nota || ""}</textarea>
-          </div>
-        </div>
-      `;
-    });
-
-    htmlDetalle += `</div>`;
-  }
-
-  detalle.innerHTML = htmlDetalle;
-
-  // Guardar notas de sección en estado
-  const currentSectionNotes = (appState.presupuesto.sectionNotes =
-    sectionNotes);
-
-  detalle.querySelectorAll(".section-note").forEach((ta) => {
-    ta.addEventListener("input", (e) => {
-      const sec = e.target.dataset.section;
-      currentSectionNotes[sec] = e.target.value;
-    });
-  });
-
-  detalle.querySelectorAll(".section-note-extra").forEach((ta) => {
-    ta.addEventListener("input", (e) => {
-      const id = e.target.dataset.id;
-      const presu2 = appState.presupuesto || {};
-      presu2.extraSections = presu2.extraSections || [];
-      const found = presu2.extraSections.find((s) => s.id === id);
-      if (found) {
-        found.nota = e.target.value;
-      }
-    });
-  });
-
-  // Drag & Drop de secciones
-  inicializarDragSecciones();
-
-  // Listeners de checkboxes para recalcular totales
-  detalle.querySelectorAll(".presu-line-check").forEach((cb) => {
-    cb.addEventListener("change", () => {
-      recalcularResumenDesdeSeleccion(lineasFiltradas, dto);
-    });
-  });
-
-  // Cálculo inicial
-  recalcularResumenDesdeSeleccion(lineasFiltradas, dto, totalBruto);
-}
-
-// ===============================================
-// Drag & Drop de secciones (reordenar bloques)
-// ===============================================
-function inicializarDragSecciones() {
-  const presu = appState.presupuesto || {};
-  presu.sectionOrder = presu.sectionOrder || [];
-
-  const rows = document.querySelectorAll(".presu-section-row");
-  if (!rows.length) return;
-
-  let dragSrcSection = null;
-
-  rows.forEach((row) => {
-    row.addEventListener("dragstart", (e) => {
-      dragSrcSection = row.dataset.section;
-      row.classList.add("dragging");
-      e.dataTransfer.effectAllowed = "move";
-    });
-
-    row.addEventListener("dragover", (e) => {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = "move";
-      row.classList.add("drag-over");
-    });
-
-    row.addEventListener("dragleave", () => {
-      row.classList.remove("drag-over");
-    });
-
-    row.addEventListener("drop", (e) => {
-      e.preventDefault();
-      row.classList.remove("drag-over");
-      const targetSection = row.dataset.section;
-      if (!dragSrcSection || dragSrcSection === targetSection) return;
-
-      const order = presu.sectionOrder || [];
-      const srcIdx = order.indexOf(dragSrcSection);
-      const tgtIdx = order.indexOf(targetSection);
-      if (srcIdx === -1 || tgtIdx === -1) return;
-
-      // mover sección
-      const [moved] = order.splice(srcIdx, 1);
-      order.splice(tgtIdx, 0, moved);
-
-      presu.sectionOrder = order;
-      appState.presupuesto = presu;
-
-      // Re-render
-      const p = appState.presupuesto;
-      renderResultados(
-        p.lineas,
-        p.resumen.totalBruto || 0,
-        p.resumen.totalNeto || 0,
-        p.resumen.dto || 0
-      );
-    });
-
-    row.addEventListener("dragend", () => {
-      row.classList.remove("dragging");
-    });
-  });
-}
-
-// ===============================================
-// Recalcular resumen económico según selección
-// ===============================================
-function recalcularResumenDesdeSeleccion(lineasVisibles, dto) {
-  const resumen = document.getElementById("presuResumen");
-  const detalle = document.getElementById("presuDetalle");
-  if (!resumen || !detalle) return;
-
-  const checks = detalle.querySelectorAll(".presu-line-check");
-
-  let totalBrutoSel = 0;
-  let lineasSel = 0;
-
-  lineasVisibles.forEach((l, idx) => {
-    const cb = checks[idx];
-    if (!cb || !cb.checked) return;
-    const importe = l.subtotal || l.pvp * l.cantidad || 0;
-    totalBrutoSel += importe;
-    lineasSel += 1;
-  });
-
-  const presu = appState.presupuesto || {};
-  const tarifaNombre = presu.tarifaNombre || "PVP";
-  const incluirIVA =
-    typeof presu.incluirIVA === "boolean" ? presu.incluirIVA : true;
-
-  const factorDto = dto > 0 ? 1 - dto / 100 : 1;
-  const subtotal = totalBrutoSel * factorDto;
-  const iva = incluirIVA ? subtotal * 0.21 : 0;
-  const totalConIva = subtotal + iva;
-
-  const leyendaIVA = incluirIVA
-    ? "Los precios indicados incluyen IVA (21%) en el total mostrado."
-    : "Los precios indicados no incluyen IVA. El IVA se añadirá según la legislación vigente.";
-
-  resumen.innerHTML = `
-    <div class="metric-card">
-      <span class="metric-label">SUBTOTAL (base imponible)</span>
-      <span class="metric-value">${subtotal.toFixed(2)} €</span>
-    </div>
-
-    <div class="metric-card">
-      <span class="metric-label">IVA 21%</span>
-      <span class="metric-value">${iva.toFixed(2)} €</span>
-    </div>
-
-    <div class="metric-card">
-      <span class="metric-label">TOTAL CON IVA</span>
-      <span class="metric-value">${totalConIva.toFixed(2)} €</span>
-    </div>
-
-    <div class="form-group" style="margin-top:0.75rem; font-size:0.8rem;">
-      <label style="display:flex; align-items:center; gap:0.35rem; cursor:pointer;">
-        <input type="checkbox" id="presuIncluirIVA" ${
-          incluirIVA ? "checked" : ""
-        } />
-        Incluir IVA (21%) en el total
-      </label>
-    </div>
-
-    <p style="font-size:0.8rem; color:#6b7280; margin-top:0.5rem;">
-      Tarifa seleccionada: <strong>${tarifaNombre}</strong><br/>
-      Líneas seleccionadas: <strong>${lineasSel}</strong><br/>
-      Total bruto sin descuento (seleccionadas): <strong>${totalBrutoSel.toFixed(
-        2
-      )} €</strong> ·
-      Descuento global aplicado: <strong>${dto}%</strong>
-    </p>
-
-    <p style="font-size:0.8rem; color:#4b5563; margin-top:0.5rem;">
-      Este presupuesto tiene una validez de <strong>60 días</strong> desde la fecha de emisión,
-      salvo indicación contraria por escrito. ${leyendaIVA}
-    </p>
-  `;
-
-  const chkIVA = document.getElementById("presuIncluirIVA");
-  if (chkIVA) {
-    chkIVA.addEventListener("change", (e) => {
-      const presu2 = appState.presupuesto || {};
-      presu2.incluirIVA = !!e.target.checked;
-      appState.presupuesto = presu2;
-      recalcularResumenDesdeSeleccion(lineasVisibles, dto);
-    });
-  }
-}
-
-console.log(
-  "%cUI Presupuesto cargado (ui_presupuesto.js)",
-  "color:#0284c7;"
-);
-window.renderPresupuestoView = renderPresupuestoView;
+  if (!nombre) re
