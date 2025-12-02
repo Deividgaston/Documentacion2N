@@ -238,7 +238,6 @@ function confirmarImportacionProyecto() {
   // Ir directamente a Presupuesto
   if (typeof selectView === "function") {
     selectView("presupuesto");
-    // marcar tab active la maneja ui_shell.js
   }
 }
 
@@ -445,10 +444,24 @@ function intentarParsearProjectDesigner(hojaArray) {
     const cantTxt = limpiar(cantRaw);
     const firstTxtRow = firstText(row);
 
-    // === Fila de título gris (ej. "Accesorios", "Recepción") ===
+    // === Fila de título gris / azul sin productos ===
     // Tiene texto en alguna celda, pero no en nombre/ref/cantidad.
     if (firstTxtRow && !nombreTxt && !refTxt && !cantTxt) {
-      currentSub = limpiar(firstTxtRow);
+      const t = limpiar(firstTxtRow);
+      const tl = t.toLowerCase();
+
+      // CASO ESPECIAL: "Accesorios" o "Recepción" (solo banda azul, sin gris)
+      if (tl === "accesorios" || tl === "recepción" || tl === "recepcion") {
+        currentMain = t; // nueva sección principal
+        currentSub = t;  // sin sub-sección propia, usamos la misma
+        if (firstMain === null) {
+          firstMain = currentMain;
+          firstSub = currentSub;
+        }
+      } else {
+        // Comportamiento normal: solo cambiamos la sub-sección gris
+        currentSub = t;
+      }
       continue;
     }
 
@@ -477,7 +490,7 @@ function intentarParsearProjectDesigner(hojaArray) {
 
   if (!filas.length) return null;
 
-  // ==== AJUSTE: si hay sección pero no título, usamos la sección como título ====
+  // Resumen global
   let seccionGlobal = firstMain || "";
   let tituloGlobal = firstSub || "";
 
