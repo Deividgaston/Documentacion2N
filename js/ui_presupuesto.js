@@ -9,13 +9,15 @@ appState.presupuesto = appState.presupuesto || {
   sectionNotes: {}, // notas por sección
   extraSections: [], // secciones manuales añadidas desde la UI
   sectionOrder: [], // orden de secciones para drag & drop
+  tarifaNombre: "PVP",
+  incluirIVA: true,
 };
 
 appState.tarifasCache = appState.tarifasCache || null; // cache de tarifas en memoria
 appState.presupuestoFiltroRef = appState.presupuestoFiltroRef || "";
 
 console.log(
-  "%cUI Presupuesto · versión DRAG&LINEAS-02-12",
+  "%cUI Presupuesto · versión DRAG&LINEAS-IVA-02-12",
   "color:#22c55e; font-weight:bold;"
 );
 
@@ -63,6 +65,19 @@ function renderPresupuestoView() {
               <div class="form-group">
                 <label>Descuento global (%)</label>
                 <input id="presuDto" type="number" min="0" max="90" value="0" />
+              </div>
+
+              <div class="form-group">
+                <label>Tarifa 2N para este presupuesto</label>
+                <select id="presuTarifa" class="input">
+                  <option value="PVP">PVP 2N (por defecto)</option>
+                  <option value="Distribuidor">Tarifa Distribuidor</option>
+                  <option value="Integrador">Tarifa Integrador / Instalador</option>
+                  <option value="Especial">Tarifa especial / Proyecto</option>
+                </select>
+                <p style="font-size:0.75rem; color:#6b7280; margin-top:0.25rem;">
+                  Solo cambia el nombre de la tarifa a efectos de documento entregado.
+                </p>
               </div>
             </div>
 
@@ -139,7 +154,7 @@ function renderPresupuestoView() {
             <input id="lineaTitulo" type="text" placeholder="Ej: Cerraduras electrónicas" />
           </div>
           <div class="form-group">
-            <label>Referencia</label>
+            <label>Referencia (opcional)</label>
             <div style="display:flex; gap:0.5rem;">
               <input id="lineaRef" type="text" style="flex:1;" placeholder="Ej: 9155101" />
               <button id="btnLineaBuscarRef" class="btn btn-secondary btn-sm">
@@ -285,16 +300,16 @@ async function guardarLineaManual() {
   const cantVal = Number(document.getElementById("lineaCantidad").value) || 0;
   const pvpVal = Number(document.getElementById("lineaPvp").value) || 0;
 
-  if (!refRaw || !cantVal) {
-    alert("Referencia y cantidad son obligatorias.");
+  if (!cantVal) {
+    alert("La cantidad es obligatoria.");
     return;
   }
 
   let pvp = pvpVal;
   let descripcion = desc;
 
-  // Si no hay pvp, intentamos buscar en la tarifa
-  if (!pvp) {
+  // Si hay referencia y no hay pvp, intentamos buscar en la tarifa
+  if (!pvp && refRaw) {
     const prod = await buscarProductoEnTarifa(refRaw);
     if (prod) {
       pvp = Number(prod.pvp) || 0;
@@ -304,7 +319,7 @@ async function guardarLineaManual() {
     }
   }
 
-  const refNormalizada = refRaw.replace(/\s+/g, "");
+  const refNormalizada = refRaw ? refRaw.replace(/\s+/g, "") : "";
 
   const subtotal = pvp * cantVal;
 
@@ -312,8 +327,8 @@ async function guardarLineaManual() {
   presu.lineas = presu.lineas || [];
 
   presu.lineas.push({
-    ref: refNormalizada,
-    descripcion: descripcion || refRaw,
+    ref: refNormalizada || "-", // puede ir sin referencia real
+    descripcion: descripcion || refRaw || "Línea sin referencia",
     cantidad: cantVal,
     pvp,
     subtotal,
@@ -327,7 +342,7 @@ async function guardarLineaManual() {
     presu.sectionOrder.push(seccion);
   }
 
-  // Recalcular resumen
+  // Recalcular resumen (sin tocar IVA aquí)
   const dto = Number(document.getElementById("presuDto").value) || 0;
   let totalBruto = 0;
   presu.lineas.forEach((l) => {
@@ -368,6 +383,11 @@ function precargarDatosProyecto() {
     "se requiere de switch poe para alimentar los equipos";
   document.getElementById("presuNotas").value =
     presu.notas || p.notas || notasPorDefecto;
+
+  const tarifaSelect = document.getElementById("presuTarifa");
+  if (tarifaSelect) {
+    tarifaSelect.value = presu.tarifaNombre || "PVP";
+  }
 }
 
 // ===============================================
@@ -603,6 +623,8 @@ async function generarPresupuesto() {
   totalNeto = totalBruto * factorDto;
 
   const notas = document.getElementById("presuNotas").value || "";
+  const tarifaSelect = document.getElementById("presuTarifa");
+  const tarifaNombre = tarifaSelect ? tarifaSelect.value : "PVP";
 
   const prevSectionNotes = appState.presupuesto.sectionNotes || {};
   const prevExtraSections = appState.presupuesto.extraSections || [];
@@ -625,6 +647,12 @@ async function generarPresupuesto() {
     if (!sectionOrder.includes(sec)) sectionOrder.push(sec);
   });
 
+  // mantener configuración de IVA anterior si existe (por defecto true)
+  const incluirIVA =
+    appState.presupuesto && typeof appState.presupuesto.incluirIVA === "boolean"
+      ? appState.presupuesto.incluirIVA
+      : true;
+
   appState.presupuesto = {
     lineas: lineasPresupuesto,
     resumen: {
@@ -639,6 +667,8 @@ async function generarPresupuesto() {
     sectionNotes: prevSectionNotes,
     extraSections: prevExtraSections,
     sectionOrder,
+    tarifaNombre,
+    incluirIVA,
   };
 
   renderResultados(lineasPresupuesto, totalBruto, totalNeto, dto);
@@ -981,7 +1011,7 @@ function inicializarDragSecciones() {
 // ===============================================
 // Recalcular resumen económico según selección
 // ===============================================
-function recalcularResumenDesdeSeleccion(lineasVisibles, dto, totalBrutoOriginal) {
+function recalcularResumenDesdeSeleccion(lineasVisibles, dto) {
   const resumen = document.getElementById("presuResumen");
   const detalle = document.getElementById("presuDetalle");
   if (!resumen || !detalle) return;
@@ -999,10 +1029,19 @@ function recalcularResumenDesdeSeleccion(lineasVisibles, dto, totalBrutoOriginal
     lineasSel += 1;
   });
 
+  const presu = appState.presupuesto || {};
+  const tarifaNombre = presu.tarifaNombre || "PVP";
+  const incluirIVA =
+    typeof presu.incluirIVA === "boolean" ? presu.incluirIVA : true;
+
   const factorDto = dto > 0 ? 1 - dto / 100 : 1;
   const subtotal = totalBrutoSel * factorDto;
-  const iva = subtotal * 0.21;
+  const iva = incluirIVA ? subtotal * 0.21 : 0;
   const totalConIva = subtotal + iva;
+
+  const leyendaIVA = incluirIVA
+    ? "Los precios indicados incluyen IVA (21%) en el total mostrado."
+    : "Los precios indicados no incluyen IVA. El IVA se añadirá según la legislación vigente.";
 
   resumen.innerHTML = `
     <div class="metric-card">
@@ -1020,14 +1059,39 @@ function recalcularResumenDesdeSeleccion(lineasVisibles, dto, totalBrutoOriginal
       <span class="metric-value">${totalConIva.toFixed(2)} €</span>
     </div>
 
+    <div class="form-group" style="margin-top:0.75rem; font-size:0.8rem;">
+      <label style="display:flex; align-items:center; gap:0.35rem; cursor:pointer;">
+        <input type="checkbox" id="presuIncluirIVA" ${
+          incluirIVA ? "checked" : ""
+        } />
+        Incluir IVA (21%) en el total
+      </label>
+    </div>
+
     <p style="font-size:0.8rem; color:#6b7280; margin-top:0.5rem;">
+      Tarifa seleccionada: <strong>${tarifaNombre}</strong><br/>
       Líneas seleccionadas: <strong>${lineasSel}</strong><br/>
       Total bruto sin descuento (seleccionadas): <strong>${totalBrutoSel.toFixed(
         2
       )} €</strong> ·
       Descuento global aplicado: <strong>${dto}%</strong>
     </p>
+
+    <p style="font-size:0.8rem; color:#4b5563; margin-top:0.5rem;">
+      Este presupuesto tiene una validez de <strong>60 días</strong> desde la fecha de emisión,
+      salvo indicación contraria por escrito. ${leyendaIVA}
+    </p>
   `;
+
+  const chkIVA = document.getElementById("presuIncluirIVA");
+  if (chkIVA) {
+    chkIVA.addEventListener("change", (e) => {
+      const presu2 = appState.presupuesto || {};
+      presu2.incluirIVA = !!e.target.checked;
+      appState.presupuesto = presu2;
+      recalcularResumenDesdeSeleccion(lineasVisibles, dto);
+    });
+  }
 }
 
 console.log(
