@@ -443,12 +443,12 @@ function intentarParsearProjectDesigner(hojaArray) {
     const nombreTxt = limpiar(nombre);
     const refTxt = limpiar(refRaw);
     const cantTxt = limpiar(cantRaw);
-    const firstTxt = firstText(row);
+    const firstTxtRow = firstText(row);
 
     // === Fila de título gris (ej. "Accesorios", "Recepción") ===
     // Tiene texto en alguna celda, pero no en nombre/ref/cantidad.
-    if (firstTxt && !nombreTxt && !refTxt && !cantTxt) {
-      currentSub = limpiar(firstTxt);
+    if (firstTxtRow && !nombreTxt && !refTxt && !cantTxt) {
+      currentSub = limpiar(firstTxtRow);
       continue;
     }
 
@@ -477,10 +477,18 @@ function intentarParsearProjectDesigner(hojaArray) {
 
   if (!filas.length) return null;
 
+  // ==== AJUSTE: si hay sección pero no título, usamos la sección como título ====
+  let seccionGlobal = firstMain || "";
+  let tituloGlobal = firstSub || "";
+
+  if (seccionGlobal && !tituloGlobal) {
+    tituloGlobal = seccionGlobal;
+  }
+
   return {
     filas,
-    seccion: firstMain || "",
-    titulo: firstSub || "",
+    seccion: seccionGlobal,
+    titulo: tituloGlobal,
   };
 }
 
