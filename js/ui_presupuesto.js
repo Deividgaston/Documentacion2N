@@ -32,7 +32,7 @@ const COMPANY_INFO = {
 };
 
 console.log(
-  "%cUI Presupuesto · versión EXPORT-EXCEL-PDF · IVA TEXT · EDIT-LINE · PERSIST",
+  "%cUI Presupuesto · versión EXPORT-EXCEL-PDF · IVA TEXT · EDIT-LINE · PERSIST · SF CSV",
   "color:#22c55e; font-weight:bold;"
 );
 
@@ -301,7 +301,12 @@ function renderPresupuestoView() {
   // Si ya había un presupuesto en memoria, pintar directamente
   const presu = appState.presupuesto || {};
   if (presu.lineas && presu.lineas.length && presu.resumen) {
-    renderResultados(presu.lineas, presu.resumen.totalBruto || 0, presu.resumen.totalNeto || 0, presu.resumen.dto || 0);
+    renderResultados(
+      presu.lineas,
+      presu.resumen.totalBruto || 0,
+      presu.resumen.totalNeto || 0,
+      presu.resumen.dto || 0
+    );
   }
 }
 
@@ -1220,9 +1225,10 @@ function recalcularResumenDesdeSeleccion(lineasVisibles, dto) {
     "Este presupuesto tiene una validez de 60 días desde la fecha de emisión, salvo indicación contraria por escrito.";
 
   resumen.innerHTML = `
-    <div style="display:flex; gap:0.5rem; margin-bottom:0.75rem;">
+    <div style="display:flex; gap:0.5rem; margin-bottom:0.75rem; flex-wrap:wrap;">
       <button id="btnExportExcel" class="btn btn-secondary btn-sm">Exportar a Excel</button>
       <button id="btnExportPDF" class="btn btn-primary btn-sm">Exportar a PDF</button>
+      <button id="btnExportSalesforce" class="btn btn-secondary btn-sm">Exportar Salesforce</button>
     </div>
 
     <div class="metric-card">
@@ -1280,8 +1286,10 @@ function recalcularResumenDesdeSeleccion(lineasVisibles, dto) {
   // Botones exportar
   const btnExcel = document.getElementById("btnExportExcel");
   const btnPDF = document.getElementById("btnExportPDF");
+  const btnSF = document.getElementById("btnExportSalesforce");
   if (btnExcel) btnExcel.addEventListener("click", exportarPresupuestoExcel);
   if (btnPDF) btnPDF.addEventListener("click", exportarPresupuestoPDF);
+  if (btnSF) btnSF.addEventListener("click", exportarPresupuestoSalesforce);
 }
 
 // ===============================================
@@ -1439,6 +1447,66 @@ function exportarPresupuestoExcel() {
   XLSX.writeFile(wb, fileName);
 }
 
+// ===============================================
+// EXPORTAR A CSV SALESFORCE (SKU;Quantity;Discount)
+// ===============================================
+function exportarPresupuestoSalesforce() {
+  const presu = appState.presupuesto || {};
+  const lineas = presu.lineas || [];
+  if (!lineas.length) {
+    alert("No hay líneas de presupuesto para exportar.");
+    return;
+  }
+
+  // Agregar por referencia
+  const cantidadesPorSKU = {};
+  const orden = [];
+
+  lineas.forEach((l) => {
+    const rawRef = (l.ref || "").toString().trim();
+    const sku = rawRef.replace(/\s+/g, "");
+    if (!sku || sku === "-") return; // saltar líneas sin referencia
+
+    if (!(sku in cantidadesPorSKU)) {
+      cantidadesPorSKU[sku] = 0;
+      orden.push(sku);
+    }
+    const qty = Number(l.cantidad || 0) || 0;
+    cantidadesPorSKU[sku] += qty;
+  });
+
+  if (!orden.length) {
+    alert("No hay referencias válidas para exportar a Salesforce.");
+    return;
+  }
+
+  // Construir CSV con ; como separador
+  let csv = "SKU;Quantity;Discount\n";
+  orden.forEach((sku) => {
+    const qty = cantidadesPorSKU[sku];
+    csv += `${sku};${qty};\n`;
+  });
+
+  const fechaHoy = presu.fecha || new Date().toISOString().split("T")[0];
+  const nombreProyecto = presu.nombre || "Proyecto_sin_nombre";
+  const fileName =
+    "Salesforce_" +
+    nombreProyecto.replace(/[^a-zA-Z0-9_-]+/g, "_") +
+    "_" +
+    fechaHoy.replace(/-/g, "") +
+    ".csv";
+
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
 
 // ===============================================
 // EXPORTAR A PDF (ventana nueva + print -> PDF)
