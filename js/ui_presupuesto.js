@@ -6,11 +6,14 @@ appState.presupuesto = appState.presupuesto || {
   lineas: [],
   resumen: {},
   notas: "",
-  sectionNotes: {},      // notas por sección
-  extraSections: [],     // secciones manuales añadidas desde la UI
+  sectionNotes: {}, // notas por sección
+  extraSections: [], // secciones manuales añadidas desde la UI
 };
 
-console.log("%cUI Presupuesto · versión DAVID-01-12", "color:#22c55e; font-weight:bold;");
+console.log(
+  "%cUI Presupuesto · versión DAVID-01-12",
+  "color:#22c55e; font-weight:bold;"
+);
 
 // ===============================================
 // Render de la vista de PRESUPUESTO
@@ -57,7 +60,6 @@ function renderPresupuestoView() {
                 <label>Descuento global (%)</label>
                 <input id="presuDto" type="number" min="0" max="90" value="0" />
               </div>
-
             </div>
 
             <div class="form-group mt-3">
@@ -126,7 +128,7 @@ function renderPresupuestoView() {
     btnGenerar.addEventListener("click", generarPresupuesto);
   }
 
-  // Botón añadir sección
+  // Botón añadir sección manual
   const btnAddSection = document.getElementById("btnAddSection");
   if (btnAddSection) {
     btnAddSection.addEventListener("click", onAddManualSection);
@@ -155,9 +157,7 @@ function precargarDatosProyecto() {
   document.getElementById("presuCliente").value =
     p.cliente || presu.cliente || "";
   document.getElementById("presuFecha").value =
-    p.fecha ||
-    presu.fecha ||
-    new Date().toISOString().split("T")[0];
+    p.fecha || presu.fecha || new Date().toISOString().split("T")[0];
   document.getElementById("presuDto").value = presu.resumen?.dto || p.dto || 0;
 
   const notasPorDefecto =
@@ -208,17 +208,15 @@ async function generarPresupuesto() {
 
   const proyecto = appState.proyecto || {};
   const lineasProyecto =
-    (proyecto.lineas && proyecto.lineas.length ? proyecto.lineas : proyecto.filas) ||
-    [];
+    (proyecto.lineas && proyecto.lineas.length
+      ? proyecto.lineas
+      : proyecto.filas) || [];
 
   console.log(
     "[Presupuesto] tarifas cargadas (reales):",
     Object.keys(tarifas).length
   );
-  console.log(
-    "[Presupuesto] líneas de proyecto:",
-    lineasProyecto.length
-  );
+  console.log("[Presupuesto] líneas de proyecto:", lineasProyecto.length);
 
   let lineasPresupuesto = [];
   let totalBruto = 0;
@@ -297,19 +295,23 @@ async function generarPresupuesto() {
     const subtotal = pvp * cantidad;
     totalBruto += subtotal;
 
+    // === sección y título procedentes del Excel/proyecto ===
     const seccion =
       item.seccion ||
       item.section ||
+      item.apartado ||
+      item.grupo ||
       item["Sección"] ||
-      item["sección"] ||
       item["SECCION"] ||
-      "";
+      item["Grupo"] ||
+      item["Apartado"] ||
+      ""; // puede ir vacío
 
     const titulo =
       item.titulo ||
       item.title ||
+      item.subseccion ||
       item["Título"] ||
-      item["titulo"] ||
       item["TITULO"] ||
       item.descripcionTitulo ||
       "";
@@ -410,7 +412,9 @@ function renderResultados(lineas, totalBruto, totalNeto, dto) {
   // Actualizar contador en cabecera derecha
   const countLabel = document.getElementById("presuLineCount");
   if (countLabel) {
-    countLabel.textContent = `${lineas ? lineas.length : 0} líneas cargadas desde el proyecto`;
+    countLabel.textContent = `${
+      lineas ? lineas.length : 0
+    } líneas cargadas desde el proyecto`;
   }
 
   if (!lineas || lineas.length === 0) {
@@ -439,8 +443,27 @@ function renderResultados(lineas, totalBruto, totalNeto, dto) {
   let currentTitle = null;
 
   for (const l of lineas) {
-    const sec = l.seccion || "Sin sección";
-    const tit = l.titulo || "Sin título";
+    // === NUEVA LÓGICA FLEXIBLE DE SECCIÓN/TÍTULO ===
+    const sec =
+      l.seccion ||
+      l.section ||
+      l.apartado ||
+      l.grupo ||
+      l["Sección"] ||
+      l["SECCION"] ||
+      l["Grupo"] ||
+      l["Apartado"] ||
+      l.titulo ||
+      l.title ||
+      "Sin sección";
+
+    const tit =
+      l.titulo ||
+      l.title ||
+      l.subseccion ||
+      l["Título"] ||
+      l["TITULO"] ||
+      "";
 
     // ===== Fila de SECCIÓN (azul) + nota de sección =====
     if (sec !== currentSection) {
@@ -467,7 +490,7 @@ function renderResultados(lineas, totalBruto, totalNeto, dto) {
       `;
     }
 
-    // ===== Fila de TÍTULO (gris) =====
+    // ===== Fila de TÍTULO (gris), solo si tenemos valor distinto =====
     if (tit && tit !== currentTitle) {
       currentTitle = tit;
       htmlDetalle += `
@@ -482,16 +505,13 @@ function renderResultados(lineas, totalBruto, totalNeto, dto) {
     // ===== Fila de producto =====
     const importe = l.subtotal || l.pvp * l.cantidad || 0;
 
-    // la celda de sección muestra el título del bloque (o la sección si no hay título)
-    const seccionCelda = l.titulo || sec || "";
-
     htmlDetalle += `
       <tr>
         <td>
           <input type="checkbox" checked />
         </td>
         <td>${l.ref}</td>
-        <td>${seccionCelda}</td>
+        <td>${sec}</td>
         <td>${l.descripcion}</td>
         <td>${l.cantidad}</td>
         <td>${l.pvp.toFixed(2)} €</td>
@@ -592,5 +612,8 @@ function renderResultados(lineas, totalBruto, totalNeto, dto) {
   `;
 }
 
-console.log("%cUI Presupuesto cargado (ui_presupuesto.js)", "color:#0284c7;");
+console.log(
+  "%cUI Presupuesto cargado (ui_presupuesto.js)",
+  "color:#0284c7;"
+);
 window.renderPresupuestoView = renderPresupuestoView;
