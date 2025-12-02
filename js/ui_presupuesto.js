@@ -10,6 +10,9 @@ appState.presupuesto = appState.presupuesto || {
   extraSections: [],     // secciones manuales añadidas desde la UI
 };
 
+
+console.log("%cUI Presupuesto · versión DAVID-01-12", "color:#22c55e; font-weight:bold;");
+
 // ===============================================
 // Render de la vista de PRESUPUESTO
 // ===============================================
