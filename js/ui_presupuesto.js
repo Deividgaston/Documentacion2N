@@ -18,10 +18,10 @@ function renderPresupuestoView() {
   if (!container) return;
 
   container.innerHTML = `
-    <div class="presupuesto-layout grid-2">
+    <div class="presupuesto-layout">
 
       <!-- COLUMNA IZQUIERDA: datos + notas + resumen -->
-      <div>
+      <div class="presupuesto-left-column">
         <!-- DATOS DEL PRESUPUESTO + NOTAS GENERALES -->
         <div class="card">
           <div class="card-header">
@@ -89,7 +89,7 @@ function renderPresupuestoView() {
       </div>
 
       <!-- COLUMNA DERECHA: DETALLE DEL PRESUPUESTO (SECCIONES) -->
-      <div>
+      <div class="presupuesto-right-column">
         <div class="card">
           <div class="card-header" style="display:flex; align-items:center; justify-content:space-between;">
             <div class="card-title">Detalle del presupuesto</div>
@@ -200,7 +200,17 @@ async function generarPresupuesto() {
   let totalNeto = 0;
 
   for (const item of lineasProyecto) {
-    const refCampo = item.ref || item.referencia;
+    // ==========================
+    // 1) REFERENCIA (varios nombres posibles)
+    // ==========================
+    const refCampo =
+      item.ref ||
+      item.referencia ||
+      item.numeroPedido ||
+      item["numero de pedido"] ||
+      item["Número de pedido"] ||
+      item.orderingNumber ||
+      item["Ordering Number"];
 
     if (!item || !refCampo) {
       console.warn("⚠ Línea sin referencia válida:", item);
@@ -232,12 +242,24 @@ async function generarPresupuesto() {
     const candidatosUnicos = [...new Set(candidatos)];
     // =====================================================
 
-    const cantidad = Number(item.cantidad || 1);
+    // ==========================
+    // 2) CANTIDAD
+    // ==========================
+    const cantidad =
+      Number(item.cantidad) ||
+      Number(item.qty) ||
+      Number(item["Cantidad"]) ||
+      Number(item["cantidad"]) ||
+      1;
+
     if (!cantidad || cantidad <= 0) {
       console.warn("⚠ Cantidad inválida:", item);
       continue;
     }
 
+    // ==========================
+    // 3) PRECIO DESDE TARIFA
+    // ==========================
     let pvp = 0;
     for (const key of candidatosUnicos) {
       if (tarifas[key] != null) {
@@ -247,12 +269,16 @@ async function generarPresupuesto() {
     }
 
     if (!pvp) {
-      console.warn("⚠ Línea sin precio o cantidad inválida", {
+      console.warn("⚠ Línea sin precio en tarifa", {
         refOriginal,
         refNormalizada: ref,
         candidatos: candidatosUnicos,
         cantidad,
-        desc: item.descripcion || item.titulo,
+        desc:
+          item.descripcion ||
+          item["Nombre del producto"] ||
+          item.nombreProducto ||
+          item.titulo,
       });
       continue;
     }
@@ -260,14 +286,44 @@ async function generarPresupuesto() {
     const subtotal = pvp * cantidad;
     totalBruto += subtotal;
 
+    // ==========================
+    // 4) SECCIÓN y TÍTULO (encabezados del Excel)
+    // ==========================
+    const seccion =
+      item.seccion ||
+      item.section ||
+      item["Sección"] ||
+      item["sección"] ||
+      item["SECCION"] ||
+      "";
+
+    const titulo =
+      item.titulo ||
+      item.title ||
+      item["Título"] ||
+      item["titulo"] ||
+      item["TITULO"] ||
+      item.descripcionTitulo ||
+      "";
+
+    // ==========================
+    // 5) DESCRIPCIÓN
+    // ==========================
+    const descripcion =
+      item.descripcion ||
+      item["Nombre del producto"] ||
+      item.nombreProducto ||
+      item.titulo ||
+      "";
+
     lineasPresupuesto.push({
       ref,
-      descripcion: item.descripcion || item.titulo || "",
+      descripcion,
       cantidad,
       pvp,
       subtotal,
-      seccion: item.seccion || "",
-      titulo: item.titulo || "",
+      seccion,
+      titulo,
     });
   }
 
