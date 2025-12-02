@@ -10,8 +10,10 @@ appState.presupuesto = appState.presupuesto || {
   extraSections: [],     // secciones manuales añadidas desde la UI
 };
 
-
-console.log("%cUI Presupuesto · versión DAVID-01-12", "color:#22c55e; font-weight:bold;");
+console.log(
+  "%cUI Presupuesto · versión DAVID-01-12",
+  "color:#22c55e; font-weight:bold;"
+);
 
 // ===============================================
 // Render de la vista de PRESUPUESTO
@@ -398,9 +400,6 @@ function onAddManualSection() {
 // ===============================================
 // Mostrar resultados en pantalla (detalle tipo tabla proyecto)
 // ===============================================
-// ===============================================
-// Mostrar resultados en pantalla (detalle tipo tabla proyecto)
-// ===============================================
 function renderResultados(lineas, totalBruto, totalNeto, dto) {
   const detalle = document.getElementById("presuDetalle");
   const resumen = document.getElementById("presuResumen");
@@ -491,7 +490,7 @@ function renderResultados(lineas, totalBruto, totalNeto, dto) {
           <input type="checkbox" checked />
         </td>
         <td>${l.ref}</td>
-        <td>${sec}</td>
+        <td></td>
         <td>${l.descripcion}</td>
         <td>${l.cantidad}</td>
         <td>${l.pvp.toFixed(2)} €</td>
@@ -592,6 +591,8 @@ function renderResultados(lineas, totalBruto, totalNeto, dto) {
   `;
 }
 
-
-console.log("%cUI Presupuesto cargado (ui_presupuesto.js)", "color:#0284c7;");
+console.log(
+  "%cUI Presupuesto cargado (ui_presupuesto.js)",
+  "color:#0284c7;"
+);
 window.renderPresupuestoView = renderPresupuestoView;
