@@ -104,7 +104,7 @@ function renderPresupuestoView() {
       </div>
 
     </div>
-  """
+  `;
 
   document
     .getElementById("btnGenerarPresupuesto")
