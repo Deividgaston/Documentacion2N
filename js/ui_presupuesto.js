@@ -15,6 +15,9 @@ appState.presupuesto = appState.presupuesto || {
 appState.tarifasCache = appState.tarifasCache || null; // cache de tarifas en memoria
 appState.presupuestoFiltroRef = appState.presupuestoFiltroRef || "";
 
+// Para saber qué línea estamos editando en el modal de edición
+let presuEditLineaIndex = null;
+
 // Datos de la empresa para el presupuesto (puedes cambiarlos aquí)
 const COMPANY_INFO = {
   nombre: "2N TELEKOMUNIKACE a.s.",
@@ -25,7 +28,7 @@ const COMPANY_INFO = {
 };
 
 console.log(
-  "%cUI Presupuesto · versión EXPORT-EXCEL-PDF · IVA TEXT",
+  "%cUI Presupuesto · versión EDIT & PDF IVA",
   "color:#22c55e; font-weight:bold;"
 );
 
@@ -131,7 +134,7 @@ function renderPresupuestoView() {
 
     </div>
 
-    <!-- MODAL LÍNEA -->
+    <!-- MODAL LÍNEA (NUEVA) -->
     <div id="presuLineaOverlay" class="modal-overlay" style="display:none;">
       <div class="modal-card">
         <div class="modal-title">Añadir línea al presupuesto</div>
@@ -181,6 +184,62 @@ function renderPresupuestoView() {
         </div>
       </div>
     </div>
+
+    <!-- MODAL EDITAR LÍNEA (CLICK EN REFERENCIA) -->
+    <div id="presuEditLineaOverlay" class="modal-overlay" style="display:none;">
+      <div class="modal-card">
+        <div class="modal-title">Editar línea de presupuesto</div>
+        
+        <div class="modal-text">
+          <div class="form-group">
+            <label>Sección</label>
+            <input id="editLineaSeccion" type="text" />
+          </div>
+
+          <div class="form-group">
+            <label>Título (opcional)</label>
+            <input id="editLineaTitulo" type="text" />
+          </div>
+
+          <div class="form-group">
+            <label>Referencia</label>
+            <div style="display:flex; gap:0.5rem;">
+              <input id="editLineaRef" type="text" style="flex:1;" />
+              <button id="btnEditLineaBuscarRef" class="btn btn-secondary btn-sm">Buscar ref</button>
+            </div>
+            <p style="font-size:0.75rem; color:#6b7280; margin-top:0.25rem;">
+              Si la referencia existe en la tarifa, se rellenarán automáticamente la descripción y el PVP.
+            </p>
+          </div>
+
+          <div class="form-group">
+            <label>Descripción</label>
+            <textarea id="editLineaDesc" rows="2"></textarea>
+          </div>
+
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Cantidad</label>
+              <input id="editLineaCantidad" type="number" min="1" value="1" />
+            </div>
+            <div class="form-group">
+              <label>PVP unidad (€)</label>
+              <input id="editLineaPvp" type="number" min="0" step="0.01" value="0" />
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-actions" style="justify-content:space-between;">
+          <button id="btnEditLineaBorrar" class="btn btn-secondary btn-sm" style="background:#fee2e2; color:#b91c1c; border-color:#fecaca;">
+            Borrar línea
+          </button>
+          <div>
+            <button id="btnEditLineaCancelar" class="btn btn-secondary btn-sm">Cancelar</button>
+            <button id="btnEditLineaGuardar" class="btn btn-primary btn-sm">Guardar cambios</button>
+          </div>
+        </div>
+      </div>
+    </div>
   `;
 
   // ==== LISTENERS ====
@@ -191,7 +250,7 @@ function renderPresupuestoView() {
   if (btnAddSection) btnAddSection.addEventListener("click", onAddManualSection);
 
   const btnAddLinea = document.getElementById("btnAddLinea");
-  if (btnAddLinea) btnAddLinea.addEventListener("click", abrirModalLinea);
+  if (btnAddLinea) btnAddLinea.addEventListener("click", () => abrirModalLinea());
 
   // Filtro ref
   const filtroRefInput = document.getElementById("presuFiltroRef");
@@ -206,19 +265,19 @@ function renderPresupuestoView() {
     });
   }
 
-  // Modal
-  const overlay = document.getElementById("presuLineaOverlay");
+  // Modal NUEVA línea
+  const overlayNueva = document.getElementById("presuLineaOverlay");
   const btnCancelarLinea = document.getElementById("btnLineaCancelar");
   const btnGuardarLinea = document.getElementById("btnLineaGuardar");
   const btnBuscarRef = document.getElementById("btnLineaBuscarRef");
 
-  if (btnCancelarLinea && overlay) {
+  if (btnCancelarLinea && overlayNueva) {
     btnCancelarLinea.addEventListener("click", () => {
-      overlay.style.display = "none";
+      overlayNueva.style.display = "none";
     });
   }
 
-  if (btnGuardarLinea && overlay) {
+  if (btnGuardarLinea && overlayNueva) {
     btnGuardarLinea.addEventListener("click", guardarLineaManual);
   }
 
@@ -226,20 +285,56 @@ function renderPresupuestoView() {
     btnBuscarRef.addEventListener("click", autofillLineaDesdeTarifa);
   }
 
+  // Modal EDITAR línea
+  const overlayEdit = document.getElementById("presuEditLineaOverlay");
+  const btnEditCancelar = document.getElementById("btnEditLineaCancelar");
+  const btnEditGuardar = document.getElementById("btnEditLineaGuardar");
+  const btnEditBorrar = document.getElementById("btnEditLineaBorrar");
+  const btnEditBuscarRef = document.getElementById("btnEditLineaBuscarRef");
+
+  if (btnEditCancelar && overlayEdit) {
+    btnEditCancelar.addEventListener("click", () => {
+      overlayEdit.style.display = "none";
+      presuEditLineaIndex = null;
+    });
+  }
+
+  if (btnEditGuardar && overlayEdit) {
+    btnEditGuardar.addEventListener("click", guardarLineaEditada);
+  }
+
+  if (btnEditBorrar && overlayEdit) {
+    btnEditBorrar.addEventListener("click", borrarLineaEditada);
+  }
+
+  if (btnEditBuscarRef) {
+    btnEditBuscarRef.addEventListener("click", autofillLineaEditDesdeTarifa);
+  }
+
   precargarDatosProyecto();
 }
+
 // ===============================================
-// Modal línea manual
+// Modal línea manual (NUEVA)
 // ===============================================
-function abrirModalLinea() {
+function abrirModalLinea(defaultSection, defaultTitle) {
   const overlay = document.getElementById("presuLineaOverlay");
   if (!overlay) return;
 
   const presu = appState.presupuesto || {};
   const ult = presu.lineas && presu.lineas.length ? presu.lineas[presu.lineas.length - 1] : null;
 
-  document.getElementById("lineaSeccion").value = ult?.seccion || "";
-  document.getElementById("lineaTitulo").value = ult?.titulo || "";
+  const secInput = document.getElementById("lineaSeccion");
+  const titInput = document.getElementById("lineaTitulo");
+
+  if (typeof defaultSection === "string") {
+    secInput.value = defaultSection;
+    titInput.value = defaultTitle || "";
+  } else {
+    secInput.value = ult?.seccion || "";
+    titInput.value = ult?.titulo || "";
+  }
+
   document.getElementById("lineaRef").value = "";
   document.getElementById("lineaDesc").value = "";
   document.getElementById("lineaCantidad").value = "1";
@@ -249,7 +344,7 @@ function abrirModalLinea() {
 }
 
 // ===============================================
-// Buscar producto en tarifa desde modal
+// Buscar producto en tarifa desde modal NUEVA
 // ===============================================
 async function autofillLineaDesdeTarifa() {
   const refInput = document.getElementById("lineaRef");
@@ -273,7 +368,7 @@ async function autofillLineaDesdeTarifa() {
 }
 
 // ===============================================
-// Guardar línea manual
+// Guardar línea manual NUEVA
 // ===============================================
 async function guardarLineaManual() {
   const overlay = document.getElementById("presuLineaOverlay");
@@ -305,6 +400,7 @@ async function guardarLineaManual() {
   const subtotal = pvp * cantidad;
 
   const presu = appState.presupuesto;
+  presu.lineas = presu.lineas || [];
   presu.lineas.push({
     ref,
     descripcion: descripcion || refRaw || "Línea sin referencia",
@@ -315,14 +411,27 @@ async function guardarLineaManual() {
     titulo,
   });
 
-  if (!presu.sectionOrder.includes(seccion)) {
-    presu.sectionOrder.push(seccion);
-  }
+  // Recalcular orden de secciones desde lineas
+  presu.sectionOrder = [];
+  presu.lineas.forEach((l) => {
+    const sec =
+      l.seccion ||
+      l.section ||
+      l.apartado ||
+      l.grupo ||
+      l["Sección"] ||
+      l["SECCION"] ||
+      l["Grupo"] ||
+      l["Apartado"] ||
+      l.titulo ||
+      l.title ||
+      "Sin sección";
+    if (!presu.sectionOrder.includes(sec)) presu.sectionOrder.push(sec);
+  });
 
   const dto = Number(document.getElementById("presuDto").value) || 0;
   let totalBruto = 0;
-
-  presu.lineas.forEach(l => totalBruto += l.subtotal);
+  presu.lineas.forEach((l) => (totalBruto += l.subtotal || l.pvp * l.cantidad || 0));
   const factorDto = dto > 0 ? 1 - dto / 100 : 1;
 
   presu.resumen = {
@@ -340,7 +449,192 @@ async function guardarLineaManual() {
     presu.resumen.dto
   );
 
-  overlay.style.display = "none";
+  if (overlay) overlay.style.display = "none";
+}
+
+// ===============================================
+// Modal EDITAR línea (desde click en referencia)
+// ===============================================
+function abrirModalEditarLinea(index) {
+  const overlay = document.getElementById("presuEditLineaOverlay");
+  if (!overlay) return;
+
+  const presu = appState.presupuesto || {};
+  const lineas = presu.lineas || [];
+  const l = lineas[index];
+  if (!l) return;
+
+  presuEditLineaIndex = index;
+
+  document.getElementById("editLineaSeccion").value = l.seccion || "";
+  document.getElementById("editLineaTitulo").value = l.titulo || "";
+  document.getElementById("editLineaRef").value = l.ref || "";
+  document.getElementById("editLineaDesc").value = l.descripcion || "";
+  document.getElementById("editLineaCantidad").value = l.cantidad || 1;
+  document.getElementById("editLineaPvp").value = (l.pvp || 0).toString();
+
+  overlay.style.display = "flex";
+}
+
+// Buscar producto en tarifa desde modal EDITAR
+async function autofillLineaEditDesdeTarifa() {
+  const refInput = document.getElementById("editLineaRef");
+  const descInput = document.getElementById("editLineaDesc");
+  const pvpInput = document.getElementById("editLineaPvp");
+  if (!refInput) return;
+
+  const ref = refInput.value.trim();
+  if (!ref) return;
+
+  const producto = await buscarProductoEnTarifa(ref);
+  if (!producto) {
+    alert("No se ha encontrado esta referencia en la tarifa.");
+    return;
+  }
+
+  if (producto.descripcion) {
+    descInput.value = producto.descripcion;
+  }
+  pvpInput.value = (Number(producto.pvp) || 0).toFixed(2);
+}
+
+// Guardar cambios en línea editada
+async function guardarLineaEditada() {
+  if (presuEditLineaIndex === null) return;
+
+  const presu = appState.presupuesto || {};
+  const lineas = presu.lineas || [];
+  const l = lineas[presuEditLineaIndex];
+  if (!l) return;
+
+  const seccion = (document.getElementById("editLineaSeccion").value || "").trim() || "Sección manual";
+  const titulo = (document.getElementById("editLineaTitulo").value || "").trim();
+  const refRaw = (document.getElementById("editLineaRef").value || "").trim();
+  let desc = (document.getElementById("editLineaDesc").value || "").trim();
+  let cantidad = Number(document.getElementById("editLineaCantidad").value) || 0;
+  let pvp = Number(document.getElementById("editLineaPvp").value) || 0;
+
+  if (!cantidad) {
+    alert("La cantidad es obligatoria.");
+    return;
+  }
+
+  if (refRaw && (!pvp || !desc)) {
+    const prod = await buscarProductoEnTarifa(refRaw);
+    if (prod) {
+      if (!pvp) pvp = Number(prod.pvp) || 0;
+      if (!desc && prod.descripcion) desc = prod.descripcion;
+    }
+  }
+
+  const ref = refRaw ? refRaw.replace(/\s+/g, "") : "-";
+  const subtotal = pvp * cantidad;
+
+  l.seccion = seccion;
+  l.titulo = titulo;
+  l.ref = ref;
+  l.descripcion = desc || refRaw || "Línea sin referencia";
+  l.cantidad = cantidad;
+  l.pvp = pvp;
+  l.subtotal = subtotal;
+
+  // Recalcular sección order
+  presu.sectionOrder = [];
+  lineas.forEach((li) => {
+    const sec =
+      li.seccion ||
+      li.section ||
+      li.apartado ||
+      li.grupo ||
+      li["Sección"] ||
+      li["SECCION"] ||
+      li["Grupo"] ||
+      li["Apartado"] ||
+      li.titulo ||
+      li.title ||
+      "Sin sección";
+    if (!presu.sectionOrder.includes(sec)) presu.sectionOrder.push(sec);
+  });
+
+  const dto = Number(document.getElementById("presuDto").value) || 0;
+  let totalBruto = 0;
+  lineas.forEach((li) => (totalBruto += li.subtotal || li.pvp * li.cantidad || 0));
+  const factorDto = dto > 0 ? 1 - dto / 100 : 1;
+
+  presu.resumen = {
+    totalBruto,
+    dto,
+    totalNeto: totalBruto * factorDto,
+  };
+
+  appState.presupuesto = presu;
+
+  renderResultados(
+    presu.lineas,
+    presu.resumen.totalBruto,
+    presu.resumen.totalNeto,
+    presu.resumen.dto
+  );
+
+  const overlay = document.getElementById("presuEditLineaOverlay");
+  if (overlay) overlay.style.display = "none";
+  presuEditLineaIndex = null;
+}
+
+// Borrar línea editada
+function borrarLineaEditada() {
+  if (presuEditLineaIndex === null) return;
+
+  if (!confirm("¿Seguro que quieres borrar esta línea del presupuesto?")) return;
+
+  const presu = appState.presupuesto || {};
+  const lineas = presu.lineas || [];
+
+  if (!lineas[presuEditLineaIndex]) return;
+
+  lineas.splice(presuEditLineaIndex, 1);
+  presuEditLineaIndex = null;
+
+  // Recalcular sección order
+  presu.sectionOrder = [];
+  lineas.forEach((li) => {
+    const sec =
+      li.seccion ||
+      li.section ||
+      li.apartado ||
+      li.grupo ||
+      li["Sección"] ||
+      li["SECCION"] ||
+      li["Grupo"] ||
+      li["Apartado"] ||
+      li.titulo ||
+      li.title ||
+      "Sin sección";
+    if (!presu.sectionOrder.includes(sec)) presu.sectionOrder.push(sec);
+  });
+
+  const dto = Number(document.getElementById("presuDto").value) || 0;
+  let totalBruto = 0;
+  lineas.forEach((li) => (totalBruto += li.subtotal || li.pvp * li.cantidad || 0));
+  const factorDto = dto > 0 ? 1 - dto / 100 : 1;
+
+  presu.resumen = {
+    totalBruto,
+    dto,
+    totalNeto: totalBruto * factorDto,
+  };
+
+  appState.presupuesto = presu;
+
+  renderResultados(
+    presu.lineas,
+    presu.resumen.totalBruto,
+    presu.resumen.totalNeto,
+    presu.resumen.dto
+  );
+
+  const overlay = document.getElementById("presuEditLineaOverlay");
+  if (overlay) overlay.style.display = "none";
 }
 
 // ===============================================
@@ -372,7 +666,7 @@ async function cargarTarifasDesdeFirestore() {
   const snap = await db.collection("tarifas").doc("v1").collection("productos").get();
 
   const result = {};
-  snap.forEach(d => {
+  snap.forEach((d) => {
     const obj = d.data();
     const pvp = Number(obj.pvp) || 0;
     if (!pvp) return;
@@ -410,7 +704,7 @@ async function buscarProductoEnTarifa(refRaw) {
   if (ref.length === 7) candidatos.push(ref + "0", ref + "00");
   if (ref.length === 8) candidatos.push(ref.slice(0, 7));
 
-  const únicos = [...new Set(candidatos.map(c => c.replace(/\s+/g, "")))];
+  const únicos = [...new Set(candidatos.map((c) => c.replace(/\s+/g, "")))];
 
   for (const c of únicos) {
     if (tarifas[c]) return tarifas[c];
@@ -418,6 +712,7 @@ async function buscarProductoEnTarifa(refRaw) {
 
   return null;
 }
+
 // ===============================================
 // Generación del presupuesto completo desde PROYECTO
 // ===============================================
@@ -528,7 +823,7 @@ async function generarPresupuesto() {
       item["SECCION"] ||
       item["Grupo"] ||
       item["Apartado"] ||
-      ""; // puede ir vacío
+      "";
 
     const titulo =
       item.titulo ||
@@ -649,6 +944,7 @@ function onAddManualSection() {
     );
   }
 }
+
 // ===============================================
 // Pintar resultados en pantalla (detalle + resumen)
 // ===============================================
@@ -743,11 +1039,14 @@ function renderResultados(lineas, totalBruto, totalNeto, dto) {
 
     let currentTitle = null;
 
-    // Fila de sección (drag & drop)
+    // Fila de sección (drag & drop) + botón añadir línea en sección
     htmlDetalle += `
       <tr class="presu-section-row" data-section="${sec}" draggable="true">
-        <td colspan="7" style="background:#eef2ff; font-weight:600; text-transform:uppercase; cursor:move;">
-          <span style="margin-right:0.5rem;">↕</span>${sec}
+        <td colspan="7" style="background:#eef2ff; font-weight:600; text-transform:uppercase; cursor:move; display:flex; align-items:center; justify-content:space-between;">
+          <span><span style="margin-right:0.5rem;">↕</span>${sec}</span>
+          <button type="button" class="btn btn-secondary btn-sm presu-add-line-section" data-section="${sec}">
+            + Añadir línea
+          </button>
         </td>
       </tr>
       <tr>
@@ -784,13 +1083,20 @@ function renderResultados(lineas, totalBruto, totalNeto, dto) {
       }
 
       const importe = l.subtotal || l.pvp * l.cantidad || 0;
+      const indexGlobal = presu.lineas.indexOf(l);
 
       htmlDetalle += `
         <tr>
           <td>
             <input type="checkbox" class="presu-line-check" checked />
           </td>
-          <td>${l.ref}</td>
+          <td>
+            <span class="presu-ref-click"
+                  data-line-index="${indexGlobal}"
+                  style="cursor:pointer; text-decoration:underline; color:#1d4ed8;">
+              ${l.ref}
+            </span>
+          </td>
           <td>${sec}</td>
           <td>${l.descripcion}</td>
           <td>${l.cantidad}</td>
@@ -862,6 +1168,22 @@ function renderResultados(lineas, totalBruto, totalNeto, dto) {
     });
   });
 
+  // Botones "Añadir línea" por sección
+  detalle.querySelectorAll(".presu-add-line-section").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const sec = btn.dataset.section || "";
+      abrirModalLinea(sec, "");
+    });
+  });
+
+  // Click en referencia -> abrir modal editar
+  detalle.querySelectorAll(".presu-ref-click").forEach((el) => {
+    el.addEventListener("click", () => {
+      const idx = Number(el.dataset.lineIndex);
+      if (!Number.isNaN(idx)) abrirModalEditarLinea(idx);
+    });
+  });
+
   // Drag & drop secciones
   inicializarDragSecciones();
 
@@ -875,6 +1197,7 @@ function renderResultados(lineas, totalBruto, totalNeto, dto) {
   // Cálculo inicial
   recalcularResumenDesdeSeleccion(lineasFiltradas, dto);
 }
+
 // ===============================================
 // Drag & Drop de secciones (reordenar bloques)
 // ===============================================
@@ -1037,6 +1360,7 @@ function recalcularResumenDesdeSeleccion(lineasVisibles, dto) {
   if (btnExcel) btnExcel.addEventListener("click", exportarPresupuestoExcel);
   if (btnPDF) btnPDF.addEventListener("click", exportarPresupuestoPDF);
 }
+
 // ===============================================
 // EXPORTAR A EXCEL (XLSX)
 // ===============================================
@@ -1183,6 +1507,7 @@ function exportarPresupuestoExcel() {
 
   XLSX.writeFile(wb, fileName);
 }
+
 // ===============================================
 // EXPORTAR A PDF (ventana nueva + print -> PDF)
 // ===============================================
@@ -1218,6 +1543,10 @@ function exportarPresupuestoPDF() {
   const textoValidez =
     "Este presupuesto tiene una validez de 60 días desde la fecha de emisión, salvo indicación contraria por escrito.";
 
+  const etiquetaTotal = incluirIVA
+    ? "Total oferta (IVA incluido)"
+    : "Total oferta (sin IVA)";
+
   // Agrupar por sección respetando el orden del presupuesto
   const secciones = presu.sectionOrder || [];
   const mapSec = {};
@@ -1248,7 +1577,7 @@ function exportarPresupuestoPDF() {
     <style>
       body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 24px; color:#111827; }
       h1 { font-size: 20px; margin-bottom: 4px; }
-      h2 { font-size: 15px; margin: 16px 0 8px; }
+      h2 { font-size: 15px; margin: 16px 0 4px; }
       .header { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:3px solid #1d4ed8; padding-bottom:12px; margin-bottom:18px; }
       .brand { font-size:12px; text-transform:uppercase; letter-spacing:0.08em; color:#1d4ed8; font-weight:600; }
       .company-name { font-size:16px; font-weight:700; }
@@ -1262,7 +1591,7 @@ function exportarPresupuestoPDF() {
       .totals { margin-top:16px; font-size:11px; width:280px; margin-left:auto; }
       .totals td { padding:4px 4px; }
       .totals tr:last-child td { font-weight:700; border-top:2px solid #1f2937; }
-      .notes { margin-top:16px; font-size:10px; color:#4b5563; }
+      .notes { margin-top:4px; font-size:11px; color:#4b5563; }
       .footer { margin-top:12px; font-size:9px; color:#6b7280; }
     </style>
   `;
@@ -1297,6 +1626,16 @@ function exportarPresupuestoPDF() {
         </div>
 
         <h2>Detalle del suministro</h2>
+        <div class="notes">
+          ${
+            presu.notas
+              ? `<strong>Observaciones generales del proyecto:</strong><br/>${presu.notas
+                  .split("\n")
+                  .join("<br/>")}`
+              : ""
+          }
+        </div>
+
         <table>
           <thead>
             <tr>
@@ -1371,20 +1710,10 @@ function exportarPresupuestoPDF() {
             <td style="text-align:right;">${iva.toFixed(2)} €</td>
           </tr>
           <tr>
-            <td>Total oferta</td>
+            <td>${etiquetaTotal}</td>
             <td style="text-align:right;">${total.toFixed(2)} €</td>
           </tr>
         </table>
-
-        <div class="notes">
-          ${
-            presu.notas
-              ? `<strong>Observaciones generales:</strong><br/>${presu.notas
-                  .split("\n")
-                  .join("<br/>")}`
-              : ""
-          }
-        </div>
 
         <div class="footer">
           ${textoValidez}<br/>
