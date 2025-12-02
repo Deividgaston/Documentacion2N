@@ -1,6 +1,9 @@
 // js/ui_proyecto.js
 // Pantalla de PROYECTO: importar Excel (incl. Project Designer) y guardar en appState + localStorage
 
+// 💾 Clave para cachear el proyecto en localStorage
+const PROYECTO_CACHE_KEY = "proyecto_cache_v1";
+
 window.appState = window.appState || {};
 appState.proyecto = appState.proyecto || {
   filas: [],
@@ -88,7 +91,7 @@ function renderProyectoView() {
         </div>
       </div>
     </div>
-  ";
+  `;  // 👈 aquí he cambiado la " por backtick
 
   // Eventos
   const btnProcesar = document.getElementById("btnProcesarProyecto");
