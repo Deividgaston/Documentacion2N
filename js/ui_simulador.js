@@ -1,144 +1,126 @@
 // js/ui_simulador.js
-// Página de SIMULADOR de márgenes y tarifas
+// SIMULADOR de tarifas por rol a partir del presupuesto actual
 
 window.appState = window.appState || {};
 appState.simulador = appState.simulador || {
-  ref: "",
-  descripcion: "",
-  pvpBase: 0,
-  cantidad: 1,
-  roles: null, // se rellena con DEFAULT_SIM_ROLES
+  rol: "PVP",
+  dtoExtra: 0,          // descuento adicional global sobre el rol elegido
+  lineasSimuladas: [],  // cache de resultado
 };
 
-// Márgenes por defecto sacados de la PLANTILLA 4.0 (hoja TARIFA, fila 0)
-const DEFAULT_SIM_ROLES = [
-  { id: "nfrd",   label: "NFR Distribuidor",          descuento: 55 },
-  { id: "rnfr",   label: "RNFR Reseller",             descuento: 50 },
-  { id: "vad",    label: "VAD / Mayorista",           descuento: 39 },
-  { id: "bbd",    label: "BBD / Proyecto",            descuento: 39 },
-  { id: "rp2",    label: "RP2",                       descuento: 28 },
-  { id: "rp1",    label: "RP1 (PVP recomendado)",     descuento: 10 },
+appState.tarifasRolCache = appState.tarifasRolCache || null;
+
+// Si existen helpers del presupuesto, los usamos
+const getPresupuestoActual =
+  typeof window.getPresupuestoActual === "function"
+    ? window.getPresupuestoActual
+    : null;
+
+// ===============================
+// CONFIGURACIÓN DE ROLES
+// ===============================
+const ROLES_TARIFA = [
+  { id: "PVP", label: "PVP público" },
+  { id: "INSTALADOR", label: "Instalador" },
+  { id: "PARTNER", label: "Partner / Integrador" },
+  { id: "PROMOTOR", label: "Promotor / BTR" },
 ];
 
-// ===============================================
-// Render principal de la vista SIMULADOR
-// ===============================================
+// Mapeo de campos que habrá en Firestore para cada rol
+// Ajusta estos nombres a tu estructura real de Firestore
+const ROL_FIELD_MAP = {
+  PVP: "pvp_pvp",             // o simplemente "pvp" si quieres
+  INSTALADOR: "pvp_instalador",
+  PARTNER: "pvp_partner",
+  PROMOTOR: "pvp_promotor",
+};
+
+console.log(
+  "%cUI Simulador · v1 · roles de tarifa",
+  "color:#22c55e; font-weight:bold;"
+);
+
+// ===============================
+// RENDER PRINCIPAL
+// ===============================
 function renderSimuladorView() {
   const container = document.getElementById("appContent");
   if (!container) return;
 
-  const sim = appState.simulador || {};
-  if (!sim.roles) {
-    // Clonamos la config por defecto
-    sim.roles = DEFAULT_SIM_ROLES.map((r) => ({ ...r }));
-  }
-
   container.innerHTML = `
-    <div class="presupuesto-layout">
+    <div class="simulador-layout">
 
-      <!-- COLUMNA IZQUIERDA: parámetros de simulación -->
-      <div class="presupuesto-left-column">
+      <!-- COLUMNA IZQUIERDA: Configuración -->
+      <div class="simulador-left-column">
         <div class="card">
           <div class="card-header">
             <div>
-              <div class="card-title">Simulador de márgenes</div>
+              <div class="card-title">Simulador de tarifas</div>
               <div class="card-subtitle">
-                Juega con referencias, descuentos y márgenes para cada rol
-                partiendo de la tarifa oficial 2N.
+                Compara cómo cambia el presupuesto según el rol y descuentos adicionales.
               </div>
             </div>
-            <span class="badge-step">Herramienta de apoyo</span>
+            <span class="badge-step">Paso 3 de 3</span>
           </div>
 
           <div class="card-body">
             <div class="form-group">
-              <label>Referencia 2N</label>
-              <div style="display:flex; gap:0.5rem;">
-                <input id="simRef" type="text" class="input" style="flex:1;"
-                  placeholder="Ej: 9155101" />
-                <button id="simBuscarRef" class="btn btn-secondary">
-                  Buscar
-                </button>
-              </div>
-              <p style="font-size:0.78rem; color:#6b7280; margin-top:0.25rem;">
-                Si la referencia existe en la tarifa (Firestore), se cargarán automáticamente
-                la descripción y el PVP base.
+              <label>Fuente de líneas</label>
+              <p style="font-size:0.8rem; color:#6b7280; margin-top:0.25rem;">
+                Se utilizan las líneas del <strong>presupuesto actual</strong> (ref, descripción y cantidades).
               </p>
             </div>
 
-            <div class="form-group mt-2">
-              <label>Descripción</label>
-              <textarea id="simDescripcion" rows="2"
-                placeholder="Descripción del producto"></textarea>
-            </div>
-
-            <div class="form-grid mt-2">
+            <div class="form-grid">
               <div class="form-group">
-                <label>PVP base (PRECIO UNITARIO)</label>
-                <input id="simPvpBase" type="number" min="0" step="0.01" />
-                <p style="font-size:0.78rem; color:#6b7280; margin-top:0.15rem;">
-                  Es el PVP lista de tarifa. Desde aquí se calculan los distintos precios netos.
+                <label>Rol de tarifa</label>
+                <select id="simRol" class="input">
+                  ${ROLES_TARIFA.map(
+                    (r) =>
+                      `<option value="${r.id}">${
+                        r.label
+                      }</option>`
+                  ).join("")}
+                </select>
+                <p style="font-size:0.75rem; color:#6b7280; margin-top:0.25rem;">
+                  Cada rol usa su precio específico desde la base de datos (tarifas 2N por rol).
                 </p>
               </div>
+
               <div class="form-group">
-                <label>Cantidad</label>
-                <input id="simCantidad" type="number" min="1" value="1" />
+                <label>Descuento adicional (%)</label>
+                <input id="simDtoExtra" type="number" min="0" max="90" value="0" />
+                <p style="font-size:0.75rem; color:#6b7280; margin-top:0.25rem;">
+                  Se aplica sobre el precio del rol seleccionado (ej. promo especial de proyecto).
+                </p>
               </div>
             </div>
 
-            <div class="form-group mt-3">
-              <label>Márgenes por rol</label>
-              <p style="font-size:0.78rem; color:#6b7280; margin-bottom:0.35rem;">
-                Valores por defecto basados en tu PLANTILLA 4.0 (hoja TARIFA). 
-                Puedes modificarlos para simular distintos escenarios.
-              </p>
-              <table class="table" style="font-size:0.8rem;">
-                <thead>
-                  <tr>
-                    <th>Rol / nivel de tarifa</th>
-                    <th style="width:100px;">Dto. desde PVP</th>
-                  </tr>
-                </thead>
-                <tbody id="simRolesTbody">
-                  ${sim.roles
-                    .map(
-                      (r, idx) => `
-                    <tr>
-                      <td>${r.label}</td>
-                      <td>
-                        <div style="display:flex; align-items:center; gap:0.25rem;">
-                          <input type="number" min="0" max="95" step="0.5"
-                            class="sim-role-discount input"
-                            data-index="${idx}"
-                            value="${r.descuento}" />
-                          <span>%</span>
-                        </div>
-                      </td>
-                    </tr>
-                  `
-                    )
-                    .join("")}
-                </tbody>
-              </table>
-            </div>
-
-            <button id="simResetRoles" class="btn btn-secondary btn-sm mt-2">
-              Restablecer márgenes por defecto
+            <button id="btnSimRecalcular" class="btn btn-primary w-full mt-3">
+              Recalcular simulación
             </button>
+
+            <div class="sim-summary mt-4" id="simResumenMini" style="font-size:0.85rem; color:#4b5563;">
+              No se ha calculado todavía la simulación.
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- COLUMNA DERECHA: resultados -->
-      <div class="presupuesto-right-column">
+      <!-- COLUMNA DERECHA: Tabla de simulación -->
+      <div class="simulador-right-column">
         <div class="card">
           <div class="card-header" style="display:flex; align-items:center; justify-content:space-between; gap:1rem;">
             <div class="card-title">
               Resultado de la simulación
+              <span id="simLineCount" style="font-size:0.8rem; color:#6b7280; font-weight:400;">
+                0 líneas simuladas
+              </span>
             </div>
           </div>
-          <div class="card-body" id="simResultado">
-            Introduce una referencia o un PVP base para ver aquí el detalle.
+
+          <div class="card-body" id="simDetalle">
+            No hay datos de presupuesto para simular. Genera primero un presupuesto.
           </div>
         </div>
       </div>
@@ -146,107 +128,42 @@ function renderSimuladorView() {
     </div>
   `;
 
-  // Precargar estado si existía algo
-  document.getElementById("simRef").value = sim.ref || "";
-  document.getElementById("simDescripcion").value = sim.descripcion || "";
-  document.getElementById("simPvpBase").value =
-    sim.pvpBase != null ? sim.pvpBase : "";
-  document.getElementById("simCantidad").value = sim.cantidad || 1;
+  // Inicializar UI con estado guardado
+  const rolSelect = document.getElementById("simRol");
+  const dtoExtraInput = document.getElementById("simDtoExtra");
 
-  // Eventos básicos
-  const btnBuscar = document.getElementById("simBuscarRef");
-  if (btnBuscar) btnBuscar.addEventListener("click", onSimBuscarRef);
+  if (rolSelect) {
+    rolSelect.value = appState.simulador.rol || "PVP";
+  }
+  if (dtoExtraInput) {
+    dtoExtraInput.value = appState.simulador.dtoExtra || 0;
+  }
 
-  const inpPvpBase = document.getElementById("simPvpBase");
-  const inpCantidad = document.getElementById("simCantidad");
-  const inpDesc = document.getElementById("simDescripcion");
-  const inpRef = document.getElementById("simRef");
-
-  if (inpPvpBase) inpPvpBase.addEventListener("input", onSimInputsChange);
-  if (inpCantidad) inpCantidad.addEventListener("input", onSimInputsChange);
-  if (inpDesc) inpDesc.addEventListener("input", onSimInputsChange);
-  if (inpRef) inpRef.addEventListener("input", onSimInputsChange);
-
-  // Cambios en descuentos por rol
-  document.querySelectorAll(".sim-role-discount").forEach((input) => {
-    input.addEventListener("input", (e) => {
-      const idx = Number(e.target.dataset.index);
-      const val = Number(e.target.value) || 0;
-      const sim = appState.simulador;
-      if (!sim.roles || !sim.roles[idx]) return;
-      sim.roles[idx].descuento = val;
+  const btnRecalc = document.getElementById("btnSimRecalcular");
+  if (btnRecalc) {
+    btnRecalc.addEventListener("click", () => {
       recalcularSimulador();
     });
-  });
-
-  const btnReset = document.getElementById("simResetRoles");
-  if (btnReset) {
-    btnReset.addEventListener("click", () => {
-      const sim = appState.simulador;
-      sim.roles = DEFAULT_SIM_ROLES.map((r) => ({ ...r }));
-      renderSimuladorView(); // volvemos a pintar con valores por defecto
-    });
   }
 
-  // Cálculo inicial (si hubiera estado guardado)
+  // Primera carga automática
   recalcularSimulador();
 }
 
-// ===============================================
-// Gestión de cambios en inputs simples
-// ===============================================
-function onSimInputsChange() {
-  const sim = appState.simulador || {};
-  sim.ref = (document.getElementById("simRef").value || "").trim();
-  sim.descripcion =
-    (document.getElementById("simDescripcion").value || "").trim();
-  sim.pvpBase = Number(
-    document.getElementById("simPvpBase").value || 0
-  );
-  sim.cantidad = Number(
-    document.getElementById("simCantidad").value || 1
-  );
-  appState.simulador = sim;
-  recalcularSimulador();
-}
-
-// ===============================================
-// Buscar referencia en Firestore (tarifa 2N)
-// reutiliza cargarTarifasDesdeFirestore / lógica de normalización
-// ===============================================
-async function onSimBuscarRef() {
-  const refInput = document.getElementById("simRef");
-  if (!refInput) return;
-
-  const raw = (refInput.value || "").trim();
-  if (!raw) return;
-
-  const producto = await simBuscarProductoEnTarifa(raw);
-  if (!producto) {
-    alert("No se ha encontrado esa referencia en la tarifa.");
-    return;
+// ===============================
+// Cargar tarifas con precios por rol
+// (una sola lectura a Firestore, cache global)
+// ===============================
+async function cargarTarifasPorRolDesdeFirestore() {
+  if (appState.tarifasRolCache) {
+    console.log(
+      "%cSimulador · tarifasRol desde caché (" +
+        Object.keys(appState.tarifasRolCache).length +
+        " refs)",
+      "color:#16a34a;"
+    );
+    return appState.tarifasRolCache;
   }
-
-  const sim = appState.simulador || {};
-  sim.ref = raw;
-  sim.descripcion = producto.descripcion || "";
-  sim.pvpBase = Number(producto.pvp) || 0;
-  appState.simulador = sim;
-
-  document.getElementById("simDescripcion").value = sim.descripcion;
-  document.getElementById("simPvpBase").value = sim.pvpBase.toFixed(2);
-
-  recalcularSimulador();
-}
-
-async function simObtenerTarifas() {
-  // Si ya tienes la función global de presupuesto, la aprovechamos
-  if (typeof cargarTarifasDesdeFirestore === "function") {
-    return await cargarTarifasDesdeFirestore();
-  }
-
-  // Fallback: misma lógica que en ui_presupuesto, pero sólo si hiciera falta
-  if (appState.tarifasCache) return appState.tarifasCache;
 
   const db = firebase.firestore();
   const snap = await db
@@ -256,14 +173,21 @@ async function simObtenerTarifas() {
     .get();
 
   const result = {};
+
   snap.forEach((docSnap) => {
     const d = docSnap.data();
     if (!d) return;
-    const ref = docSnap.id;
-    const pvp = Number(d.pvp) || 0;
-    if (!pvp) return;
+
+    const ref = docSnap.id.replace(/\s+/g, "");
+    const basePvp = Number(d.pvp) || 0;
+
     result[ref] = {
-      pvp,
+      base: basePvp,
+      // Si el campo específico de rol no existe, se cae al base
+      PVP: Number(d[ROL_FIELD_MAP.PVP]) || basePvp,
+      INSTALADOR: Number(d[ROL_FIELD_MAP.INSTALADOR]) || basePvp,
+      PARTNER: Number(d[ROL_FIELD_MAP.PARTNER]) || basePvp,
+      PROMOTOR: Number(d[ROL_FIELD_MAP.PROMOTOR]) || basePvp,
       descripcion:
         d.descripcion ||
         d.desc ||
@@ -274,107 +198,144 @@ async function simObtenerTarifas() {
     };
   });
 
-  appState.tarifasCache = result;
+  console.log(
+    "%cSimulador · tarifasRol cargadas (" +
+      Object.keys(result).length +
+      " refs)",
+    "color:#3b82f6;"
+  );
+
+  appState.tarifasRolCache = result;
   return result;
 }
 
-async function simBuscarProductoEnTarifa(refRaw) {
-  const tarifas = await simObtenerTarifas();
-  if (!tarifas) return null;
+// ===============================
+// Lógica principal de simulación
+// ===============================
+async function recalcularSimulador() {
+  const detalle = document.getElementById("simDetalle");
+  const resumenMini = document.getElementById("simResumenMini");
+  const countLabel = document.getElementById("simLineCount");
+  if (!detalle || !resumenMini) return;
 
-  const refOriginal = String(refRaw || "").trim();
-  let ref = refOriginal.replace(/\s+/g, "");
+  // 1) Obtenemos el presupuesto actual como fuente de referencias
+  const presu =
+    (typeof getPresupuestoActual === "function" &&
+      getPresupuestoActual()) ||
+    null;
 
-  // Normalización tipo 9xxxxxxx0/00
-  if (/^9\d{7}$/.test(ref)) {
-    ref = ref.slice(0, 7);
-  }
+  const lineasBase = presu && presu.lineas ? presu.lineas : [];
 
-  const candidatos = [];
-  if (refOriginal) candidatos.push(refOriginal.replace(/\s+/g, ""));
-  if (ref) candidatos.push(ref);
-
-  if (ref.length === 7) {
-    candidatos.push(ref + "0");
-    candidatos.push(ref + "00");
-  } else if (ref.length === 8) {
-    candidatos.push(ref.slice(0, 7));
-  }
-
-  const candidatosUnicos = [...new Set(candidatos)];
-
-  for (const key of candidatosUnicos) {
-    if (tarifas[key]) return tarifas[key];
-  }
-
-  return null;
-}
-
-// ===============================================
-// Recalcular tabla del simulador
-// ===============================================
-function recalcularSimulador() {
-  const cont = document.getElementById("simResultado");
-  if (!cont) return;
-
-  const sim = appState.simulador || {};
-  const pvpBase = Number(sim.pvpBase) || 0;
-  const cantidad = Number(sim.cantidad) || 1;
-  const roles = sim.roles || [];
-
-  if (!pvpBase || !roles.length) {
-    cont.textContent =
-      "Introduce un PVP base o busca una referencia para ver la simulación.";
+  if (!lineasBase.length) {
+    detalle.textContent =
+      "No hay líneas de presupuesto. Ve a la pestaña de Presupuesto, genera una oferta y vuelve.";
+    resumenMini.textContent =
+      "Sin datos de presupuesto, no se puede realizar la simulación.";
+    if (countLabel) countLabel.textContent = "0 líneas simuladas";
     return;
   }
 
-  // Calculamos precios por rol
-  const filas = roles.map((r) => {
-    const dto = Number(r.descuento) || 0;
-    const factor = 1 - dto / 100;
-    const neto = pvpBase * factor;
-    const total = neto * cantidad;
-    const margenEuro = pvpBase - neto;
+  // 2) Parámetros de simulación desde la UI
+  const rolSelect = document.getElementById("simRol");
+  const dtoExtraInput = document.getElementById("simDtoExtra");
+
+  const rol = (rolSelect && rolSelect.value) || "PVP";
+  const dtoExtra = Number(dtoExtraInput && dtoExtraInput.value) || 0;
+
+  appState.simulador.rol = rol;
+  appState.simulador.dtoExtra = dtoExtra;
+
+  // 3) Cargar tarifas por rol (con caché)
+  const tarifasRol = await cargarTarifasPorRolDesdeFirestore();
+
+  // 4) Generar líneas simuladas
+  let totalBaseRol = 0;
+  let totalFinal = 0;
+
+  const lineasSim = lineasBase.map((lBase) => {
+    const refNorm = String(lBase.ref || "")
+      .trim()
+      .replace(/\s+/g, "");
+    const info = tarifasRol[refNorm] || {};
+
+    // Precio base del rol: si no hay para ese rol, usamos base o el PVP del presupuesto
+    const precioRol =
+      info[rol] != null && !Number.isNaN(info[rol])
+        ? Number(info[rol])
+        : info.base != null && !Number.isNaN(info.base)
+        ? Number(info.base)
+        : Number(lBase.pvp || 0);
+
+    const cantidad = Number(lBase.cantidad || 0) || 0;
+
+    const baseRolSubtotal = precioRol * cantidad;
+    totalBaseRol += baseRolSubtotal;
+
+    const factorExtra = dtoExtra > 0 ? 1 - dtoExtra / 100 : 1;
+    const precioFinalUd = precioRol * factorExtra;
+    const subtotalFinal = precioFinalUd * cantidad;
+    totalFinal += subtotalFinal;
+
     return {
-      label: r.label,
-      dto,
-      neto,
-      total,
-      margenEuro,
-      margenPct: dto,
+      ref: refNorm || lBase.ref || "-",
+      descripcion:
+        lBase.descripcion ||
+        info.descripcion ||
+        "Producto sin descripción",
+      seccion: lBase.seccion || "",
+      titulo: lBase.titulo || "",
+      cantidad,
+      precioRol,
+      precioFinalUd,
+      subtotalFinal,
+      baseRolSubtotal,
     };
   });
 
-  let html = `
-    <div style="font-size:0.85rem; color:#4b5563; margin-bottom:0.5rem;">
-      Ref: <strong>${sim.ref || "-"}</strong> · 
-      Descripción: <strong>${sim.descripcion || "Sin descripción"}</strong><br/>
-      PVP base (PRECIO UNITARIO): <strong>${pvpBase.toFixed(
-        2
-      )} €</strong> · Cantidad: <strong>${cantidad}</strong>
-    </div>
+  appState.simulador.lineasSimuladas = lineasSim;
 
+  // 5) Pintar tabla
+  if (countLabel) {
+    countLabel.textContent = `${lineasSim.length} líneas simuladas`;
+  }
+
+  let html = `
     <table class="table">
       <thead>
         <tr>
-          <th>Rol / nivel</th>
-          <th style="width:90px;">Dto. %</th>
-          <th style="width:110px;">Neto ud. (€)</th>
-          <th style="width:120px;">Margen vs PVP</th>
-          <th style="width:120px;">Importe total (€)</th>
+          <th style="width:14%;">Ref.</th>
+          <th>Descripción</th>
+          <th style="width:10%;">Ud.</th>
+          <th style="width:12%;">Precio ${rol}</th>
+          <th style="width:12%;">Dto extra</th>
+          <th style="width:12%;">Precio final</th>
+          <th style="width:14%;">Importe final</th>
         </tr>
       </thead>
       <tbody>
   `;
 
-  filas.forEach((f) => {
+  lineasSim.forEach((l) => {
     html += `
       <tr>
-        <td>${f.label}</td>
-        <td>${f.dto.toFixed(1)} %</td>
-        <td>${f.neto.toFixed(2)} €</td>
-        <td>${f.margenEuro.toFixed(2)} € (${f.margenPct.toFixed(1)} %)</td>
-        <td>${f.total.toFixed(2)} €</td>
+        <td>${l.ref}</td>
+        <td>
+          ${l.descripcion}
+          ${
+            l.seccion || l.titulo
+              ? `<div style="font-size:0.75rem; color:#6b7280; margin-top:0.15rem;">
+                   ${l.seccion ? `<strong>${l.seccion}</strong>` : ""}${
+                  l.seccion && l.titulo ? " · " : ""
+                }${l.titulo || ""}
+                 </div>`
+              : ""
+          }
+        </td>
+        <td>${l.cantidad}</td>
+        <td>${l.precioRol.toFixed(2)} €</td>
+        <td>${dtoExtra.toFixed(1)} %</td>
+        <td>${l.precioFinalUd.toFixed(2)} €</td>
+        <td>${l.subtotalFinal.toFixed(2)} €</td>
       </tr>
     `;
   });
@@ -382,20 +343,42 @@ function recalcularSimulador() {
   html += `
       </tbody>
     </table>
-
-    <p style="font-size:0.8rem; color:#6b7280; margin-top:0.75rem;">
-      Este simulador replica la lógica de tu Excel PLANTILLA 4.0:
-      partiendo del PRECIO UNITARIO (PVP lista) aplica descuentos para
-      cada nivel de tarifa (NFR, RNFR, VAD, BBD, RP2, RP1). Puedes modificar
-      los porcentajes para ver rápidamente el impacto en precio y margen.
-    </p>
   `;
 
-  cont.innerHTML = html;
+  detalle.innerHTML = html;
+
+  // 6) Resumen mini
+  const diff = totalFinal - totalBaseRol;
+  const diffPct =
+    totalBaseRol > 0 ? (diff / totalBaseRol) * 100 : 0;
+
+  const rolLabel =
+    ROLES_TARIFA.find((r) => r.id === rol)?.label || rol;
+
+  resumenMini.innerHTML = `
+    <div style="margin-bottom:0.35rem;">
+      <strong>Rol seleccionado:</strong> ${rolLabel}
+    </div>
+    <div>
+      Importe total a precios de rol (sin descuento extra):
+      <strong>${totalBaseRol.toFixed(2)} €</strong>
+    </div>
+    <div>
+      Importe total con descuento adicional (${dtoExtra.toFixed(
+        1
+      )}%):
+      <strong>${totalFinal.toFixed(2)} €</strong>
+    </div>
+    <div style="margin-top:0.35rem; font-size:0.8rem; color:${
+      diff >= 0 ? "#16a34a" : "#b91c1c"
+    };">
+      Diferencia vs. precio de rol: 
+      <strong>${diff.toFixed(2)} € (${diffPct.toFixed(1)} %)</strong>
+    </div>
+  `;
 }
 
-console.log(
-  "%cUI Simulador cargado (ui_simulador.js)",
-  "color:#0ea5e9; font-weight:600;"
-);
+// ===============================
+// Exponer global
+// ===============================
 window.renderSimuladorView = renderSimuladorView;
