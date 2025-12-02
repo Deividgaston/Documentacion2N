@@ -1,9 +1,6 @@
 // js/ui_proyecto.js
 // Pantalla de PROYECTO: importar Excel (incl. Project Designer) y guardar en appState + localStorage
 
-// 💾 Clave para cachear el proyecto en localStorage
-const PROYECTO_CACHE_KEY = "proyecto_cache_v1";
-
 window.appState = window.appState || {};
 appState.proyecto = appState.proyecto || {
   filas: [],
@@ -91,7 +88,7 @@ function renderProyectoView() {
         </div>
       </div>
     </div>
-  `;  // 👈 aquí he cambiado la " por backtick
+  `;
 
   // Eventos
   const btnProcesar = document.getElementById("btnProcesarProyecto");
@@ -342,14 +339,13 @@ function leerProyectoDesdeExcel(file) {
  * Soporta varias secciones y sub-secciones (ej. Cerraduras + Accesorios + Recepción).
  *
  * - "titulo"  = grupo azul (ej. "Cerraduras electrónicas")
- * - "seccion" = bloque gris (ej. "CERRADURA VIVIENDA", "Accesorios", "Recepción")
+ * - "seccion" = bloque gris (ej. "CONTROL DE ACCESOS VIVIENDAS", "Accesorios", "Recepción")
  *
  * Si no existe título gris, se usa el azul como sección.
  */
 function intentarParsearProjectDesigner(hojaArray) {
   if (!Array.isArray(hojaArray) || hojaArray.length === 0) return null;
 
-  // Helpers locales (no tocan el resto del fichero)
   const limpiar = (t) => (t ?? "").toString().trim();
 
   const rowHasText = (row) =>
