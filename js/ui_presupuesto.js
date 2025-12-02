@@ -22,7 +22,6 @@ function renderPresupuestoView() {
 
       <!-- COLUMNA IZQUIERDA: datos + notas + resumen -->
       <div class="presupuesto-left-column">
-        <!-- DATOS DEL PRESUPUESTO + NOTAS GENERALES -->
         <div class="card">
           <div class="card-header">
             <div>
@@ -104,7 +103,7 @@ function renderPresupuestoView() {
       </div>
 
     </div>
-  `;
+  ";
 
   document
     .getElementById("btnGenerarPresupuesto")
@@ -200,9 +199,7 @@ async function generarPresupuesto() {
   let totalNeto = 0;
 
   for (const item of lineasProyecto) {
-    // ==========================
-    // 1) REFERENCIA (varios nombres posibles)
-    // ==========================
+    // 1) REFERENCIA (varios posibles campos)
     const refCampo =
       item.ref ||
       item.referencia ||
@@ -217,13 +214,11 @@ async function generarPresupuesto() {
       continue;
     }
 
-    // =====================================================
-    // 🔧 NORMALIZACIÓN DE REFERENCIA 2N
-    // =====================================================
+    // Normalización referencia 2N
     const refOriginal = String(refCampo || "").trim();
     let ref = refOriginal.replace(/\s+/g, "");
 
-    // Caso habitual Project Designer -> 8 dígitos, tarifa -> 7
+    // Project Designer -> 8 dígitos, tarifa -> 7
     if (/^9\d{7}$/.test(ref)) {
       ref = ref.slice(0, 7);
     }
@@ -240,11 +235,8 @@ async function generarPresupuesto() {
     }
 
     const candidatosUnicos = [...new Set(candidatos)];
-    // =====================================================
 
-    // ==========================
     // 2) CANTIDAD
-    // ==========================
     const cantidad =
       Number(item.cantidad) ||
       Number(item.qty) ||
@@ -257,9 +249,7 @@ async function generarPresupuesto() {
       continue;
     }
 
-    // ==========================
     // 3) PRECIO DESDE TARIFA
-    // ==========================
     let pvp = 0;
     for (const key of candidatosUnicos) {
       if (tarifas[key] != null) {
@@ -286,9 +276,7 @@ async function generarPresupuesto() {
     const subtotal = pvp * cantidad;
     totalBruto += subtotal;
 
-    // ==========================
-    // 4) SECCIÓN y TÍTULO (encabezados del Excel)
-    // ==========================
+    // 4) SECCIÓN y TÍTULO
     const seccion =
       item.seccion ||
       item.section ||
@@ -306,9 +294,7 @@ async function generarPresupuesto() {
       item.descripcionTitulo ||
       "";
 
-    // ==========================
     // 5) DESCRIPCIÓN
-    // ==========================
     const descripcion =
       item.descripcion ||
       item["Nombre del producto"] ||
@@ -392,7 +378,7 @@ function onAddManualSection() {
 }
 
 // ===============================================
-// Mostrar resultados en pantalla (secciones + resumen)
+// Mostrar resultados en pantalla (detalle tipo tabla proyecto)
 // Mantiene el ORDEN de las líneas importadas
 // ===============================================
 function renderResultados(lineas, totalBruto, totalNeto, dto) {
@@ -410,7 +396,22 @@ function renderResultados(lineas, totalBruto, totalNeto, dto) {
     return;
   }
 
-  let htmlDetalle = "";
+  let htmlDetalle = `
+    <table class="table">
+      <thead>
+        <tr>
+          <th style="width:48px;">OK</th>
+          <th>Ref.</th>
+          <th>Sección</th>
+          <th>Descripción</th>
+          <th style="width:70px;">Ud.</th>
+          <th style="width:90px;">PVP</th>
+          <th style="width:110px;">Importe</th>
+        </tr>
+      </thead>
+      <tbody>
+  `;
+
   let currentSection = null;
   let currentTitle = null;
 
@@ -419,78 +420,66 @@ function renderResultados(lineas, totalBruto, totalNeto, dto) {
     const sec = l.seccion || "Sin sección";
     const tit = l.titulo || "Sin título";
 
-    // Cambio de sección → cerramos la anterior y abrimos bloque nuevo
+    // Cambio de sección -> fila de cabecera + notas
     if (sec !== currentSection) {
-      // cerrar sección previa
-      if (currentSection !== null) {
-        htmlDetalle += `
-            </tbody>
-          </table>
-        </div>
-        `;
-      }
-
       currentSection = sec;
       currentTitle = null;
 
+      // fila cabecera sección (tipo barra gris PLACA DE CALLE)
       htmlDetalle += `
-        <div class="section-block" style="margin-bottom:1.5rem;">
-          <div class="section-header" style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.5rem;">
-            <div style="font-weight:600; font-size:0.95rem;">${sec}</div>
-          </div>
-
-          <div class="form-group" style="margin-bottom:0.75rem;">
-            <label style="font-size:0.8rem; color:#6b7280;">Notas de la sección</label>
-            <textarea class="section-note" data-section="${sec}" rows="2"
-              style="width:100%;">${sectionNotes[sec] || ""}</textarea>
-          </div>
-
-          <table class="table">
-            <thead>
-              <tr>
-                <th>Ref.</th>
-                <th>Descripción</th>
-                <th>Cant.</th>
-                <th>PVP</th>
-                <th>Total</th>
-              </tr>
-            </thead>
-            <tbody>
+        <tr>
+          <td colspan="7" style="background:#eef2ff; font-weight:600; text-transform:uppercase;">
+            ${sec}
+          </td>
+        </tr>
+        <tr>
+          <td colspan="7">
+            <textarea
+              class="section-note"
+              data-section="${sec}"
+              rows="2"
+              style="width:100%; font-size:0.78rem; resize:vertical;"
+              placeholder="Notas de la sección (opcional)"
+            >${sectionNotes[sec] || ""}</textarea>
+          </td>
+        </tr>
       `;
     }
 
-    // Cambio de título dentro de la sección → fila gris
-    if (tit !== currentTitle) {
+    // Cambio de título dentro de la sección -> fila gris como subtítulo
+    if (tit && tit !== currentTitle) {
       currentTitle = tit;
       htmlDetalle += `
         <tr>
-          <td colspan="5" style="background:#f3f4f6; font-weight:500;">
+          <td colspan="7" style="background:#f3f4f6; font-weight:500;">
             ${tit}
           </td>
         </tr>
       `;
     }
 
-    // Línea de producto
+    const importe = l.subtotal || l.pvp * l.cantidad || 0;
+
+    // Fila de producto, columnas como en la imagen
     htmlDetalle += `
       <tr>
+        <td>
+          <input type="checkbox" checked />
+        </td>
         <td>${l.ref}</td>
+        <td>${sec}</td>
         <td>${l.descripcion}</td>
         <td>${l.cantidad}</td>
         <td>${l.pvp.toFixed(2)} €</td>
-        <td>${l.subtotal.toFixed(2)} €</td>
+        <td>${importe.toFixed(2)} €</td>
       </tr>
     `;
   }
 
-  // Cerrar última sección si existía
-  if (currentSection !== null) {
-    htmlDetalle += `
-          </tbody>
-        </table>
-      </div>
-    `;
-  }
+  htmlDetalle += `
+      </tbody>
+    </table>
+  `;
 
   // Secciones manuales extra (sin líneas, solo bloque y nota)
   if (extraSections.length) {
