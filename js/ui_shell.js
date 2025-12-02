@@ -54,10 +54,22 @@ function selectView(viewName) {
     typeof renderPresupuestoView === "function"
   ) {
     renderPresupuestoView();
-  } else if (viewName === "tarifa" && typeof renderTarifaView === "function") {
+  } else if (
+    viewName === "tarifa" &&
+    typeof renderTarifaView === "function"
+  ) {
     renderTarifaView();
-  } else if (viewName === "docs" && typeof renderDocumentacionView === "function") {
+  } else if (
+    viewName === "docs" &&
+    typeof renderDocumentacionView === "function"
+  ) {
     renderDocumentacionView();
+  } else if (
+    viewName === "simulador" &&
+    typeof renderSimuladorView === "function"
+  ) {
+    // Nueva vista: Simulador de márgenes
+    renderSimuladorView();
   }
 
   // 2. Actualizar pestañas activas
@@ -65,7 +77,9 @@ function selectView(viewName) {
     el.classList.remove("active");
   });
 
-  const activeTab = document.querySelector(`.top-nav-link[data-view="${viewName}"]`);
+  const activeTab = document.querySelector(
+    `.top-nav-link[data-view="${viewName}"]`
+  );
   if (activeTab) {
     activeTab.classList.add("active");
   }
