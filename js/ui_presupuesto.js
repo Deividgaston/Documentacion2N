@@ -6,6 +6,8 @@ appState.presupuesto = appState.presupuesto || {
   lineas: [],
   resumen: {},
   notas: "",
+  sectionNotes: {},      // notas por sección
+  extraSections: [],     // secciones manuales añadidas desde la UI
 };
 
 // ===============================================
@@ -20,7 +22,7 @@ function renderPresupuestoView() {
 
       <!-- COLUMNA IZQUIERDA: datos + notas + resumen -->
       <div>
-        <!-- DATOS DEL PRESUPUESTO + NOTAS -->
+        <!-- DATOS DEL PRESUPUESTO + NOTAS GENERALES -->
         <div class="card">
           <div class="card-header">
             <div>
@@ -60,7 +62,7 @@ function renderPresupuestoView() {
               <label>Notas del presupuesto</label>
               <textarea id="presuNotas" rows="3"></textarea>
               <p style="font-size:0.78rem; color:#6b7280; margin-top:0.25rem;">
-                Estas notas se usarán como observaciones del presupuesto
+                Estas notas se usarán como observaciones generales
                 (ej. requisitos de red, alimentación, alcances, exclusiones...).
               </p>
             </div>
@@ -86,11 +88,14 @@ function renderPresupuestoView() {
         </div>
       </div>
 
-      <!-- COLUMNA DERECHA: DETALLE DEL PRESUPUESTO -->
+      <!-- COLUMNA DERECHA: DETALLE DEL PRESUPUESTO (SECCIONES) -->
       <div>
         <div class="card">
-          <div class="card-header">
+          <div class="card-header" style="display:flex; align-items:center; justify-content:space-between;">
             <div class="card-title">Detalle del presupuesto</div>
+            <button id="btnAddSection" class="btn btn-secondary">
+              Añadir sección
+            </button>
           </div>
           <div class="card-body" id="presuDetalle">
             No hay líneas de presupuesto generadas.
@@ -99,11 +104,16 @@ function renderPresupuestoView() {
       </div>
 
     </div>
-  `;
+  """
 
   document
     .getElementById("btnGenerarPresupuesto")
     .addEventListener("click", generarPresupuesto);
+
+  const btnAddSection = document.getElementById("btnAddSection");
+  if (btnAddSection) {
+    btnAddSection.addEventListener("click", onAddManualSection);
+  }
 
   precargarDatosProyecto();
 }
@@ -203,6 +213,7 @@ async function generarPresupuesto() {
     const refOriginal = String(refCampo || "").trim();
     let ref = refOriginal.replace(/\s+/g, "");
 
+    // Caso habitual Project Designer -> 8 dígitos, tarifa -> 7
     if (/^9\d{7}$/.test(ref)) {
       ref = ref.slice(0, 7);
     }
@@ -255,6 +266,8 @@ async function generarPresupuesto() {
       cantidad,
       pvp,
       subtotal,
+      seccion: item.seccion || "",
+      titulo: item.titulo || "",
     });
   }
 
@@ -264,6 +277,10 @@ async function generarPresupuesto() {
   totalNeto = totalBruto * factorDto;
 
   const notas = document.getElementById("presuNotas").value || "";
+
+  // preservamos notas por sección y secciones extra
+  const prevSectionNotes = appState.presupuesto.sectionNotes || {};
+  const prevExtraSections = appState.presupuesto.extraSections || [];
 
   appState.presupuesto = {
     lineas: lineasPresupuesto,
@@ -276,6 +293,8 @@ async function generarPresupuesto() {
     nombre: document.getElementById("presuNombre").value || "",
     cliente: document.getElementById("presuCliente").value || "",
     fecha: document.getElementById("presuFecha").value || "",
+    sectionNotes: prevSectionNotes,
+    extraSections: prevExtraSections,
   };
 
   renderResultados(lineasPresupuesto, totalBruto, totalNeto, dto);
@@ -287,11 +306,66 @@ async function generarPresupuesto() {
 }
 
 // ===============================================
-// Mostrar resultados en pantalla
+// Agrupar líneas por sección y título
+// ===============================================
+function agruparPorSeccionYTitulo(lineas) {
+  const mapa = {};
+
+  for (const l of lineas) {
+    const sec = l.seccion || "Sin sección";
+    const tit = l.titulo || "Sin título";
+
+    if (!mapa[sec]) {
+      mapa[sec] = {};
+    }
+    if (!mapa[sec][tit]) {
+      mapa[sec][tit] = [];
+    }
+    mapa[sec][tit].push(l);
+  }
+
+  return mapa;
+}
+
+// ===============================================
+// Añadir sección manual (sin líneas) desde la UI
+// ===============================================
+function onAddManualSection() {
+  const nombre = prompt("Nombre de la nueva sección:");
+  if (!nombre) return;
+
+  const titulo = prompt("Título dentro de la sección (opcional):") || "";
+
+  const presu = appState.presupuesto || {};
+  presu.extraSections = presu.extraSections || [];
+  presu.extraSections.push({
+    id: Date.now().toString(),
+    seccion: nombre,
+    titulo,
+    nota: "",
+  });
+
+  appState.presupuesto = presu;
+
+  if (presu.lineas && presu.resumen) {
+    renderResultados(
+      presu.lineas,
+      presu.resumen.totalBruto || 0,
+      presu.resumen.totalNeto || 0,
+      presu.resumen.dto || 0
+    );
+  }
+}
+
+// ===============================================
+// Mostrar resultados en pantalla (secciones + resumen)
 // ===============================================
 function renderResultados(lineas, totalBruto, totalNeto, dto) {
   const detalle = document.getElementById("presuDetalle");
   const resumen = document.getElementById("presuResumen");
+  const presu = appState.presupuesto || {};
+  const sectionNotes = presu.sectionNotes || {};
+  const extraSections = presu.extraSections || [];
 
   if (!detalle) return;
 
@@ -301,35 +375,131 @@ function renderResultados(lineas, totalBruto, totalNeto, dto) {
     return;
   }
 
-  let html = `
-    <table class="table">
-      <thead>
-        <tr>
-          <th>Ref.</th>
-          <th>Descripción</th>
-          <th>Cant.</th>
-          <th>PVP</th>
-          <th>Total</th>
-        </tr>
-      </thead>
-      <tbody>
-  `;
+  const secciones = agruparPorSeccionYTitulo(lineas);
 
-  for (const l of lineas) {
-    html += `
-      <tr>
-        <td>${l.ref}</td>
-        <td>${l.descripcion}</td>
-        <td>${l.cantidad}</td>
-        <td>${l.pvp.toFixed(2)} €</td>
-        <td>${l.subtotal.toFixed(2)} €</td>
-      </tr>
+  let htmlDetalle = "";
+
+  // Secciones importadas del proyecto
+  Object.keys(secciones).forEach((secNombre) => {
+    const titulos = secciones[secNombre];
+
+    htmlDetalle += `
+      <div class="section-block" style="margin-bottom:1.5rem;">
+        <div class="section-header" style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.5rem;">
+          <div style="font-weight:600; font-size:0.95rem;">${secNombre}</div>
+        </div>
+
+        <div class="form-group" style="margin-bottom:0.75rem;">
+          <label style="font-size:0.8rem; color:#6b7280;">Notas de la sección</label>
+          <textarea class="section-note" data-section="${secNombre}" rows="2"
+            style="width:100%;">${sectionNotes[secNombre] || ""}</textarea>
+        </div>
+
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Ref.</th>
+              <th>Descripción</th>
+              <th>Cant.</th>
+              <th>PVP</th>
+              <th>Total</th>
+            </tr>
+          </thead>
+          <tbody>
     `;
+
+    Object.keys(titulos).forEach((titNombre) => {
+      const filas = titulos[titNombre];
+
+      htmlDetalle += `
+        <tr>
+          <td colspan="5" style="background:#f3f4f6; font-weight:500;">
+            ${titNombre}
+          </td>
+        </tr>
+      `;
+
+      for (const l of filas) {
+        htmlDetalle += `
+          <tr>
+            <td>${l.ref}</td>
+            <td>${l.descripcion}</td>
+            <td>${l.cantidad}</td>
+            <td>${l.pvp.toFixed(2)} €</td>
+            <td>${l.subtotal.toFixed(2)} €</td>
+          </tr>
+        `;
+      }
+    });
+
+    htmlDetalle += `
+          </tbody>
+        </table>
+      </div>
+    `;
+  });
+
+  // Secciones manuales extra (sin líneas, solo bloque y nota)
+  if (extraSections.length) {
+    htmlDetalle += `
+      <div style="border-top:1px solid #e5e7eb; margin-top:1rem; padding-top:1rem;">
+        <div style="font-size:0.85rem; color:#6b7280; margin-bottom:0.5rem;">
+          Secciones adicionales
+        </div>
+    `;
+
+    extraSections.forEach((sec) => {
+      htmlDetalle += `
+        <div class="section-block" style="margin-bottom:1rem;">
+          <div style="font-weight:600; font-size:0.9rem; margin-bottom:0.25rem;">
+            ${sec.seccion}
+          </div>
+          ${
+            sec.titulo
+              ? `<div style="background:#f3f4f6; padding:0.25rem 0.5rem; font-size:0.8rem; margin-bottom:0.25rem;">
+                  ${sec.titulo}
+                 </div>`
+              : ""
+          }
+          <div class="form-group">
+            <label style="font-size:0.8rem; color:#6b7280;">Notas de la sección</label>
+            <textarea class="section-note-extra" data-id="${sec.id}" rows="2"
+              style="width:100%;">${sec.nota || ""}</textarea>
+          </div>
+        </div>
+      `;
+    });
+
+    htmlDetalle += `</div>`;
   }
 
-  html += "</tbody></table>";
-  detalle.innerHTML = html;
+  detalle.innerHTML = htmlDetalle;
 
+  // Guardar notas por sección en appState al escribir
+  const currentSectionNotes = (appState.presupuesto.sectionNotes =
+    sectionNotes);
+
+  detalle.querySelectorAll(".section-note").forEach((ta) => {
+    ta.addEventListener("input", (e) => {
+      const sec = e.target.dataset.section;
+      currentSectionNotes[sec] = e.target.value;
+    });
+  });
+
+  // Notas de secciones manuales
+  detalle.querySelectorAll(".section-note-extra").forEach((ta) => {
+    ta.addEventListener("input", (e) => {
+      const id = e.target.dataset.id;
+      const presu = appState.presupuesto || {};
+      presu.extraSections = presu.extraSections || [];
+      const found = presu.extraSections.find((s) => s.id === id);
+      if (found) {
+        found.nota = e.target.value;
+      }
+    });
+  });
+
+  // ==== RESUMEN ECONÓMICO ====
   const subtotal = totalNeto; // base imponible después de dto
   const iva = subtotal * 0.21;
   const totalConIva = subtotal + iva;
