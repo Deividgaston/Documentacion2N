@@ -88,7 +88,7 @@ function renderProyectoView() {
         </div>
       </div>
     </div>
-  `;
+  ";
 
   // Eventos
   const btnProcesar = document.getElementById("btnProcesarProyecto");
@@ -334,26 +334,51 @@ function leerProyectoDesdeExcel(file) {
   });
 }
 
-// ====================
-// Project Designer: múltiples bloques, usando SOLO la fila gris
-// ====================
+/**
+ * Parser específico para Project Designer 2N.
+ * Soporta varias secciones y sub-secciones (ej. Cerraduras + Accesorios + Recepción).
+ *
+ * - "titulo"  = grupo azul (ej. "Cerraduras electrónicas")
+ * - "seccion" = bloque gris (ej. "CERRADURA VIVIENDA", "Accesorios", "Recepción")
+ *
+ * Si no existe título gris, se usa el azul como sección.
+ */
 function intentarParsearProjectDesigner(hojaArray) {
   if (!Array.isArray(hojaArray) || hojaArray.length === 0) return null;
 
+  // Helpers locales (no tocan el resto del fichero)
+  const limpiar = (t) => (t ?? "").toString().trim();
+
+  const rowHasText = (row) =>
+    Array.isArray(row) &&
+    row.some((c) => (c ?? "").toString().trim() !== "");
+
+  const firstText = (row) => {
+    if (!Array.isArray(row)) return "";
+    for (const c of row) {
+      const s = (c ?? "").toString().trim();
+      if (s) return s;
+    }
+    return "";
+  };
+
+  const filas = [];
   let idxNombre = -1;
   let idxRef = -1;
   let idxCant = -1;
-  let headerDetectado = false;
 
-  let currentSection = "";   // usamos SOLO la fila gris
-  let firstSection = "";
+  let currentMain = ""; // azul
+  let currentSub = "";  // gris
+  let firstMain = null;
+  let firstSub = null;
 
-  const filas = [];
+  for (let i = 0; i < hojaArray.length; i++) {
+    const row = hojaArray[i];
+    if (!Array.isArray(row)) continue;
 
-  // Helper: detectar si una fila es cabecera (Nombre del producto / Número de pedido / Cantidad)
-  function esFilaCabecera(row) {
-    if (!Array.isArray(row)) return null;
-    const lowerRow = row.map((c) => String(c).toLowerCase().trim());
+    const lowerRow = row.map((c) =>
+      (c ?? "").toString().toLowerCase().trim()
+    );
 
     const iNombre = lowerRow.findIndex((c) =>
       c.includes("nombre del producto")
@@ -363,83 +388,100 @@ function intentarParsearProjectDesigner(hojaArray) {
     );
     const iCant = lowerRow.findIndex((c) => c === "cantidad");
 
+    // === Cabecera "Foto / Nombre del producto / Nº pedido / Cantidad" ===
     if (iNombre !== -1 && iRef !== -1 && iCant !== -1) {
-      return { iNombre, iRef, iCant };
-    }
-    return null;
-  }
+      idxNombre = iNombre;
+      idxRef = iRef;
+      idxCant = iCant;
 
-  for (let i = 0; i < hojaArray.length; i++) {
-    const row = hojaArray[i];
-    if (!Array.isArray(row)) continue;
-
-    // ¿Es una cabecera de bloque?
-    const infoCabecera = esFilaCabecera(row);
-    if (infoCabecera) {
-      headerDetectado = true;
-      idxNombre = infoCabecera.iNombre;
-      idxRef = infoCabecera.iRef;
-      idxCant = infoCabecera.iCant;
-
-      // Buscar SOLO la última fila NO vacía justo encima (fila gris)
-      let seccion = "";
+      // Buscamos hacia arriba:
+      // j1 = última fila con texto  -> suele ser la gris (sub-sección)
+      // j0 = la anterior con texto -> suele ser la azul (grupo)
+      let j1 = -1;
+      let j0 = -1;
 
       for (let j = i - 1; j >= 0; j--) {
-        const prev = hojaArray[j];
-        if (!Array.isArray(prev)) continue;
-
-        const textos = prev
-          .map((c) => String(c).trim())
-          .filter((t) => t !== "");
-        if (!textos.length) continue;
-
-        seccion = textos[0];
-        break;
+        if (rowHasText(hojaArray[j])) {
+          j1 = j;
+          break;
+        }
+      }
+      if (j1 !== -1) {
+        for (let j = j1 - 1; j >= 0; j--) {
+          if (rowHasText(hojaArray[j])) {
+            j0 = j;
+            break;
+          }
+        }
       }
 
-      currentSection = limpiarTexto(seccion);
-      if (!firstSection) firstSection = currentSection;
+      let sub = j1 !== -1 ? firstText(hojaArray[j1]) : "";
+      let main = j0 !== -1 ? firstText(hojaArray[j0]) : "";
 
-      continue; // las líneas empiezan después de la cabecera
+      // Si solo hay una fila de texto, úsala como main y sub
+      if (!main && sub) {
+        main = sub;
+      }
+
+      currentMain = limpiar(main || currentMain || "Grupo sin nombre");
+      currentSub = limpiar(sub || currentMain || "Sección sin título");
+
+      if (firstMain === null) {
+        firstMain = currentMain;
+        firstSub = currentSub;
+      }
+
+      continue; // siguiente fila, no es producto
     }
 
-    // Si aún no hemos detectado ninguna cabecera, no procesamos líneas
-    if (!headerDetectado || idxNombre === -1 || idxRef === -1 || idxCant === -1) {
+    // Hasta que no encontremos la primera cabecera, ignoramos filas
+    if (idxNombre === -1) continue;
+
+    const nombre = row[idxNombre];
+    const refRaw = row[idxRef];
+    const cantRaw = row[idxCant];
+
+    const nombreTxt = limpiar(nombre);
+    const refTxt = limpiar(refRaw);
+    const cantTxt = limpiar(cantRaw);
+    const firstTxt = firstText(row);
+
+    // === Fila de título gris (ej. "Accesorios", "Recepción") ===
+    // Tiene texto en alguna celda, pero no en nombre/ref/cantidad.
+    if (firstTxt && !nombreTxt && !refTxt && !cantTxt) {
+      currentSub = limpiar(firstTxt);
       continue;
     }
 
-    const nombre = row[idxNombre] || "";
-    const ref = row[idxRef] || "";
-    const cant = row[idxCant] || "";
-
-    // Fila completamente vacía → se ignora
-    if (
-      String(nombre).trim() === "" &&
-      String(ref).trim() === "" &&
-      String(cant).trim() === ""
-    ) {
+    // Fila completamente vacía
+    if (!nombreTxt && !refTxt && !cantTxt) {
       continue;
     }
 
-    const referencia = normalizarRef(ref);
-    const cantidad = Number(cant) || 0;
-    if (!referencia || cantidad <= 0) continue;
+    // === Fila de producto ===
+    const referencia = normalizarRef(refTxt);
+    if (!referencia) continue;
+
+    const cantidadNum = Number(
+      (cantTxt || "0").toString().replace(",", ".")
+    );
+    if (!cantidadNum || cantidadNum <= 0) continue;
 
     filas.push({
-      seccion: currentSection,          // SOLO gris
-      titulo: "",                       // no usamos el azul
-      descripcion: limpiarTexto(nombre),
+      seccion: currentSub || currentMain, // bloque gris (o azul si no hay gris)
+      titulo: currentMain,                // grupo azul
+      descripcion: nombreTxt,
       referencia,
-      cantidad,
+      cantidad: cantidadNum,
     });
   }
 
-  if (!headerDetectado || filas.length === 0) return null;
+  if (!filas.length) return null;
 
   return {
     filas,
-    seccion: firstSection,
-    titulo: "",
+    seccion: firstMain || "",
+    titulo: firstSub || "",
   };
 }
 
@@ -483,7 +525,7 @@ function actualizarEstadoProyecto() {
 
   const numFilas = proyecto.filas.length;
   const nombre = proyecto.archivoNombre || "Proyecto";
-  theFecha = proyecto.fechaImportacion
+  const fecha = proyecto.fechaImportacion
     ? new Date(proyecto.fechaImportacion).toLocaleString("es-ES")
     : "N/D";
 
@@ -501,7 +543,7 @@ function actualizarEstadoProyecto() {
     </div>
     <p class="mt-2" style="font-size:0.82rem; color:#4b5563;">
       Archivo: <strong>${nombre}</strong><br/>
-      Importado: ${theFecha}
+      Importado: ${fecha}
       ${seccionTxt}
       ${tituloTxt}
     </p>
