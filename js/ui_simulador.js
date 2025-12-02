@@ -1,11 +1,11 @@
 // js/ui_simulador.js
-// SIMULADOR de tarifas/ descuentos a partir del presupuesto actual
+// SIMULADOR de tarifas / descuentos a partir del presupuesto actual
 
 window.appState = window.appState || {};
 appState.simulador = appState.simulador || {
-  tarifaDefecto: "PVP",
-  dtoGlobal: 0,           // descuento adicional global sobre tarifa
-  lineasSimuladas: [],    // último resultado
+  tarifaDefecto: "nfrDistributor", // id de tarifa global por defecto
+  dtoGlobal: 0,                    // descuento adicional global sobre la tarifa
+  lineasSimuladas: [],             // último resultado
 };
 
 appState.tarifasBaseSimCache = appState.tarifasBaseSimCache || null;
@@ -17,17 +17,24 @@ const getPresupuestoActual =
     : null;
 
 /**
- * TARIFAS DEFINIDAS
- * Aquí configuras las tarifas reales que tenéis y el % de descuento
- * que aplica cada una sobre el PVP base de tarifa.
+ * TARIFAS 2N
+ * Estas son las columnas de precio que esperamos en Firestore
+ * dentro de cada producto de tarifas/v1/productos.
  *
- * Puedes cambiar nombres y descuentos sin tocar el resto del código.
+ * - nfrDistributor        -> "NFR Distributor (EUR)"
+ * - nfrReseller           -> "NFR Reseller (EUR)"
+ * - distributorPrice      -> "Distributor Price (EUR)"
+ * - rrp2                  -> "Recommended Reseller Price 2 (EUR)"
+ * - rrp1                  -> "Recommended Reseller Price 1 (EUR)"
+ * - msrp                  -> "MSRP (EUR)"
  */
 const TARIFAS_2N = [
-  { id: "PVP", label: "Tarifa PVP (0%)", dto: 0 },
-  { id: "DIST", label: "Distribuidor (-20%)", dto: 20 },
-  { id: "INST", label: "Instalador (-30%)", dto: 30 },
-  { id: "PROMO", label: "Promoción Obra (-35%)", dto: 35 },
+  { id: "nfrDistributor", label: "NFR Distributor (EUR)" },
+  { id: "nfrReseller", label: "NFR Reseller (EUR)" },
+  { id: "distributorPrice", label: "Distributor Price (EUR)" },
+  { id: "rrp2", label: "Recommended Reseller Price 2 (EUR)" },
+  { id: "rrp1", label: "Recommended Reseller Price 1 (EUR)" },
+  { id: "msrp", label: "MSRP (EUR)" },
 ];
 
 // Mapa rápido de tarifa por id
@@ -37,9 +44,39 @@ const TARIFAS_MAP = TARIFAS_2N.reduce((acc, t) => {
 }, {});
 
 console.log(
-  "%cUI Simulador · v2 · tarifas + descuentos línea",
+  "%cUI Simulador · v3 · tarifas 2N + dto global / línea",
   "color:#22c55e; font-weight:bold;"
 );
+
+// ===============================
+// Helpers de tarifa
+// ===============================
+function getTarifaConfigById(id) {
+  return TARIFAS_MAP[id] || TARIFAS_2N[0];
+}
+
+// Dado un producto de tarifas y una tarifa seleccionada, sacar el precio adecuado
+function obtenerPrecioPorTarifa(producto, tarifaId) {
+  if (!producto) return 0;
+
+  switch (tarifaId) {
+    case "nfrDistributor":
+      return Number(producto.nfrDistributor || 0);
+    case "nfrReseller":
+      return Number(producto.nfrReseller || 0);
+    case "distributorPrice":
+      return Number(producto.distributorPrice || 0);
+    case "rrp2":
+      return Number(producto.rrp2 || 0);
+    case "rrp1":
+      return Number(producto.rrp1 || 0);
+    case "msrp":
+      return Number(producto.msrp || 0);
+    default:
+      // fallback: usamos pvp si no hay el campo específico
+      return Number(producto.pvp || 0);
+  }
+}
 
 // ===============================
 // Helper: clave única por línea
@@ -57,13 +94,13 @@ function buildLineaKey(baseLinea, index) {
 }
 
 // ===============================
-// Cargar tarifas base (PVP) desde Firestore
+// Cargar tarifas completas desde Firestore
 // Reutiliza cargarTarifasDesdeFirestore() del presupuesto
 // ===============================
 async function getTarifasBase2N() {
   if (appState.tarifasBaseSimCache) {
     console.log(
-      "%cSimulador · tarifas base desde caché (" +
+      "%cSimulador · tarifas desde caché (" +
         Object.keys(appState.tarifasBaseSimCache).length +
         " refs)",
       "color:#16a34a;"
@@ -85,8 +122,9 @@ async function getTarifasBase2N() {
 }
 
 // ===============================
-// Leer configuración de líneas desde el DOM (tarifa + dto línea)
-// para mantener los cambios del usuario entre recalculados
+// Leer configuración de líneas desde el DOM
+// (tarifa por línea + dto línea) para mantener
+// los cambios del usuario entre recalculados
 // ===============================
 function leerConfigLineasDesdeDOM() {
   const detalle = document.getElementById("simDetalle");
@@ -101,7 +139,9 @@ function leerConfigLineasDesdeDOM() {
     const inpDtoLinea = row.querySelector(".sim-dto-line");
 
     const tarifaId =
-      (selTarifa && selTarifa.value) || appState.simulador.tarifaDefecto || "PVP";
+      (selTarifa && selTarifa.value) ||
+      appState.simulador.tarifaDefecto ||
+      TARIFAS_2N[0].id;
     const dtoLinea = Number(inpDtoLinea && inpDtoLinea.value) || 0;
 
     config[key] = { tarifaId, dtoLinea };
@@ -127,7 +167,8 @@ function renderSimuladorView() {
             <div>
               <div class="card-title">Simulador de tarifas</div>
               <div class="card-subtitle">
-                Ajusta tarifas y descuentos sobre las líneas del presupuesto actual.
+                Elige la tarifa 2N y aplica descuentos globales o por línea
+                sobre las líneas del presupuesto actual.
               </div>
             </div>
             <span class="badge-step">Paso 3 de 3</span>
@@ -137,13 +178,14 @@ function renderSimuladorView() {
             <div class="form-group">
               <label>Fuente de líneas</label>
               <p style="font-size:0.8rem; color:#6b7280; margin-top:0.25rem;">
-                Se utilizan las líneas del <strong>presupuesto actual</strong>: referencias, descripciones y cantidades.
+                Se utilizan las líneas del <strong>presupuesto actual</strong>:
+                referencias, descripciones y cantidades.
               </p>
             </div>
 
             <div class="form-grid">
               <div class="form-group">
-                <label>Tarifa por defecto</label>
+                <label>Tarifa 2N por defecto</label>
                 <select id="simTarifaDefecto" class="input">
                   ${TARIFAS_2N.map(
                     (t) =>
@@ -151,7 +193,8 @@ function renderSimuladorView() {
                   ).join("")}
                 </select>
                 <p style="font-size:0.75rem; color:#6b7280; margin-top:0.25rem;">
-                  Esta tarifa se aplica por defecto a todas las líneas (luego podrás cambiarla línea a línea).
+                  Esta tarifa se aplica por defecto a todas las líneas.
+                  Después podrás cambiar la tarifa <strong>en cada línea</strong>.
                 </p>
               </div>
 
@@ -159,8 +202,8 @@ function renderSimuladorView() {
                 <label>Descuento global adicional (%)</label>
                 <input id="simDtoGlobal" type="number" min="0" max="90" value="0" />
                 <p style="font-size:0.75rem; color:#6b7280; margin-top:0.25rem;">
-                  Se aplica a todas las líneas <strong>además</strong> del descuento propio de cada tarifa
-                  (y además del descuento extra por línea).
+                  Se aplica a todas las líneas <strong>además</strong> de la tarifa
+                  seleccionada, y además del descuento extra por línea.
                 </p>
               </div>
             </div>
@@ -195,15 +238,15 @@ function renderSimuladorView() {
       </div>
 
     </div>
-  `;
+  ";
 
-  // Inicializar UI con el estado que hubiera
+  // Inicializar UI con el estado previo
   const selTarifaDefecto = document.getElementById("simTarifaDefecto");
   const inpDtoGlobal = document.getElementById("simDtoGlobal");
 
   if (selTarifaDefecto) {
     selTarifaDefecto.value =
-      appState.simulador.tarifaDefecto || "PVP";
+      appState.simulador.tarifaDefecto || TARIFAS_2N[0].id;
   }
   if (inpDtoGlobal) {
     inpDtoGlobal.value = appState.simulador.dtoGlobal || 0;
@@ -251,7 +294,8 @@ async function recalcularSimulador() {
   const inpDtoGlobal = document.getElementById("simDtoGlobal");
 
   const tarifaDefecto =
-    (selTarifaDefecto && selTarifaDefecto.value) || "PVP";
+    (selTarifaDefecto && selTarifaDefecto.value) ||
+    TARIFAS_2N[0].id;
   const dtoGlobal = Number(inpDtoGlobal && inpDtoGlobal.value) || 0;
 
   appState.simulador.tarifaDefecto = tarifaDefecto;
@@ -260,12 +304,12 @@ async function recalcularSimulador() {
   // 3) Config de líneas ya modificadas por el usuario (si existe DOM previo)
   const configPrev = leerConfigLineasDesdeDOM();
 
-  // 4) Cargar tarifas base 2N (PVP) desde Firestore
+  // 4) Cargar tarifas 2N desde Firestore (una sola vez, cacheada)
   const tarifasBase = await getTarifasBase2N();
 
   // 5) Construir nuevas líneas simuladas
-  let totalBaseTarifa = 0;
-  let totalFinal = 0;
+  let totalBaseTarifa = 0; // suma a precio de tarifa (sin dto global / línea)
+  let totalFinal = 0;      // suma con todos los descuentos
 
   const lineasSim = lineasBase.map((lBase, index) => {
     const key = buildLineaKey(lBase, index);
@@ -275,31 +319,23 @@ async function recalcularSimulador() {
       .replace(/\s+/g, "");
 
     const infoTarifa = tarifasBase[refNorm] || {};
-    const basePvp =
-      Number(infoTarifa.pvp) ||
-      Number(lBase.pvp || 0) ||
-      0;
-
     const cantidad = Number(lBase.cantidad || 0) || 0;
 
     // Tarifa/dto línea: si ya existe en configPrev, se respeta; si no, tarifa por defecto y dto línea 0
     const cfg = configPrev[key] || {};
-    const tarifaId = cfg.tarifaId || tarifaDefecto;
+    const tarifaLineaId = cfg.tarifaId || tarifaDefecto;
     const dtoLinea = Number(cfg.dtoLinea || 0) || 0;
 
-    const objTarifa = TARIFAS_MAP[tarifaId] || TARIFAS_MAP["PVP"];
-    const dtoTarifa = objTarifa ? objTarifa.dto || 0 : 0;
+    // Precio base de tarifa (sin descuentos)
+    const precioTarifaUd = obtenerPrecioPorTarifa(infoTarifa, tarifaLineaId);
 
-    // Descuentos combinados (multiplicativo)
-    const factorTarifa = 1 - dtoTarifa / 100;
+    // Factores de descuento
     const factorGlobal = 1 - dtoGlobal / 100;
     const factorLinea = 1 - dtoLinea / 100;
+    const factorTotal = factorGlobal * factorLinea;
 
-    const factorTotal = factorTarifa * factorGlobal * factorLinea;
-
-    const pvpTarifaUd = basePvp * factorTarifa; // precio tras tarifa (sin dto global/ línea)
-    const pvpFinalUd = basePvp * factorTotal;
-    const subtotalTarifa = pvpTarifaUd * cantidad;
+    const pvpFinalUd = precioTarifaUd * factorTotal;
+    const subtotalTarifa = precioTarifaUd * cantidad;
     const subtotalFinal = pvpFinalUd * cantidad;
 
     totalBaseTarifa += subtotalTarifa;
@@ -315,12 +351,10 @@ async function recalcularSimulador() {
       seccion: lBase.seccion || "",
       titulo: lBase.titulo || "",
       cantidad,
-      basePvp,
-      tarifaId,
-      dtoTarifa,
+      tarifaId: tarifaLineaId,
       dtoGlobal,
       dtoLinea,
-      pvpTarifaUd,
+      precioTarifaUd,
       pvpFinalUd,
       subtotalTarifa,
       subtotalFinal,
@@ -341,11 +375,10 @@ async function recalcularSimulador() {
           <th style="width:12%;">Ref.</th>
           <th>Descripción</th>
           <th style="width:8%;">Ud.</th>
-          <th style="width:15%;">Tarifa</th>
-          <th style="width:9%;">Dto tarifa</th>
-          <th style="width:10%;">Dto línea</th>
-          <th style="width:10%;">PVP base</th>
-          <th style="width:12%;">PVP final ud.</th>
+          <th style="width:18%;">Tarifa 2N</th>
+          <th style="width:10%;">Dto línea (%)</th>
+          <th style="width:10%;">Precio tarifa ud.</th>
+          <th style="width:12%;">Precio final ud.</th>
           <th style="width:12%;">Importe final</th>
         </tr>
       </thead>
@@ -385,8 +418,6 @@ async function recalcularSimulador() {
           </select>
         </td>
 
-        <td>${l.dtoTarifa.toFixed(1)} %</td>
-
         <td>
           <input
             type="number"
@@ -400,7 +431,7 @@ async function recalcularSimulador() {
           />
         </td>
 
-        <td>${l.basePvp.toFixed(2)} €</td>
+        <td>${l.precioTarifaUd.toFixed(2)} €</td>
         <td>${l.pvpFinalUd.toFixed(2)} €</td>
         <td>${l.subtotalFinal.toFixed(2)} €</td>
       </tr>
@@ -417,7 +448,6 @@ async function recalcularSimulador() {
   // 7) Listeners por línea (cambio de tarifa o dto línea)
   detalle.querySelectorAll(".sim-tarifa-line").forEach((sel) => {
     sel.addEventListener("change", () => {
-      // Recalcular preservando todo lo que haya en DOM
       recalcularSimulador();
     });
   });
@@ -434,15 +464,15 @@ async function recalcularSimulador() {
     totalBaseTarifa > 0 ? (diff / totalBaseTarifa) * 100 : 0;
 
   const tarifaLabel =
-    TARIFAS_MAP[tarifaDefecto]?.label || tarifaDefecto;
+    getTarifaConfigById(tarifaDefecto).label || tarifaDefecto;
 
   resumenMini.innerHTML = `
     <div style="margin-bottom:0.35rem;">
-      <strong>Tarifa por defecto:</strong> ${tarifaLabel}<br/>
+      <strong>Tarifa global por defecto:</strong> ${tarifaLabel}<br/>
       <strong>Dto global adicional:</strong> ${dtoGlobal.toFixed(1)} %
     </div>
     <div>
-      Importe total a precios de tarifa (sin dto línea):
+      Importe total a <strong>precio de tarifa</strong> (sin dto global / línea):
       <strong>${totalBaseTarifa.toFixed(2)} €</strong>
     </div>
     <div>
@@ -452,7 +482,7 @@ async function recalcularSimulador() {
     <div style="margin-top:0.35rem; font-size:0.8rem; color:${
       diff <= 0 ? "#16a34a" : "#b91c1c"
     };">
-      Diferencia vs. solo tarifa: 
+      Diferencia vs. precio de tarifa: 
       <strong>${diff.toFixed(2)} € (${diffPct.toFixed(1)} %)</strong>
     </div>
   `;
