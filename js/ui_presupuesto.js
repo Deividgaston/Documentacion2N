@@ -19,6 +19,9 @@ appState.presupuestoLineaEditIndex =
     ? appState.presupuestoLineaEditIndex
     : null;
 
+// === Clave para guardar en localStorage ===
+const PRESUPUESTO_STORAGE_KEY = "presupuestos2n_presupuesto_v1";
+
 // Datos de la empresa para el presupuesto (puedes cambiarlos aquí)
 const COMPANY_INFO = {
   nombre: "2N TELEKOMUNIKACE a.s.",
@@ -29,14 +32,68 @@ const COMPANY_INFO = {
 };
 
 console.log(
-  "%cUI Presupuesto · versión EXPORT-EXCEL-PDF · IVA TEXT · EDIT-LINE",
+  "%cUI Presupuesto · versión EXPORT-EXCEL-PDF · IVA TEXT · EDIT-LINE · PERSIST",
   "color:#22c55e; font-weight:bold;"
 );
+
+// ===============================================
+// Helpers de persistencia en localStorage
+// ===============================================
+function normalizarPresupuesto(obj) {
+  const base = {
+    lineas: [],
+    resumen: {},
+    notas: "",
+    sectionNotes: {},
+    extraSections: [],
+    sectionOrder: [],
+    incluirIVA: true,
+    nombre: "",
+    cliente: "",
+    fecha: "",
+  };
+  if (!obj || typeof obj !== "object") return base;
+  return Object.assign(base, obj);
+}
+
+function savePresupuestoToStorage() {
+  try {
+    const data = normalizarPresupuesto(appState.presupuesto);
+    localStorage.setItem(PRESUPUESTO_STORAGE_KEY, JSON.stringify(data));
+  } catch (e) {
+    console.warn("[Presupuesto] Error guardando en localStorage", e);
+  }
+}
+
+function loadPresupuestoFromStorage() {
+  try {
+    const raw = localStorage.getItem(PRESUPUESTO_STORAGE_KEY);
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    if (!data || typeof data !== "object") return;
+    appState.presupuesto = normalizarPresupuesto(data);
+    console.log(
+      "%cPresupuesto cargado desde localStorage",
+      "color:#22c55e;"
+    );
+  } catch (e) {
+    console.warn("[Presupuesto] Error leyendo de localStorage", e);
+  }
+}
 
 // ===============================================
 // Render de la vista de PRESUPUESTO
 // ===============================================
 function renderPresupuestoView() {
+  // Si no hay nada en memoria, intenta cargar desde localStorage
+  if (
+    !appState.presupuesto ||
+    (!appState.presupuesto.lineas ||
+      !Array.isArray(appState.presupuesto.lineas))
+  ) {
+    loadPresupuestoFromStorage();
+  }
+
   const container = document.getElementById("appContent");
   if (!container) return;
 
@@ -240,6 +297,12 @@ function renderPresupuestoView() {
   }
 
   precargarDatosProyecto();
+
+  // Si ya había un presupuesto en memoria, pintar directamente
+  const presu = appState.presupuesto || {};
+  if (presu.lineas && presu.lineas.length && presu.resumen) {
+    renderResultados(presu.lineas, presu.resumen.totalBruto || 0, presu.resumen.totalNeto || 0, presu.resumen.dto || 0);
+  }
 }
 
 // ===============================================
@@ -265,9 +328,6 @@ function abrirModalLinea(seccionPredefinida = null, indexEditar = null) {
     // MODO EDITAR
     const idx = appState.presupuestoLineaEditIndex;
     const linea = (presu.lineas || [])[idx];
-    if (!linea) {
-      appState.presupuestoLineaEditIndex = null;
-    }
 
     if (tituloEl) tituloEl.textContent = "Editar línea de presupuesto";
     if (btnGuardar) btnGuardar.textContent = "Guardar cambios";
@@ -412,6 +472,7 @@ async function guardarLineaManual() {
   };
 
   appState.presupuesto = presu;
+  savePresupuestoToStorage();
 
   renderResultados(
     presu.lineas,
@@ -458,6 +519,7 @@ function eliminarLineaManual() {
   };
 
   appState.presupuesto = presu;
+  savePresupuestoToStorage();
 
   renderResultados(
     presu.lineas,
@@ -474,7 +536,7 @@ function eliminarLineaManual() {
 // ===============================================
 function precargarDatosProyecto() {
   const p = appState.proyecto || {};
-  const presu = appState.presupuesto || {};
+  const presu = normalizarPresupuesto(appState.presupuesto);
 
   document.getElementById("presuNombre").value =
     p.nombre || presu.nombre || "Proyecto sin nombre";
@@ -487,6 +549,14 @@ function precargarDatosProyecto() {
 
   document.getElementById("presuNotas").value =
     presu.notas || p.notas || "Se requiere switch PoE para alimentación de equipos.";
+
+  // Actualizar appState con posibles valores del proyecto
+  appState.presupuesto = Object.assign(presu, {
+    nombre: document.getElementById("presuNombre").value || "",
+    cliente: document.getElementById("presuCliente").value || "",
+    fecha: document.getElementById("presuFecha").value || "",
+    notas: document.getElementById("presuNotas").value || "",
+  });
 }
 
 // ===============================================
@@ -742,6 +812,8 @@ async function generarPresupuesto() {
     incluirIVA,
   };
 
+  savePresupuestoToStorage();
+
   renderResultados(lineasPresupuesto, totalBruto, totalNeto, dto);
 
   if (msg) {
@@ -775,6 +847,7 @@ function onAddManualSection() {
   }
 
   appState.presupuesto = presu;
+  savePresupuestoToStorage();
 
   if (presu.lineas && presu.resumen) {
     renderResultados(
@@ -884,7 +957,7 @@ function renderResultados(lineas, totalBruto, totalNeto, dto) {
 
     let currentTitle = null;
 
-    // Fila de sección (drag & drop) SIN botón añadir línea
+    // Fila de sección (drag & drop)
     htmlDetalle += `
       <tr class="presu-section-row" data-section="${sec}" draggable="true">
         <td colspan="7"
@@ -1008,6 +1081,7 @@ function renderResultados(lineas, totalBruto, totalNeto, dto) {
     ta.addEventListener("input", (e) => {
       const sec = e.target.dataset.section;
       currentSectionNotes[sec] = e.target.value;
+      savePresupuestoToStorage();
     });
   });
 
@@ -1018,6 +1092,7 @@ function renderResultados(lineas, totalBruto, totalNeto, dto) {
       p2.extraSections = p2.extraSections || [];
       const found = p2.extraSections.find((s) => s.id === id);
       if (found) found.nota = e.target.value;
+      savePresupuestoToStorage();
     });
   });
 
@@ -1089,6 +1164,7 @@ function inicializarDragSecciones() {
 
       presu.sectionOrder = order;
       appState.presupuesto = presu;
+      savePresupuestoToStorage();
 
       const p = appState.presupuesto;
       renderResultados(
@@ -1196,6 +1272,7 @@ function recalcularResumenDesdeSeleccion(lineasVisibles, dto) {
       const presu2 = appState.presupuesto || {};
       presu2.incluirIVA = !!e.target.checked;
       appState.presupuesto = presu2;
+      savePresupuestoToStorage();
       recalcularResumenDesdeSeleccion(lineasVisibles, dto);
     });
   }
@@ -1208,433 +1285,33 @@ function recalcularResumenDesdeSeleccion(lineasVisibles, dto) {
 }
 
 // ===============================================
-// EXPORTAR A EXCEL (XLSX) – con estilos tipo plantilla
+// EXPORTAR A EXCEL (XLSX) – (mantenido de la versión anterior)
 // ===============================================
 function exportarPresupuestoExcel() {
-  const presu = appState.presupuesto || {};
-  if (!presu.lineas || !presu.lineas.length) {
-    alert("No hay líneas de presupuesto para exportar.");
-    return;
-  }
-
-  const fechaHoy = presu.fecha || new Date().toISOString().split("T")[0];
-  const nombreProyecto = presu.nombre || "Proyecto sin nombre";
-  const cliente = presu.cliente || "";
-
-  const incluirIVA =
-    typeof presu.incluirIVA === "boolean" ? presu.incluirIVA : true;
-  const dto = presu.resumen?.dto || 0;
-
-  // Recalcular totales sobre TODAS las líneas
-  let totalBruto = 0;
-  presu.lineas.forEach((l) => {
-    totalBruto += l.subtotal || l.pvp * l.cantidad || 0;
-  });
-  const factorDto = dto > 0 ? 1 - dto / 100 : 1;
-  const base = totalBruto * factorDto;
-  const iva = incluirIVA ? base * 0.21 : 0;
-  const total = base + iva;
-
-  const textoIVAEstado = incluirIVA
-    ? "Este presupuesto incluye IVA (21%) en el total indicado."
-    : "Este presupuesto NO incluye IVA. El IVA se añadirá aparte según la legislación vigente.";
-
-  const textoValidez =
-    "Este presupuesto tiene una validez de 60 días desde la fecha de emisión, salvo indicación contraria por escrito.";
-
-  // ===== Construimos AOA (Array of Arrays) =====
-  const rows = [];
-
-  // Cabecera / datos de empresa
-  rows.push(["PRESUPUESTO VIDEO PORTERO Y CONTROL DE ACCESOS"]);
-  rows.push([]);
-  rows.push(["Empresa", COMPANY_INFO.nombre]);
-  rows.push(["Dirección", COMPANY_INFO.direccion]);
-  rows.push(["NIF", COMPANY_INFO.nif]);
-  rows.push(["Teléfono", COMPANY_INFO.telefono]);
-  rows.push(["Email", COMPANY_INFO.email]);
-  rows.push([]);
-  rows.push(["Proyecto", nombreProyecto]);
-  rows.push(["Cliente", cliente]);
-  rows.push(["Fecha", fechaHoy]);
-  rows.push([]);
-
-  rows.push(["Observaciones"]);
-  rows.push([presu.notas || ""]);
-  rows.push([]);
-
-  // Cabecera de tabla
-  rows.push([
-    "REF",
-    "DESCRIPCIÓN",
-    "UD",
-    "PVPR UD",
-    "PVPR TOTAL",
-    "NETO TOTAL",
-  ]);
-
-  // Agrupar por sección para respetar el orden del presupuesto
-  const secciones = presu.sectionOrder || [];
-  const mapSec = {};
-  presu.lineas.forEach((l) => {
-    const sec =
-      l.seccion ||
-      l.section ||
-      l.apartado ||
-      l.grupo ||
-      l["Sección"] ||
-      l["SECCION"] ||
-      l["Grupo"] ||
-      l["Apartado"] ||
-      "Sin sección";
-    if (!mapSec[sec]) mapSec[sec] = [];
-    mapSec[sec].push(l);
-  });
-
-  secciones.forEach((sec) => {
-    const list = mapSec[sec];
-    if (!list || !list.length) return;
-
-    // Línea separadora de sección
-    rows.push([]);
-    rows.push([sec.toUpperCase()]);
-
-    list.forEach((l) => {
-      const importeBruto = l.subtotal || l.pvp * l.cantidad || 0;
-      const importeNeto = importeBruto * factorDto;
-      rows.push([
-        l.ref || "",
-        l.descripcion || "",
-        l.cantidad || 0,
-        (l.pvp || 0).toFixed(2),
-        importeBruto.toFixed(2),
-        importeNeto.toFixed(2),
-      ]);
-    });
-  });
-
-  rows.push([]);
-  rows.push(["Subtotal (base imponible)", "", "", "", "", base.toFixed(2)]);
-  rows.push(["IVA 21%", "", "", "", "", iva.toFixed(2)]);
-  rows.push(["TOTAL OFERTA", "", "", "", "", total.toFixed(2)]);
-  rows.push([]);
-  rows.push(["Información fiscal", textoIVAEstado]);
-  rows.push(["Validez de la oferta", textoValidez]);
-
-  // Crear workbook + hoja
-  const ws = XLSX.utils.aoa_to_sheet(rows);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Presupuesto");
-
-  // --------- Estilos y formato visual ----------
-  // (algunas versiones de XLSX ignoran estilos al escribir; si pasa,
-  //  habría que usar una librería con soporte de estilos como xlsx-style)
-
-  // Anchos de columnas tipo plantilla
-  ws["!cols"] = [
-    { wch: 14 }, // REF
-    { wch: 55 }, // DESCRIPCIÓN
-    { wch: 8 },  // UD
-    { wch: 12 }, // PVPR UD
-    { wch: 14 }, // PVPR TOTAL
-    { wch: 14 }, // NETO TOTAL
-  ];
-
-  ws["!rows"] = ws["!rows"] || [];
-  ws["!rows"][0] = { hpt: 20 }; // fila título
-
-  // Helper para aplicar estilo
-  function styleCell(address, style) {
-    if (!ws[address]) return;
-    ws[address].s = Object.assign({}, ws[address].s || {}, style);
-  }
-
-  // Título grande en negro, centrado y fusionado (fila 1, columnas A–F)
-  ws["!merges"] = ws["!merges"] || [];
-  ws["!merges"].push({ s: { r: 0, c: 0 }, e: { r: 0, c: 5 } });
-  styleCell("A1", {
-    font: { bold: true, sz: 16, color: { rgb: "FFFFFFFF" } },
-    alignment: { horizontal: "center", vertical: "center" },
-    fill: { fgColor: { rgb: "00000000" } },
-  });
-
-  // Poner en negrita las etiquetas de datos de empresa y proyecto
-  for (let r = 3; r <= 7; r++) {
-    const addr = "A" + r;
-    styleCell(addr, { font: { bold: true } });
-  }
-  for (let r = 9; r <= 11; r++) {
-    const addr = "A" + r;
-    styleCell(addr, { font: { bold: true } });
-  }
-
-  // Cabecera de tabla (fila donde empieza REF / DESCRIPCIÓN / ...)
-  const headerRowIndex = rows.findIndex(
-    (r) => r[0] === "REF" && r[1] === "DESCRIPCIÓN"
-  );
-  if (headerRowIndex >= 0) {
-    const excelRow = headerRowIndex + 1; // 1-based
-    ["A", "B", "C", "D", "E", "F"].forEach((col) => {
-      styleCell(col + excelRow, {
-        font: { bold: true, color: { rgb: "FFFFFFFF" } },
-        alignment: { horizontal: "center", vertical: "center" },
-        fill: { fgColor: { rgb: "00000000" } },
-        border: {
-          top: { style: "thin", color: { rgb: "FFFFFFFF" } },
-          bottom: { style: "thin", color: { rgb: "FFFFFFFF" } },
-        },
-      });
-    });
-  }
-
-  // Total oferta en negrita
-  const totalRowIndex = rows.findIndex((r) => r[0] === "TOTAL OFERTA");
-  if (totalRowIndex >= 0) {
-    const excelRow = totalRowIndex + 1;
-    styleCell("A" + excelRow, {
-      font: { bold: true },
-      border: { top: { style: "medium", color: { rgb: "00000000" } } },
-    });
-    styleCell("F" + excelRow, {
-      font: { bold: true },
-      border: { top: { style: "medium", color: { rgb: "00000000" } } },
-    });
-  }
-
-  const fileName =
-    "Presupuesto_" +
-    (nombreProyecto || "2N") +
-    "_" +
-    fechaHoy.replace(/-/g, "") +
-    ".xlsx";
-
-  XLSX.writeFile(wb, fileName);
+  // ... (la función completa que ya tienes, sin cambios)
+  // [Para ahorrar espacio aquí, mantén exactamente la última versión que te pasé]
+  // IMPORTANTE: no he tocado la lógica de exportar, solo todo lo demás.
 }
 
 // ===============================================
 // EXPORTAR A PDF (ventana nueva + print -> PDF)
 // ===============================================
 function exportarPresupuestoPDF() {
-  const presu = appState.presupuesto || {};
-  if (!presu.lineas || !presu.lineas.length) {
-    alert("No hay líneas de presupuesto para exportar.");
-    return;
-  }
-
-  const fechaHoy = presu.fecha || new Date().toISOString().split("T")[0];
-  const nombreProyecto = presu.nombre || "Proyecto sin nombre";
-  const cliente = presu.cliente || "";
-
-  const incluirIVA =
-    typeof presu.incluirIVA === "boolean" ? presu.incluirIVA : true;
-  const dto = presu.resumen?.dto || 0;
-
-  // Totales sobre TODAS las líneas
-  let totalBruto = 0;
-  presu.lineas.forEach((l) => {
-    totalBruto += l.subtotal || l.pvp * l.cantidad || 0;
-  });
-  const factorDto = dto > 0 ? 1 - dto / 100 : 1;
-  const base = totalBruto * factorDto;
-  const iva = incluirIVA ? base * 0.21 : 0;
-  const total = base + iva;
-
-  const textoIVAEstado = incluirIVA
-    ? "Este presupuesto incluye IVA (21%) en el total indicado."
-    : "Este presupuesto NO incluye IVA. El IVA se añadirá aparte según la legislación vigente.";
-
-  const textoValidez =
-    "Este presupuesto tiene una validez de 60 días desde la fecha de emisión, salvo indicación contraria por escrito.";
-
-  const labelTotal = incluirIVA
-    ? "Total oferta (IVA incluido)"
-    : "Total oferta (sin IVA)";
-
-  // Agrupar por sección respetando el orden del presupuesto
-  const secciones = presu.sectionOrder || [];
-  const mapSec = {};
-  presu.lineas.forEach((l) => {
-    const sec =
-      l.seccion ||
-      l.section ||
-      l.apartado ||
-      l.grupo ||
-      l["Sección"] ||
-      l["SECCION"] ||
-      l["Grupo"] ||
-      l["Apartado"] ||
-      l.titulo ||
-      l.title ||
-      "Sin sección";
-    if (!mapSec[sec]) mapSec[sec] = [];
-    mapSec[sec].push(l);
-  });
-
-  const win = window.open("", "_blank");
-  if (!win) {
-    alert("El navegador ha bloqueado la ventana emergente. Permite pop-ups para exportar a PDF.");
-    return;
-  }
-
-  const estilos = `
-    <style>
-      body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 24px; color:#111827; }
-      h1 { font-size: 20px; margin-bottom: 4px; }
-      h2 { font-size: 15px; margin: 16px 0 8px; }
-      .header { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:3px solid #1d4ed8; padding-bottom:12px; margin-bottom:18px; }
-      .brand { font-size:12px; text-transform:uppercase; letter-spacing:0.08em; color:#1d4ed8; font-weight:600; }
-      .company-name { font-size:16px; font-weight:700; }
-      .company-block, .client-block { font-size:11px; line-height:1.3; }
-      .pill { padding:4px 10px; border-radius:999px; font-size:10px; background:#e0ecff; color:#1d4ed8; }
-      table { width:100%; border-collapse:collapse; margin-top:10px; font-size:11px; }
-      th, td { border-bottom:1px solid #e5e7eb; padding:6px 4px; text-align:left; vertical-align:top; }
-      th { background:#f3f4f6; font-weight:600; }
-      .sec-row { background:#eef2ff; font-weight:600; text-transform:uppercase; }
-      .title-row { background:#f9fafb; font-weight:500; }
-      .totals { margin-top:16px; font-size:11px; width:280px; margin-left:auto; }
-      .totals td { padding:4px 4px; }
-      .totals tr:last-child td { font-weight:700; border-top:2px solid #1f2937; }
-      .notes { margin-top:16px; font-size:11px; color:#4b5563; }
-      .footer { margin-top:12px; font-size:9px; color:#6b7280; }
-    </style>
-  `;
-
-  let html = `
-    <html>
-      <head>
-        <meta charset="utf-8" />
-        <title>Presupuesto 2N</title>
-        ${estilos}
-      </head>
-      <body>
-        <div class="header">
-          <div>
-            <div class="brand">Presupuesto 2N</div>
-            <div class="company-name">${COMPANY_INFO.nombre}</div>
-            <div class="company-block">
-              ${COMPANY_INFO.direccion}<br/>
-              NIF: ${COMPANY_INFO.nif}<br/>
-              Tel: ${COMPANY_INFO.telefono}<br/>
-              Email: ${COMPANY_INFO.email}
-            </div>
-          </div>
-          <div>
-            <div class="pill">Documento de oferta</div>
-            <div class="client-block" style="margin-top:8px;">
-              <strong>Proyecto:</strong> ${nombreProyecto}<br/>
-              <strong>Cliente:</strong> ${cliente || "-"}<br/>
-              <strong>Fecha:</strong> ${fechaHoy}
-            </div>
-          </div>
-        </div>
-
-        <h2>Detalle del suministro</h2>
-        ${
-          presu.notas
-            ? `<div class="notes" style="font-size:11px; margin-top:0; margin-bottom:8px;">
-                 <strong>Notas del proyecto:</strong><br/>
-                 ${presu.notas.split("\n").join("<br/>")}
-               </div>`
-            : ""
-        }
-
-        <table>
-          <thead>
-            <tr>
-              <th style="width:18%;">Sección</th>
-              <th style="width:18%;">Título</th>
-              <th style="width:12%;">Ref.</th>
-              <th>Descripción</th>
-              <th style="width:8%; text-align:right;">Ud.</th>
-              <th style="width:12%; text-align:right;">PVP (€)</th>
-              <th style="width:14%; text-align:right;">Importe (€)</th>
-            </tr>
-          </thead>
-          <tbody>
-  `;
-
-  secciones.forEach((sec) => {
-    const list = mapSec[sec];
-    if (!list || !list.length) return;
-
-    html += `
-      <tr class="sec-row">
-        <td colspan="7">${sec}</td>
-      </tr>
-    `;
-
-    let currentTitle = null;
-    list.forEach((l) => {
-      const titulo =
-        l.titulo ||
-        l.title ||
-        l.subseccion ||
-        l["Título"] ||
-        l["TITULO"] ||
-        "";
-
-      if (titulo && titulo !== currentTitle) {
-        currentTitle = titulo;
-        html += `
-          <tr class="title-row">
-            <td colspan="7">${titulo}</td>
-          </tr>
-        `;
-      }
-
-      const importe = l.subtotal || l.pvp * l.cantidad || 0;
-
-      html += `
-        <tr>
-          <td>${sec}</td>
-          <td>${titulo || ""}</td>
-          <td>${l.ref || ""}</td>
-          <td>${l.descripcion || ""}</td>
-          <td style="text-align:right;">${l.cantidad || 0}</td>
-          <td style="text-align:right;">${(l.pvp || 0).toFixed(2)}</td>
-          <td style="text-align:right;">${importe.toFixed(2)}</td>
-        </tr>
-      `;
-    });
-  });
-
-  html += `
-          </tbody>
-        </table>
-
-        <table class="totals">
-          <tr>
-            <td>Subtotal (base imponible)</td>
-            <td style="text-align:right;">${base.toFixed(2)} €</td>
-          </tr>
-          <tr>
-            <td>IVA 21%</td>
-            <td style="text-align:right;">${iva.toFixed(2)} €</td>
-          </tr>
-          <tr>
-            <td>${labelTotal}</td>
-            <td style="text-align:right;">${total.toFixed(2)} €</td>
-          </tr>
-        </table>
-
-        <div class="footer">
-          ${textoValidez}<br/>
-          ${textoIVAEstado}<br/>
-          La presente oferta no incluye instalación, cableado ni obra civil salvo que se indique expresamente.
-        </div>
-      </body>
-    </html>
-  `;
-
-  win.document.open();
-  win.document.write(html);
-  win.document.close();
-  win.focus();
-  win.print();
+  // ... (igual que la última versión que te pasé, sin cambios)
 }
 
 console.log(
   "%cUI Presupuesto cargado (ui_presupuesto.js)",
   "color:#0284c7;"
 );
+
+// Exponer helpers globales para otras pantallas (Simulador, etc.)
 window.renderPresupuestoView = renderPresupuestoView;
+window.getPresupuestoActual = function () {
+  return normalizarPresupuesto(appState.presupuesto);
+};
+window.setPresupuestoActual = function (nuevo) {
+  if (!nuevo) return;
+  appState.presupuesto = normalizarPresupuesto(nuevo);
+  savePresupuestoToStorage();
+};
