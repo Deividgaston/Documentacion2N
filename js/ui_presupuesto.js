@@ -884,7 +884,7 @@ function renderResultados(lineas, totalBruto, totalNeto, dto) {
 
     let currentTitle = null;
 
-    // Fila de sección (drag & drop) + botón añadir línea
+    // Fila de sección (drag & drop) SIN botón añadir línea
     htmlDetalle += `
       <tr class="presu-section-row" data-section="${sec}" draggable="true">
         <td colspan="7"
@@ -893,21 +893,9 @@ function renderResultados(lineas, totalBruto, totalNeto, dto) {
             font-weight:600;
             text-transform:uppercase;
             cursor:move;
-            display:flex;
-            justify-content:space-between;
-            align-items:center;
             padding:6px 8px;
           ">
-          <div>
-            <span style="margin-right:0.5rem;">↕</span>${sec}
-          </div>
-          <button 
-            type="button"
-            class="btn btn-secondary btn-sm btnAddLineaSeccion"
-            data-seccion="${sec}"
-            style="font-size:0.75rem; padding:2px 8px;">
-            + Añadir línea
-          </button>
+          <span style="margin-right:0.5rem;">↕</span>${sec}
         </td>
       </tr>
       <tr>
@@ -1035,14 +1023,6 @@ function renderResultados(lineas, totalBruto, totalNeto, dto) {
 
   // Drag & drop secciones
   inicializarDragSecciones();
-
-  // Botones "Añadir línea" por sección
-  detalle.querySelectorAll(".btnAddLineaSeccion").forEach((btn) => {
-    btn.addEventListener("click", (e) => {
-      const sec = e.currentTarget.dataset.seccion;
-      abrirModalLinea(sec, null);
-    });
-  });
 
   // Click en referencia -> editar línea
   detalle.querySelectorAll(".presu-ref-link").forEach((btn) => {
