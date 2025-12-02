@@ -1285,9 +1285,9 @@ function recalcularResumenDesdeSeleccion(lineasVisibles, dto) {
 }
 
 // ===============================================
-// EXPORTAR A EXCEL (XLSX) CON FORMATO
+// EXPORTAR A EXCEL (XLSX) CON FORMATO BONITO (EXCELJS)
 // ===============================================
-function exportarPresupuestoExcel() {
+async function exportarPresupuestoExcel() {
   const presu = appState.presupuesto || {};
   if (!presu.lineas || !presu.lineas.length) {
     alert("No hay líneas de presupuesto para exportar.");
@@ -1314,50 +1314,158 @@ function exportarPresupuestoExcel() {
 
   const textoIVAEstado = incluirIVA
     ? "Este presupuesto incluye IVA (21%) en el total indicado."
-    : "Este presupuesto NO incluye IVA. El IVA se añadirá aparte según la legislación vigente.";
+    : "Este presupuesto NO incluye IVA (21%). El IVA se añadirá aparte según la legislación vigente.";
 
   const textoValidez =
     "Este presupuesto tiene una validez de 60 días desde la fecha de emisión, salvo indicación contraria por escrito.";
 
-  // ===== Construimos AOA (Array of Arrays) =====
-  const rows = [];
+  // ==========================
+  // CREAR LIBRO Y HOJA
+  // ==========================
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet("Presupuesto", {
+    pageSetup: {
+      paperSize: 9, // A4
+      orientation: "portrait",
+      fitToPage: true,
+      fitToWidth: 1,
+      fitToHeight: 0,
+      margins: { left: 0.5, right: 0.5, top: 0.75, bottom: 0.75 },
+    },
+    views: [{ state: "normal" }],
+  });
 
-  // TÍTULO (fila 1)
-  rows.push(["PRESUPUESTO VIDEO PORTERO Y CONTROL DE ACCESOS"]);
-  rows.push([]);
+  // Columnas (anchos)
+  ws.columns = [
+    { key: "A", width: 18 },
+    { key: "B", width: 45 },
+    { key: "C", width: 10 },
+    { key: "D", width: 14 },
+    { key: "E", width: 16 },
+    { key: "F", width: 16 },
+    { key: "G", width: 16 },
+  ];
 
-  // Datos empresa
-  rows.push(["Empresa", COMPANY_INFO.nombre]);
-  rows.push(["Dirección", COMPANY_INFO.direccion]);
-  rows.push(["NIF", COMPANY_INFO.nif]);
-  rows.push(["Teléfono", COMPANY_INFO.telefono]);
-  rows.push(["Email", COMPANY_INFO.email]);
-  rows.push([]);
+  const colorBlue = "FF111827"; // azul casi negro
+  const colorBlueLight = "FF1D4ED8";
+  const colorHeaderBg = "FF111827";
+  const colorTableHeaderBg = "FF111827";
+  const colorTableHeaderFont = "FFFFFFFF";
+  const colorSectionBg = "FFE5E7EB";
+  const colorBorder = "FFCBD5E1";
 
-  // Datos proyecto
-  rows.push(["Proyecto", nombreProyecto]);
-  rows.push(["Cliente", cliente]);
-  rows.push(["Fecha", fechaHoy]);
-  rows.push([]);
+  const thinBorder = {
+    top: { style: "thin", color: { argb: colorBorder } },
+    left: { style: "thin", color: { argb: colorBorder } },
+    bottom: { style: "thin", color: { argb: colorBorder } },
+    right: { style: "thin", color: { argb: colorBorder } },
+  };
 
-  // Observaciones generales
-  rows.push(["Observaciones"]);
-  rows.push([presu.notas || ""]);
-  rows.push([]);
+  let rowIdx = 1;
 
-  // Cabecera de tabla
-  rows.push([
-    "REF",
+  // ==========================
+  // CABECERA PRINCIPAL
+  // ==========================
+  ws.mergeCells(`A${rowIdx}:G${rowIdx}`);
+  const titleCell = ws.getCell(`A${rowIdx}`);
+  titleCell.value = "PRESUPUESTO VIDEO PORTERO Y CONTROL DE ACCESOS";
+  titleCell.font = {
+    name: "Calibri",
+    size: 15,
+    bold: true,
+    color: { argb: "FFFFFFFF" },
+  };
+  titleCell.alignment = { horizontal: "center", vertical: "middle" };
+  titleCell.fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: colorHeaderBg },
+  };
+  titleCell.border = thinBorder;
+  ws.getRow(rowIdx).height = 24;
+  rowIdx += 2;
+
+  // ==========================
+  // DATOS EMPRESA / PROYECTO
+  // ==========================
+  function labelValueRow(label, value) {
+    const r = ws.getRow(rowIdx);
+    r.getCell("A").value = label;
+    r.getCell("A").font = { bold: true, size: 11, color: { argb: colorBlue } };
+    r.getCell("B").value = value;
+    r.getCell("B").font = { size: 11 };
+    r.getCell("A").alignment = { vertical: "middle" };
+    r.getCell("B").alignment = { vertical: "middle" };
+    rowIdx++;
+  }
+
+  labelValueRow("Empresa", COMPANY_INFO.nombre);
+  labelValueRow("Dirección", COMPANY_INFO.direccion);
+  labelValueRow("NIF", COMPANY_INFO.nif);
+  labelValueRow("Teléfono", COMPANY_INFO.telefono);
+  labelValueRow("Email", COMPANY_INFO.email);
+
+  rowIdx++;
+
+  labelValueRow("Proyecto", nombreProyecto);
+  labelValueRow("Cliente", cliente || "-");
+  labelValueRow("Fecha", fechaHoy);
+
+  rowIdx++;
+
+  // Observaciones (nota general del presupuesto, un poco más grande)
+  ws.getCell(`A${rowIdx}`).value = "Observaciones";
+  ws.getCell(`A${rowIdx}`).font = {
+    bold: true,
+    size: 11,
+    color: { argb: colorBlue },
+  };
+  ws.getCell(`A${rowIdx}`).alignment = { vertical: "top" };
+  ws.mergeCells(`B${rowIdx}:G${rowIdx + 2}`);
+  const obsCell = ws.getCell(`B${rowIdx}`);
+  obsCell.value = presu.notas || "Se requiere switch PoE para alimentación de equipos.";
+  obsCell.font = { size: 11 };
+  obsCell.alignment = { wrapText: true, vertical: "top" };
+  ws.getRow(rowIdx).height = 30;
+  rowIdx += 4;
+
+  // ==========================
+  // CABECERA TABLA DE LÍNEAS
+  // ==========================
+  const headerRow = ws.getRow(rowIdx);
+  const headers = [
+    "SECCIÓN",
+    "TÍTULO",
+    "REF.",
     "DESCRIPCIÓN",
-    "UD",
-    "PVPR UD",
-    "PVPR TOTAL",
-    "NETO TOTAL",
-  ]);
+    "UD.",
+    "PVP UD (€)",
+    "IMPORTE (€)",
+  ];
 
-  const filaCabeceraTabla = rows.length; // índice 1-based de la cabecera tabla
+  headers.forEach((h, i) => {
+    const cell = headerRow.getCell(i + 1);
+    cell.value = h;
+    cell.font = {
+      bold: true,
+      size: 11,
+      color: { argb: colorTableHeaderFont },
+    };
+    cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+    cell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: colorTableHeaderBg },
+    };
+    cell.border = thinBorder;
+  });
 
-  // Agrupar por sección para respetar el orden del presupuesto
+  ws.getRow(rowIdx).height = 18;
+  rowIdx++;
+
+  // ==========================
+  // LÍNEAS DEL PRESUPUESTO
+  // ==========================
   const secciones = presu.sectionOrder || [];
   const mapSec = {};
   presu.lineas.forEach((l) => {
@@ -1370,7 +1478,9 @@ function exportarPresupuestoExcel() {
       l["SECCION"] ||
       l["Grupo"] ||
       l["Apartado"] ||
-      "SIN SECCIÓN";
+      l.titulo ||
+      l.title ||
+      "Sin sección";
     if (!mapSec[sec]) mapSec[sec] = [];
     mapSec[sec].push(l);
   });
@@ -1379,149 +1489,143 @@ function exportarPresupuestoExcel() {
     const list = mapSec[sec];
     if (!list || !list.length) return;
 
-    // Fila de sección (una sola celda con el texto)
-    rows.push([]);
-    rows.push([sec.toUpperCase()]);
-    const filaSeccion = rows.length; // por si quisieras estilar después
+    // Fila de sección (bloque gris claro)
+    const secRow = ws.getRow(rowIdx);
+    ws.mergeCells(`A${rowIdx}:G${rowIdx}`);
+    const secCell = secRow.getCell("A");
+    secCell.value = sec;
+    secCell.font = { bold: true, size: 11, color: { argb: colorBlue } };
+    secCell.alignment = { vertical: "middle" };
+    secCell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: colorSectionBg },
+    };
+    secCell.border = thinBorder;
+    ws.getRow(rowIdx).height = 18;
+    rowIdx++;
 
     list.forEach((l) => {
-      rows.push([
-        l.ref || "",
-        l.descripcion || "",
-        l.cantidad || 0,
-        (l.pvp || 0).toFixed(2),
-        (l.subtotal || l.pvp * l.cantidad || 0).toFixed(2),
-        (l.subtotal || l.pvp * l.cantidad || 0).toFixed(2),
-      ]);
-    });
-  });
+      const row = ws.getRow(rowIdx);
+      const importe = l.subtotal || l.pvp * l.cantidad || 0;
 
-  rows.push([]);
-  const filaSubtotal = rows.length + 1;
-  rows.push(["Subtotal (base imponible)", "", "", "", "", base.toFixed(2)]);
-  const filaIVA = rows.length + 1;
-  rows.push(["IVA 21%", "", "", "", "", iva.toFixed(2)]);
-  const filaTotal = rows.length + 1;
-  rows.push(["TOTAL OFERTA", "", "", "", "", total.toFixed(2)]);
-  rows.push([]);
-  rows.push(["Información fiscal", textoIVAEstado]);
-  rows.push(["Validez de la oferta", textoValidez]);
+      row.getCell("A").value = sec;
+      row.getCell("B").value =
+        l.titulo ||
+        l.title ||
+        l.subseccion ||
+        l["Título"] ||
+        l["TITULO"] ||
+        "";
+      row.getCell("C").value = l.ref || "";
+      row.getCell("D").value = l.descripcion || "";
+      row.getCell("E").value = l.cantidad || 0;
+      row.getCell("F").value = Number(l.pvp || 0);
+      row.getCell("G").value = Number(importe);
 
-  // ===== Crear hoja y aplicar formato =====
-  const ws = XLSX.utils.aoa_to_sheet(rows);
+      row.getCell("E").numFmt = "0";
+      row.getCell("F").numFmt = "#,##0.00";
+      row.getCell("G").numFmt = "#,##0.00";
 
-  // Helper para aplicar estilo a una celda
-  function styleCell(ref, style) {
-    if (!ws[ref]) return;
-    ws[ref].s = Object.assign(ws[ref].s || {}, style);
-  }
+      ["A", "B", "C", "D"].forEach((c) => {
+        row.getCell(c).alignment = { vertical: "top", wrapText: true };
+      });
+      ["E", "F", "G"].forEach((c) => {
+        row.getCell(c).alignment = {
+          vertical: "middle",
+          horizontal: "right",
+        };
+      });
 
-  // Column widths
-  ws["!cols"] = [
-    { wch: 14 }, // REF
-    { wch: 55 }, // DESCRIPCIÓN
-    { wch: 6 },  // UD
-    { wch: 12 }, // PVPR UD
-    { wch: 12 }, // PVPR TOTAL
-    { wch: 14 }, // NETO TOTAL
-  ];
+      row.eachCell((cell) => {
+        cell.border = thinBorder;
+      });
 
-  // Merges: título en A1:F1
-  ws["!merges"] = ws["!merges"] || [];
-  ws["!merges"].push({
-    s: { r: 0, c: 0 }, // A1
-    e: { r: 0, c: 5 }, // F1
-  });
-
-  // Estilos base
-  const borderThin = {
-    top: { style: "thin", color: { rgb: "FFDDDDDD" } },
-    bottom: { style: "thin", color: { rgb: "FFDDDDDD" } },
-    left: { style: "thin", color: { rgb: "FFDDDDDD" } },
-    right: { style: "thin", color: { rgb: "FFDDDDDD" } },
-  };
-
-  const titleStyle = {
-    font: { bold: true, sz: 14, color: { rgb: "FFFFFFFF" } },
-    fill: { fgColor: { rgb: "FF111827" } },
-    alignment: { horizontal: "center", vertical: "center" },
-  };
-
-  const labelBold = {
-    font: { bold: true },
-  };
-
-  const tableHeaderStyle = {
-    font: { bold: true, color: { rgb: "FFFFFFFF" } },
-    fill: { fgColor: { rgb: "FF111827" } },
-    alignment: { horizontal: "center" },
-    border: borderThin,
-  };
-
-  const sectionStyle = {
-    font: { bold: true, color: { rgb: "FF111827" } },
-    fill: { fgColor: { rgb: "FFE5E7EB" } },
-  };
-
-  const totalRowStyle = {
-    font: { bold: true },
-    fill: { fgColor: { rgb: "FFF3F4F6" } },
-    border: borderThin,
-  };
-
-  // Aplicar estilo título (A1)
-  styleCell("A1", titleStyle);
-
-  // Labels empresa / proyecto / observaciones
-  const labels = ["A3", "A4", "A5", "A6", "A7", "A9", "A10", "A11", "A13"];
-  labels.forEach((ref) => styleCell(ref, labelBold));
-
-  // Cabecera de tabla (filaCabeceraTabla)
-  const cabRow = filaCabeceraTabla; // 1-based
-  const cabIdx = cabRow - 1;        // 0-based para convertir a letras
-  const headerCols = ["A", "B", "C", "D", "E", "F"];
-  headerCols.forEach((col) => {
-    const ref = col + cabRow;
-    styleCell(ref, tableHeaderStyle);
-  });
-
-  // Bordes en todas las filas de detalle (desde cabecera hasta antes de Subtotal)
-  const filaPrimeraDetalle = cabRow + 1;
-  const filaAntesSubtotal = filaSubtotal - 2; // fila en blanco previa
-  for (let r = filaPrimeraDetalle; r <= filaAntesSubtotal; r++) {
-    headerCols.forEach((col) => {
-      const ref = col + r;
-      if (!ws[ref]) return;
-      ws[ref].s = Object.assign(ws[ref].s || {}, { border: borderThin });
+      ws.getRow(rowIdx).height = 18;
+      rowIdx++;
     });
 
-    // Si la fila es una fila de sección (solo texto en A y vacío en resto),
-    // aplica estilo de sección
-    const aRef = "A" + r;
-    const bRef = "B" + r;
-    if (ws[aRef] && (!ws[bRef] || !ws[bRef].v)) {
-      styleCell(aRef, sectionStyle);
-    }
-  }
+    rowIdx++; // pequeño espacio entre secciones
+  });
 
-  // Estilo totales
-  ["A" + filaSubtotal, "A" + filaIVA, "A" + filaTotal].forEach((ref) =>
-    styleCell(ref, labelBold)
-  );
-  ["E" + filaSubtotal, "F" + filaSubtotal].forEach((ref) =>
-    styleCell(ref, totalRowStyle)
-  );
-  ["E" + filaIVA, "F" + filaIVA].forEach((ref) =>
-    styleCell(ref, totalRowStyle)
-  );
-  ["E" + filaTotal, "F" + filaTotal].forEach((ref) =>
-    styleCell(ref, totalRowStyle)
-  );
+  // ==========================
+  // BLOQUE TOTALES
+  // ==========================
+  rowIdx++;
+  const subtotalRow = ws.getRow(rowIdx);
+  ws.mergeCells(`A${rowIdx}:F${rowIdx}`);
+  subtotalRow.getCell("A").value = "Subtotal (base imponible)";
+  subtotalRow.getCell("A").font = { bold: true, size: 11 };
+  subtotalRow.getCell("G").value = base;
+  subtotalRow.getCell("G").numFmt = "#,##0.00";
+  subtotalRow.getCell("G").font = { bold: true, size: 11 };
+  subtotalRow.getCell("G").alignment = {
+    horizontal: "right",
+    vertical: "middle",
+  };
+  subtotalRow.eachCell((cell) => {
+    cell.border = thinBorder;
+  });
+  rowIdx++;
 
-  // ===== Crear workbook y descargar =====
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Presupuesto");
+  const ivaRow = ws.getRow(rowIdx);
+  ws.mergeCells(`A${rowIdx}:F${rowIdx}`);
+  ivaRow.getCell("A").value = "IVA 21%";
+  ivaRow.getCell("A").font = { bold: true, size: 11 };
+  ivaRow.getCell("G").value = iva;
+  ivaRow.getCell("G").numFmt = "#,##0.00";
+  ivaRow.getCell("G").alignment = {
+    horizontal: "right",
+    vertical: "middle",
+  };
+  ivaRow.eachCell((cell) => {
+    cell.border = thinBorder;
+  });
+  rowIdx++;
 
+  const totalRow = ws.getRow(rowIdx);
+  ws.mergeCells(`A${rowIdx}:F${rowIdx}`);
+  totalRow.getCell("A").value = "TOTAL OFERTA";
+  totalRow.getCell("A").font = {
+    bold: true,
+    size: 12,
+    color: { argb: colorBlueLight },
+  };
+  totalRow.getCell("G").value = total;
+  totalRow.getCell("G").numFmt = "#,##0.00";
+  totalRow.getCell("G").font = {
+    bold: true,
+    size: 12,
+    color: { argb: colorBlueLight },
+  };
+  totalRow.getCell("G").alignment = {
+    horizontal: "right",
+    vertical: "middle",
+  };
+  totalRow.eachCell((cell) => {
+    cell.border = thinBorder;
+  });
+  rowIdx += 2;
+
+  // ==========================
+  // TEXTOS FINALES (IVA + VALIDEZ)
+  // ==========================
+  ws.getCell(`A${rowIdx}`).value = "Información fiscal";
+  ws.getCell(`A${rowIdx}`).font = { bold: true, size: 10 };
+  ws.mergeCells(`B${rowIdx}:G${rowIdx}`);
+  ws.getCell(`B${rowIdx}`).value = textoIVAEstado;
+  ws.getCell(`B${rowIdx}`).alignment = { wrapText: true };
+  rowIdx++;
+
+  ws.getCell(`A${rowIdx}`).value = "Validez de la oferta";
+  ws.getCell(`A${rowIdx}`).font = { bold: true, size: 10 };
+  ws.mergeCells(`B${rowIdx}:G${rowIdx}`);
+  ws.getCell(`B${rowIdx}`).value = textoValidez;
+  ws.getCell(`B${rowIdx}`).alignment = { wrapText: true };
+
+  // ==========================
+  // GUARDAR ARCHIVO
+  // ==========================
   const fileName =
     "Presupuesto_" +
     (nombreProyecto || "2N") +
@@ -1529,7 +1633,11 @@ function exportarPresupuestoExcel() {
     fechaHoy.replace(/-/g, "") +
     ".xlsx";
 
-  XLSX.writeFile(wb, fileName);
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  saveAs(blob, fileName);
 }
 
 
