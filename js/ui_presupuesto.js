@@ -6,15 +6,15 @@ appState.presupuesto = appState.presupuesto || {
   lineas: [],
   resumen: {},
   notas: "",
-  sectionNotes: {},
-  extraSections: [],
+  sectionNotes: {},      // notas por sección
+  extraSections: [],     // secciones manuales añadidas desde la UI
 };
 
 console.log("%cUI Presupuesto · versión DAVID-01-12", "color:#22c55e; font-weight:bold;");
 
-// ======================================================================
+// ===============================================
 // Render de la vista de PRESUPUESTO
-// ======================================================================
+// ===============================================
 function renderPresupuestoView() {
   const container = document.getElementById("appContent");
   if (!container) return;
@@ -22,7 +22,7 @@ function renderPresupuestoView() {
   container.innerHTML = `
     <div class="presupuesto-layout">
 
-      <!-- COLUMNA IZQUIERDA -->
+      <!-- COLUMNA IZQUIERDA: datos + notas + resumen -->
       <div class="presupuesto-left-column">
         <div class="card">
           <div class="card-header">
@@ -64,7 +64,8 @@ function renderPresupuestoView() {
               <label>Notas del presupuesto</label>
               <textarea id="presuNotas" rows="3"></textarea>
               <p style="font-size:0.78rem; color:#6b7280; margin-top:0.25rem;">
-                Estas notas se usarán como observaciones generales.
+                Estas notas se usarán como observaciones generales
+                (ej. requisitos de red, alimentación, alcances, exclusiones...).
               </p>
             </div>
 
@@ -89,66 +90,92 @@ function renderPresupuestoView() {
         </div>
       </div>
 
-      <!-- COLUMNA DERECHA -->
+      <!-- COLUMNA DERECHA: DETALLE DEL PRESUPUESTO (SECCIONES) -->
       <div class="presupuesto-right-column">
         <div class="card">
-          <div class="card-header" style="display:flex; align-items:center; justify-content:space-between;">
+          <div class="card-header" style="display:flex; align-items:center; justify-content:space-between; gap:1rem;">
             <div class="card-title">
               Líneas del presupuesto
-              <span id="presuLineCount" style="font-size:0.8rem; color:#6b7280;">
+              <span id="presuLineCount" style="font-size:0.8rem; color:#6b7280; font-weight:400;">
                 0 líneas cargadas desde el proyecto
               </span>
             </div>
-
-            <div style="display:flex; align-items:center; gap:0.5rem;">
+            <div class="presu-header-actions" style="display:flex; align-items:center; gap:0.5rem; font-size:0.8rem;">
               <span>Filtro ref:</span>
               <input id="presuFiltroRef" type="text" class="input" style="width:130px;" />
-              <button id="btnAddLinea" class="btn btn-secondary">Añadir línea</button>
-              <button id="btnAddSection" class="btn btn-secondary">Añadir sección</button>
+              <button id="btnAddLinea" class="btn btn-secondary">
+                Añadir línea
+              </button>
+              <button id="btnAddSection" class="btn btn-secondary">
+                Añadir sección
+              </button>
             </div>
-
           </div>
-          <div class="card-body" id="presuDetalle">No hay líneas de presupuesto generadas.</div>
+          <div class="card-body" id="presuDetalle">
+            No hay líneas de presupuesto generadas.
+          </div>
         </div>
       </div>
 
     </div>
-  `;
+  ";
 
-  document.getElementById("btnGenerarPresupuesto")?.addEventListener("click", generarPresupuesto);
-  document.getElementById("btnAddSection")?.addEventListener("click", onAddManualSection);
-  document.getElementById("btnAddLinea")?.addEventListener("click", () => {
-    alert("Función pendiente de implementar.");
-  });
+  // Botón generar
+  const btnGenerar = document.getElementById("btnGenerarPresupuesto");
+  if (btnGenerar) {
+    btnGenerar.addEventListener("click", generarPresupuesto);
+  }
+
+  // Botón añadir sección
+  const btnAddSection = document.getElementById("btnAddSection");
+  if (btnAddSection) {
+    btnAddSection.addEventListener("click", onAddManualSection);
+  }
+
+  // Botón añadir línea (stub)
+  const btnAddLinea = document.getElementById("btnAddLinea");
+  if (btnAddLinea) {
+    btnAddLinea.addEventListener("click", () => {
+      alert("Función 'Añadir línea' pendiente de implementar.");
+    });
+  }
 
   precargarDatosProyecto();
 }
 
-// ======================================================================
-// Precargar datos
-// ======================================================================
+// ===============================================
+// Precargar datos del proyecto en el formulario
+// ===============================================
 function precargarDatosProyecto() {
   const p = appState.proyecto || {};
   const presu = appState.presupuesto || {};
 
-  document.getElementById("presuNombre").value = p.nombre || presu.nombre || "Proyecto sin nombre";
-  document.getElementById("presuCliente").value = p.cliente || presu.cliente || "";
-
+  document.getElementById("presuNombre").value =
+    p.nombre || presu.nombre || "Proyecto sin nombre";
+  document.getElementById("presuCliente").value =
+    p.cliente || presu.cliente || "";
   document.getElementById("presuFecha").value =
-    p.fecha || presu.fecha || new Date().toISOString().split("T")[0];
-
+    p.fecha ||
+    presu.fecha ||
+    new Date().toISOString().split("T")[0];
   document.getElementById("presuDto").value = presu.resumen?.dto || p.dto || 0;
 
-  const notasPorDefecto = "se requiere de switch poe para alimentar los equipos";
-  document.getElementById("presuNotas").value = presu.notas || p.notas || notasPorDefecto;
+  const notasPorDefecto =
+    "se requiere de switch poe para alimentar los equipos";
+  document.getElementById("presuNotas").value =
+    presu.notas || p.notas || notasPorDefecto;
 }
 
-// ======================================================================
-// Cargar tarifas Firestore
-// ======================================================================
+// ===============================================
+// Carga directa de tarifas desde Firestore
+// ===============================================
 async function cargarTarifasDesdeFirestore() {
   const db = firebase.firestore();
-  const snap = await db.collection("tarifas").doc("v1").collection("productos").get();
+  const snap = await db
+    .collection("tarifas")
+    .doc("v1")
+    .collection("productos")
+    .get();
 
   const result = {};
   snap.forEach((docSnap) => {
@@ -160,13 +187,19 @@ async function cargarTarifasDesdeFirestore() {
     result[ref] = pvp;
   });
 
-  console.log("%cTarifa cargada -> " + Object.keys(result).length, "color:#3b82f6;");
+  console.log(
+    "%cTarifa · cargarTarifasDesdeFirestore() -> " +
+      Object.keys(result).length +
+      " referencias",
+    "color:#3b82f6;"
+  );
+
   return result;
 }
 
-// ======================================================================
-// Generar presupuesto
-// ======================================================================
+// ===============================================
+// Generación del presupuesto completo
+// ===============================================
 async function generarPresupuesto() {
   const msg = document.getElementById("presuMsg");
   if (msg) msg.style.display = "none";
@@ -175,40 +208,116 @@ async function generarPresupuesto() {
 
   const proyecto = appState.proyecto || {};
   const lineasProyecto =
-    (proyecto.lineas?.length ? proyecto.lineas : proyecto.filas) || [];
+    (proyecto.lineas && proyecto.lineas.length ? proyecto.lineas : proyecto.filas) ||
+    [];
 
-  console.log("[Presupuesto] líneas:", lineasProyecto.length);
+  console.log(
+    "[Presupuesto] tarifas cargadas (reales):",
+    Object.keys(tarifas).length
+  );
+  console.log(
+    "[Presupuesto] líneas de proyecto:",
+    lineasProyecto.length
+  );
 
   let lineasPresupuesto = [];
   let totalBruto = 0;
+  let totalNeto = 0;
 
   for (const item of lineasProyecto) {
     const refCampo =
       item.ref ||
       item.referencia ||
       item.numeroPedido ||
-      item["Número de pedido"];
+      item["numero de pedido"] ||
+      item["Número de pedido"] ||
+      item.orderingNumber ||
+      item["Ordering Number"];
 
-    if (!refCampo) continue;
+    if (!item || !refCampo) {
+      console.warn("⚠ Línea sin referencia válida:", item);
+      continue;
+    }
 
-    const ref = String(refCampo).replace(/\s+/g, "");
-    const cantidad = Number(item.cantidad || 1);
+    const refOriginal = String(refCampo || "").trim();
+    let ref = refOriginal.replace(/\s+/g, "");
 
-    let pvp = tarifas[ref] || 0;
-    if (!pvp) continue;
+    if (/^9\d{7}$/.test(ref)) {
+      ref = ref.slice(0, 7);
+    }
 
-    const subtotal = cantidad * pvp;
+    const candidatos = [];
+    if (refOriginal) candidatos.push(refOriginal.replace(/\s+/g, ""));
+    if (ref) candidatos.push(ref);
+
+    if (ref.length === 7) {
+      candidatos.push(ref + "0");
+      candidatos.push(ref + "00");
+    } else if (ref.length === 8) {
+      candidatos.push(ref.slice(0, 7));
+    }
+
+    const candidatosUnicos = [...new Set(candidatos)];
+
+    const cantidad =
+      Number(item.cantidad) ||
+      Number(item.qty) ||
+      Number(item["Cantidad"]) ||
+      Number(item["cantidad"]) ||
+      1;
+
+    if (!cantidad || cantidad <= 0) {
+      console.warn("⚠ Cantidad inválida:", item);
+      continue;
+    }
+
+    let pvp = 0;
+    for (const key of candidatosUnicos) {
+      if (tarifas[key] != null) {
+        pvp = Number(tarifas[key]) || 0;
+        if (pvp) break;
+      }
+    }
+
+    if (!pvp) {
+      console.warn("⚠ Línea sin precio en tarifa", {
+        refOriginal,
+        refNormalizada: ref,
+        candidatos: candidatosUnicos,
+        cantidad,
+        desc:
+          item.descripcion ||
+          item["Nombre del producto"] ||
+          item.nombreProducto ||
+          item.titulo,
+      });
+      continue;
+    }
+
+    const subtotal = pvp * cantidad;
     totalBruto += subtotal;
 
     const seccion =
-      item.seccion || item["Sección"] || item.section || "";
+      item.seccion ||
+      item.section ||
+      item["Sección"] ||
+      item["sección"] ||
+      item["SECCION"] ||
+      "";
 
     const titulo =
-      item.titulo || item["Título"] || item.title || "";
+      item.titulo ||
+      item.title ||
+      item["Título"] ||
+      item["titulo"] ||
+      item["TITULO"] ||
+      item.descripcionTitulo ||
+      "";
 
     const descripcion =
       item.descripcion ||
       item["Nombre del producto"] ||
+      item.nombreProducto ||
       item.titulo ||
       "";
 
@@ -224,40 +333,49 @@ async function generarPresupuesto() {
   }
 
   const dto = Number(document.getElementById("presuDto").value) || 0;
-  const factorDto = 1 - dto / 100;
+  const factorDto = dto > 0 ? 1 - dto / 100 : 1;
 
-  const totalNeto = totalBruto * factorDto;
-  const notas = document.getElementById("presuNotas").value;
+  totalNeto = totalBruto * factorDto;
+
+  const notas = document.getElementById("presuNotas").value || "";
+
+  const prevSectionNotes = appState.presupuesto.sectionNotes || {};
+  const prevExtraSections = appState.presupuesto.extraSections || [];
 
   appState.presupuesto = {
     lineas: lineasPresupuesto,
-    resumen: { totalBruto, totalNeto, dto },
+    resumen: {
+      totalBruto,
+      dto,
+      totalNeto,
+    },
     notas,
-    nombre: document.getElementById("presuNombre").value,
-    cliente: document.getElementById("presuCliente").value,
-    fecha: document.getElementById("presuFecha").value,
-    sectionNotes: appState.presupuesto.sectionNotes || {},
-    extraSections: appState.presupuesto.extraSections || [],
+    nombre: document.getElementById("presuNombre").value || "",
+    cliente: document.getElementById("presuCliente").value || "",
+    fecha: document.getElementById("presuFecha").value || "",
+    sectionNotes: prevSectionNotes,
+    extraSections: prevExtraSections,
   };
 
   renderResultados(lineasPresupuesto, totalBruto, totalNeto, dto);
 
   if (msg) {
     msg.textContent = `Presupuesto generado: ${lineasPresupuesto.length} líneas con precio.`;
-    msg.style.display = "block";
+    msg.style.display = "flex";
   }
 }
 
-// ======================================================================
-// Añadir sección manual
-// ======================================================================
+// ===============================================
+// Añadir sección manual (sin líneas) desde la UI
+// ===============================================
 function onAddManualSection() {
   const nombre = prompt("Nombre de la nueva sección:");
   if (!nombre) return;
 
   const titulo = prompt("Título dentro de la sección (opcional):") || "";
 
-  const presu = appState.presupuesto;
+  const presu = appState.presupuesto || {};
+  presu.extraSections = presu.extraSections || [];
   presu.extraSections.push({
     id: Date.now().toString(),
     seccion: nombre,
@@ -265,28 +383,43 @@ function onAddManualSection() {
     nota: "",
   });
 
-  renderResultados(
-    presu.lineas,
-    presu.resumen.totalBruto,
-    presu.resumen.totalNeto,
-    presu.resumen.dto
-  );
+  appState.presupuesto = presu;
+
+  if (presu.lineas && presu.resumen) {
+    renderResultados(
+      presu.lineas,
+      presu.resumen.totalBruto || 0,
+      presu.resumen.totalNeto || 0,
+      presu.resumen.dto || 0
+    );
+  }
 }
 
-// ======================================================================
-// RenderResultados (DETALLE PRESUPUESTO)
-// ======================================================================
+// ===============================================
+// Mostrar resultados en pantalla (detalle tipo tabla proyecto)
+// ===============================================
 function renderResultados(lineas, totalBruto, totalNeto, dto) {
   const detalle = document.getElementById("presuDetalle");
   const resumen = document.getElementById("presuResumen");
+  const presu = appState.presupuesto || {};
+  const sectionNotes = presu.sectionNotes || {};
+  const extraSections = presu.extraSections || [];
 
-  if (!lineas?.length) {
+  if (!detalle) return;
+
+  // Actualizar contador en cabecera derecha
+  const countLabel = document.getElementById("presuLineCount");
+  if (countLabel) {
+    countLabel.textContent = `${lineas ? lineas.length : 0} líneas cargadas desde el proyecto`;
+  }
+
+  if (!lineas || lineas.length === 0) {
     detalle.textContent = "No hay líneas de presupuesto generadas.";
     resumen.textContent = "No se ha generado todavía el presupuesto.";
     return;
   }
 
-  let html = `
+  let htmlDetalle = `
     <table class="table">
       <thead>
         <tr>
@@ -304,36 +437,40 @@ function renderResultados(lineas, totalBruto, totalNeto, dto) {
 
   let currentSection = null;
   let currentTitle = null;
-  const notes = appState.presupuesto.sectionNotes;
 
   for (const l of lineas) {
     const sec = l.seccion || "Sin sección";
-    const tit = l.titulo || "";
+    const tit = l.titulo || "Sin título";
 
+    // ===== Fila de SECCIÓN (azul) + nota de sección =====
     if (sec !== currentSection) {
       currentSection = sec;
       currentTitle = null;
 
-      html += `
+      htmlDetalle += `
         <tr>
-          <td colspan="7" style="background:#eef2ff; font-weight:600;">
+          <td colspan="7" style="background:#eef2ff; font-weight:600; text-transform:uppercase;">
             ${sec}
           </td>
         </tr>
         <tr>
           <td colspan="7">
-            <textarea class="section-note"
-                      data-section="${sec}"
-                      rows="2"
-                      style="width:100%; font-size:0.78rem;">${notes[sec] || ""}</textarea>
+            <textarea
+              class="section-note"
+              data-section="${sec}"
+              rows="2"
+              style="width:100%; font-size:0.78rem; resize:vertical;"
+              placeholder="Notas de la sección (opcional)"
+            >${sectionNotes[sec] || ""}</textarea>
           </td>
         </tr>
       `;
     }
 
+    // ===== Fila de TÍTULO (gris) =====
     if (tit && tit !== currentTitle) {
       currentTitle = tit;
-      html += `
+      htmlDetalle += `
         <tr>
           <td colspan="7" style="background:#f3f4f6; font-weight:500;">
             ${tit}
@@ -342,14 +479,19 @@ function renderResultados(lineas, totalBruto, totalNeto, dto) {
       `;
     }
 
-    // ⭐ CAMBIO ÚNICO REALIZADO: MOSTRAR LA SECCIÓN EN SU COLUMNA ⭐
-    const importe = l.subtotal;
+    // ===== Fila de producto =====
+    const importe = l.subtotal || l.pvp * l.cantidad || 0;
 
-    html += `
+    // 👉 NUEVO: la columna "Sección" usa el TÍTULO del bloque (o, si no hay, la sección)
+    const seccionCelda = l.titulo || sec || "";
+
+    htmlDetalle += `
       <tr>
-        <td><input type="checkbox" checked /></td>
+        <td>
+          <input type="checkbox" checked />
+        </td>
         <td>${l.ref}</td>
-        <td>${sec}</td>   <!-- <- AQUI EL CAMBIO -->
+        <td>${seccionCelda}</td>
         <td>${l.descripcion}</td>
         <td>${l.cantidad}</td>
         <td>${l.pvp.toFixed(2)} €</td>
@@ -358,32 +500,97 @@ function renderResultados(lineas, totalBruto, totalNeto, dto) {
     `;
   }
 
-  html += `
+  htmlDetalle += `
       </tbody>
     </table>
   `;
 
-  detalle.innerHTML = html;
+  // ===== Secciones adicionales creadas desde la UI =====
+  if (extraSections.length) {
+    htmlDetalle += `
+      <div style="border-top:1px solid #e5e7eb; margin-top:1rem; padding-top:1rem;">
+        <div style="font-size:0.85rem; color:#6b7280; margin-bottom:0.5rem;">
+          Secciones adicionales
+        </div>
+    `;
 
-  // Resumen económico
-  const iva = totalNeto * 0.21;
-  const totalConIva = totalNeto + iva;
+    extraSections.forEach((sec) => {
+      htmlDetalle += `
+        <div class="section-block" style="margin-bottom:1rem;">
+          <div style="font-weight:600; font-size:0.9rem; margin-bottom:0.25rem;">
+            ${sec.seccion}
+          </div>
+          ${
+            sec.titulo
+              ? `<div style="background:#f3f4f6; padding:0.25rem 0.5rem; font-size:0.8rem; margin-bottom:0.25rem;">
+                  ${sec.titulo}
+                 </div>`
+              : ""
+          }
+          <div class="form-group">
+            <label style="font-size:0.8rem; color:#6b7280;">Notas de la sección</label>
+            <textarea class="section-note-extra" data-id="${sec.id}" rows="2"
+              style="width:100%;">${sec.nota || ""}</textarea>
+          </div>
+        </div>
+      `;
+    });
+
+    htmlDetalle += `</div>`;
+  }
+
+  detalle.innerHTML = htmlDetalle;
+
+  // Guardar notas de sección en estado
+  const currentSectionNotes = (appState.presupuesto.sectionNotes =
+    sectionNotes);
+
+  detalle.querySelectorAll(".section-note").forEach((ta) => {
+    ta.addEventListener("input", (e) => {
+      const sec = e.target.dataset.section;
+      currentSectionNotes[sec] = e.target.value;
+    });
+  });
+
+  detalle.querySelectorAll(".section-note-extra").forEach((ta) => {
+    ta.addEventListener("input", (e) => {
+      const id = e.target.dataset.id;
+      const presu = appState.presupuesto || {};
+      presu.extraSections = presu.extraSections || [];
+      const found = presu.extraSections.find((s) => s.id === id);
+      if (found) {
+        found.nota = e.target.value;
+      }
+    });
+  });
+
+  // ===== Resumen económico con IVA =====
+  const subtotal = totalNeto;
+  const iva = subtotal * 0.21;
+  const totalConIva = subtotal + iva;
 
   resumen.innerHTML = `
     <div class="metric-card">
       <span class="metric-label">SUBTOTAL (base imponible)</span>
-      <span class="metric-value">${totalNeto.toFixed(2)} €</span>
+      <span class="metric-value">${subtotal.toFixed(2)} €</span>
     </div>
+
     <div class="metric-card">
       <span class="metric-label">IVA 21%</span>
       <span class="metric-value">${iva.toFixed(2)} €</span>
     </div>
+
     <div class="metric-card">
       <span class="metric-label">TOTAL CON IVA</span>
       <span class="metric-value">${totalConIva.toFixed(2)} €</span>
     </div>
+
+    <p style="font-size:0.8rem; color:#6b7280; margin-top:0.5rem;">
+      Total bruto sin descuento: <strong>${totalBruto.toFixed(2)} €</strong> ·
+      Descuento global aplicado: <strong>${dto}%</strong>
+    </p>
   `;
 }
 
-console.log("%cUI Presupuesto cargado", "color:#0284c7;");
+console.log("%cUI Presupuesto cargado (ui_presupuesto.js)", "color:#0284c7;");
 window.renderPresupuestoView = renderPresupuestoView;
