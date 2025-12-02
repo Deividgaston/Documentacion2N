@@ -607,3 +607,25 @@ textarea {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+/* ===== Layout específico de la página de Presupuesto ===== */
+
+.presupuesto-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.7fr);
+  gap: 1.5rem;
+  align-items: flex-start;
+}
+
+.presupuesto-left-column,
+.presupuesto-right-column {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* En pantallas pequeñas, las cards se apilan una debajo de otra */
+@media (max-width: 1024px) {
+  .presupuesto-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
