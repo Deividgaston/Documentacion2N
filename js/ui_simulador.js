@@ -577,12 +577,11 @@ async function recalcularSimulador() {
       ? (1 - totalFinal / totalBaseTarifa) * 100
       : 0;
 
-  // ===== NUEVO: función para aplicar margen sobre precio de venta =====
+  // ===== función para aplicar margen sobre precio de venta =====
   function aplicarMargenSobreVenta(cost, marginPct) {
     const m = Number(marginPct) || 0;
     if (m <= 0) return cost;
     const f = m / 100;
-    // Evitar divisiones raras si alguien pone 100% o más
     if (f >= 0.99) return cost / 0.01;
     return cost / (1 - f);
   }
@@ -606,7 +605,6 @@ async function recalcularSimulador() {
     totalPvpBase > 0 ? (1 - precioInte / totalPvpBase) * 100 : 0;
   const descConst =
     totalPvpBase > 0 ? (1 - precioConst / totalPvpBase) * 100 : 0;
-
 
   // 9) BLOQUES 2 y 3 en el resumen
   resumenMini.innerHTML = `
