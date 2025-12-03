@@ -220,7 +220,7 @@ function renderSimuladorView() {
       </div>
 
     </div>
-  ”
+  `;
 
   // Inicializar select/global con el estado guardado
   const selTarifaDefecto = document.getElementById("simTarifaDefecto");
