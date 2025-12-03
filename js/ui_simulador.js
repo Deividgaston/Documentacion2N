@@ -1,39 +1,86 @@
-// js/ui_simulador.js
-// SIMULADOR de tarifas/ descuentos a partir del presupuesto actual
+// ===============================================
+// Cargar tarifa desde Firestore con caché (todas las columnas de precio)
+// ===============================================
+async function cargarTarifasDesdeFirestore() {
+  if (appState.tarifasCache) {
+    console.log("%cTarifa · desde caché", "color:#22c55e;");
+    return appState.tarifasCache;
+  }
 
-window.appState = window.appState || {};
-appState.simulador = appState.simulador || {
-  // Por defecto: tarifa de DISTRIBUIDOR
-  tarifaDefecto: "DIST_PRICE",
-  dtoGlobal: 0, // descuento adicional global sobre tarifa
-  lineasSimuladas: [],
-};
+  // Helper para números con coma
+  function parseNum(v) {
+    if (v == null) return 0;
+    if (typeof v === "string") {
+      v = v.replace(/\./g, "").replace(",", "."); // "1.234,56" -> "1234.56"
+    }
+    const n = Number(v);
+    return Number.isNaN(n) ? 0 : n;
+  }
 
-appState.tarifasBaseSimCache = appState.tarifasBaseSimCache || null;
+  const db = firebase.firestore();
+  const snap = await db
+    .collection("tarifas")
+    .doc("v1")
+    .collection("productos")
+    .get();
 
-// Si existen helpers del presupuesto, los usamos
-const getPresupuestoActual =
-  typeof window.getPresupuestoActual === "function"
-    ? window.getPresupuestoActual
-    : null;
+  const result = {};
 
-/**
- * TARIFAS REALES 2N
- * Cada tarifa tiene:
- * - id: interno en la app
- * - label: cómo se muestra en los selects
- * - fieldKeys: posibles nombres de campo en Firestore
- *
- * Ajusta fieldKeys a cómo tengas los nombres EXACTOS en tu BD.
- */
-const TARIFAS_2N = [
-  {
-    id: "NFR_DIST",
-    label: "NFR Distributor (EUR)",
-    fieldKeys: [
+  snap.forEach((d) => {
+    const obj = d.data() || {};
+
+    // Campos de precios que vienen del Excel
+    const priceFields = [
       "NFR Distributor (EUR)",
-      "nfrDistributor",
-      "nfr_distributor",
+      "NFR Reseller (EUR)",
+      "Distributor Price (EUR)",
+      "Recommended Reseller Price 2 (EUR)",
+      "Recommended Reseller Price 1 (EUR)",
+      "MSRP (EUR)",
+    ];
+
+    const precios = {};
+    priceFields.forEach((f) => {
+      if (Object.prototype.hasOwnProperty.call(obj, f)) {
+        const val = parseNum(obj[f]);
+        if (val > 0) precios[f] = val;
+      }
+    });
+
+    // PVP base de referencia (para compatibilidad con el resto de la app)
+    const pvpBase =
+      parseNum(obj.pvp) ||
+      parseNum(obj["MSRP (EUR)"]) ||
+      parseNum(obj["Recommended Reseller Price 1 (EUR)"]) ||
+      parseNum(obj["Recommended Reseller Price 2 (EUR)"]) ||
+      parseNum(obj["Distributor Price (EUR)"]) ||
+      parseNum(obj["NFR Reseller (EUR)"]) ||
+      parseNum(obj["NFR Distributor (EUR)"]);
+
+    if (!pvpBase) {
+      // si no hay ningún precio, no guardamos esta ref
+      return;
+    }
+
+    result[d.id] = {
+      // precios por tarifa
+      ...precios,
+      // pvp "genérico" para el resto de pantallas
+      pvp: pvpBase,
+      descripcion:
+        obj.descripcion || obj.desc || obj.nombre || obj.titulo || "",
+    };
+  });
+
+  appState.tarifasCache = result;
+
+  console.log(
+    "%cTarifa cargada · " + Object.keys(result).length + " referencias",
+    "color:#3b82f6;"
+  );
+
+  return result;
+}
       "nfrDistEur",
     ],
     dto: 0,
