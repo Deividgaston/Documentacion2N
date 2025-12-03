@@ -36,7 +36,7 @@ const TARIFAS_2N = [
   { id: "MSRP",         label: "MSRP (EUR)",                          dto: 0  },
 ];
 
-// Mapa rápido id -> objeto tarifa
+// Mapa id -> objeto tarifa
 const TARIFAS_MAP = TARIFAS_2N.reduce((acc, t) => {
   acc[t.id] = t;
   return acc;
@@ -64,7 +64,6 @@ function buildLineaKey(baseLinea, index) {
 
 // ===============================
 // Cargar tarifas base (PVP) desde Firestore
-// Reutiliza cargarTarifasDesdeFirestore() del presupuesto
 // ===============================
 async function getTarifasBase2N() {
   if (appState.tarifasBaseSimCache) {
@@ -92,7 +91,6 @@ async function getTarifasBase2N() {
 
 // ===============================
 // Leer configuración de líneas desde el DOM
-// (tarifa + dto línea) para mantener cambios del usuario
 // ===============================
 function leerConfigLineasDesdeDOM() {
   const detalle = document.getElementById("simDetalle");
@@ -125,6 +123,10 @@ function leerConfigLineasDesdeDOM() {
 function renderSimuladorView() {
   const container = document.getElementById("appContent");
   if (!container) return;
+
+  const tarifaOptions = TARIFAS_2N.map(
+    (t) => `<option value="${t.id}">${t.label}</option>`
+  ).join("");
 
   container.innerHTML = `
     <div class="simulador-layout">
@@ -161,10 +163,7 @@ function renderSimuladorView() {
                 <div class="form-group">
                   <label>Tarifa 2N por defecto</label>
                   <select id="simTarifaDefecto" class="input">
-                    ${TARIFAS_2N.map(
-                      (t) =>
-                        `<option value="${t.id}">${t.label}</option>`
-                    ).join("")}
+                    ${tarifaOptions}
                   </select>
                   <p style="font-size:0.75rem; color:#6b7280; margin-top:0.25rem;">
                     Esta tarifa se aplica por defecto a todas las líneas.
@@ -243,7 +242,7 @@ function renderSimuladorView() {
       </div>
 
     </div>
-  ";
+  `;
 
   const selTarifaDefecto = document.getElementById("simTarifaDefecto");
   const inpDtoGlobal = document.getElementById("simDtoGlobal");
@@ -256,49 +255,58 @@ function renderSimuladorView() {
   if (selTarifaDefecto) {
     selTarifaDefecto.value =
       appState.simulador.tarifaDefecto || "DIST_PRICE";
-    selTarifaDefecto.addEventListener("change", () => {
-      recalcularSimulador();
-    });
   }
-
   if (inpDtoGlobal) {
     inpDtoGlobal.value = appState.simulador.dtoGlobal || 0;
-    inpDtoGlobal.addEventListener("change", () => {
-      recalcularSimulador();
-    });
   }
-
   if (inpMgnDist) {
     inpMgnDist.value = appState.simulador.mgnDist || 0;
-    inpMgnDist.addEventListener("change", () => {
-      recalcularSimulador();
-    });
   }
-
   if (inpMgnSubdist) {
     inpMgnSubdist.value = appState.simulador.mgnSubdist || 0;
-    inpMgnSubdist.addEventListener("change", () => {
-      recalcularSimulador();
-    });
   }
-
   if (inpMgnInte) {
     inpMgnInte.value = appState.simulador.mgnInte || 0;
-    inpMgnInte.addEventListener("change", () => {
-      recalcularSimulador();
-    });
   }
-
   if (inpMgnConst) {
     inpMgnConst.value = appState.simulador.mgnConst || 0;
-    inpMgnConst.addEventListener("change", () => {
-      recalcularSimulador();
-    });
   }
 
   const btnRecalc = document.getElementById("btnSimRecalcular");
   if (btnRecalc) {
     btnRecalc.addEventListener("click", () => {
+      recalcularSimulador();
+    });
+  }
+
+  // También recalc cuando cambian estos campos
+  if (selTarifaDefecto) {
+    selTarifaDefecto.addEventListener("change", () => {
+      recalcularSimulador();
+    });
+  }
+  if (inpDtoGlobal) {
+    inpDtoGlobal.addEventListener("change", () => {
+      recalcularSimulador();
+    });
+  }
+  if (inpMgnDist) {
+    inpMgnDist.addEventListener("change", () => {
+      recalcularSimulador();
+    });
+  }
+  if (inpMgnSubdist) {
+    inpMgnSubdist.addEventListener("change", () => {
+      recalcularSimulador();
+    });
+  }
+  if (inpMgnInte) {
+    inpMgnInte.addEventListener("change", () => {
+      recalcularSimulador();
+    });
+  }
+  if (inpMgnConst) {
+    inpMgnConst.addEventListener("change", () => {
       recalcularSimulador();
     });
   }
@@ -384,7 +392,6 @@ async function recalcularSimulador() {
       .replace(/\s+/g, "");
 
     const infoTarifa = tarifasBase[refNorm] || {};
-    // PVP base: campo "pvp" o pvp del presupuesto
     const basePvp =
       Number(infoTarifa.pvp) || Number(lBase.pvp || 0) || 0;
 
@@ -469,6 +476,13 @@ async function recalcularSimulador() {
   `;
 
   lineasSim.forEach((l) => {
+    const optionsHtml = TARIFAS_2N.map(
+      (t) =>
+        `<option value="${t.id}" ${
+          t.id === l.tarifaId ? "selected" : ""
+        }>${t.label}</option>`
+    ).join("");
+
     html += `
       <tr data-key="${l.key}">
         <td>${l.ref}</td>
@@ -492,12 +506,7 @@ async function recalcularSimulador() {
             data-key="${l.key}"
             style="font-size:0.78rem; padding:0.15rem 0.25rem;"
           >
-            ${TARIFAS_2N.map(
-              (t) =>
-                `<option value="${t.id}" ${
-                  t.id === l.tarifaId ? "selected" : ""
-                }>${t.label}</option>`
-            ).join("")}
+            ${optionsHtml}
           </select>
         </td>
 
