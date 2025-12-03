@@ -577,12 +577,23 @@ async function recalcularSimulador() {
       ? (1 - totalFinal / totalBaseTarifa) * 100
       : 0;
 
-  // Cadena de márgenes
-  const precio2N = totalFinal;
-  const precioDist = precio2N * (1 + mgnDist / 100);
-  const precioSubdist = precioDist * (1 + mgnSubdist / 100);
-  const precioInte = precioSubdist * (1 + mgnInte / 100);
-  const precioConst = precioInte * (1 + mgnConst / 100);
+  // ===== NUEVO: función para aplicar margen sobre precio de venta =====
+  function aplicarMargenSobreVenta(cost, marginPct) {
+    const m = Number(marginPct) || 0;
+    if (m <= 0) return cost;
+    const f = m / 100;
+    // Evitar divisiones raras si alguien pone 100% o más
+    if (f >= 0.99) return cost / 0.01;
+    return cost / (1 - f);
+  }
+
+  // Cadena de márgenes (margen = beneficio sobre precio de venta)
+  const precio2N = totalFinal; // 2N vende al distribuidor a este precio (salida del simulador)
+
+  const precioDist    = aplicarMargenSobreVenta(precio2N,    mgnDist);
+  const precioSubdist = aplicarMargenSobreVenta(precioDist,  mgnSubdist);
+  const precioInte    = aplicarMargenSobreVenta(precioSubdist, mgnInte);
+  const precioConst   = aplicarMargenSobreVenta(precioInte,  mgnConst);
 
   // Descuentos efectivos vs PVP para cada actor
   const desc2N =
@@ -595,6 +606,7 @@ async function recalcularSimulador() {
     totalPvpBase > 0 ? (1 - precioInte / totalPvpBase) * 100 : 0;
   const descConst =
     totalPvpBase > 0 ? (1 - precioConst / totalPvpBase) * 100 : 0;
+
 
   // 9) BLOQUES 2 y 3 en el resumen
   resumenMini.innerHTML = `
