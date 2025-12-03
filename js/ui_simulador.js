@@ -6,6 +6,7 @@ appState.simulador = appState.simulador || {
   tarifaDefecto: "DIST_PRICE", // Tarifa global por defecto: Distributor Price (EUR)
   dtoGlobal: 0,                // descuento adicional global sobre tarifa
   lineasSimuladas: [],         // último resultado
+  lineDtoEdited: {},           // mapa: key -> true si el dto de esa línea se ha editado a mano
 };
 
 appState.tarifasBaseSimCache = appState.tarifasBaseSimCache || null;
@@ -19,16 +20,16 @@ const getPresupuestoActual =
 /**
  * TARIFAS DEFINIDAS (coinciden con las columnas de tu Excel)
  * Por ahora se implementan como "descuento sobre el PVP base" (campo pvp)
- * para simplificar. Más adelante, si quieres, podemos leer directamente
- * los campos específicos de Firestore (nfrDistributor, distributorPrice, etc.).
+ * para simplificar. Más adelante podemos leer directamente los campos
+ * específicos de Firestore (nfrDistributor, distributorPrice, etc.).
  */
 const TARIFAS_2N = [
-  { id: "NFR_DIST", label: "NFR Distributor (EUR)", dto: 55 },
-  { id: "NFR_RESELLER", label: "NFR Reseller (EUR)", dto: 50 },
-  { id: "DIST_PRICE", label: "Distributor Price (EUR)", dto: 39 },
-  { id: "RRP2", label: "Recommended Reseller Price 2 (EUR)", dto: 28 },
-  { id: "RRP1", label: "Recommended Reseller Price 1 (EUR)", dto: 10 },
-  { id: "MSRP", label: "MSRP (EUR)", dto: 0 },
+  { id: "NFR_DIST",     label: "NFR Distributor (EUR)",           dto: 55 },
+  { id: "NFR_RESELLER", label: "NFR Reseller (EUR)",              dto: 50 },
+  { id: "DIST_PRICE",   label: "Distributor Price (EUR)",         dto: 39 },
+  { id: "RRP2",         label: "Recommended Reseller Price 2 (EUR)", dto: 28 },
+  { id: "RRP1",         label: "Recommended Reseller Price 1 (EUR)", dto: 10 },
+  { id: "MSRP",         label: "MSRP (EUR)",                      dto: 0  },
 ];
 
 // Mapa rápido id -> objeto tarifa
@@ -38,7 +39,7 @@ const TARIFAS_MAP = TARIFAS_2N.reduce((acc, t) => {
 }, {});
 
 console.log(
-  "%cUI Simulador · v3 · tarifas 2N + dto global / línea",
+  "%cUI Simulador · v3.1 · tarifas 2N + dto global / línea (sync dto global -> línea)",
   "color:#22c55e; font-weight:bold;"
 );
 
@@ -166,6 +167,7 @@ function renderSimuladorView() {
                 <p style="font-size:0.75rem; color:#6b7280; margin-top:0.25rem;">
                   Se aplica a todas las líneas <strong>además</strong> del descuento propio de cada tarifa
                   (y además del descuento extra por línea).
+                  El valor se copia como descuento de línea por defecto.
                 </p>
               </div>
             </div>
@@ -210,7 +212,7 @@ function renderSimuladorView() {
     selTarifaDefecto.value =
       appState.simulador.tarifaDefecto || "DIST_PRICE";
 
-    // 👉 al cambiar la tarifa global, recalculamos
+    // Al cambiar la tarifa global, recalculamos
     selTarifaDefecto.addEventListener("change", () => {
       recalcularSimulador();
     });
@@ -219,7 +221,7 @@ function renderSimuladorView() {
   if (inpDtoGlobal) {
     inpDtoGlobal.value = appState.simulador.dtoGlobal || 0;
 
-    // 👉 al cambiar dto global, recalculamos
+    // Al cambiar dto global, recalculamos
     inpDtoGlobal.addEventListener("change", () => {
       recalcularSimulador();
     });
@@ -274,6 +276,7 @@ async function recalcularSimulador() {
 
   appState.simulador.tarifaDefecto = tarifaDefecto;
   appState.simulador.dtoGlobal = dtoGlobal;
+  appState.simulador.lineDtoEdited = appState.simulador.lineDtoEdited || {};
 
   // 3) Config de líneas ya modificadas por el usuario (si existe DOM previo)
   //    Si ha cambiado la tarifa global, ignoramos la config anterior para
@@ -282,6 +285,8 @@ async function recalcularSimulador() {
   if (tarifaDefecto === oldTarifaDefecto) {
     configPrev = leerConfigLineasDesdeDOM();
   }
+
+  const editedMap = appState.simulador.lineDtoEdited || {};
 
   // 4) Cargar tarifas base 2N (PVP) desde Firestore
   const tarifasBase = await getTarifasBase2N();
@@ -304,10 +309,18 @@ async function recalcularSimulador() {
 
     const cantidad = Number(lBase.cantidad || 0) || 0;
 
-    // Tarifa/dto línea: si ya existe en configPrev, se respeta; si no, tarifa por defecto y dto línea 0
     const cfg = configPrev[key] || {};
     const tarifaId = cfg.tarifaId || tarifaDefecto;
-    const dtoLinea = Number(cfg.dtoLinea || 0) || 0;
+
+    // === DTO LÍNEA ===
+    // - Si la línea ha sido editada a mano (lineDtoEdited[key] == true),
+    //   respetamos el valor que había en el DOM.
+    // - Si NO ha sido editada, usamos SIEMPRE el dtoGlobal actual
+    //   (esto hace que el descuento global se copie a cada línea por defecto).
+    const edited = !!editedMap[key];
+    const dtoLinea = edited
+      ? (Number(cfg.dtoLinea || 0) || 0)
+      : dtoGlobal;
 
     const objTarifa = TARIFAS_MAP[tarifaId] || TARIFAS_MAP["DIST_PRICE"];
     const dtoTarifa = objTarifa ? objTarifa.dto || 0 : 0;
@@ -439,13 +452,18 @@ async function recalcularSimulador() {
   // 7) Listeners por línea (cambio de tarifa o dto línea)
   detalle.querySelectorAll(".sim-tarifa-line").forEach((sel) => {
     sel.addEventListener("change", () => {
-      // Recalcular preservando config de líneas
       recalcularSimulador();
     });
   });
 
   detalle.querySelectorAll(".sim-dto-line").forEach((input) => {
-    input.addEventListener("change", () => {
+    input.addEventListener("change", (e) => {
+      const key = e.target.dataset.key;
+      if (key) {
+        appState.simulador.lineDtoEdited =
+          appState.simulador.lineDtoEdited || {};
+        appState.simulador.lineDtoEdited[key] = true; // esta línea ya está “desacoplada” del dto global
+      }
       recalcularSimulador();
     });
   });
