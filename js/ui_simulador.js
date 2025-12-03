@@ -43,7 +43,7 @@ const TARIFAS_MAP = TARIFAS_2N.reduce((acc, t) => {
 }, {});
 
 console.log(
-  "%cUI Simulador · v3.2 · resumen PVP + cadena de márgenes",
+  "%cUI Simulador · v3.3 · 3 bloques + descuentos por actor vs PVP",
   "color:#22c55e; font-weight:bold;"
 );
 
@@ -143,77 +143,83 @@ function renderSimuladorView() {
           </div>
 
           <div class="card-body">
-            <div class="form-group">
-              <label>Fuente de líneas</label>
-              <p style="font-size:0.8rem; color:#6b7280; margin-top:0.25rem;">
-                Se utilizan las líneas del <strong>presupuesto actual</strong>: referencias, descripciones y cantidades.
-              </p>
-            </div>
 
-            <div class="form-grid">
-              <div class="form-group">
-                <label>Tarifa 2N por defecto</label>
-                <select id="simTarifaDefecto" class="input">
-                  ${TARIFAS_2N.map(
-                    (t) =>
-                      `<option value="${t.id}">${t.label}</option>`
-                  ).join("")}
-                </select>
-                <p style="font-size:0.75rem; color:#6b7280; margin-top:0.25rem;">
-                  Esta tarifa se aplica por defecto a todas las líneas.
-                  Luego podrás cambiarla individualmente en cada referencia.
-                </p>
+            <!-- BLOQUE 1 · SIMULADOR -->
+            <div style="border:1px solid #e5e7eb; border-radius:0.75rem; padding:0.75rem; margin-bottom:0.75rem;">
+              <div style="font-weight:600; font-size:0.9rem; margin-bottom:0.25rem;">
+                1 · Bloque simulador
               </div>
 
               <div class="form-group">
-                <label>Descuento global adicional (%)</label>
-                <input id="simDtoGlobal" type="number" min="0" max="90" value="0" />
-                <p style="font-size:0.75rem; color:#6b7280; margin-top:0.25rem;">
-                  Se aplica a todas las líneas <strong>además</strong> del descuento propio de la tarifa
-                  y se copia como descuento inicial de cada línea.
+                <label>Fuente de líneas</label>
+                <p style="font-size:0.8rem; color:#6b7280; margin-top:0.25rem;">
+                  Se utilizan las líneas del <strong>presupuesto actual</strong>: referencias, descripciones y cantidades.
                 </p>
               </div>
-            </div>
 
-            <!-- Cadena de márgenes por actor -->
-            <div class="form-group" style="margin-top:1rem;">
-              <label>Cadena de márgenes hasta promotor</label>
-              <div class="form-grid" style="grid-template-columns:repeat(2,minmax(0,1fr)); gap:0.5rem;">
-                <div>
-                  <div style="font-size:0.75rem; color:#6b7280;">Distribuidor (%)</div>
-                  <input id="simMgnDist" type="number" min="0" max="100" step="0.5"
-                    style="width:100%;" />
+              <div class="form-grid">
+                <div class="form-group">
+                  <label>Tarifa 2N por defecto</label>
+                  <select id="simTarifaDefecto" class="input">
+                    ${TARIFAS_2N.map(
+                      (t) =>
+                        `<option value="${t.id}">${t.label}</option>`
+                    ).join("")}
+                  </select>
+                  <p style="font-size:0.75rem; color:#6b7280; margin-top:0.25rem;">
+                    Esta tarifa se aplica por defecto a todas las líneas.
+                    Luego podrás cambiarla individualmente en cada referencia.
+                  </p>
                 </div>
-                <div>
-                  <div style="font-size:0.75rem; color:#6b7280;">Subdistribuidor (%)</div>
-                  <input id="simMgnSubdist" type="number" min="0" max="100" step="0.5"
-                    style="width:100%;" />
-                </div>
-                <div>
-                  <div style="font-size:0.75rem; color:#6b7280;">Integrador (%)</div>
-                  <input id="simMgnInte" type="number" min="0" max="100" step="0.5"
-                    style="width:100%;" />
-                </div>
-                <div>
-                  <div style="font-size:0.75rem; color:#6b7280;">Constructora (%)</div>
-                  <input id="simMgnConst" type="number" min="0" max="100" step="0.5"
-                    style="width:100%;" />
+
+                <div class="form-group">
+                  <label>Descuento global adicional (%)</label>
+                  <input id="simDtoGlobal" type="number" min="0" max="90" value="0" />
+                  <p style="font-size:0.75rem; color:#6b7280; margin-top:0.25rem;">
+                    Se aplica a todas las líneas <strong>además</strong> del descuento propio de la tarifa
+                    y se copia como descuento inicial de cada línea.
+                  </p>
                 </div>
               </div>
-              <p style="font-size:0.72rem; color:#6b7280; margin-top:0.25rem;">
-                Los márgenes se aplican en cadena sobre el importe final simulado, para estimar el precio
-                al promotor.
-              </p>
+
+              <!-- Cadena de márgenes por actor -->
+              <div class="form-group" style="margin-top:0.5rem;">
+                <label>Cadena de márgenes hasta promotor</label>
+                <div class="form-grid" style="grid-template-columns:repeat(2,minmax(0,1fr)); gap:0.5rem;">
+                  <div>
+                    <div style="font-size:0.75rem; color:#6b7280;">Distribuidor (%)</div>
+                    <input id="simMgnDist" type="number" min="0" max="100" step="0.5"
+                      style="width:100%;" />
+                  </div>
+                  <div>
+                    <div style="font-size:0.75rem; color:#6b7280;">Subdistribuidor (%)</div>
+                    <input id="simMgnSubdist" type="number" min="0" max="100" step="0.5"
+                      style="width:100%;" />
+                  </div>
+                  <div>
+                    <div style="font-size:0.75rem; color:#6b7280;">Integrador (%)</div>
+                    <input id="simMgnInte" type="number" min="0" max="100" step="0.5"
+                      style="width:100%;" />
+                  </div>
+                  <div>
+                    <div style="font-size:0.75rem; color:#6b7280;">Constructora (%)</div>
+                    <input id="simMgnConst" type="number" min="0" max="100" step="0.5"
+                      style="width:100%;" />
+                  </div>
+                </div>
+              </div>
+
+              <button id="btnSimRecalcular" class="btn btn-primary w-full mt-3">
+                Recalcular simulación
+              </button>
             </div>
 
-            <button id="btnSimRecalcular" class="btn btn-primary w-full mt-3">
-              Recalcular simulación
-            </button>
-
-            <div class="sim-summary mt-4" id="simResumenMini"
+            <!-- BLOQUES 2 y 3 · RESUMEN + RESULTADO -->
+            <div class="sim-summary" id="simResumenMini"
               style="font-size:0.9rem; color:#111827;">
               No se ha calculado todavía la simulación.
             </div>
+
           </div>
         </div>
       </div>
@@ -237,7 +243,7 @@ function renderSimuladorView() {
       </div>
 
     </div>
-  `;
+  ";
 
   const selTarifaDefecto = document.getElementById("simTarifaDefecto");
   const inpDtoGlobal = document.getElementById("simDtoGlobal");
@@ -355,8 +361,6 @@ async function recalcularSimulador() {
   appState.simulador.lineDtoEdited = appState.simulador.lineDtoEdited || {};
 
   // 3) Config de líneas modificadas (si existe DOM previo)
-  //    Si cambia la tarifa global, ignoramos config previa para
-  //    que todas las líneas adopten la nueva tarifa.
   let configPrev = {};
   if (tarifaDefecto === oldTarifaDefecto) {
     configPrev = leerConfigLineasDesdeDOM();
@@ -545,7 +549,7 @@ async function recalcularSimulador() {
     });
   });
 
-  // 8) Resumen grande y compacto (todo vs PVP + márgenes)
+  // 8) Cálculos de resumen y cadena de márgenes
   const tarifaLabel =
     TARIFAS_MAP[tarifaDefecto]?.label || tarifaDefecto;
 
@@ -565,14 +569,31 @@ async function recalcularSimulador() {
       : 0;
 
   // Cadena de márgenes
-  const precioDist = totalFinal * (1 + mgnDist / 100);
+  const precio2N = totalFinal;
+  const precioDist = precio2N * (1 + mgnDist / 100);
   const precioSubdist = precioDist * (1 + mgnSubdist / 100);
   const precioInte = precioSubdist * (1 + mgnInte / 100);
   const precioConst = precioInte * (1 + mgnConst / 100);
 
+  // Descuentos efectivos vs PVP para cada actor
+  const desc2N =
+    totalPvpBase > 0 ? (1 - precio2N / totalPvpBase) * 100 : 0;
+  const descDist =
+    totalPvpBase > 0 ? (1 - precioDist / totalPvpBase) * 100 : 0;
+  const descSubdist =
+    totalPvpBase > 0 ? (1 - precioSubdist / totalPvpBase) * 100 : 0;
+  const descInte =
+    totalPvpBase > 0 ? (1 - precioInte / totalPvpBase) * 100 : 0;
+  const descConst =
+    totalPvpBase > 0 ? (1 - precioConst / totalPvpBase) * 100 : 0;
+
+  // 9) BLOQUES 2 y 3 en el resumen
   resumenMini.innerHTML = `
-    <div style="margin-bottom:0.5rem;">
-      <div style="font-weight:600; margin-bottom:0.25rem;">Resumen económico (referencia PVP)</div>
+    <!-- BLOQUE 2: RESUMEN -->
+    <div style="border:1px solid #e5e7eb; border-radius:0.75rem; padding:0.75rem; margin-bottom:0.75rem;">
+      <div style="font-weight:600; font-size:0.9rem; margin-bottom:0.25rem;">
+        2 · Bloque resumen (referencia PVP)
+      </div>
       <div style="font-size:0.86rem;">
         <div>
           PVP base total:
@@ -599,31 +620,46 @@ async function recalcularSimulador() {
       </div>
     </div>
 
-    <div style="border-top:1px solid #e5e7eb; padding-top:0.5rem; margin-top:0.35rem;">
-      <div style="font-weight:600; margin-bottom:0.25rem; font-size:0.86rem;">
-        Cadena de márgenes hasta promotor
+    <!-- BLOQUE 3: RESULTADO SIMULACIÓN / CADENA ACTORES -->
+    <div style="border:1px solid #e5e7eb; border-radius:0.75rem; padding:0.75rem;">
+      <div style="font-weight:600; font-size:0.9rem; margin-bottom:0.25rem;">
+        3 · Bloque resultado simulación (cadena de actores)
       </div>
       <div style="font-size:0.84rem;">
-        <div>
-          Base simulada (sin márgenes actores):
-          <strong>${totalFinal.toFixed(2)} €</strong>
+        <div style="margin-bottom:0.2rem;">
+          <strong>2N (precio simulado):</strong>
+          ${precio2N.toFixed(2)} €
+          <span style="color:#6b7280;">
+            (${desc2N.toFixed(1)} % vs PVP)
+          </span>
+        </div>
+        <div style="margin-bottom:0.2rem;">
+          <strong>Distribuidor (${mgnDist.toFixed(1)} % margen):</strong>
+          ${precioDist.toFixed(2)} €
+          <span style="color:#6b7280;">
+            (${descDist.toFixed(1)} % vs PVP)
+          </span>
+        </div>
+        <div style="margin-bottom:0.2rem;">
+          <strong>Subdistribuidor (${mgnSubdist.toFixed(1)} % margen):</strong>
+          ${precioSubdist.toFixed(2)} €
+          <span style="color:#6b7280;">
+            (${descSubdist.toFixed(1)} % vs PVP)
+          </span>
+        </div>
+        <div style="margin-bottom:0.2rem;">
+          <strong>Integrador (${mgnInte.toFixed(1)} % margen):</strong>
+          ${precioInte.toFixed(2)} €
+          <span style="color:#6b7280;">
+            (${descInte.toFixed(1)} % vs PVP)
+          </span>
         </div>
         <div>
-          Distribuidor (${mgnDist.toFixed(1)} %):
-          <strong>${precioDist.toFixed(2)} €</strong>
-        </div>
-        <div>
-          Subdistribuidor (${mgnSubdist.toFixed(1)} %):
-          <strong>${precioSubdist.toFixed(2)} €</strong>
-        </div>
-        <div>
-          Integrador (${mgnInte.toFixed(1)} %):
-          <strong>${precioInte.toFixed(2)} €</strong>
-        </div>
-        <div>
-          Constructora (${mgnConst.toFixed(1)} %):
-          <strong>${precioConst.toFixed(2)} €</strong>
-          <span style="color:#4b5563;">(precio estimado al promotor)</span>
+          <strong>Constructora (${mgnConst.toFixed(1)} % margen):</strong>
+          ${precioConst.toFixed(2)} €
+          <span style="color:#6b7280;">
+            (${descConst.toFixed(1)} % vs PVP · precio estimado al promotor)
+          </span>
         </div>
       </div>
     </div>
