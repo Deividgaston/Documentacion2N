@@ -247,7 +247,7 @@ function renderSimuladorView() {
       </div>
 
     </div>
-  */
+  `;
 
   // Inicializar controles con estado previo
   const selTarifaDefecto = document.getElementById("simTarifaDefecto");
