@@ -3,7 +3,7 @@
 
 window.appState = window.appState || {};
 appState.simulador = appState.simulador || {
-  tarifaDefecto: "DIST_PRICE", // Tarifa global por defecto: Distributor Price (EUR)
+  tarifaDefecto: "DIST_PRICE", // Tarifa global por defecto
   dtoGlobal: 0,                // descuento adicional global sobre tarifa
   lineasSimuladas: [],         // último resultado
   lineDtoEdited: {},           // mapa: key -> true si el dto de esa línea se ha editado a mano
@@ -22,10 +22,8 @@ const getPresupuestoActual =
     : null;
 
 /**
- * TARIFAS DEFINIDAS (coinciden con las columnas de tu Excel)
- * De momento se implementan como "descuento sobre el PVP base" (campo pvp)
- * para simplificar. Más adelante podemos leer directamente columnas
- * específicas de Firestore (nfrDistributor, etc.).
+ * TARIFAS DEFINIDAS (alineadas con tu Excel/Firestore)
+ * dto = descuento sobre el PVP base (campo pvp).
  */
 const TARIFAS_2N = [
   { id: "NFR_DIST",     label: "NFR Distributor (EUR)",               dto: 55 },
@@ -43,7 +41,7 @@ const TARIFAS_MAP = TARIFAS_2N.reduce((acc, t) => {
 }, {});
 
 console.log(
-  "%cUI Simulador · v3.3 · 3 bloques + descuentos por actor vs PVP",
+  "%cUI Simulador · v4 · 3 bloques + dto adicional sobre tarifa + cadena márgenes",
   "color:#22c55e; font-weight:bold;"
 );
 
@@ -118,7 +116,7 @@ function leerConfigLineasDesdeDOM() {
 }
 
 // ===============================
-// RENDER PRINCIPAL
+// RENDER PRINCIPAL (3 bloques estilo Presupuesto)
 // ===============================
 function renderSimuladorView() {
   const container = document.getElementById("appContent");
@@ -131,104 +129,109 @@ function renderSimuladorView() {
   container.innerHTML = `
     <div class="simulador-layout">
 
-      <!-- COLUMNA IZQUIERDA: Configuración -->
+      <!-- COLUMNA IZQUIERDA (3 bloques) -->
       <div class="simulador-left-column">
+
+        <!-- BLOQUE 1 · SIMULADOR (configuración) -->
         <div class="card">
           <div class="card-header">
             <div>
-              <div class="card-title">Simulador de tarifas</div>
+              <div class="card-title">1 · Simulador de tarifas</div>
               <div class="card-subtitle">
-                Ajusta tarifas, descuentos y márgenes sobre las líneas del presupuesto actual.
+                Ajusta la tarifa 2N y el descuento adicional sobre el precio de tarifa.
               </div>
             </div>
             <span class="badge-step">Paso 3 de 3</span>
           </div>
 
           <div class="card-body">
+            <div class="form-group">
+              <label>Fuente de líneas</label>
+              <p style="font-size:0.8rem; color:#6b7280; margin-top:0.25rem;">
+                Se utilizan las líneas del <strong>presupuesto actual</strong>: referencias, descripciones y cantidades.
+              </p>
+            </div>
 
-            <!-- BLOQUE 1 · SIMULADOR -->
-            <div style="border:1px solid #e5e7eb; border-radius:0.75rem; padding:0.75rem; margin-bottom:0.75rem;">
-              <div style="font-weight:600; font-size:0.9rem; margin-bottom:0.25rem;">
-                1 · Bloque simulador
-              </div>
-
+            <div class="form-grid">
               <div class="form-group">
-                <label>Fuente de líneas</label>
-                <p style="font-size:0.8rem; color:#6b7280; margin-top:0.25rem;">
-                  Se utilizan las líneas del <strong>presupuesto actual</strong>: referencias, descripciones y cantidades.
+                <label>Tarifa 2N por defecto</label>
+                <select id="simTarifaDefecto" class="input">
+                  ${tarifaOptions}
+                </select>
+                <p style="font-size:0.75rem; color:#6b7280; margin-top:0.25rem;">
+                  Esta tarifa se aplica por defecto a todas las líneas. Luego podrás cambiarla
+                  individualmente en cada referencia.
                 </p>
               </div>
 
-              <div class="form-grid">
-                <div class="form-group">
-                  <label>Tarifa 2N por defecto</label>
-                  <select id="simTarifaDefecto" class="input">
-                    ${tarifaOptions}
-                  </select>
-                  <p style="font-size:0.75rem; color:#6b7280; margin-top:0.25rem;">
-                    Esta tarifa se aplica por defecto a todas las líneas.
-                    Luego podrás cambiarla individualmente en cada referencia.
-                  </p>
-                </div>
-
-                <div class="form-group">
-                  <label>Descuento global adicional (%)</label>
-                  <input id="simDtoGlobal" type="number" min="0" max="90" value="0" />
-                  <p style="font-size:0.75rem; color:#6b7280; margin-top:0.25rem;">
-                    Se aplica a todas las líneas <strong>además</strong> del descuento propio de la tarifa
-                    y se copia como descuento inicial de cada línea.
-                  </p>
-                </div>
+              <div class="form-group">
+                <label>Descuento global adicional (%)</label>
+                <input id="simDtoGlobal" type="number" min="0" max="90" value="0" />
+                <p style="font-size:0.75rem; color:#6b7280; margin-top:0.25rem;">
+                  Descuento extra aplicado <strong>sobre el precio de tarifa</strong>.
+                  Se copia como valor inicial al campo "Dto línea" en cada referencia.
+                </p>
               </div>
-
-              <!-- Cadena de márgenes por actor -->
-              <div class="form-group" style="margin-top:0.5rem;">
-                <label>Cadena de márgenes hasta promotor</label>
-                <div class="form-grid" style="grid-template-columns:repeat(2,minmax(0,1fr)); gap:0.5rem;">
-                  <div>
-                    <div style="font-size:0.75rem; color:#6b7280;">Distribuidor (%)</div>
-                    <input id="simMgnDist" type="number" min="0" max="100" step="0.5"
-                      style="width:100%;" />
-                  </div>
-                  <div>
-                    <div style="font-size:0.75rem; color:#6b7280;">Subdistribuidor (%)</div>
-                    <input id="simMgnSubdist" type="number" min="0" max="100" step="0.5"
-                      style="width:100%;" />
-                  </div>
-                  <div>
-                    <div style="font-size:0.75rem; color:#6b7280;">Integrador (%)</div>
-                    <input id="simMgnInte" type="number" min="0" max="100" step="0.5"
-                      style="width:100%;" />
-                  </div>
-                  <div>
-                    <div style="font-size:0.75rem; color:#6b7280;">Constructora (%)</div>
-                    <input id="simMgnConst" type="number" min="0" max="100" step="0.5"
-                      style="width:100%;" />
-                  </div>
-                </div>
-              </div>
-
-              <button id="btnSimRecalcular" class="btn btn-primary w-full mt-3">
-                Recalcular simulación
-              </button>
             </div>
 
-            <!-- BLOQUES 2 y 3 · RESUMEN + RESULTADO -->
-            <div class="sim-summary" id="simResumenMini"
-              style="font-size:0.9rem; color:#111827;">
-              No se ha calculado todavía la simulación.
-            </div>
-
+            <button id="btnSimRecalcular" class="btn btn-primary w-full mt-3">
+              Recalcular simulación
+            </button>
           </div>
         </div>
+
+        <!-- BLOQUE 2 · RESUMEN -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">2 · Resumen (referencia PVP)</div>
+          </div>
+          <div class="card-body" id="simResumenCard" style="font-size:0.9rem; color:#111827;">
+            No se ha calculado todavía la simulación.
+          </div>
+        </div>
+
+        <!-- BLOQUE 3 · RESULTADO SIMULACIÓN / CADENA ACTORES -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">3 · Cadena de márgenes hasta promotor</div>
+          </div>
+          <div class="card-body" style="font-size:0.86rem; color:#111827;">
+            <div class="form-group">
+              <label>Márgenes por actor (beneficio sobre precio de venta)</label>
+              <div class="form-grid" style="grid-template-columns:repeat(2,minmax(0,1fr)); gap:0.5rem;">
+                <div>
+                  <div style="font-size:0.75rem; color:#6b7280;">Distribuidor (%)</div>
+                  <input id="simMgnDist" type="number" min="0" max="100" step="0.5" style="width:100%;" />
+                </div>
+                <div>
+                  <div style="font-size:0.75rem; color:#6b7280;">Subdistribuidor (%)</div>
+                  <input id="simMgnSubdist" type="number" min="0" max="100" step="0.5" style="width:100%;" />
+                </div>
+                <div>
+                  <div style="font-size:0.75rem; color:#6b7280;">Integrador (%)</div>
+                  <input id="simMgnInte" type="number" min="0" max="100" step="0.5" style="width:100%;" />
+                </div>
+                <div>
+                  <div style="font-size:0.75rem; color:#6b7280;">Constructora (%)</div>
+                  <input id="simMgnConst" type="number" min="0" max="100" step="0.5" style="width:100%;" />
+                </div>
+              </div>
+            </div>
+
+            <div id="simCadenaCard" style="margin-top:0.75rem;">
+              Introduce márgenes para ver el precio final al promotor.
+            </div>
+          </div>
+        </div>
+
       </div>
 
-      <!-- COLUMNA DERECHA: Tabla de simulación -->
+      <!-- COLUMNA DERECHA: Tabla de simulación por línea -->
       <div class="simulador-right-column">
         <div class="card">
           <div class="card-header" style="display:flex; align-items:center; justify-content:space-between; gap:1rem;">
             <div class="card-title">
-              Resultado de la simulación
+              Líneas simuladas
               <span id="simLineCount" style="font-size:0.8rem; color:#6b7280; font-weight:400;">
                 0 líneas simuladas
               </span>
@@ -244,6 +247,7 @@ function renderSimuladorView() {
     </div>
   `;
 
+  // Inicializar controles con estado previo
   const selTarifaDefecto = document.getElementById("simTarifaDefecto");
   const inpDtoGlobal = document.getElementById("simDtoGlobal");
   const inpMgnDist = document.getElementById("simMgnDist");
@@ -251,7 +255,6 @@ function renderSimuladorView() {
   const inpMgnInte = document.getElementById("simMgnInte");
   const inpMgnConst = document.getElementById("simMgnConst");
 
-  // Inicializar con el estado guardado
   if (selTarifaDefecto) {
     selTarifaDefecto.value =
       appState.simulador.tarifaDefecto || "DIST_PRICE";
@@ -279,14 +282,16 @@ function renderSimuladorView() {
     });
   }
 
-  // También recalc cuando cambian estos campos
   if (selTarifaDefecto) {
     selTarifaDefecto.addEventListener("change", () => {
+      // al cambiar la tarifa, reseteamos el mapa de líneas editadas
+      appState.simulador.lineDtoEdited = {};
       recalcularSimulador();
     });
   }
   if (inpDtoGlobal) {
     inpDtoGlobal.addEventListener("change", () => {
+      // al cambiar dto global, las líneas NO editadas heredan el nuevo valor
       recalcularSimulador();
     });
   }
@@ -320,9 +325,10 @@ function renderSimuladorView() {
 // ===============================
 async function recalcularSimulador() {
   const detalle = document.getElementById("simDetalle");
-  const resumenMini = document.getElementById("simResumenMini");
+  const resumenCard = document.getElementById("simResumenCard");
+  const cadenaCard = document.getElementById("simCadenaCard");
   const countLabel = document.getElementById("simLineCount");
-  if (!detalle || !resumenMini) return;
+  if (!detalle || !resumenCard || !cadenaCard) return;
 
   // 1) Leemos presupuesto
   const presu =
@@ -335,8 +341,10 @@ async function recalcularSimulador() {
   if (!lineasBase.length) {
     detalle.textContent =
       "No hay líneas de presupuesto. Ve a la pestaña de Presupuesto, genera una oferta y vuelve.";
-    resumenMini.textContent =
+    resumenCard.textContent =
       "Sin datos de presupuesto, no se puede realizar la simulación.";
+    cadenaCard.textContent =
+      "Sin datos de simulación, no se puede calcular la cadena de márgenes.";
     if (countLabel) countLabel.textContent = "0 líneas simuladas";
     return;
   }
@@ -348,8 +356,6 @@ async function recalcularSimulador() {
   const inpMgnSubdist = document.getElementById("simMgnSubdist");
   const inpMgnInte = document.getElementById("simMgnInte");
   const inpMgnConst = document.getElementById("simMgnConst");
-
-  const oldTarifaDefecto = appState.simulador.tarifaDefecto || "DIST_PRICE";
 
   const tarifaDefecto =
     (selTarifaDefecto && selTarifaDefecto.value) || "DIST_PRICE";
@@ -369,20 +375,16 @@ async function recalcularSimulador() {
   appState.simulador.lineDtoEdited = appState.simulador.lineDtoEdited || {};
 
   // 3) Config de líneas modificadas (si existe DOM previo)
-  let configPrev = {};
-  if (tarifaDefecto === oldTarifaDefecto) {
-    configPrev = leerConfigLineasDesdeDOM();
-  }
-
+  const configPrev = leerConfigLineasDesdeDOM();
   const editedMap = appState.simulador.lineDtoEdited || {};
 
   // 4) Cargar tarifas base 2N (PVP) desde Firestore
   const tarifasBase = await getTarifasBase2N();
 
   // 5) Construir nuevas líneas simuladas
-  let totalBaseTarifa = 0; // total a precio de tarifa (PVP - dtoTarifa)
-  let totalFinal = 0;      // total final (tarifa + dto global + dto línea)
-  let totalPvpBase = 0;    // total PVP puro (sin descuentos)
+  let totalPvpBase = 0;     // total PVP puro (sin descuentos)
+  let totalBaseTarifa = 0;  // total a precio de tarifa (PVP - dtoTarifa)
+  let totalFinal = 0;       // total final (tarifa + dto línea adicional)
 
   const lineasSim = lineasBase.map((lBase, index) => {
     const key = buildLineaKey(lBase, index);
@@ -397,30 +399,29 @@ async function recalcularSimulador() {
 
     const cantidad = Number(lBase.cantidad || 0) || 0;
 
+    // Config previa (tarifa + dto línea)
     const cfg = configPrev[key] || {};
     const tarifaId = cfg.tarifaId || tarifaDefecto;
 
     // DTO LÍNEA:
-    // - Si la línea fue editada, respetamos el valor actual.
-    // - Si no, usamos SIEMPRE dtoGlobal como valor por defecto.
-    const edited = !!editedMap[key];
-    const dtoLinea = edited
-      ? (Number(cfg.dtoLinea || 0) || 0)
-      : dtoGlobal;
+    // - Si la línea se ha editado a mano, respetamos su valor actual.
+    // - Si no se ha editado, usamos SIEMPRE el dtoGlobal como valor de línea.
+    let dtoLinea;
+    if (editedMap[key]) {
+      dtoLinea = Number(cfg.dtoLinea || 0) || 0;
+    } else {
+      dtoLinea = dtoGlobal;
+    }
 
     const objTarifa = TARIFAS_MAP[tarifaId] || TARIFAS_MAP["DIST_PRICE"];
     const dtoTarifa = objTarifa ? objTarifa.dto || 0 : 0;
 
-    // Descuentos combinados (multiplicativo)
     const factorTarifa = 1 - dtoTarifa / 100;
-    const factorGlobal = 1 - dtoGlobal / 100;
     const factorLinea = 1 - dtoLinea / 100;
 
-    const factorTotal = factorTarifa * factorGlobal * factorLinea;
-
     const subtotalPvpBase = basePvp * cantidad;
-    const pvpTarifaUd = basePvp * factorTarifa; // precio tras tarifa (sin dto global / línea)
-    const pvpFinalUd = basePvp * factorTotal;
+    const pvpTarifaUd = basePvp * factorTarifa; // precio tras tarifa
+    const pvpFinalUd = basePvp * factorTarifa * factorLinea; // tarifa + dto adicional
     const subtotalTarifa = pvpTarifaUd * cantidad;
     const subtotalFinal = pvpFinalUd * cantidad;
 
@@ -441,7 +442,6 @@ async function recalcularSimulador() {
       basePvp,
       tarifaId,
       dtoTarifa,
-      dtoGlobal,
       dtoLinea,
       pvpTarifaUd,
       pvpFinalUd,
@@ -452,7 +452,7 @@ async function recalcularSimulador() {
 
   appState.simulador.lineasSimuladas = lineasSim;
 
-  // 6) Pintar tabla
+  // 6) Pintar tabla de líneas
   if (countLabel) {
     countLabel.textContent = `${lineasSim.length} líneas simuladas`;
   }
@@ -539,9 +539,10 @@ async function recalcularSimulador() {
 
   detalle.innerHTML = html;
 
-  // 7) Listeners por línea (tarifa / dto línea)
+  // Listeners por línea (tarifa / dto línea)
   detalle.querySelectorAll(".sim-tarifa-line").forEach((sel) => {
     sel.addEventListener("change", () => {
+      // al cambiar la tarifa de una línea, no tocamos dtoEdited, solo recalculamos
       recalcularSimulador();
     });
   });
@@ -558,7 +559,7 @@ async function recalcularSimulador() {
     });
   });
 
-  // 8) Cálculos de resumen y cadena de márgenes
+  // 7) BLOQUE 2: Resumen (referencia PVP)
   const tarifaLabel =
     TARIFAS_MAP[tarifaDefecto]?.label || tarifaDefecto;
 
@@ -577,24 +578,49 @@ async function recalcularSimulador() {
       ? (1 - totalFinal / totalBaseTarifa) * 100
       : 0;
 
-  // ===== función para aplicar margen sobre precio de venta =====
+  resumenCard.innerHTML = `
+    <div style="font-size:0.86rem;">
+      <div>
+        PVP base total:
+        <strong>${totalPvpBase.toFixed(2)} €</strong>
+      </div>
+      <div>
+        Total tras tarifa <strong>${tarifaLabel}</strong>:
+        <strong>${totalBaseTarifa.toFixed(2)} €</strong>
+        <span style="color:#6b7280;">
+          (${dtoTarifaEf.toFixed(1)} % dto vs PVP)
+        </span>
+      </div>
+      <div>
+        Total simulado (tarifa + descuento adicional de línea):
+        <strong>${totalFinal.toFixed(2)} €</strong>
+        <span style="color:#6b7280;">
+          (${dtoTotalEf.toFixed(1)} % dto total vs PVP)
+        </span>
+      </div>
+      <div style="font-size:0.8rem; color:#4b5563; margin-top:0.15rem;">
+        Descuento extra sobre el precio de tarifa (dto adicional de línea):
+        <strong>${dtoExtraEf.toFixed(1)} %</strong>
+      </div>
+    </div>
+  `;
+
+  // 8) BLOQUE 3: Cadena de márgenes hasta promotor
   function aplicarMargenSobreVenta(cost, marginPct) {
     const m = Number(marginPct) || 0;
     if (m <= 0) return cost;
     const f = m / 100;
-    if (f >= 0.99) return cost / 0.01;
+    if (f >= 0.99) return cost / 0.01; // evitar divisiones locas
     return cost / (1 - f);
   }
 
-  // Cadena de márgenes (margen = beneficio sobre precio de venta)
-  const precio2N = totalFinal; // 2N vende al distribuidor a este precio (salida del simulador)
+  const precio2N = totalFinal; // 2N vende al distribuidor a este precio
 
-  const precioDist    = aplicarMargenSobreVenta(precio2N,    mgnDist);
-  const precioSubdist = aplicarMargenSobreVenta(precioDist,  mgnSubdist);
-  const precioInte    = aplicarMargenSobreVenta(precioSubdist, mgnInte);
-  const precioConst   = aplicarMargenSobreVenta(precioInte,  mgnConst);
+  const precioDist    = aplicarMargenSobreVenta(precio2N,     mgnDist);
+  const precioSubdist = aplicarMargenSobreVenta(precioDist,   mgnSubdist);
+  const precioInte    = aplicarMargenSobreVenta(precioSubdist,mgnInte);
+  const precioConst   = aplicarMargenSobreVenta(precioInte,   mgnConst);
 
-  // Descuentos efectivos vs PVP para cada actor
   const desc2N =
     totalPvpBase > 0 ? (1 - precio2N / totalPvpBase) * 100 : 0;
   const descDist =
@@ -606,80 +632,42 @@ async function recalcularSimulador() {
   const descConst =
     totalPvpBase > 0 ? (1 - precioConst / totalPvpBase) * 100 : 0;
 
-  // 9) BLOQUES 2 y 3 en el resumen
-  resumenMini.innerHTML = `
-    <!-- BLOQUE 2: RESUMEN -->
-    <div style="border:1px solid #e5e7eb; border-radius:0.75rem; padding:0.75rem; margin-bottom:0.75rem;">
-      <div style="font-weight:600; font-size:0.9rem; margin-bottom:0.25rem;">
-        2 · Bloque resumen (referencia PVP)
+  cadenaCard.innerHTML = `
+    <div style="font-size:0.84rem;">
+      <div style="margin-bottom:0.2rem;">
+        <strong>2N (precio simulado):</strong>
+        ${precio2N.toFixed(2)} €
+        <span style="color:#6b7280;">
+          (${desc2N.toFixed(1)} % vs PVP)
+        </span>
       </div>
-      <div style="font-size:0.86rem;">
-        <div>
-          PVP base total:
-          <strong>${totalPvpBase.toFixed(2)} €</strong>
-        </div>
-        <div>
-          Total tras tarifa <strong>${tarifaLabel}</strong>:
-          <strong>${totalBaseTarifa.toFixed(2)} €</strong>
-          <span style="color:#6b7280;">
-            (${dtoTarifaEf.toFixed(1)} % dto vs PVP)
-          </span>
-        </div>
-        <div>
-          Total simulado (tarifa + dto global + dto línea):
-          <strong>${totalFinal.toFixed(2)} €</strong>
-          <span style="color:#6b7280;">
-            (${dtoTotalEf.toFixed(1)} % dto total vs PVP)
-          </span>
-        </div>
-        <div style="font-size:0.8rem; color:#4b5563; margin-top:0.15rem;">
-          Descuento extra sobre el precio de tarifa (dto global + línea):
-          <strong>${dtoExtraEf.toFixed(1)} %</strong>
-        </div>
+      <div style="margin-bottom:0.2rem;">
+        <strong>Distribuidor (${mgnDist.toFixed(1)} % margen):</strong>
+        ${precioDist.toFixed(2)} €
+        <span style="color:#6b7280;">
+          (${descDist.toFixed(1)} % vs PVP)
+        </span>
       </div>
-    </div>
-
-    <!-- BLOQUE 3: RESULTADO SIMULACIÓN / CADENA ACTORES -->
-    <div style="border:1px solid #e5e7eb; border-radius:0.75rem; padding:0.75rem;">
-      <div style="font-weight:600; font-size:0.9rem; margin-bottom:0.25rem;">
-        3 · Bloque resultado simulación (cadena de actores)
+      <div style="margin-bottom:0.2rem;">
+        <strong>Subdistribuidor (${mgnSubdist.toFixed(1)} % margen):</strong>
+        ${precioSubdist.toFixed(2)} €
+        <span style="color:#6b7280;">
+          (${descSubdist.toFixed(1)} % vs PVP)
+        </span>
       </div>
-      <div style="font-size:0.84rem;">
-        <div style="margin-bottom:0.2rem;">
-          <strong>2N (precio simulado):</strong>
-          ${precio2N.toFixed(2)} €
-          <span style="color:#6b7280;">
-            (${desc2N.toFixed(1)} % vs PVP)
-          </span>
-        </div>
-        <div style="margin-bottom:0.2rem;">
-          <strong>Distribuidor (${mgnDist.toFixed(1)} % margen):</strong>
-          ${precioDist.toFixed(2)} €
-          <span style="color:#6b7280;">
-            (${descDist.toFixed(1)} % vs PVP)
-          </span>
-        </div>
-        <div style="margin-bottom:0.2rem;">
-          <strong>Subdistribuidor (${mgnSubdist.toFixed(1)} % margen):</strong>
-          ${precioSubdist.toFixed(2)} €
-          <span style="color:#6b7280;">
-            (${descSubdist.toFixed(1)} % vs PVP)
-          </span>
-        </div>
-        <div style="margin-bottom:0.2rem;">
-          <strong>Integrador (${mgnInte.toFixed(1)} % margen):</strong>
-          ${precioInte.toFixed(2)} €
-          <span style="color:#6b7280;">
-            (${descInte.toFixed(1)} % vs PVP)
-          </span>
-        </div>
-        <div>
-          <strong>Constructora (${mgnConst.toFixed(1)} % margen):</strong>
-          ${precioConst.toFixed(2)} €
-          <span style="color:#6b7280;">
-            (${descConst.toFixed(1)} % vs PVP · precio estimado al promotor)
-          </span>
-        </div>
+      <div style="margin-bottom:0.2rem;">
+        <strong>Integrador (${mgnInte.toFixed(1)} % margen):</strong>
+        ${precioInte.toFixed(2)} €
+        <span style="color:#6b7280;">
+          (${descInte.toFixed(1)} % vs PVP)
+        </span>
+      </div>
+      <div>
+        <strong>Constructora (${mgnConst.toFixed(1)} % margen):</strong>
+        ${precioConst.toFixed(2)} €
+        <span style="color:#6b7280;">
+          (${descConst.toFixed(1)} % vs PVP · precio estimado al promotor)
+        </span>
       </div>
     </div>
   `;
