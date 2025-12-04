@@ -617,16 +617,22 @@ async function recalcularSimulador() {
   const precioInte    = aplicarMargenSobreVenta(precioSubdist, mgnInte);
   const precioConst   = aplicarMargenSobreVenta(precioInte,   mgnConst);
 
+  // Base de referencia para la cadena de actores:
+  // usamos el TOTAL a precio de tarifa (sin dto adicional ni dto de línea)
+  const baseCadena = totalBaseTarifa > 0 ? totalBaseTarifa : totalPvpBase;
+
+  // Descuentos efectivos vs PRECIO TARIFA para cada actor
   const desc2N =
-    totalPvpBase > 0 ? (1 - precio2N / totalPvpBase) * 100 : 0;
+    baseCadena > 0 ? (1 - precio2N / baseCadena) * 100 : 0;
   const descDist =
-    totalPvpBase > 0 ? (1 - precioDist / totalPvpBase) * 100 : 0;
+    baseCadena > 0 ? (1 - precioDist / baseCadena) * 100 : 0;
   const descSubdist =
-    totalPvpBase > 0 ? (1 - precioSubdist / totalPvpBase) * 100 : 0;
+    baseCadena > 0 ? (1 - precioSubdist / baseCadena) * 100 : 0;
   const descInte =
-    totalPvpBase > 0 ? (1 - precioInte / totalPvpBase) * 100 : 0;
+    baseCadena > 0 ? (1 - precioInte / baseCadena) * 100 : 0;
   const descConst =
-    totalPvpBase > 0 ? (1 - precioConst / totalPvpBase) * 100 : 0;
+    baseCadena > 0 ? (1 - precioConst / baseCadena) * 100 : 0;
+
 
   cadenaCard.innerHTML = `
     <div style="margin-bottom:0.2rem;">
