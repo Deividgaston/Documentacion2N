@@ -41,7 +41,7 @@ const TARIFAS_MAP = TARIFAS_2N.reduce((acc, t) => {
 }, {});
 
 console.log(
-  "%cUI Simulador · v4 · 3 bloques + dto adicional sobre tarifa + cadena márgenes",
+  "%cUI Simulador · v4.1 · layout compacto 3 bloques + tabla derecha",
   "color:#22c55e; font-weight:bold;"
 );
 
@@ -116,7 +116,7 @@ function leerConfigLineasDesdeDOM() {
 }
 
 // ===============================
-// RENDER PRINCIPAL (3 bloques estilo Presupuesto)
+// RENDER PRINCIPAL (3 bloques estilo Presupuesto, más compactos)
 // ===============================
 function renderSimuladorView() {
   const container = document.getElementById("appContent");
@@ -129,96 +129,98 @@ function renderSimuladorView() {
   container.innerHTML = `
     <div class="simulador-layout">
 
-      <!-- COLUMNA IZQUIERDA (3 bloques) -->
-      <div class="simulador-left-column">
+      <!-- COLUMNA IZQUIERDA (3 bloques pequeños) -->
+      <div class="simulador-left-column" style="max-width:420px;">
 
         <!-- BLOQUE 1 · SIMULADOR (configuración) -->
-        <div class="card">
-          <div class="card-header">
+        <div class="card" style="margin-bottom:0.75rem;">
+          <div class="card-header" style="padding-bottom:0.5rem;">
             <div>
               <div class="card-title">1 · Simulador de tarifas</div>
-              <div class="card-subtitle">
-                Ajusta la tarifa 2N y el descuento adicional sobre el precio de tarifa.
+              <div class="card-subtitle" style="font-size:0.8rem;">
+                Selecciona la tarifa 2N y un descuento adicional por defecto.
               </div>
             </div>
             <span class="badge-step">Paso 3 de 3</span>
           </div>
 
-          <div class="card-body">
-            <div class="form-group">
-              <label>Fuente de líneas</label>
-              <p style="font-size:0.8rem; color:#6b7280; margin-top:0.25rem;">
-                Se utilizan las líneas del <strong>presupuesto actual</strong>: referencias, descripciones y cantidades.
-              </p>
-            </div>
+          <div class="card-body" style="padding-top:0.5rem; padding-bottom:0.75rem;">
+            <p style="font-size:0.75rem; color:#6b7280; margin-bottom:0.5rem;">
+              Se usan las líneas del <strong>presupuesto actual</strong>
+              (referencias, descripciones y cantidades).
+            </p>
 
             <div class="form-grid">
-              <div class="form-group">
-                <label>Tarifa 2N por defecto</label>
-                <select id="simTarifaDefecto" class="input">
+              <div class="form-group" style="margin-bottom:0.5rem;">
+                <label style="font-size:0.8rem;">Tarifa 2N por defecto</label>
+                <select id="simTarifaDefecto" class="input" style="height:32px; font-size:0.85rem;">
                   ${tarifaOptions}
                 </select>
-                <p style="font-size:0.75rem; color:#6b7280; margin-top:0.25rem;">
-                  Esta tarifa se aplica por defecto a todas las líneas. Luego podrás cambiarla
-                  individualmente en cada referencia.
-                </p>
               </div>
 
-              <div class="form-group">
-                <label>Descuento global adicional (%)</label>
-                <input id="simDtoGlobal" type="number" min="0" max="90" value="0" />
-                <p style="font-size:0.75rem; color:#6b7280; margin-top:0.25rem;">
-                  Descuento extra aplicado <strong>sobre el precio de tarifa</strong>.
-                  Se copia como valor inicial al campo "Dto línea" en cada referencia.
+              <div class="form-group" style="margin-bottom:0.5rem;">
+                <label style="font-size:0.8rem;">Descuento global adicional (%)</label>
+                <input id="simDtoGlobal" type="number" min="0" max="90" value="0"
+                       style="height:32px; font-size:0.85rem;" />
+                <p style="font-size:0.72rem; color:#6b7280; margin-top:0.2rem;">
+                  Se aplica <strong>sobre el precio de tarifa</strong> y se copia al campo
+                  "Dto línea" (puedes ajustarlo por referencia).
                 </p>
               </div>
             </div>
 
-            <button id="btnSimRecalcular" class="btn btn-primary w-full mt-3">
+            <button id="btnSimRecalcular"
+              class="btn btn-primary w-full"
+              style="margin-top:0.35rem; height:34px; font-size:0.85rem;">
               Recalcular simulación
             </button>
           </div>
         </div>
 
         <!-- BLOQUE 2 · RESUMEN -->
-        <div class="card">
-          <div class="card-header">
-            <div class="card-title">2 · Resumen (referencia PVP)</div>
+        <div class="card" style="margin-bottom:0.75rem;">
+          <div class="card-header" style="padding-bottom:0.35rem;">
+            <div class="card-title" style="font-size:0.95rem;">2 · Resumen (referencia PVP)</div>
           </div>
-          <div class="card-body" id="simResumenCard" style="font-size:0.9rem; color:#111827;">
+          <div class="card-body" id="simResumenCard"
+               style="font-size:0.85rem; color:#111827; padding-top:0.5rem; padding-bottom:0.6rem;">
             No se ha calculado todavía la simulación.
           </div>
         </div>
 
         <!-- BLOQUE 3 · RESULTADO SIMULACIÓN / CADENA ACTORES -->
         <div class="card">
-          <div class="card-header">
-            <div class="card-title">3 · Cadena de márgenes hasta promotor</div>
+          <div class="card-header" style="padding-bottom:0.35rem;">
+            <div class="card-title" style="font-size:0.95rem;">3 · Cadena de márgenes hasta promotor</div>
           </div>
-          <div class="card-body" style="font-size:0.86rem; color:#111827;">
-            <div class="form-group">
-              <label>Márgenes por actor (beneficio sobre precio de venta)</label>
-              <div class="form-grid" style="grid-template-columns:repeat(2,minmax(0,1fr)); gap:0.5rem;">
+          <div class="card-body" style="font-size:0.84rem; color:#111827; padding-top:0.5rem; padding-bottom:0.6rem;">
+            <div class="form-group" style="margin-bottom:0.5rem;">
+              <label style="font-size:0.8rem;">Márgenes por actor (beneficio sobre precio de venta)</label>
+              <div class="form-grid" style="grid-template-columns:repeat(2,minmax(0,1fr)); gap:0.4rem;">
                 <div>
-                  <div style="font-size:0.75rem; color:#6b7280;">Distribuidor (%)</div>
-                  <input id="simMgnDist" type="number" min="0" max="100" step="0.5" style="width:100%;" />
+                  <div style="font-size:0.72rem; color:#6b7280;">Distribuidor (%)</div>
+                  <input id="simMgnDist" type="number" min="0" max="100" step="0.5"
+                         style="width:100%; height:28px; font-size:0.8rem;" />
                 </div>
                 <div>
-                  <div style="font-size:0.75rem; color:#6b7280;">Subdistribuidor (%)</div>
-                  <input id="simMgnSubdist" type="number" min="0" max="100" step="0.5" style="width:100%;" />
+                  <div style="font-size:0.72rem; color:#6b7280;">Subdistribuidor (%)</div>
+                  <input id="simMgnSubdist" type="number" min="0" max="100" step="0.5"
+                         style="width:100%; height:28px; font-size:0.8rem;" />
                 </div>
                 <div>
-                  <div style="font-size:0.75rem; color:#6b7280;">Integrador (%)</div>
-                  <input id="simMgnInte" type="number" min="0" max="100" step="0.5" style="width:100%;" />
+                  <div style="font-size:0.72rem; color:#6b7280;">Integrador (%)</div>
+                  <input id="simMgnInte" type="number" min="0" max="100" step="0.5"
+                         style="width:100%; height:28px; font-size:0.8rem;" />
                 </div>
                 <div>
-                  <div style="font-size:0.75rem; color:#6b7280;">Constructora (%)</div>
-                  <input id="simMgnConst" type="number" min="0" max="100" step="0.5" style="width:100%;" />
+                  <div style="font-size:0.72rem; color:#6b7280;">Constructora (%)</div>
+                  <input id="simMgnConst" type="number" min="0" max="100" step="0.5"
+                         style="width:100%; height:28px; font-size:0.8rem;" />
                 </div>
               </div>
             </div>
 
-            <div id="simCadenaCard" style="margin-top:0.75rem;">
+            <div id="simCadenaCard" style="margin-top:0.25rem; font-size:0.82rem;">
               Introduce márgenes para ver el precio final al promotor.
             </div>
           </div>
@@ -245,7 +247,7 @@ function renderSimuladorView() {
       </div>
 
     </div>
-  `;
+  */
 
   // Inicializar controles con estado previo
   const selTarifaDefecto = document.getElementById("simTarifaDefecto");
@@ -579,7 +581,7 @@ async function recalcularSimulador() {
       : 0;
 
   resumenCard.innerHTML = `
-    <div style="font-size:0.86rem;">
+    <div style="font-size:0.84rem;">
       <div>
         PVP base total:
         <strong>${totalPvpBase.toFixed(2)} €</strong>
@@ -598,7 +600,7 @@ async function recalcularSimulador() {
           (${dtoTotalEf.toFixed(1)} % dto total vs PVP)
         </span>
       </div>
-      <div style="font-size:0.8rem; color:#4b5563; margin-top:0.15rem;">
+      <div style="font-size:0.78rem; color:#4b5563; margin-top:0.15rem;">
         Descuento extra sobre el precio de tarifa (dto adicional de línea):
         <strong>${dtoExtraEf.toFixed(1)} %</strong>
       </div>
@@ -633,29 +635,29 @@ async function recalcularSimulador() {
     totalPvpBase > 0 ? (1 - precioConst / totalPvpBase) * 100 : 0;
 
   cadenaCard.innerHTML = `
-    <div style="font-size:0.84rem;">
-      <div style="margin-bottom:0.2rem;">
+    <div style="font-size:0.82rem;">
+      <div style="margin-bottom:0.18rem;">
         <strong>2N (precio simulado):</strong>
         ${precio2N.toFixed(2)} €
         <span style="color:#6b7280;">
           (${desc2N.toFixed(1)} % vs PVP)
         </span>
       </div>
-      <div style="margin-bottom:0.2rem;">
+      <div style="margin-bottom:0.18rem;">
         <strong>Distribuidor (${mgnDist.toFixed(1)} % margen):</strong>
         ${precioDist.toFixed(2)} €
         <span style="color:#6b7280;">
           (${descDist.toFixed(1)} % vs PVP)
         </span>
       </div>
-      <div style="margin-bottom:0.2rem;">
+      <div style="margin-bottom:0.18rem;">
         <strong>Subdistribuidor (${mgnSubdist.toFixed(1)} % margen):</strong>
         ${precioSubdist.toFixed(2)} €
         <span style="color:#6b7280;">
           (${descSubdist.toFixed(1)} % vs PVP)
         </span>
       </div>
-      <div style="margin-bottom:0.2rem;">
+      <div style="margin-bottom:0.18rem;">
         <strong>Integrador (${mgnInte.toFixed(1)} % margen):</strong>
         ${precioInte.toFixed(2)} €
         <span style="color:#6b7280;">
