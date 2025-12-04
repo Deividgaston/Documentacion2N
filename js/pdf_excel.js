@@ -1,9 +1,9 @@
 // js/pdf_excel.js
 // Generación de PDF + Excel (Presupuesto) + PDF Simulador
 
-// =====================================================
-// PRESUPUESTO · PDF
-// =====================================================
+// ======================================================
+// 1) PRESUPUESTO · PDF
+// ======================================================
 function generarPDF() {
   if (!window.jspdf || !window.jspdf.jsPDF) {
     alert("No se ha cargado jsPDF. Revisa los <script> del index.html.");
@@ -118,9 +118,9 @@ function generarPDF() {
   pdf.save(`${codigo}.pdf`);
 }
 
-// =====================================================
-// PRESUPUESTO · EXCEL
-// =====================================================
+// ======================================================
+// 2) PRESUPUESTO · EXCEL
+// ======================================================
 function generarExcel() {
   if (!window.XLSX) {
     alert("No se ha cargado XLSX. Revisa los <script> del index.html.");
@@ -144,7 +144,13 @@ function generarExcel() {
     const importe = cantidad * pvp;
     subtotal += importe;
 
-    data.push([l.ref || "", l.descripcion || "", cantidad, pvp, importe]);
+    data.push([
+      l.ref || "",
+      l.descripcion || "",
+      cantidad,
+      pvp,
+      importe,
+    ]);
   });
 
   const descEu = subtotal * (appState.descuentoGlobal / 100);
@@ -154,7 +160,13 @@ function generarExcel() {
 
   data.push([]);
   data.push(["Subtotal", "", "", "", subtotal]);
-  data.push([`Descuento (${appState.descuentoGlobal}%)`, "", "", "", -descEu]);
+  data.push([
+    `Descuento (${appState.descuentoGlobal}%)`,
+    "",
+    "",
+    "",
+    -descEu,
+  ]);
   data.push(["Base imponible", "", "", "", baseImp]);
   data.push([
     `IVA ${appState.aplicarIVA ? "21%" : "(no aplicado)"}`,
@@ -186,65 +198,84 @@ function generarExcel() {
   URL.revokeObjectURL(url);
 }
 
-// =====================================================
-// SIMULADOR · PDF (tabla ajustada a márgenes A4 vertical)
-// =====================================================
-window.exportSimuladorPDF = function () {
-  if (!window.jspdf || !window.jspdf.jsPDF) {
-    alert("No está disponible jsPDF. Revisa la carga de scripts.");
-    return;
-  }
-  if (!window.jspdf || !window.jspdf.jsPDF || !window.jspdf.jsPDF.API.autoTable) {
-    // Si tu versión de jsPDF no expone autoTable así, descomenta el check siguiente:
-    // if (!window.jspdf || !window.jspdf.jsPDF || !window.jspdf.jsPDF.API || !window.jspdf.jsPDF.API.autoTable) {
-    alert("No está disponible jsPDF AutoTable. Revisa el script de autotable.");
+// ======================================================
+// 3) SIMULADOR · PDF (sin cadena de márgenes)
+// ======================================================
+function exportSimuladorPDF() {
+  if (!window.jspdf || !window.jspdf.jsPDF || !window.jspdf.autoTable) {
+    alert("No está disponible jsPDF o autoTable. Revisa los <script> del index.html.");
     return;
   }
 
   const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({
-    unit: "pt",
-    format: "a4",
-    compress: true,
-  });
+  // 👉 A4 VERTICAL
+  const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
 
-  const fmtEur = (n) =>
-    (Number(n) || 0).toLocaleString("es-ES", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }) + " €";
-
-  const fmtPct = (n) =>
-    (Number(n) || 0).toFixed(1).replace(".", ",") + " %";
-
-  // Datos del presupuesto / simulador
-  const presu =
-    typeof window.getPresupuestoActual === "function"
-      ? window.getPresupuestoActual()
-      : null;
-
-  const proyectoNombre = presu?.nombre || "Proyecto sin nombre";
-  const fechaPresu = presu?.fecha || new Date().toISOString().slice(0, 10);
-
-  const sim = window.appState?.simulador || {};
+  const info = appState.infoPresupuesto || {};
+  const sim = appState.simulador || {};
   const lineasSim = sim.lineasSimuladas || [];
-  const tarifaDefecto = sim.tarifaDefecto || "DIST_PRICE";
 
-  const TARIFAS_MAP = window.TARIFAS_MAP || {};
-  const tarifaLabel =
-    TARIFAS_MAP[tarifaDefecto]?.label || "Tarifa seleccionada";
+  if (!lineasSim.length) {
+    alert("No hay líneas simuladas. Recalcula la simulación primero.");
+    return;
+  }
 
-  // Totales desde las líneas simuladas
+  // ================= CABECERA =================
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const marginLeft = 40;
+  const marginTop = 40;
+  const marginRight = 40;
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(18);
+  doc.text("Simulación de tarifas 2N", marginLeft, marginTop);
+
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "normal");
+
+  const hoy = new Date();
+  const fechaStr = hoy.toISOString().slice(0, 10);
+
+  const tarifaDef = sim.tarifaDefecto || "DIST_PRICE";
+  const objTarifa =
+    (sim.TARIFAS_MAP && sim.TARIFAS_MAP[tarifaDef]) || null;
+
+  const etiquetaTarifaBase =
+    (objTarifa && objTarifa.label) || "Tarifa seleccionada";
+
+  let y = marginTop + 22;
+
+  doc.text(`Proyecto: ${info.proyecto || "Proyecto sin nombre"}`, marginLeft, y);
+  y += 14;
+  doc.text(`Fecha: ${fechaStr}`, marginLeft, y);
+  y += 14;
+  doc.text(
+    `Tarifa base: ${etiquetaTarifaBase}`,
+    marginLeft,
+    y
+  );
+  y += 22;
+
+  // ========= RESUMEN (LOS TOTALES LOS CALCULAMOS AQUÍ) =========
   let totalPvpBase = 0;
   let totalBaseTarifa = 0;
   let totalFinal = 0;
 
   lineasSim.forEach((l) => {
-    const base = Number(l.basePvp || 0);
-    const cant = Number(l.cantidad || 0);
-    totalPvpBase += base * cant;
-    totalBaseTarifa += Number(l.subtotalTarifa || 0);
-    totalFinal += Number(l.subtotalFinal || 0);
+    const cantidad = Number(l.cantidad || 0) || 0;
+    const base = Number(l.basePvp || 0) || 0;
+    const dtoTarifa = Number(l.dtoTarifa || 0) || 0;
+    const dtoLinea = Number(l.dtoLinea || 0) || 0;
+
+    const factorTarifa = 1 - dtoTarifa / 100;
+    const factorLinea = 1 - dtoLinea / 100;
+
+    const pvpTarifaUd = base * factorTarifa;
+    const pvpFinalUd = base * factorTarifa * factorLinea;
+
+    totalPvpBase += base * cantidad;
+    totalBaseTarifa += pvpTarifaUd * cantidad;
+    totalFinal += pvpFinalUd * cantidad;
   });
 
   const dtoTarifaEf =
@@ -254,173 +285,126 @@ window.exportSimuladorPDF = function () {
   const dtoExtraEf =
     totalBaseTarifa > 0 ? (1 - totalFinal / totalBaseTarifa) * 100 : 0;
 
-  const marginX = 40;
-  let y = 60;
-
-  // Título
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(18);
-  doc.text("Simulación de tarifas 2N", marginX, y);
-
-  // Cabecera texto
-  y += 30;
-  doc.setFontSize(11);
-  doc.setFont("helvetica", "normal");
-  doc.text(`Proyecto: ${proyectoNombre}`, marginX, y);
+  doc.text("Resumen de simulación (referencia PVP)", marginLeft, y);
   y += 16;
-  doc.text(`Fecha: ${fechaPresu}`, marginX, y);
-  y += 16;
-  doc.text(`Tarifa base: ${tarifaLabel}`, marginX, y);
-
-  // Bloque resumen
-  y += 28;
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(12);
-  doc.text("Resumen de simulación (referencia PVP)", marginX, y);
 
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  y += 18;
-  doc.text(`PVP base total: ${fmtEur(totalPvpBase)}`, marginX, y);
-  y += 14;
   doc.text(
-    `Total tras tarifa ${tarifaLabel}: ${fmtEur(totalBaseTarifa)}  (${fmtPct(
-      dtoTarifaEf
-    )} dto vs PVP)`,
-    marginX,
+    `PVP base total: ${totalPvpBase.toFixed(2)} €`,
+    marginLeft,
     y
   );
   y += 14;
+
   doc.text(
-    `Total simulado: ${fmtEur(totalFinal)}  (${fmtPct(
-      dtoTotalEf
-    )} dto total vs PVP)`,
-    marginX,
+    `Total tras tarifa ${etiquetaTarifaBase}: ${totalBaseTarifa.toFixed(
+      2
+    )} €   (${dtoTarifaEf.toFixed(1)} % dto vs PVP)`,
+    marginLeft,
     y
   );
   y += 14;
+
   doc.text(
-    `Descuento extra sobre tarifa (dto adicional de línea): ${fmtPct(
-      dtoExtraEf
-    )}`,
-    marginX,
+    `Total simulado: ${totalFinal.toFixed(
+      2
+    )} €   (${dtoTotalEf.toFixed(1)} % dto total vs PVP)`,
+    marginLeft,
+    y
+  );
+  y += 14;
+
+  doc.text(
+    `Descuento extra sobre tarifa (dto adicional de línea): ${dtoExtraEf.toFixed(
+      1
+    )} %`,
+    marginLeft,
     y
   );
 
-  if (!lineasSim.length) {
-    doc.text(
-      "No hay líneas simuladas. Genera primero un presupuesto.",
-      marginX,
-      y + 30
-    );
-    doc.save("simulacion_tarifas_2n.pdf");
-    return;
-  }
+  // Separador
+  y += 26;
+  doc.setDrawColor(220);
+  doc.line(marginLeft, y - 10, pageWidth - marginRight, y - 10);
 
-  // Cuerpo de la tabla
-  const body = lineasSim.map((l) => {
-    const tObj = TARIFAS_MAP[l.tarifaId] || {};
-    return {
-      ref: l.ref || "",
-      descripcion: l.descripcion || "",
-      cantidad: l.cantidad || 0,
-      tarifa: tObj.label || l.tarifaId || "",
-      dtoTarifa: fmtPct(l.dtoTarifa || 0),
-      dtoLinea: fmtPct(l.dtoLinea || 0),
-      pvpFinalUd: fmtEur(l.pvpFinalUd || 0),
-      subtotalFinal: fmtEur(l.subtotalFinal || 0),
-    };
-  });
+  // ================= TABLA =================
+  const usableWidth = pageWidth - marginLeft - marginRight;
 
-  const columns = [
-    { header: "Ref.", dataKey: "ref" },
-    { header: "Descripción", dataKey: "descripcion" },
-    { header: "Ud.", dataKey: "cantidad" },
-    { header: "Tarifa 2N", dataKey: "tarifa" },
-    { header: "Dto tarifa", dataKey: "dtoTarifa" },
-    { header: "Dto línea", dataKey: "dtoLinea" },
-    { header: "PVP final ud.", dataKey: "pvpFinalUd" },
-    { header: "Importe final", dataKey: "subtotalFinal" },
-  ];
-
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const usableWidth = pageWidth - marginX * 2;
-
-  // Anchos relativos ajustados a A4 vertical
-  const widthsRel = {
-    ref: 0.12,
-    descripcion: 0.32,
-    cantidad: 0.06,
-    tarifa: 0.20,
-    dtoTarifa: 0.08,
-    dtoLinea: 0.08,
-    pvpFinalUd: 0.07,
-    subtotalFinal: 0.07,
+  // Reparto de ancho proporcional para que NO se corte nada
+  const colW = {
+    ref: usableWidth * 0.11,
+    descripcion: usableWidth * 0.34,
+    cantidad: usableWidth * 0.05,
+    tarifa: usableWidth * 0.18,
+    dtoTarifa: usableWidth * 0.08,
+    dtoLinea: usableWidth * 0.08,
+    pvpFinalUd: usableWidth * 0.08,
+    subtotalFinal: usableWidth * 0.08,
   };
 
-  const columnStyles = {};
-  Object.keys(widthsRel).forEach((key) => {
-    columnStyles[key] = {
-      cellWidth: widthsRel[key] * usableWidth,
-    };
+  const body = lineasSim.map((l) => ({
+    ref: l.ref || "",
+    descripcion: l.descripcion || "",
+    cantidad: l.cantidad || 0,
+    tarifa: (TARIFAS_MAP && TARIFAS_MAP[l.tarifaId]?.label) || "",
+    dtoTarifa: `${(l.dtoTarifa || 0).toFixed(1)} %`,
+    dtoLinea: `${(l.dtoLinea || 0).toFixed(1)} %`,
+    pvpFinalUd: `${(l.pvpFinalUd || 0).toFixed(2)} €`,
+    subtotalFinal: `${(l.subtotalFinal || 0).toFixed(2)} €`,
+  }));
+
+  doc.autoTable({
+    startY: y,
+    margin: { left: marginLeft, right: marginRight },
+    styles: {
+      font: "helvetica",
+      fontSize: 7,
+      cellPadding: 2,
+      overflow: "linebreak",
+      valign: "middle",
+    },
+    headStyles: {
+      fillColor: [15, 23, 42],
+      textColor: 255,
+      fontStyle: "bold",
+      fontSize: 7,
+    },
+    columnStyles: {
+      ref: { cellWidth: colW.ref },
+      descripcion: { cellWidth: colW.descripcion },
+      cantidad: { cellWidth: colW.cantidad, halign: "center" },
+      tarifa: { cellWidth: colW.tarifa },
+      dtoTarifa: { cellWidth: colW.dtoTarifa, halign: "right" },
+      dtoLinea: { cellWidth: colW.dtoLinea, halign: "right" },
+      pvpFinalUd: { cellWidth: colW.pvpFinalUd, halign: "right" },
+      subtotalFinal: { cellWidth: colW.subtotalFinal, halign: "right" },
+    },
+    columns: [
+      { header: "Ref.", dataKey: "ref" },
+      { header: "Descripción", dataKey: "descripcion" },
+      { header: "Ud.", dataKey: "cantidad" },
+      { header: "Tarifa 2N", dataKey: "tarifa" },
+      { header: "Dto tarifa", dataKey: "dtoTarifa" },
+      { header: "Dto línea", dataKey: "dtoLinea" },
+      { header: "PVP final ud.", dataKey: "pvpFinalUd" },
+      { header: "Importe final", dataKey: "subtotalFinal" },
+    ],
+    body,
+    didDrawPage: (data) => {
+      const pageCount = doc.internal.getNumberOfPages();
+      const pageCurrent = doc.internal.getCurrentPageInfo().pageNumber;
+      doc.setFontSize(8);
+      doc.setTextColor(130);
+      doc.text(
+        `Página ${pageCurrent} / ${pageCount}`,
+        pageWidth - marginRight,
+        doc.internal.pageSize.getHeight() - 20,
+        { align: "right" }
+      );
+    },
   });
 
- doc.autoTable({
-  startY: y + 26,
-  margin: { left: 32, right: 20 }, 
-  tableWidth: "auto",
-  styles: {
-    font: "helvetica",
-    fontSize: 7,                  // → Fuente más pequeña = más espacio útil
-    cellPadding: 2,
-    overflow: "linebreak",
-    valign: "middle",
-  },
-  headStyles: {
-    fillColor: [15, 23, 42],
-    textColor: 255,
-    fontStyle: "bold",
-    fontSize: 7,
-  },
-
-  // ANCHOS FIJOS PERFECTOS PARA A4 VERTICAL
-  columnStyles: {
-    ref:           { cellWidth: 55 },  // fijo → evita que crezca
-    descripcion:   { cellWidth: 190 }, // espacio grande pero controlado
-    cantidad:      { cellWidth: 25 },
-    tarifa:        { cellWidth: 115 },
-    dtoTarifa:     { cellWidth: 42 },
-    dtoLinea:      { cellWidth: 42 },
-    pvpFinalUd:    { cellWidth: 55 },
-    subtotalFinal: { cellWidth: 55 },
-  },
-
-  columns: [
-    { header: "Ref.", dataKey: "ref" },
-    { header: "Descripción", dataKey: "descripcion" },
-    { header: "Ud.", dataKey: "cantidad" },
-    { header: "Tarifa 2N", dataKey: "tarifa" },
-    { header: "Dto tarifa", dataKey: "dtoTarifa" },
-    { header: "Dto línea", dataKey: "dtoLinea" },
-    { header: "PVP final ud.", dataKey: "pvpFinalUd" },
-    { header: "Importe final", dataKey: "subtotalFinal" },
-  ],
-
-  body,
-  
-  didDrawPage: (data) => {
-    const pageCount = doc.internal.getNumberOfPages();
-    const pageCurrent = doc.internal.getCurrentPageInfo().pageNumber;
-    doc.setFontSize(8);
-    doc.setTextColor(130);
-    doc.text(
-      `Página ${pageCurrent} / ${pageCount}`,
-      doc.internal.pageSize.getWidth() - 40,
-      doc.internal.pageSize.getHeight() - 20,
-      { align: "right" }
-    );
-  }
-});
-
-  doc.save("simulacion_tarifas_2n.pdf");
-};
+  const nombre = `Simulacion_2N_${fechaStr}.pdf`;
+  doc.save(nombre);
+}
