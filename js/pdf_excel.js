@@ -208,8 +208,8 @@ function exportSimuladorPDF() {
   }
 
   const { jsPDF } = window.jspdf;
-  // 👉 A4 VERTICAL
-  const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
+  // 👉 A4 HORIZONTAL para tener más ancho
+  const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
 
   const info = appState.infoPresupuesto || {};
   const sim = appState.simulador || {};
@@ -220,15 +220,15 @@ function exportSimuladorPDF() {
     return;
   }
 
-  // ================= CABECERA =================
-  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageWidth  = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
   const marginLeft = 40;
-  const marginTop = 40;
   const marginRight = 40;
 
+  // =============== CABECERA =================
   doc.setFont("helvetica", "bold");
   doc.setFontSize(18);
-  doc.text("Simulación de tarifas 2N", marginLeft, marginTop);
+  doc.text("Simulación de tarifas 2N", marginLeft, 40);
 
   doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
@@ -237,45 +237,38 @@ function exportSimuladorPDF() {
   const fechaStr = hoy.toISOString().slice(0, 10);
 
   const tarifaDef = sim.tarifaDefecto || "DIST_PRICE";
-  const objTarifa =
-    (sim.TARIFAS_MAP && sim.TARIFAS_MAP[tarifaDef]) || null;
-
+  const objTarifa = (window.TARIFAS_MAP && window.TARIFAS_MAP[tarifaDef]) || null;
   const etiquetaTarifaBase =
     (objTarifa && objTarifa.label) || "Tarifa seleccionada";
 
-  let y = marginTop + 22;
-
+  let y = 40 + 22;
   doc.text(`Proyecto: ${info.proyecto || "Proyecto sin nombre"}`, marginLeft, y);
   y += 14;
   doc.text(`Fecha: ${fechaStr}`, marginLeft, y);
   y += 14;
-  doc.text(
-    `Tarifa base: ${etiquetaTarifaBase}`,
-    marginLeft,
-    y
-  );
+  doc.text(`Tarifa base: ${etiquetaTarifaBase}`, marginLeft, y);
   y += 22;
 
-  // ========= RESUMEN (LOS TOTALES LOS CALCULAMOS AQUÍ) =========
+  // ========= RESUMEN: recalculamos totales =========
   let totalPvpBase = 0;
   let totalBaseTarifa = 0;
   let totalFinal = 0;
 
   lineasSim.forEach((l) => {
-    const cantidad = Number(l.cantidad || 0) || 0;
-    const base = Number(l.basePvp || 0) || 0;
+    const cantidad  = Number(l.cantidad || 0) || 0;
+    const base      = Number(l.basePvp || 0) || 0;
     const dtoTarifa = Number(l.dtoTarifa || 0) || 0;
-    const dtoLinea = Number(l.dtoLinea || 0) || 0;
+    const dtoLinea  = Number(l.dtoLinea || 0) || 0;
 
     const factorTarifa = 1 - dtoTarifa / 100;
-    const factorLinea = 1 - dtoLinea / 100;
+    const factorLinea  = 1 - dtoLinea  / 100;
 
     const pvpTarifaUd = base * factorTarifa;
-    const pvpFinalUd = base * factorTarifa * factorLinea;
+    const pvpFinalUd  = base * factorTarifa * factorLinea;
 
-    totalPvpBase += base * cantidad;
+    totalPvpBase    += base        * cantidad;
     totalBaseTarifa += pvpTarifaUd * cantidad;
-    totalFinal += pvpFinalUd * cantidad;
+    totalFinal      += pvpFinalUd  * cantidad;
   });
 
   const dtoTarifaEf =
@@ -290,13 +283,8 @@ function exportSimuladorPDF() {
   y += 16;
 
   doc.setFont("helvetica", "normal");
-  doc.text(
-    `PVP base total: ${totalPvpBase.toFixed(2)} €`,
-    marginLeft,
-    y
-  );
+  doc.text(`PVP base total: ${totalPvpBase.toFixed(2)} €`, marginLeft, y);
   y += 14;
-
   doc.text(
     `Total tras tarifa ${etiquetaTarifaBase}: ${totalBaseTarifa.toFixed(
       2
@@ -305,7 +293,6 @@ function exportSimuladorPDF() {
     y
   );
   y += 14;
-
   doc.text(
     `Total simulado: ${totalFinal.toFixed(
       2
@@ -314,7 +301,6 @@ function exportSimuladorPDF() {
     y
   );
   y += 14;
-
   doc.text(
     `Descuento extra sobre tarifa (dto adicional de línea): ${dtoExtraEf.toFixed(
       1
@@ -324,30 +310,16 @@ function exportSimuladorPDF() {
   );
 
   // Separador
-  y += 26;
+  y += 24;
   doc.setDrawColor(220);
   doc.line(marginLeft, y - 10, pageWidth - marginRight, y - 10);
 
-  // ================= TABLA =================
-  const usableWidth = pageWidth - marginLeft - marginRight;
-
-  // Reparto de ancho proporcional para que NO se corte nada
-  const colW = {
-    ref: usableWidth * 0.11,
-    descripcion: usableWidth * 0.34,
-    cantidad: usableWidth * 0.05,
-    tarifa: usableWidth * 0.18,
-    dtoTarifa: usableWidth * 0.08,
-    dtoLinea: usableWidth * 0.08,
-    pvpFinalUd: usableWidth * 0.08,
-    subtotalFinal: usableWidth * 0.08,
-  };
-
+  // =============== TABLA =================
   const body = lineasSim.map((l) => ({
     ref: l.ref || "",
     descripcion: l.descripcion || "",
     cantidad: l.cantidad || 0,
-    tarifa: (TARIFAS_MAP && TARIFAS_MAP[l.tarifaId]?.label) || "",
+    tarifa: (window.TARIFAS_MAP && window.TARIFAS_MAP[l.tarifaId]?.label) || "",
     dtoTarifa: `${(l.dtoTarifa || 0).toFixed(1)} %`,
     dtoLinea: `${(l.dtoLinea || 0).toFixed(1)} %`,
     pvpFinalUd: `${(l.pvpFinalUd || 0).toFixed(2)} €`,
@@ -357,6 +329,7 @@ function exportSimuladorPDF() {
   doc.autoTable({
     startY: y,
     margin: { left: marginLeft, right: marginRight },
+    tableWidth: pageWidth - marginLeft - marginRight, // 👉 forzamos ancho total dentro de márgenes
     styles: {
       font: "helvetica",
       fontSize: 7,
@@ -371,35 +344,32 @@ function exportSimuladorPDF() {
       fontSize: 7,
     },
     columnStyles: {
-      ref: { cellWidth: colW.ref },
-      descripcion: { cellWidth: colW.descripcion },
-      cantidad: { cellWidth: colW.cantidad, halign: "center" },
-      tarifa: { cellWidth: colW.tarifa },
-      dtoTarifa: { cellWidth: colW.dtoTarifa, halign: "right" },
-      dtoLinea: { cellWidth: colW.dtoLinea, halign: "right" },
-      pvpFinalUd: { cellWidth: colW.pvpFinalUd, halign: "right" },
-      subtotalFinal: { cellWidth: colW.subtotalFinal, halign: "right" },
+      cantidad:   { halign: "center" },
+      dtoTarifa:  { halign: "right" },
+      dtoLinea:   { halign: "right" },
+      pvpFinalUd: { halign: "right" },
+      subtotalFinal: { halign: "right" },
     },
     columns: [
-      { header: "Ref.", dataKey: "ref" },
-      { header: "Descripción", dataKey: "descripcion" },
-      { header: "Ud.", dataKey: "cantidad" },
-      { header: "Tarifa 2N", dataKey: "tarifa" },
-      { header: "Dto tarifa", dataKey: "dtoTarifa" },
-      { header: "Dto línea", dataKey: "dtoLinea" },
-      { header: "PVP final ud.", dataKey: "pvpFinalUd" },
-      { header: "Importe final", dataKey: "subtotalFinal" },
+      { header: "Ref.",         dataKey: "ref" },
+      { header: "Descripción",  dataKey: "descripcion" },
+      { header: "Ud.",          dataKey: "cantidad" },
+      { header: "Tarifa 2N",    dataKey: "tarifa" },
+      { header: "Dto tarifa",   dataKey: "dtoTarifa" },
+      { header: "Dto línea",    dataKey: "dtoLinea" },
+      { header: "PVP ud.",      dataKey: "pvpFinalUd" },   // encabezado más corto
+      { header: "Imp. final",   dataKey: "subtotalFinal" } // encabezado más corto
     ],
     body,
     didDrawPage: (data) => {
-      const pageCount = doc.internal.getNumberOfPages();
+      const pageCount   = doc.internal.getNumberOfPages();
       const pageCurrent = doc.internal.getCurrentPageInfo().pageNumber;
       doc.setFontSize(8);
       doc.setTextColor(130);
       doc.text(
         `Página ${pageCurrent} / ${pageCount}`,
         pageWidth - marginRight,
-        doc.internal.pageSize.getHeight() - 20,
+        pageHeight - 20,
         { align: "right" }
       );
     },
