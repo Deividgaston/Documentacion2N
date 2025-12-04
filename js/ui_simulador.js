@@ -41,7 +41,7 @@ const TARIFAS_MAP = TARIFAS_2N.reduce((acc, t) => {
 }, {});
 
 console.log(
-  "%cUI Simulador · v4.1 · layout compacto 3 bloques + tabla derecha",
+  "%cUI Simulador · v4.2 · layout 2 columnas (3 bloques izq + tabla dcha)",
   "color:#22c55e; font-weight:bold;"
 );
 
@@ -116,7 +116,7 @@ function leerConfigLineasDesdeDOM() {
 }
 
 // ===============================
-// RENDER PRINCIPAL (3 bloques estilo Presupuesto, más compactos)
+// RENDER PRINCIPAL (2 columnas: 3 bloques izq + tabla dcha)
 // ===============================
 function renderSimuladorView() {
   const container = document.getElementById("appContent");
@@ -127,10 +127,12 @@ function renderSimuladorView() {
   ).join("");
 
   container.innerHTML = `
-    <div class="simulador-layout">
+    <div class="simulador-layout"
+         style="display:flex; gap:1.5rem; align-items:flex-start;">
 
       <!-- COLUMNA IZQUIERDA (3 bloques pequeños) -->
-      <div class="simulador-left-column" style="max-width:420px;">
+      <div class="simulador-left-column"
+           style="flex:0 0 380px; max-width:400px;">
 
         <!-- BLOQUE 1 · SIMULADOR (configuración) -->
         <div class="card" style="margin-bottom:0.75rem;">
@@ -229,7 +231,8 @@ function renderSimuladorView() {
       </div>
 
       <!-- COLUMNA DERECHA: Tabla de simulación por línea -->
-      <div class="simulador-right-column">
+      <div class="simulador-right-column"
+           style="flex:1 1 auto; min-width:0;">
         <div class="card">
           <div class="card-header" style="display:flex; align-items:center; justify-content:space-between; gap:1rem;">
             <div class="card-title">
@@ -286,14 +289,12 @@ function renderSimuladorView() {
 
   if (selTarifaDefecto) {
     selTarifaDefecto.addEventListener("change", () => {
-      // al cambiar la tarifa, reseteamos el mapa de líneas editadas
       appState.simulador.lineDtoEdited = {};
       recalcularSimulador();
     });
   }
   if (inpDtoGlobal) {
     inpDtoGlobal.addEventListener("change", () => {
-      // al cambiar dto global, las líneas NO editadas heredan el nuevo valor
       recalcularSimulador();
     });
   }
@@ -332,7 +333,6 @@ async function recalcularSimulador() {
   const countLabel = document.getElementById("simLineCount");
   if (!detalle || !resumenCard || !cadenaCard) return;
 
-  // 1) Leemos presupuesto
   const presu =
     (typeof getPresupuestoActual === "function" &&
       getPresupuestoActual()) ||
@@ -351,7 +351,6 @@ async function recalcularSimulador() {
     return;
   }
 
-  // 2) Parámetros globales
   const selTarifaDefecto = document.getElementById("simTarifaDefecto");
   const inpDtoGlobal = document.getElementById("simDtoGlobal");
   const inpMgnDist = document.getElementById("simMgnDist");
@@ -376,17 +375,14 @@ async function recalcularSimulador() {
   appState.simulador.mgnConst = mgnConst;
   appState.simulador.lineDtoEdited = appState.simulador.lineDtoEdited || {};
 
-  // 3) Config de líneas modificadas (si existe DOM previo)
   const configPrev = leerConfigLineasDesdeDOM();
   const editedMap = appState.simulador.lineDtoEdited || {};
 
-  // 4) Cargar tarifas base 2N (PVP) desde Firestore
   const tarifasBase = await getTarifasBase2N();
 
-  // 5) Construir nuevas líneas simuladas
-  let totalPvpBase = 0;     // total PVP puro (sin descuentos)
-  let totalBaseTarifa = 0;  // total a precio de tarifa (PVP - dtoTarifa)
-  let totalFinal = 0;       // total final (tarifa + dto línea adicional)
+  let totalPvpBase = 0;
+  let totalBaseTarifa = 0;
+  let totalFinal = 0;
 
   const lineasSim = lineasBase.map((lBase, index) => {
     const key = buildLineaKey(lBase, index);
@@ -401,13 +397,9 @@ async function recalcularSimulador() {
 
     const cantidad = Number(lBase.cantidad || 0) || 0;
 
-    // Config previa (tarifa + dto línea)
     const cfg = configPrev[key] || {};
     const tarifaId = cfg.tarifaId || tarifaDefecto;
 
-    // DTO LÍNEA:
-    // - Si la línea se ha editado a mano, respetamos su valor actual.
-    // - Si no se ha editado, usamos SIEMPRE el dtoGlobal como valor de línea.
     let dtoLinea;
     if (editedMap[key]) {
       dtoLinea = Number(cfg.dtoLinea || 0) || 0;
@@ -422,8 +414,8 @@ async function recalcularSimulador() {
     const factorLinea = 1 - dtoLinea / 100;
 
     const subtotalPvpBase = basePvp * cantidad;
-    const pvpTarifaUd = basePvp * factorTarifa; // precio tras tarifa
-    const pvpFinalUd = basePvp * factorTarifa * factorLinea; // tarifa + dto adicional
+    const pvpTarifaUd = basePvp * factorTarifa;
+    const pvpFinalUd = basePvp * factorTarifa * factorLinea;
     const subtotalTarifa = pvpTarifaUd * cantidad;
     const subtotalFinal = pvpFinalUd * cantidad;
 
@@ -454,7 +446,6 @@ async function recalcularSimulador() {
 
   appState.simulador.lineasSimuladas = lineasSim;
 
-  // 6) Pintar tabla de líneas
   if (countLabel) {
     countLabel.textContent = `${lineasSim.length} líneas simuladas`;
   }
@@ -541,10 +532,8 @@ async function recalcularSimulador() {
 
   detalle.innerHTML = html;
 
-  // Listeners por línea (tarifa / dto línea)
   detalle.querySelectorAll(".sim-tarifa-line").forEach((sel) => {
     sel.addEventListener("change", () => {
-      // al cambiar la tarifa de una línea, no tocamos dtoEdited, solo recalculamos
       recalcularSimulador();
     });
   });
@@ -561,7 +550,6 @@ async function recalcularSimulador() {
     });
   });
 
-  // 7) BLOQUE 2: Resumen (referencia PVP)
   const tarifaLabel =
     TARIFAS_MAP[tarifaDefecto]?.label || tarifaDefecto;
 
@@ -607,16 +595,15 @@ async function recalcularSimulador() {
     </div>
   `;
 
-  // 8) BLOQUE 3: Cadena de márgenes hasta promotor
   function aplicarMargenSobreVenta(cost, marginPct) {
     const m = Number(marginPct) || 0;
     if (m <= 0) return cost;
     const f = m / 100;
-    if (f >= 0.99) return cost / 0.01; // evitar divisiones locas
+    if (f >= 0.99) return cost / 0.01;
     return cost / (1 - f);
   }
 
-  const precio2N = totalFinal; // 2N vende al distribuidor a este precio
+  const precio2N = totalFinal;
 
   const precioDist    = aplicarMargenSobreVenta(precio2N,     mgnDist);
   const precioSubdist = aplicarMargenSobreVenta(precioDist,   mgnSubdist);
