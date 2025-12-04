@@ -86,16 +86,17 @@
     <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
 
+ <!-- 🔹 NUEVO: jsPDF + AutoTable (para Presupuesto y Simulador) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
 
-    <!-- =========================================================
+    
+        <!-- =========================================================
          ARCHIVOS JS DEL PROYECTO
     ========================================================== -->
 
     <!-- Firebase de tu proyecto, ahora como módulo (puede exportar db, auth, etc.) -->
     <script src="js/firebase.js"></script>
-
-    <!-- ⚠️ YA NO CARGAMOS firebase_tarifa.js COMO SCRIPT NORMAL -->
-    <!-- <script src="js/firebase_tarifa.js"></script> -->
 
     <script src="js/state.js"></script>
     <script src="js/utils.js"></script>
@@ -104,15 +105,17 @@
     <script src="js/ui_shell.js"></script>
     <script src="js/ui_proyecto.js"></script>
     <script src="js/ui_presupuesto.js"></script>
-    <!-- 🔹 NUEVO: UI del simulador -->
+    <!-- 🔹 UI del simulador -->
     <script src="js/ui_simulador.js"></script>
 
-    <!-- Tarifa 2N como módulo: aquí es donde se hace el import de firebase_tarifa.js -->
+    <!-- Tarifa 2N como módulo -->
     <script type="module" src="js/ui_tarifa.js"></script>
 
     <script src="js/ui_dashboard_doc.js"></script>
 
+    <!-- Export a PDF / Excel -->
     <script src="js/pdf_excel.js"></script>
+
     <script src="app.js"></script>
     <script src="js/main.js"></script>
   </body>
