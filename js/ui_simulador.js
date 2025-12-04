@@ -41,7 +41,7 @@ const TARIFAS_MAP = TARIFAS_2N.reduce((acc, t) => {
 }, {});
 
 console.log(
-  "%cUI Simulador · v4.1 · 3 bloques + dto adicional sobre tarifa + cadena márgenes vs tarifa",
+  "%cUI Simulador · v4 · 3 bloques + dto adicional sobre tarifa + cadena márgenes",
   "color:#22c55e; font-weight:bold;"
 );
 
@@ -420,7 +420,7 @@ async function recalcularSimulador() {
     const factorLinea = 1 - dtoLinea / 100;
 
     const subtotalPvpBase = basePvp * cantidad;
-    const pvpTarifaUd = basePvp * factorTarifa;            // precio tras tarifa
+    const pvpTarifaUd = basePvp * factorTarifa; // precio tras tarifa
     const pvpFinalUd = basePvp * factorTarifa * factorLinea; // tarifa + dto adicional
     const subtotalTarifa = pvpTarifaUd * cantidad;
     const subtotalFinal = pvpFinalUd * cantidad;
@@ -605,7 +605,7 @@ async function recalcularSimulador() {
     </div>
   `;
 
-  // 8) BLOQUE 3: Cadena de márgenes hasta promotor (vs TARIFA)
+  // 8) BLOQUE 3: Cadena de márgenes hasta promotor
   function aplicarMargenSobreVenta(cost, marginPct) {
     const m = Number(marginPct) || 0;
     if (m <= 0) return cost;
@@ -614,26 +614,23 @@ async function recalcularSimulador() {
     return cost / (1 - f);
   }
 
-  const precio2N = totalFinal; // 2N vende al distribuidor a este precio (salida simulación)
+  const precio2N = totalFinal; // 2N vende al distribuidor a este precio
 
-  const precioDist    = aplicarMargenSobreVenta(precio2N,      mgnDist);
-  const precioSubdist = aplicarMargenSobreVenta(precioDist,    mgnSubdist);
-  const precioInte    = aplicarMargenSobreVenta(precioSubdist, mgnInte);
-  const precioConst   = aplicarMargenSobreVenta(precioInte,    mgnConst);
-
-  // Base de referencia para descuentos de la cadena: precio TARIFA total
-  const baseCadena = totalBaseTarifa > 0 ? totalBaseTarifa : totalPvpBase;
+  const precioDist    = aplicarMargenSobreVenta(precio2N,     mgnDist);
+  const precioSubdist = aplicarMargenSobreVenta(precioDist,   mgnSubdist);
+  const precioInte    = aplicarMargenSobreVenta(precioSubdist,mgnInte);
+  const precioConst   = aplicarMargenSobreVenta(precioInte,   mgnConst);
 
   const desc2N =
-    baseCadena > 0 ? (1 - precio2N / baseCadena) * 100 : 0;
+    totalPvpBase > 0 ? (1 - precio2N / totalPvpBase) * 100 : 0;
   const descDist =
-    baseCadena > 0 ? (1 - precioDist / baseCadena) * 100 : 0;
+    totalPvpBase > 0 ? (1 - precioDist / totalPvpBase) * 100 : 0;
   const descSubdist =
-    baseCadena > 0 ? (1 - precioSubdist / baseCadena) * 100 : 0;
+    totalPvpBase > 0 ? (1 - precioSubdist / totalPvpBase) * 100 : 0;
   const descInte =
-    baseCadena > 0 ? (1 - precioInte / baseCadena) * 100 : 0;
+    totalPvpBase > 0 ? (1 - precioInte / totalPvpBase) * 100 : 0;
   const descConst =
-    baseCadena > 0 ? (1 - precioConst / baseCadena) * 100 : 0;
+    totalPvpBase > 0 ? (1 - precioConst / totalPvpBase) * 100 : 0;
 
   cadenaCard.innerHTML = `
     <div style="font-size:0.84rem;">
@@ -641,35 +638,35 @@ async function recalcularSimulador() {
         <strong>2N (precio simulado):</strong>
         ${precio2N.toFixed(2)} €
         <span style="color:#6b7280;">
-          (${desc2N.toFixed(1)} % dto vs tarifa)
+          (${desc2N.toFixed(1)} % vs PVP)
         </span>
       </div>
       <div style="margin-bottom:0.2rem;">
         <strong>Distribuidor (${mgnDist.toFixed(1)} % margen):</strong>
         ${precioDist.toFixed(2)} €
         <span style="color:#6b7280;">
-          (${descDist.toFixed(1)} % dto vs tarifa)
+          (${descDist.toFixed(1)} % vs PVP)
         </span>
       </div>
       <div style="margin-bottom:0.2rem;">
         <strong>Subdistribuidor (${mgnSubdist.toFixed(1)} % margen):</strong>
         ${precioSubdist.toFixed(2)} €
         <span style="color:#6b7280;">
-          (${descSubdist.toFixed(1)} % dto vs tarifa)
+          (${descSubdist.toFixed(1)} % vs PVP)
         </span>
       </div>
       <div style="margin-bottom:0.2rem;">
         <strong>Integrador (${mgnInte.toFixed(1)} % margen):</strong>
         ${precioInte.toFixed(2)} €
         <span style="color:#6b7280;">
-          (${descInte.toFixed(1)} % dto vs tarifa)
+          (${descInte.toFixed(1)} % vs PVP)
         </span>
       </div>
       <div>
         <strong>Constructora (${mgnConst.toFixed(1)} % margen):</strong>
         ${precioConst.toFixed(2)} €
         <span style="color:#6b7280;">
-          (${descConst.toFixed(1)} % dto vs tarifa · precio estimado al promotor)
+          (${descConst.toFixed(1)} % vs PVP · precio estimado al promotor)
         </span>
       </div>
     </div>
