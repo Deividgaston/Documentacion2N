@@ -41,7 +41,7 @@ const TARIFAS_MAP = TARIFAS_2N.reduce((acc, t) => {
 }, {});
 
 console.log(
-  "%cUI Simulador · v4.2 · layout 2 columnas (3 bloques izq + tabla dcha)",
+  "%cUI Simulador · v4.3 · layout 2 columnas + PDF",
   "color:#22c55e; font-weight:bold;"
 );
 
@@ -181,8 +181,21 @@ function renderSimuladorView() {
 
         <!-- BLOQUE 2 · RESUMEN -->
         <div class="card" style="margin-bottom:0.75rem;">
-          <div class="card-header" style="padding-bottom:0.35rem;">
+          <div class="card-header"
+               style="padding-bottom:0.35rem; display:flex; align-items:center; justify-content:space-between; gap:0.5rem;">
             <div class="card-title" style="font-size:0.95rem;">2 · Resumen (referencia PVP)</div>
+            <button id="btnSimPdf"
+              style="
+                padding:0.25rem 0.75rem;
+                font-size:0.78rem;
+                border-radius:999px;
+                border:1px solid #d1d5db;
+                background:#ffffff;
+                color:#374151;
+                cursor:pointer;
+              ">
+              Exportar PDF
+            </button>
           </div>
           <div class="card-body" id="simResumenCard"
                style="font-size:0.85rem; color:#111827; padding-top:0.5rem; padding-bottom:0.6rem;">
@@ -259,6 +272,7 @@ function renderSimuladorView() {
   const inpMgnSubdist = document.getElementById("simMgnSubdist");
   const inpMgnInte = document.getElementById("simMgnInte");
   const inpMgnConst = document.getElementById("simMgnConst");
+  const btnPdf = document.getElementById("btnSimPdf");
 
   if (selTarifaDefecto) {
     selTarifaDefecto.value =
@@ -316,6 +330,12 @@ function renderSimuladorView() {
   if (inpMgnConst) {
     inpMgnConst.addEventListener("change", () => {
       recalcularSimulador();
+    });
+  }
+
+  if (btnPdf) {
+    btnPdf.addEventListener("click", async () => {
+      await exportarSimuladorPDF();
     });
   }
 
@@ -450,6 +470,7 @@ async function recalcularSimulador() {
     countLabel.textContent = `${lineasSim.length} líneas simuladas`;
   }
 
+  // ===== Tabla en la derecha =====
   let html = `
     <table class="table">
       <thead>
@@ -550,6 +571,7 @@ async function recalcularSimulador() {
     });
   });
 
+  // ===== BLOQUE 2: Resumen (referencia PVP) =====
   const tarifaLabel =
     TARIFAS_MAP[tarifaDefecto]?.label || tarifaDefecto;
 
@@ -595,6 +617,7 @@ async function recalcularSimulador() {
     </div>
   `;
 
+  // ===== BLOQUE 3: Cadena de márgenes hasta promotor (solo pantalla) =====
   function aplicarMargenSobreVenta(cost, marginPct) {
     const m = Number(marginPct) || 0;
     if (m <= 0) return cost;
@@ -663,6 +686,171 @@ async function recalcularSimulador() {
 }
 
 // ===============================
+// EXPORTAR A PDF (sin cadena de márgenes)
+// ===============================
+async function exportarSimuladorPDF() {
+  // Aseguramos que los datos están frescos
+  await recalcularSimulador();
+
+  const lineas = appState.simulador.lineasSimuladas || [];
+  if (!lineas.length) {
+    alert("No hay datos de simulación para exportar a PDF.");
+    return;
+  }
+
+  const presu =
+    (typeof getPresupuestoActual === "function" &&
+      getPresupuestoActual()) || {};
+
+  const nombreProyecto = presu.nombre || "Proyecto sin nombre";
+  const fechaPresu = presu.fecha || "";
+  const tarifaDefecto = appState.simulador.tarifaDefecto || "DIST_PRICE";
+  const tarifaLabel = TARIFAS_MAP[tarifaDefecto]?.label || tarifaDefecto;
+
+  // Recalculamos totales para el resumen
+  let totalPvpBase = 0;
+  let totalBaseTarifa = 0;
+  let totalFinal = 0;
+
+  lineas.forEach((l) => {
+    totalPvpBase += (Number(l.basePvp) || 0) * (Number(l.cantidad) || 0);
+    totalBaseTarifa += Number(l.subtotalTarifa) || 0;
+    totalFinal += Number(l.subtotalFinal) || 0;
+  });
+
+  const dtoTarifaEf =
+    totalPvpBase > 0
+      ? (1 - totalBaseTarifa / totalPvpBase) * 100
+      : 0;
+
+  const dtoTotalEf =
+    totalPvpBase > 0
+      ? (1 - totalFinal / totalPvpBase) * 100
+      : 0;
+
+  const dtoExtraEf =
+    totalBaseTarifa > 0
+      ? (1 - totalFinal / totalBaseTarifa) * 100
+      : 0;
+
+  // jsPDF + autoTable (como en Presupuesto)
+  const jsPDFGlobal = window.jspdf || window.jsPDF;
+  if (!jsPDFGlobal) {
+    alert("No está disponible la librería jsPDF. Revisa la carga de scripts.");
+    return;
+  }
+
+  const jsPDFCtor = jsPDFGlobal.jsPDF || jsPDFGlobal;
+  const doc = new jsPDFCtor("p", "mm", "a4");
+
+  // Cabecera
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.text("Simulación de tarifas 2N", 14, 16);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  const fechaTexto = fechaPresu || new Date().toLocaleDateString();
+  doc.text(`Proyecto: ${nombreProyecto}`, 14, 23);
+  doc.text(`Fecha: ${fechaTexto}`, 14, 28);
+  doc.text(`Tarifa base: ${tarifaLabel}`, 14, 33);
+
+  // Resumen económico
+  let y = 40;
+  doc.setFont("helvetica", "bold");
+  doc.text("Resumen de simulación (referencia PVP)", 14, y);
+  y += 5;
+
+  doc.setFont("helvetica", "normal");
+  doc.text(`PVP base total: ${totalPvpBase.toFixed(2)} €`, 14, y);
+  y += 5;
+  doc.text(
+    `Total tras tarifa ${tarifaLabel}: ${totalBaseTarifa.toFixed(
+      2
+    )} €  (${dtoTarifaEf.toFixed(1)} % dto vs PVP)`,
+    14,
+    y
+  );
+  y += 5;
+  doc.text(
+    `Total simulado: ${totalFinal.toFixed(
+      2
+    )} €  (${dtoTotalEf.toFixed(1)} % dto total vs PVP)`,
+    14,
+    y
+  );
+  y += 5;
+  doc.text(
+    `Descuento extra sobre tarifa (dto adicional de línea): ${dtoExtraEf.toFixed(
+      1
+    )} %`,
+    14,
+    y
+  );
+  y += 8;
+
+  // Tabla de líneas (sin cadena de márgenes)
+  const head = [[
+    "Ref.",
+    "Descripción",
+    "Ud.",
+    "Tarifa 2N",
+    "Dto tarifa",
+    "Dto línea",
+    "PVP final ud.",
+    "Importe final",
+  ]];
+
+  const body = lineas.map((l) => [
+    l.ref || "",
+    (l.descripcion || "").slice(0, 70),
+    String(l.cantidad || ""),
+    TARIFAS_MAP[l.tarifaId]?.label || l.tarifaId || "",
+    `${Number(l.dtoTarifa || 0).toFixed(1)} %`,
+    `${Number(l.dtoLinea || 0).toFixed(1)} %`,
+    `${Number(l.pvpFinalUd || 0).toFixed(2)} €`,
+    `${Number(l.subtotalFinal || 0).toFixed(2)} €`,
+  ]);
+
+  const autoTable = doc.autoTable || (jsPDFGlobal.autoTable && jsPDFGlobal.autoTable.bind(doc));
+  if (!autoTable) {
+    alert(
+      "No está disponible jsPDF-autoTable. No se puede generar la tabla en el PDF."
+    );
+    doc.save("simulacion_2n.pdf");
+    return;
+  }
+
+  doc.autoTable({
+    startY: y,
+    head,
+    body,
+    styles: {
+      fontSize: 8,
+      cellPadding: 2,
+      valign: "middle",
+    },
+    headStyles: {
+      fillColor: [17, 24, 39], // gris oscuro
+      textColor: 255,
+    },
+    columnStyles: {
+      0: { cellWidth: 20 },  // Ref
+      1: { cellWidth: 60 },  // Descripción
+      2: { cellWidth: 10 },  // Ud
+      3: { cellWidth: 35 },  // Tarifa
+      4: { cellWidth: 18 },  // Dto tarifa
+      5: { cellWidth: 18 },  // Dto línea
+      6: { cellWidth: 20 },  // PVP ud
+      7: { cellWidth: 25 },  // Importe
+    },
+  });
+
+  doc.save("simulacion_presupuesto_2n.pdf");
+}
+
+// ===============================
 // Exponer global
 // ===============================
 window.renderSimuladorView = renderSimuladorView;
+window.exportarSimuladorPDF = exportarSimuladorPDF;
