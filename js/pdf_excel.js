@@ -365,37 +365,62 @@ window.exportSimuladorPDF = function () {
     };
   });
 
-  doc.autoTable({
-    columns,
-    body,
-    startY: y + 26,
-    margin: { left: marginX, right: marginX },
-    styles: {
-      font: "helvetica",
-      fontSize: 8,
-      cellPadding: 3,
-      valign: "middle",
-      overflow: "linebreak",
-    },
-    headStyles: {
-      fillColor: [15, 23, 42],
-      textColor: 255,
-      fontStyle: "bold",
-    },
-    columnStyles,
-    didDrawPage: (data) => {
-      const pageCount = doc.internal.getNumberOfPages();
-      const pageCurrent = doc.internal.getCurrentPageInfo().pageNumber;
-      doc.setFontSize(8);
-      doc.setTextColor(120);
-      doc.text(
-        `Página ${pageCurrent} / ${pageCount}`,
-        pageWidth - marginX,
-        doc.internal.pageSize.getHeight() - 20,
-        { align: "right" }
-      );
-    },
-  });
+ doc.autoTable({
+  startY: y + 26,
+  margin: { left: 32, right: 20 }, 
+  tableWidth: "auto",
+  styles: {
+    font: "helvetica",
+    fontSize: 7,                  // → Fuente más pequeña = más espacio útil
+    cellPadding: 2,
+    overflow: "linebreak",
+    valign: "middle",
+  },
+  headStyles: {
+    fillColor: [15, 23, 42],
+    textColor: 255,
+    fontStyle: "bold",
+    fontSize: 7,
+  },
+
+  // ANCHOS FIJOS PERFECTOS PARA A4 VERTICAL
+  columnStyles: {
+    ref:           { cellWidth: 55 },  // fijo → evita que crezca
+    descripcion:   { cellWidth: 190 }, // espacio grande pero controlado
+    cantidad:      { cellWidth: 25 },
+    tarifa:        { cellWidth: 115 },
+    dtoTarifa:     { cellWidth: 42 },
+    dtoLinea:      { cellWidth: 42 },
+    pvpFinalUd:    { cellWidth: 55 },
+    subtotalFinal: { cellWidth: 55 },
+  },
+
+  columns: [
+    { header: "Ref.", dataKey: "ref" },
+    { header: "Descripción", dataKey: "descripcion" },
+    { header: "Ud.", dataKey: "cantidad" },
+    { header: "Tarifa 2N", dataKey: "tarifa" },
+    { header: "Dto tarifa", dataKey: "dtoTarifa" },
+    { header: "Dto línea", dataKey: "dtoLinea" },
+    { header: "PVP final ud.", dataKey: "pvpFinalUd" },
+    { header: "Importe final", dataKey: "subtotalFinal" },
+  ],
+
+  body,
+  
+  didDrawPage: (data) => {
+    const pageCount = doc.internal.getNumberOfPages();
+    const pageCurrent = doc.internal.getCurrentPageInfo().pageNumber;
+    doc.setFontSize(8);
+    doc.setTextColor(130);
+    doc.text(
+      `Página ${pageCurrent} / ${pageCount}`,
+      doc.internal.pageSize.getWidth() - 40,
+      doc.internal.pageSize.getHeight() - 20,
+      { align: "right" }
+    );
+  }
+});
 
   doc.save("simulacion_tarifas_2n.pdf");
 };
