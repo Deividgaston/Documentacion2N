@@ -825,7 +825,7 @@ async function exportarTarifaExcel(tipoId) {
   }
 
   try {
-    // 1) Cargar plantilla Excel base (solo formato, no precios)
+    // 1) Cargar plantilla Excel base (formato completo)
     const resp = await fetch(tpl.url);
     if (!resp.ok) {
       throw new Error("No se pudo cargar la plantilla: " + tpl.url);
@@ -849,7 +849,7 @@ async function exportarTarifaExcel(tipoId) {
       skuToRow[sku] = r;
     }
 
-    // 3) Rellenar precios calculados (con color por grupo)
+    // 3) Rellenar precios calculados (sin tocar estilos)
     const grupos = normalizarGrupos(tipo.grupos);
     const columnasPrecio = tpl.columnasPrecio || {};
     const niveles = Object.keys(columnasPrecio); // ej: ['subd','rp2','rp1','msrp']
@@ -864,7 +864,6 @@ async function exportarTarifaExcel(tipoId) {
       const desc = prod.descripcion || prod.desc || "";
       const gid = clasificarGrupoPorDescripcion(desc);
       const dtoGrupo = grupos[gid] || {};
-      const colorGrupo = GROUP_COLORS[gid] || null;
 
       niveles.forEach((nivel) => {
         const colIndex = columnasPrecio[nivel];
@@ -883,19 +882,11 @@ async function exportarTarifaExcel(tipoId) {
           c: colIndex - 1,
         });
 
-        // Estilo suave por grupo (sin tocar la estructura general de la plantilla)
-        const style = {};
-        if (colorGrupo) {
-          style.fill = {
-            fgColor: { rgb: colorGrupo },
-          };
-        }
-        style.numFmt = "0.00";
-
+        const existente = ws[addr] || {};
         ws[addr] = {
+          ...existente,          // mantiene el estilo original (s), comentarios, etc.
           t: "n",
           v: Number(valor.toFixed(2)),
-          s: style,
         };
       });
     }
