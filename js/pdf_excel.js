@@ -2,6 +2,70 @@
 // pdf_excel.js — EXPORTACIÓN EN PDF Y EXCEL PARA PRESUPUESTO Y SIMULADOR
 // ======================================================================
 
+// =========================
+// HELPERS NOTAS POR SECCIÓN
+// =========================
+
+function detectarNotasPorSeccion() {
+  if (!window.appState) {
+    return { sectionNotes: {}, extraSections: [], sectionOrder: [] };
+  }
+
+  const candidatosRaiz = [];
+
+  if (appState.presupuesto) candidatosRaiz.push(appState.presupuesto);
+  if (appState.presupuestoActual) candidatosRaiz.push(appState.presupuestoActual);
+  if (appState.currentPresupuesto) candidatosRaiz.push(appState.currentPresupuesto);
+  candidatosRaiz.push(appState);
+
+  let sectionNotes = null;
+  let extraSections = [];
+  let sectionOrder = [];
+
+  function esMapaDeNotas(obj) {
+    if (!obj || typeof obj !== "object" || Array.isArray(obj)) return false;
+    const values = Object.values(obj);
+    if (!values.length) return false;
+    // Consideramos "mapa de notas" si la mayoría son strings
+    const strings = values.filter((v) => typeof v === "string" || v == null);
+    return strings.length / values.length >= 0.8;
+  }
+
+  for (const root of candidatosRaiz) {
+    if (!root || typeof root !== "object") continue;
+
+    // Candidatos obvios por nombre
+    if (!sectionNotes) {
+      if (esMapaDeNotas(root.sectionNotes)) sectionNotes = root.sectionNotes;
+      else if (esMapaDeNotas(root.notasSeccion)) sectionNotes = root.notasSeccion;
+      else if (esMapaDeNotas(root.sectionNotesMap)) sectionNotes = root.sectionNotesMap;
+    }
+
+    // Búsqueda genérica dentro del objeto raíz
+    if (!sectionNotes) {
+      for (const k in root) {
+        const v = root[k];
+        if (esMapaDeNotas(v)) {
+          sectionNotes = v;
+          break;
+        }
+      }
+    }
+
+    // extraSections y sectionOrder si existen aquí
+    if (!extraSections.length && Array.isArray(root.extraSections)) {
+      extraSections = root.extraSections;
+    }
+    if (!sectionOrder.length && Array.isArray(root.sectionOrder)) {
+      sectionOrder = root.sectionOrder;
+    }
+  }
+
+  if (!sectionNotes) sectionNotes = {};
+
+  return { sectionNotes, extraSections, sectionOrder };
+}
+
 // =========================================================
 //  PRESUPUESTO → PDF
 // =========================================================
@@ -38,6 +102,9 @@ function generarPDF() {
   if (d.fecha) {
     pdf.text(`Fecha: ${d.fecha}`, 40, 108);
   }
+
+  pdf.text("2N TELEKOMUNIKACE / AXIS", 500, 40);
+  pdf.text("Prescripción y soluciones IP de acceso", 500, 56);
 
   // --------------------------
   // TABLA
@@ -104,99 +171,87 @@ function generarPDF() {
   // --------------------------
   // NOTAS POR SECCIÓN
   // --------------------------
-  const presu = (window.appState && appState.presupuesto) || null;
-  if (presu) {
-    const sectionNotes = presu.sectionNotes || {};
-    const extraSections = presu.extraSections || [];
-    const sectionOrder = presu.sectionOrder || [];
+  const { sectionNotes, extraSections, sectionOrder } = detectarNotasPorSeccion();
 
-    const notasSecciones = [];
+  const notasSecciones = [];
 
-    // Usar orden de secciones si existe
+  // Usar orden de secciones si existe
+  if (sectionOrder && sectionOrder.length) {
     sectionOrder.forEach((sec) => {
       const txt = (sectionNotes[sec] || "").trim();
       if (txt) {
-        notasSecciones.push({
-          seccion: sec,
-          nota: txt,
-        });
+        notasSecciones.push({ seccion: sec, nota: txt });
       }
     });
+  }
 
-    // Cualquier sección que tenga nota pero no esté en sectionOrder
-    Object.keys(sectionNotes).forEach((sec) => {
-      if (sectionOrder.includes(sec)) return;
-      const txt = (sectionNotes[sec] || "").trim();
-      if (txt) {
-        notasSecciones.push({
-          seccion: sec,
-          nota: txt,
-        });
-      }
-    });
+  // Cualquier sección que tenga nota pero no esté en sectionOrder
+  Object.keys(sectionNotes || {}).forEach((sec) => {
+    if (sectionOrder && sectionOrder.includes && sectionOrder.includes(sec)) return;
+    const txt = (sectionNotes[sec] || "").trim();
+    if (txt) {
+      notasSecciones.push({ seccion: sec, nota: txt });
+    }
+  });
 
-    // Secciones extra manuales
-    extraSections.forEach((sec) => {
-      if (!sec) return;
-      const txt = (sec.nota || "").trim();
-      if (!txt) return;
-      const titulo =
-        sec.seccion ||
-        sec.titulo ||
-        sec.nombre ||
-        (sec.id ? `Sección extra ${sec.id}` : "Sección extra");
-      notasSecciones.push({
-        seccion: titulo,
-        nota: txt,
-      });
-    });
+  // Secciones extra manuales
+  (extraSections || []).forEach((sec) => {
+    if (!sec) return;
+    const txt = (sec.nota || sec.note || "").trim();
+    if (!txt) return;
+    const titulo =
+      sec.seccion ||
+      sec.titulo ||
+      sec.nombre ||
+      (sec.id ? `Sección extra ${sec.id}` : "Sección extra");
+    notasSecciones.push({ seccion: titulo, nota: txt });
+  });
 
-    if (notasSecciones.length) {
-      let notesY = blockY + 120;
-      const maxY = 530;
-      const startNotesY = 60;
+  if (notasSecciones.length) {
+    let notesY = blockY + 120;
+    const maxY = 530;
+    const startNotesY = 60;
 
-      if (notesY > maxY) {
+    if (notesY > maxY) {
+      pdf.addPage();
+      notesY = startNotesY;
+    }
+
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(10);
+    pdf.text("NOTAS POR SECCIÓN", 320, notesY);
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(9);
+
+    let yNotas = notesY + 18;
+
+    notasSecciones.forEach((entry) => {
+      if (yNotas > maxY) {
         pdf.addPage();
-        notesY = startNotesY;
+        yNotas = startNotesY;
       }
 
-      pdf.setFont("helvetica", "bold");
-      pdf.setFontSize(10);
-      pdf.text("NOTAS POR SECCIÓN", 320, notesY);
+      const tituloLinea = `${entry.seccion}:`;
+      pdf.text(tituloLinea, 40, yNotas);
+      yNotas += 14;
 
-      pdf.setFont("helvetica", "normal");
-      pdf.setFontSize(9);
+      const rawText = String(entry.nota || "");
+      const wrapped = pdf.splitTextToSize
+        ? pdf.splitTextToSize(rawText, 480)
+        : [rawText];
 
-      let yNotas = notesY + 18;
-
-      notasSecciones.forEach((entry) => {
+      wrapped.forEach((line) => {
         if (yNotas > maxY) {
           pdf.addPage();
           yNotas = startNotesY;
         }
-
-        const tituloLinea = `${entry.seccion}:`;
-        pdf.text(tituloLinea, 40, yNotas);
-        yNotas += 14;
-
-        const rawText = String(entry.nota || "");
-        const wrapped = pdf.splitTextToSize
-          ? pdf.splitTextToSize(rawText, 480)
-          : [rawText];
-
-        wrapped.forEach((line) => {
-          if (yNotas > maxY) {
-            pdf.addPage();
-            yNotas = startNotesY;
-          }
-          pdf.text(line, 60, yNotas);
-          yNotas += 12;
-        });
-
-        yNotas += 6;
+        pdf.text(line, 60, yNotas);
+        yNotas += 12;
       });
-    }
+
+      yNotas += 6;
+    });
   }
 
   pdf.save(`${codigo}.pdf`);
@@ -237,59 +292,46 @@ function generarExcel() {
   });
 
   // NOTAS POR SECCIÓN (desde la página de presupuesto)
-  if (window.appState && appState.presupuesto) {
-    const presu = appState.presupuesto;
-    const sectionNotes = presu.sectionNotes || {};
-    const extraSections = presu.extraSections || [];
-    const sectionOrder = presu.sectionOrder || [];
+  const { sectionNotes, extraSections, sectionOrder } = detectarNotasPorSeccion();
+  const notasSecciones = [];
 
-    const notasSecciones = [];
-
+  if (sectionOrder && sectionOrder.length) {
     sectionOrder.forEach((sec) => {
       const txt = (sectionNotes[sec] || "").trim();
       if (txt) {
-        notasSecciones.push({
-          seccion: sec,
-          nota: txt,
-        });
+        notasSecciones.push({ seccion: sec, nota: txt });
       }
     });
+  }
 
-    Object.keys(sectionNotes).forEach((sec) => {
-      if (sectionOrder.includes(sec)) return;
-      const txt = (sectionNotes[sec] || "").trim();
-      if (txt) {
-        notasSecciones.push({
-          seccion: sec,
-          nota: txt,
-        });
-      }
-    });
-
-    extraSections.forEach((sec) => {
-      if (!sec) return;
-      const txt = (sec.nota || "").trim();
-      if (!txt) return;
-      const titulo =
-        sec.seccion ||
-        sec.titulo ||
-        sec.nombre ||
-        (sec.id ? `Sección extra ${sec.id}` : "Sección extra");
-      notasSecciones.push({
-        seccion: titulo,
-        nota: txt,
-      });
-    });
-
-    if (notasSecciones.length) {
-      data.push([]);
-      data.push(["NOTAS POR SECCIÓN"]);
-      data.push(["Sección", "Nota"]);
-
-      notasSecciones.forEach((entry) => {
-        data.push([entry.seccion, entry.nota]);
-      });
+  Object.keys(sectionNotes || {}).forEach((sec) => {
+    if (sectionOrder && sectionOrder.includes && sectionOrder.includes(sec)) return;
+    const txt = (sectionNotes[sec] || "").trim();
+    if (txt) {
+      notasSecciones.push({ seccion: sec, nota: txt });
     }
+  });
+
+  (extraSections || []).forEach((sec) => {
+    if (!sec) return;
+    const txt = (sec.nota || sec.note || "").trim();
+    if (!txt) return;
+    const titulo =
+      sec.seccion ||
+      sec.titulo ||
+      sec.nombre ||
+      (sec.id ? `Sección extra ${sec.id}` : "Sección extra");
+    notasSecciones.push({ seccion: titulo, nota: txt });
+  });
+
+  if (notasSecciones.length) {
+    data.push([]);
+    data.push(["NOTAS POR SECCIÓN"]);
+    data.push(["Sección", "Nota"]);
+
+    notasSecciones.forEach((entry) => {
+      data.push([entry.seccion, entry.nota]);
+    });
   }
 
   const ws = XLSX.utils.aoa_to_sheet(data);
@@ -301,7 +343,7 @@ function generarExcel() {
 }
 
 // =====================================================================
-// SIMULADOR → PDF (SIN columna "Dto tarifa")
+// SIMULADOR → PDF
 // =====================================================================
 function exportSimuladorPDF() {
   if (!window.jspdf || !window.jspdf.jsPDF) {
@@ -309,7 +351,7 @@ function exportSimuladorPDF() {
   }
 
   const sim = appState.simulador;
-  const lineas = sim.lineasSimuladas || [];
+  const lineas = (sim && sim.lineasSimuladas) || [];
   if (!lineas.length) return alert("No hay líneas simuladas.");
 
   const { jsPDF } = window.jspdf;
@@ -325,7 +367,6 @@ function exportSimuladorPDF() {
   pdf.setFontSize(14);
   pdf.text("SIMULACIÓN TARIFAS / DESCUENTOS 2N", 40, 40);
 
-  // Cabecera de tabla
   const headers = [
     "Ref.",
     "Descripción",
@@ -335,8 +376,6 @@ function exportSimuladorPDF() {
     "PVP final ud.",
     "Importe final",
   ];
-
-  // 6 columnas ajustadas dentro de márgenes
   const colX = [40, 120, 420, 500, 580, 680];
 
   pdf.setFont("helvetica", "bold");
@@ -378,7 +417,7 @@ function exportSimuladorPDF() {
 }
 
 // =====================================================================
-// SIMULADOR → EXCEL (CON columna "Dto tarifa")
+// SIMULADOR → EXCEL
 // =====================================================================
 function exportSimuladorExcel() {
   if (!window.XLSX) {
@@ -386,13 +425,12 @@ function exportSimuladorExcel() {
   }
 
   const sim = appState.simulador;
-  const lineas = sim.lineasSimuladas || [];
+  const lineas = (sim && sim.lineasSimuladas) || [];
 
   if (!lineas.length) return alert("No hay líneas simuladas.");
 
   const data = [];
 
-  // Cabeceras: añadimos "Dto tarifa"
   data.push([
     "Ref.",
     "Descripción",
@@ -416,15 +454,14 @@ function exportSimuladorExcel() {
   });
 
   const ws = XLSX.utils.aoa_to_sheet(data);
-
   ws["!cols"] = [
-    { wch: 12 }, // Ref.
-    { wch: 50 }, // Descripción
-    { wch: 6 },  // Ud.
-    { wch: 10 }, // Dto tarifa
-    { wch: 10 }, // Dto línea
-    { wch: 12 }, // PVP final ud.
-    { wch: 14 }, // Importe final
+    { wch: 12 },
+    { wch: 50 },
+    { wch: 6 },
+    { wch: 10 },
+    { wch: 10 },
+    { wch: 12 },
+    { wch: 14 },
   ];
 
   const wb = XLSX.utils.book_new();
@@ -433,7 +470,6 @@ function exportSimuladorExcel() {
   const out = XLSX.write(wb, { bookType: "xlsx", type: "array" });
   saveAs(new Blob([out]), "Simulacion_2N.xlsx");
 }
-
 
 // Exponer funciones globalmente
 window.exportSimuladorPDF = exportSimuladorPDF;
