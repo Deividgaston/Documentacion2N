@@ -713,7 +713,7 @@ async function recalcularSimulador() {
 }
 
 // ===============================
-// EXPORTAR A PDF (sin cadena de márgenes)
+// EXPORTAR A PDF (sin columna Tarifa 2N ni Dto tarifa)
 // ===============================
 async function exportarSimuladorPDF() {
   // Aseguramos que los datos están frescos
@@ -760,7 +760,7 @@ async function exportarSimuladorPDF() {
       ? (1 - totalFinal / totalBaseTarifa) * 100
       : 0;
 
-  // jsPDF + autoTable (como en Presupuesto)
+  // jsPDF + autoTable
   const jsPDFGlobal = window.jspdf || window.jsPDF;
   if (!jsPDFGlobal) {
     alert("No está disponible la librería jsPDF. Revisa la carga de scripts.");
@@ -816,13 +816,11 @@ async function exportarSimuladorPDF() {
   );
   y += 8;
 
-  // Tabla de líneas (sin cadena de márgenes)
+  // Tabla de líneas SIN "Tarifa 2N" ni "Dto tarifa"
   const head = [[
     "Ref.",
     "Descripción",
     "Ud.",
-    "Tarifa 2N",
-    "Dto tarifa",
     "Dto línea",
     "PVP final ud.",
     "Importe final",
@@ -832,8 +830,6 @@ async function exportarSimuladorPDF() {
     l.ref || "",
     (l.descripcion || "").slice(0, 70),
     String(l.cantidad || ""),
-    TARIFAS_MAP[l.tarifaId]?.label || l.tarifaId || "",
-    `${Number(l.dtoTarifa || 0).toFixed(1)} %`,
     `${Number(l.dtoLinea || 0).toFixed(1)} %`,
     `${Number(l.pvpFinalUd || 0).toFixed(2)} €`,
     `${Number(l.subtotalFinal || 0).toFixed(2)} €`,
@@ -862,14 +858,12 @@ async function exportarSimuladorPDF() {
       textColor: 255,
     },
     columnStyles: {
-      0: { cellWidth: 20 },  // Ref
-      1: { cellWidth: 60 },  // Descripción
-      2: { cellWidth: 10 },  // Ud
-      3: { cellWidth: 35 },  // Tarifa
-      4: { cellWidth: 18 },  // Dto tarifa
-      5: { cellWidth: 18 },  // Dto línea
-      6: { cellWidth: 20 },  // PVP ud
-      7: { cellWidth: 25 },  // Importe
+      0: { cellWidth: 22 }, // Ref
+      1: { cellWidth: 70 }, // Descripción
+      2: { cellWidth: 10 }, // Ud
+      3: { cellWidth: 18 }, // Dto línea
+      4: { cellWidth: 22 }, // PVP ud
+      5: { cellWidth: 25 }, // Importe
     },
   });
 
