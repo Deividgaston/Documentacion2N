@@ -1294,6 +1294,7 @@ function recalcularResumenDesdeSeleccion(lineasVisibles, dto) {
 
 // ===============================================
 // EXPORTAR A EXCEL (XLSX) – versión simple y robusta
+// + NOTAS POR SECCIÓN
 // ===============================================
 function exportarPresupuestoExcel() {
   const presu = appState.presupuesto || {};
@@ -1349,7 +1350,53 @@ function exportarPresupuestoExcel() {
   rows.push([presu.notas || "Se requiere switch PoE para alimentación de equipos."]);
   rows.push([]);
 
-  // Cabecera tabla
+  // === NOTAS POR SECCIÓN (PÁGINA PRESUPUESTO) ===
+  const sectionNotes = presu.sectionNotes || {};
+  const extraSections = presu.extraSections || [];
+  const sectionOrder = presu.sectionOrder || [];
+
+  const notasSecciones = [];
+
+  if (sectionOrder && sectionOrder.length) {
+    sectionOrder.forEach((sec) => {
+      const txt = (sectionNotes[sec] || "").trim();
+      if (txt) {
+        notasSecciones.push({ seccion: sec, nota: txt });
+      }
+    });
+  }
+
+  Object.keys(sectionNotes || {}).forEach((sec) => {
+    if (sectionOrder && sectionOrder.includes && sectionOrder.includes(sec)) return;
+    const txt = (sectionNotes[sec] || "").trim();
+    if (txt) {
+      notasSecciones.push({ seccion: sec, nota: txt });
+    }
+  });
+
+  (extraSections || []).forEach((sec) => {
+    if (!sec) return;
+    const txt = (sec.nota || "").trim();
+    if (!txt) return;
+    const titulo =
+      sec.seccion ||
+      sec.titulo ||
+      sec.nombre ||
+      (sec.id ? `Sección extra ${sec.id}` : "Sección extra");
+    notasSecciones.push({ seccion: titulo, nota: txt });
+  });
+
+  if (notasSecciones.length) {
+    rows.push([]);
+    rows.push(["NOTAS POR SECCIÓN"]);
+    rows.push(["Sección", "Nota"]);
+    notasSecciones.forEach((entry) => {
+      rows.push([entry.seccion, entry.nota]);
+    });
+    rows.push([]);
+  }
+
+  // Cabecera tabla de líneas
   rows.push([
     "Sección",
     "Título",
@@ -1510,6 +1557,7 @@ function exportarPresupuestoSalesforce() {
 
 // ===============================================
 // EXPORTAR A PDF (ventana nueva + print -> PDF)
+// + NOTAS POR SECCIÓN
 // ===============================================
 function exportarPresupuestoPDF() {
   const presu = appState.presupuesto || {};
@@ -1567,6 +1615,64 @@ function exportarPresupuestoPDF() {
     mapSec[sec].push(l);
   });
 
+  // === NOTAS POR SECCIÓN (PÁGINA PRESUPUESTO) ===
+  const sectionNotes = presu.sectionNotes || {};
+  const extraSections = presu.extraSections || [];
+  const sectionOrder = presu.sectionOrder || [];
+
+  const notasSecciones = [];
+
+  if (sectionOrder && sectionOrder.length) {
+    sectionOrder.forEach((sec) => {
+      const txt = (sectionNotes[sec] || "").trim();
+      if (txt) {
+        notasSecciones.push({ seccion: sec, nota: txt });
+      }
+    });
+  }
+
+  Object.keys(sectionNotes || {}).forEach((sec) => {
+    if (sectionOrder && sectionOrder.includes && sectionOrder.includes(sec)) return;
+    const txt = (sectionNotes[sec] || "").trim();
+    if (txt) {
+      notasSecciones.push({ seccion: sec, nota: txt });
+    }
+  });
+
+  (extraSections || []).forEach((sec) => {
+    if (!sec) return;
+    const txt = (sec.nota || "").trim();
+    if (!txt) return;
+    const titulo =
+      sec.seccion ||
+      sec.titulo ||
+      sec.nombre ||
+      (sec.id ? `Sección extra ${sec.id}` : "Sección extra");
+    notasSecciones.push({ seccion: titulo, nota: txt });
+  });
+
+  function escapeHtml(text) {
+    return String(text || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }
+
+  const notasSeccionHtml = notasSecciones.length
+    ? `<div class="notes" style="margin-top:4px;">
+         <strong>Notas por sección:</strong>
+         ${notasSecciones
+           .map((entry) => {
+             const contenido = escapeHtml(entry.nota).split("\n").join("<br/>");
+             return `<p style="margin:4px 0;">
+                       <strong>${escapeHtml(entry.seccion)}:</strong><br/>
+                       ${contenido}
+                     </p>`;
+           })
+           .join("")}
+       </div>`
+    : "";
+
   const win = window.open("", "_blank");
   if (!win) {
     alert("El navegador ha bloqueado la ventana emergente. Permite pop-ups para exportar a PDF.");
@@ -1582,7 +1688,7 @@ function exportarPresupuestoPDF() {
       .brand { font-size:12px; text-transform:uppercase; letter-spacing:0.08em; color:#1d4ed8; font-weight:600; }
       .company-name { font-size:16px; font-weight:700; }
       .company-block, .client-block { font-size:11px; line-height:1.3; }
-      .pill { padding:4px 10px; border-radius:999px; font-size:10px; background:#e0ecff; color:#1d4ed8; }
+      .pill { padding:4px 10px; border-radius:999px; font-size:10px; background:#e0ecff; color:#1d4ed8; font-weight:500; }
       table { width:100%; border-collapse:collapse; margin-top:10px; font-size:11px; }
       th, td { border-bottom:1px solid #e5e7eb; padding:6px 4px; text-align:left; vertical-align:top; }
       th { background:#f3f4f6; font-weight:600; }
@@ -1618,8 +1724,8 @@ function exportarPresupuestoPDF() {
           <div>
             <div class="pill">Documento de oferta</div>
             <div class="client-block" style="margin-top:8px;">
-              <strong>Proyecto:</strong> ${nombreProyecto}<br/>
-              <strong>Cliente:</strong> ${cliente || "-"}<br/>
+              <strong>Proyecto:</strong> ${escapeHtml(nombreProyecto)}<br/>
+              <strong>Cliente:</strong> ${escapeHtml(cliente || "-")}<br/>
               <strong>Fecha:</strong> ${fechaHoy}
             </div>
           </div>
@@ -1630,10 +1736,11 @@ function exportarPresupuestoPDF() {
           presu.notas
             ? `<div class="notes" style="font-size:11px; margin-top:0; margin-bottom:8px;">
                  <strong>Notas del proyecto:</strong><br/>
-                 ${presu.notas.split("\n").join("<br/>")}
+                 ${escapeHtml(presu.notas).split("\\n").join("<br/>")}
                </div>`
             : ""
         }
+        ${notasSeccionHtml}
 
         <table>
           <thead>
@@ -1656,7 +1763,7 @@ function exportarPresupuestoPDF() {
 
     html += `
       <tr class="sec-row">
-        <td colspan="7">${sec}</td>
+        <td colspan="7">${escapeHtml(sec)}</td>
       </tr>
     `;
 
@@ -1674,7 +1781,7 @@ function exportarPresupuestoPDF() {
         currentTitle = titulo;
         html += `
           <tr class="title-row">
-            <td colspan="7">${titulo}</td>
+            <td colspan="7">${escapeHtml(titulo)}</td>
           </tr>
         `;
       }
@@ -1683,10 +1790,10 @@ function exportarPresupuestoPDF() {
 
       html += `
         <tr>
-          <td>${sec}</td>
-          <td>${titulo || ""}</td>
-          <td>${l.ref || ""}</td>
-          <td>${l.descripcion || ""}</td>
+          <td>${escapeHtml(sec)}</td>
+          <td>${escapeHtml(titulo || "")}</td>
+          <td>${escapeHtml(l.ref || "")}</td>
+          <td>${escapeHtml(l.descripcion || "")}</td>
           <td style="text-align:right;">${l.cantidad || 0}</td>
           <td style="text-align:right;">${(l.pvp || 0).toFixed(2)}</td>
           <td style="text-align:right;">${importe.toFixed(2)}</td>
