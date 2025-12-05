@@ -20,7 +20,9 @@ const DEFAULT_TIPOS_TARIFA = {
     nombre: "PVP Público ES",
     idioma: "ES",
     moneda: "EUR",
-    plantillaPath: BASE_PLANTILLAS + "2N%20pricelist%202026_01%20ES%20EUR%20PVP.xlsx",
+    plantillaPath:
+      BASE_PLANTILLAS +
+      "2N%20pricelist%202026_01%20ES%20EUR%20PVP.xlsx",
     hoja: "Price List",
     filaCabeceraDescuentos: null,
     columnas: [
@@ -36,14 +38,16 @@ const DEFAULT_TIPOS_TARIFA = {
     nombre: "Recommended Reseller Price 1 ES",
     idioma: "ES",
     moneda: "EUR",
-    plantillaPath: BASE_PLANTILLAS + "2N%20pricelist%202026_01%20ES%20EUR%20RP1.xlsx",
+    plantillaPath:
+      BASE_PLANTILLAS +
+      "2N%20pricelist%202026_01%20ES%20EUR%20RP1.xlsx",
     hoja: "Price List",
     filaCabeceraDescuentos: 5,
     columnas: [
-      { id: "rp1", col: 3, descuento: 0.10, actualizarCabecera: true },
+      { id: "rp1", col: 3, descuento: 0.1, actualizarCabecera: true },
       { id: "msrp", col: 4, descuento: 0, actualizarCabecera: false },
     ],
-    descuentoPrincipal: 0.10,
+    descuentoPrincipal: 0.1,
     activo: true,
     orden: 20,
   },
@@ -53,7 +57,9 @@ const DEFAULT_TIPOS_TARIFA = {
     nombre: "Recommended Reseller Price 2 ES",
     idioma: "ES",
     moneda: "EUR",
-    plantillaPath: BASE_PLANTILLAS + "2N%20pricelist%202026_01%20ES%20EUR%20RP2.xlsx",
+    plantillaPath:
+      BASE_PLANTILLAS +
+      "2N%20pricelist%202026_01%20ES%20EUR%20RP2.xlsx",
     hoja: "Price List",
     filaCabeceraDescuentos: 5,
     columnas: [
@@ -67,16 +73,18 @@ const DEFAULT_TIPOS_TARIFA = {
 
   ES_SUBD: {
     id: "ES_SUBD",
-    nombre: "Subdistribuidor ES (ES SubD)",
+    nombre: "Subdistribuidor ES (SubD)",
     idioma: "ES",
     moneda: "EUR",
-    plantillaPath: BASE_PLANTILLAS + "2N%20pricelist%202026_01%20ES%20EUR%20SubD.xlsx",
+    plantillaPath:
+      BASE_PLANTILLAS +
+      "2N%20pricelist%202026_01%20ES%20EUR%20SubD.xlsx",
     hoja: "Price List",
     filaCabeceraDescuentos: 5,
     columnas: [
       { id: "subd", col: 3, descuento: 0.36, actualizarCabecera: true },
       { id: "rp2", col: 4, descuento: 0.28, actualizarCabecera: true },
-      { id: "rp1", col: 5, descuento: 0.10, actualizarCabecera: true },
+      { id: "rp1", col: 5, descuento: 0.1, actualizarCabecera: true },
       { id: "msrp", col: 6, descuento: 0, actualizarCabecera: false },
     ],
     descuentoPrincipal: 0.36,
@@ -89,15 +97,17 @@ const DEFAULT_TIPOS_TARIFA = {
     nombre: "Broadline Distributor ES (BBD)",
     idioma: "ES",
     moneda: "EUR",
-    plantillaPath: BASE_PLANTILLAS + "2N%20pricelist%202026_01%20ES%20EUR%20BBD.xlsx",
+    plantillaPath:
+      BASE_PLANTILLAS +
+      "2N%20pricelist%202026_01%20ES%20EUR%20BBD.xlsx",
     hoja: "Price List",
     filaCabeceraDescuentos: 5,
     columnas: [
       { id: "nfrDist", col: 3, descuento: 0.55, actualizarCabecera: true },
-      { id: "nfrRes", col: 4, descuento: 0.50, actualizarCabecera: true },
+      { id: "nfrRes", col: 4, descuento: 0.5, actualizarCabecera: true },
       { id: "subd", col: 5, descuento: 0.39, actualizarCabecera: true },
       { id: "rp2", col: 6, descuento: 0.28, actualizarCabecera: true },
-      { id: "rp1", col: 7, descuento: 0.10, actualizarCabecera: true },
+      { id: "rp1", col: 7, descuento: 0.1, actualizarCabecera: true },
       { id: "msrp", col: 8, descuento: 0, actualizarCabecera: false },
     ],
     descuentoPrincipal: 0.39,
@@ -110,13 +120,15 @@ const DEFAULT_TIPOS_TARIFA = {
     nombre: "Subdistributor EN",
     idioma: "EN",
     moneda: "EUR",
-    plantillaPath: BASE_PLANTILLAS + "2N%20pricelist%202026_01%20EN%20EUR%20SubD.xlsx",
+    plantillaPath:
+      BASE_PLANTILLAS +
+      "2N%20pricelist%202026_01%20EN%20EUR%20SubD.xlsx",
     hoja: "Price List",
     filaCabeceraDescuentos: 5,
     columnas: [
       { id: "subd", col: 3, descuento: 0.36, actualizarCabecera: true },
       { id: "rp2", col: 4, descuento: 0.28, actualizarCabecera: true },
-      { id: "rp1", col: 5, descuento: 0.10, actualizarCabecera: true },
+      { id: "rp1", col: 5, descuento: 0.1, actualizarCabecera: true },
       { id: "msrp", col: 6, descuento: 0, actualizarCabecera: false },
     ],
     descuentoPrincipal: 0.36,
@@ -129,15 +141,17 @@ const DEFAULT_TIPOS_TARIFA = {
     nombre: "VAD EN",
     idioma: "EN",
     moneda: "EUR",
-    plantillaPath: BASE_PLANTILLAS + "2N%20pricelist%202026_01%20EN%20EUR%20VAD.xlsx",
+    plantillaPath:
+      BASE_PLANTILLAS +
+      "2N%20pricelist%202026_01%20EN%20EUR%20VAD.xlsx",
     hoja: "Price List",
     filaCabeceraDescuentos: 5,
     columnas: [
       { id: "nfrDist", col: 3, descuento: 0.55, actualizarCabecera: true },
-      { id: "nfrRes", col: 4, descuento: 0.50, actualizarCabecera: true },
+      { id: "nfrRes", col: 4, descuento: 0.5, actualizarCabecera: true },
       { id: "vad", col: 5, descuento: 0.42, actualizarCabecera: true },
       { id: "rp2", col: 6, descuento: 0.28, actualizarCabecera: true },
-      { id: "rp1", col: 7, descuento: 0.10, actualizarCabecera: true },
+      { id: "rp1", col: 7, descuento: 0.1, actualizarCabecera: true },
       { id: "msrp", col: 8, descuento: 0, actualizarCabecera: false },
     ],
     descuentoPrincipal: 0.42,
@@ -155,43 +169,72 @@ async function loadTarifasTiposFromFirestore() {
 
   const db = firebase.firestore();
   const colRef = db.collection("tarifas_tipos");
-  const snap = await colRef.get();
 
-  const result = {};
+  try {
+    const snap = await colRef.get();
+    const result = {};
 
-  // Si Firestore está vacío → sembramos todas las tarifas oficiales
-  if (snap.empty) {
-    const batch = db.batch();
-    Object.values(DEFAULT_TIPOS_TARIFA).forEach((tipo) => {
-      batch.set(colRef.doc(tipo.id), tipo, { merge: true });
-      result[tipo.id] = { ...tipo };
-    });
-    await batch.commit();
-  } else {
-    snap.forEach((d) => {
-      const data = d.data();
-      result[d.id] = { ...DEFAULT_TIPOS_TARIFA[d.id], ...data };
-    });
+    if (snap.empty) {
+      // Colección vacía: sembramos los tipos oficiales
+      const batch = db.batch();
+      Object.values(DEFAULT_TIPOS_TARIFA).forEach((tipo) => {
+        batch.set(colRef.doc(tipo.id), tipo, { merge: true });
+        result[tipo.id] = { ...tipo };
+      });
+      await batch.commit();
+    } else {
+      snap.forEach((d) => {
+        const data = d.data() || {};
+        const id = data.id || d.id;
+        const def = DEFAULT_TIPOS_TARIFA[id] || {};
+        result[id] = { ...def, ...data, id };
+      });
+    }
+
+    appState.tarifasTipos = result;
+    appState.tarifasTiposLoaded = true;
+
+    if (!appState.tarifasTipoSeleccionadoId) {
+      const ids = Object.values(result)
+        .sort((a, b) => (a.orden || 0) - (b.orden || 0))
+        .map((t) => t.id);
+      appState.tarifasTipoSeleccionadoId = ids[0] || null;
+    }
+
+    return result;
+  } catch (err) {
+    console.warn(
+      "[Tarifas] No se ha podido leer Firestore, usando DEFAULT_TIPOS_TARIFA solo en memoria:",
+      err
+    );
+
+    appState.tarifasTipos = { ...DEFAULT_TIPOS_TARIFA };
+    appState.tarifasTiposLoaded = true;
+
+    if (!appState.tarifasTipoSeleccionadoId) {
+      const ids = Object.values(appState.tarifasTipos)
+        .sort((a, b) => (a.orden || 0) - (b.orden || 0))
+        .map((t) => t.id);
+      appState.tarifasTipoSeleccionadoId = ids[0] || null;
+    }
+
+    return appState.tarifasTipos;
   }
-
-  appState.tarifasTipos = result;
-  appState.tarifasTiposLoaded = true;
-
-  // Seleccionar el primero
-  if (!appState.tarifasTipoSeleccionadoId) {
-    const ids = Object.values(result)
-      .sort((a, b) => (a.orden || 0) - (b.orden || 0))
-      .map((t) => t.id);
-    appState.tarifasTipoSeleccionadoId = ids[0] || null;
-  }
-
-  return result;
 }
 
 async function guardarTarifaTipoEnFirestore(tipo) {
-  const db = firebase.firestore();
-  await db.collection("tarifas_tipos").doc(tipo.id).set(tipo, { merge: true });
-  appState.tarifasTipos[tipo.id] = tipo;
+  if (!tipo || !tipo.id) return;
+  try {
+    const db = firebase.firestore();
+    await db.collection("tarifas_tipos").doc(tipo.id).set(tipo, { merge: true });
+    appState.tarifasTipos[tipo.id] = tipo;
+  } catch (e) {
+    console.warn(
+      "[Tarifas] No se pudo guardar en Firestore, pero se mantiene en memoria:",
+      e
+    );
+    appState.tarifasTipos[tipo.id] = tipo;
+  }
 }
 
 // ================================
@@ -199,8 +242,9 @@ async function guardarTarifaTipoEnFirestore(tipo) {
 // ================================
 async function getTarifasBase2N() {
   if (appState.tarifasCache) return appState.tarifasCache;
-  if (typeof cargarTarifasDesdeFirestore === "function")
+  if (typeof cargarTarifasDesdeFirestore === "function") {
     return await cargarTarifasDesdeFirestore();
+  }
   console.warn("No existe cargarTarifasDesdeFirestore()");
   return {};
 }
@@ -222,7 +266,7 @@ function renderTarifasView() {
             <div>
               <div class="card-title">Tipos de tarifa</div>
               <div class="card-subtitle">
-                Configuración guardada en Firestore.
+                Configuración guardada en Firestore (o en memoria si no hay permisos).
               </div>
             </div>
             <button id="btnNuevoTipoTarifa" class="btn btn-secondary btn-sm">Nuevo tipo</button>
@@ -245,15 +289,32 @@ function renderTarifasView() {
     </div>
   `;
 
-  document
-    .getElementById("btnNuevoTipoTarifa")
-    .addEventListener("click", () => mostrarFormularioTipoTarifa(null));
+  const btnNuevo = document.getElementById("btnNuevoTipoTarifa");
+  const lista = document.getElementById("tarifasLista");
 
-  loadTarifasTiposFromFirestore().then(() => {
-    pintarListadoTiposTarifa();
-    const id = appState.tarifasTipoSeleccionadoId;
-    if (id) mostrarFormularioTipoTarifa(appState.tarifasTipos[id]);
-  });
+  if (btnNuevo) {
+    btnNuevo.addEventListener("click", () => mostrarFormularioTipoTarifa(null));
+  }
+
+  loadTarifasTiposFromFirestore()
+    .then(() => {
+      pintarListadoTiposTarifa();
+      const id = appState.tarifasTipoSeleccionadoId;
+      if (id && appState.tarifasTipos[id]) {
+        mostrarFormularioTipoTarifa(appState.tarifasTipos[id]);
+      }
+    })
+    .catch((err) => {
+      console.error("[Tarifas] Error cargando tipos:", err);
+      if (lista) {
+        lista.innerHTML = `
+          <p style="font-size:0.85rem; color:#b91c1c;">
+            Error cargando los tipos de tarifa.<br/>
+            Detalle: ${err && err.message ? err.message : "desconocido"}
+          </p>
+        `;
+      }
+    });
 }
 
 // ================================
@@ -262,14 +323,29 @@ function renderTarifasView() {
 
 function pintarListadoTiposTarifa() {
   const lista = document.getElementById("tarifasLista");
-  const tipos = Object.values(appState.tarifasTipos).sort(
+  if (!lista) return;
+
+  const tipos = Object.values(appState.tarifasTipos || {}).sort(
     (a, b) => (a.orden || 0) - (b.orden || 0)
   );
+
+  if (!tipos.length) {
+    lista.innerHTML = `
+      <p style="font-size:0.85rem; color:#6b7280;">
+        No hay tipos de tarifa configurados.
+      </p>
+    `;
+    return;
+  }
 
   lista.innerHTML = `
     <table class="table">
       <thead>
-        <tr><th></th><th>Tarifa</th><th style="text-align:right;">Dto</th></tr>
+        <tr>
+          <th></th>
+          <th>Tarifa</th>
+          <th style="text-align:right;">Dto</th>
+        </tr>
       </thead>
       <tbody>
         ${tipos
@@ -284,19 +360,21 @@ function pintarListadoTiposTarifa() {
             <td>
               <div style="font-weight:500;">${t.nombre}</div>
               <div style="font-size:0.75rem; color:#6b7280;">
-                ${t.id} · ${t.idioma}
+                ${t.id} · Idioma: ${t.idioma || "-"} · ${t.moneda || "EUR"}
               </div>
             </td>
-            <td style="text-align:right;">${
-              t.descuentoPrincipal * 100
-            }%</td>
+            <td style="text-align:right;">
+              ${typeof t.descuentoPrincipal === "number"
+                ? (t.descuentoPrincipal * 100).toFixed(0) + "%"
+                : "-"}
+            </td>
           </tr>
         `
           )
           .join("")}
       </tbody>
     </table>
-  `;
+ `;
 
   lista.querySelectorAll(".tarifa-row").forEach((row) => {
     row.addEventListener("click", () => {
@@ -314,6 +392,8 @@ function pintarListadoTiposTarifa() {
 
 function mostrarFormularioTipoTarifa(tipoOriginal) {
   const detalle = document.getElementById("tarifasDetalle");
+  if (!detalle) return;
+
   const esNuevo = !tipoOriginal;
 
   const tipo = tipoOriginal || {
@@ -331,10 +411,13 @@ function mostrarFormularioTipoTarifa(tipoOriginal) {
     <div class="form-grid">
 
       <div class="form-group">
-        <label>ID tipo</label>
+        <label>ID tipo (único)</label>
         <input id="tipoId" type="text" value="${tipo.id}" ${
     esNuevo ? "" : "readonly"
   } />
+        <p style="font-size:0.75rem; color:#6b7280;">
+          Ej: ES_PVP, ES_INSTALADOR_15
+        </p>
       </div>
 
       <div class="form-group">
@@ -356,32 +439,43 @@ function mostrarFormularioTipoTarifa(tipoOriginal) {
       </div>
 
       <div class="form-group">
-        <label>Descuento principal (%)</label>
-        <input id="tipoDescuento" type="number" value="${
-          tipo.descuentoPrincipal * 100
-        }" />
+        <label>Descuento principal sobre PVP (%)</label>
+        <input id="tipoDescuento" type="number" min="0" max="90"
+          value="${
+            typeof tipo.descuentoPrincipal === "number"
+              ? (tipo.descuentoPrincipal * 100).toFixed(0)
+              : "0"
+          }" />
       </div>
 
       <div class="form-group">
-        <label>Plantilla Excel</label>
-        <input id="tipoPlantillaPath" type="text" value="${tipo.plantillaPath}" />
+        <label>Ruta plantilla Excel</label>
+        <input id="tipoPlantillaPath" type="text" value="${
+          tipo.plantillaPath || ""
+        }" />
+        <p style="font-size:0.75rem; color:#6b7280;">
+          Debe ser una URL válida (por ejemplo, RAW de GitHub).
+        </p>
       </div>
 
       <div class="form-group">
         <label>Orden</label>
-        <input id="tipoOrden" type="number" value="${tipo.orden}" />
+        <input id="tipoOrden" type="number" value="${tipo.orden || 100}" />
       </div>
 
       <div class="form-group">
         <label>Activo</label>
-        <input id="tipoActivo" type="checkbox" ${
-          tipo.activo !== false ? "checked" : ""
-        } />
+        <label style="display:flex; align-items:center; gap:0.35rem;">
+          <input id="tipoActivo" type="checkbox" ${
+            tipo.activo !== false ? "checked" : ""
+          } />
+          Disponible para exportar
+        </label>
       </div>
 
     </div>
 
-    <div style="margin-top:1rem; display:flex; gap:0.5rem;">
+    <div style="margin-top:1rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
       <button id="btnGuardarTipoTarifa" class="btn btn-primary btn-sm">
         Guardar
       </button>
@@ -394,43 +488,83 @@ function mostrarFormularioTipoTarifa(tipoOriginal) {
       }
     </div>
 
-    <div id="tarifasDetalleMsg" class="alert" style="display:none;"></div>
+    <div id="tarifasDetalleMsg" class="alert mt-3" style="display:none;"></div>
   `;
 
-  document
-    .getElementById("btnGuardarTipoTarifa")
-    .addEventListener("click", async () => {
-      const nuevo = {
+  const btnGuardar = document.getElementById("btnGuardarTipoTarifa");
+  const btnExportar = document.getElementById("btnExportarTipoTarifa");
+
+  if (btnGuardar) {
+    btnGuardar.addEventListener("click", async () => {
+      const id = (document.getElementById("tipoId").value || "").trim();
+      const nombre = (document.getElementById("tipoNombre").value || "").trim();
+      const idioma = document.getElementById("tipoIdioma").value || "ES";
+      const moneda =
+        (document.getElementById("tipoMoneda").value || "EUR").trim();
+      const dtoNum =
+        Number(document.getElementById("tipoDescuento").value) || 0;
+      const plantillaPath =
+        (document.getElementById("tipoPlantillaPath").value || "").trim();
+      const orden =
+        Number(document.getElementById("tipoOrden").value) || 100;
+      const activo = !!document.getElementById("tipoActivo").checked;
+
+      if (!id) {
+        mostrarMsgTarifaDetalle("El ID del tipo de tarifa es obligatorio.", true);
+        return;
+      }
+      if (!nombre) {
+        mostrarMsgTarifaDetalle("El nombre visible es obligatorio.", true);
+        return;
+      }
+
+      const descuentoPrincipal = dtoNum / 100;
+
+      const nuevoTipo = {
         ...(tipoOriginal || {}),
-        id: document.getElementById("tipoId").value.trim(),
-        nombre: document.getElementById("tipoNombre").value.trim(),
-        idioma: document.getElementById("tipoIdioma").value,
-        moneda: document.getElementById("tipoMoneda").value,
-        plantillaPath: document.getElementById("tipoPlantillaPath").value.trim(),
-        descuentoPrincipal:
-          Number(document.getElementById("tipoDescuento").value) / 100,
-        activo: document.getElementById("tipoActivo").checked,
-        orden: Number(document.getElementById("tipoOrden").value) || 100,
+        id,
+        nombre,
+        idioma,
+        moneda,
+        plantillaPath,
+        descuentoPrincipal,
+        activo,
+        orden,
       };
 
-      await guardarTarifaTipoEnFirestore(nuevo);
-      pintarListadoTiposTarifa();
-      mostrarFormularioTipoTarifa(nuevo);
-      mostrarMsgTarifaDetalle("Guardado", false);
+      try {
+        await guardarTarifaTipoEnFirestore(nuevoTipo);
+        appState.tarifasTipos[id] = nuevoTipo;
+        appState.tarifasTipoSeleccionadoId = id;
+        pintarListadoTiposTarifa();
+        mostrarFormularioTipoTarifa(nuevoTipo);
+        mostrarMsgTarifaDetalle(
+          "Tipo de tarifa guardado correctamente.",
+          false
+        );
+      } catch (e) {
+        console.error("[Tarifas] Error guardando tipo:", e);
+        mostrarMsgTarifaDetalle(
+          "Error guardando el tipo de tarifa.",
+          true
+        );
+      }
     });
+  }
 
-  if (!esNuevo) {
-    document
-      .getElementById("btnExportarTipoTarifa")
-      .addEventListener("click", () => exportarTarifaExcel(tipo.id));
+  if (btnExportar && !esNuevo) {
+    btnExportar.addEventListener("click", () => {
+      exportarTarifaExcel(tipo.id);
+    });
   }
 }
 
-function mostrarMsgTarifaDetalle(msg, error) {
-  const box = document.getElementById("tarifasDetalleMsg");
-  box.style.display = "block";
-  box.textContent = msg;
-  box.className = "alert " + (error ? "alert-error" : "alert-success");
+function mostrarMsgTarifaDetalle(texto, esError) {
+  const msg = document.getElementById("tarifasDetalleMsg");
+  if (!msg) return;
+  msg.style.display = "flex";
+  msg.textContent = texto;
+  msg.className = "alert mt-3 " + (esError ? "alert-error" : "alert-success");
 }
 
 // ================================
@@ -439,76 +573,122 @@ function mostrarMsgTarifaDetalle(msg, error) {
 
 async function exportarTarifaExcel(tipoId) {
   const tipo = appState.tarifasTipos[tipoId];
-  if (!tipo) return alert("Tipo no encontrado");
+  if (!tipo) {
+    alert("Tipo de tarifa no encontrado.");
+    return;
+  }
+  if (!tipo.plantillaPath) {
+    alert(
+      "Este tipo de tarifa no tiene definida la ruta de la plantilla Excel (plantillaPath)."
+    );
+    return;
+  }
 
   let columnas = tipo.columnas;
-  if (!columnas || !columnas.length) {
+  if (!Array.isArray(columnas) || !columnas.length) {
+    const dto =
+      typeof tipo.descuentoPrincipal === "number"
+        ? tipo.descuentoPrincipal
+        : 0;
     columnas = [
       {
         id: "precio",
         col: 3,
-        descuento: tipo.descuentoPrincipal || 0,
+        descuento: dto,
         actualizarCabecera: false,
       },
     ];
   }
 
   const tarifasBase = await getTarifasBase2N();
-  if (!Object.keys(tarifasBase).length)
-    return alert("No hay tarifa base cargada");
-
-  const resp = await fetch(tipo.plantillaPath);
-  const buf = await resp.arrayBuffer();
-  const wb = XLSX.read(buf, { type: "array" });
-
-  const ws = wb.Sheets[tipo.hoja || "Price List"];
-  if (!ws) return alert("Hoja no encontrada: " + tipo.hoja);
-
-  const skuToRow = {};
-  for (let i = 1; i < 20000; i++) {
-    const c = ws["A" + i];
-    if (c && c.v) skuToRow[String(c.v).trim()] = i;
+  if (!tarifasBase || !Object.keys(tarifasBase).length) {
+    alert("No se han encontrado productos en la tarifa base.");
+    return;
   }
 
-  // Actualizar fila descuentos
-  if (tipo.filaCabeceraDescuentos) {
-    columnas.forEach((c) => {
-      if (!c.actualizarCabecera) return;
-      const dto = c.descuento * 100;
-      const addr = XLSX.utils.encode_cell({
-        r: tipo.filaCabeceraDescuentos - 1,
-        c: c.col - 1,
+  try {
+    const resp = await fetch(tipo.plantillaPath);
+    if (!resp.ok) {
+      throw new Error(
+        "No se pudo cargar la plantilla: " + tipo.plantillaPath
+      );
+    }
+    const buf = await resp.arrayBuffer();
+    const wb = XLSX.read(buf, { type: "array" });
+
+    const hoja = tipo.hoja || "Price List";
+    const ws = wb.Sheets[hoja];
+    if (!ws) {
+      alert(`La hoja "${hoja}" no existe en la plantilla.`);
+      return;
+    }
+
+    // Mapear SKU -> fila (columna A)
+    const skuToRow = {};
+    for (let r = 1; r <= 20000; r++) {
+      const cell = ws["A" + r];
+      if (!cell || cell.v == null) continue;
+      const sku = String(cell.v).trim();
+      if (!sku) continue;
+      skuToRow[sku] = r;
+    }
+
+    // Actualizar fila de descuentos (si aplica)
+    const filaCabDesc = tipo.filaCabeceraDescuentos || null;
+    if (filaCabDesc) {
+      columnas.forEach((c) => {
+        if (!c.actualizarCabecera) return;
+        const dto = c.descuento || 0;
+        const texto = dto > 0 ? `${(dto * 100).toFixed(0)}%` : "";
+        if (!texto) return;
+
+        const addr = XLSX.utils.encode_cell({
+          r: filaCabDesc - 1,
+          c: c.col - 1,
+        });
+        ws[addr] = { t: "s", v: texto };
       });
-      ws[addr] = { t: "s", v: `${dto}%` };
-    });
-  }
+    }
 
-  // Rellenar precios
-  for (const sku of Object.keys(tarifasBase)) {
-    const row = skuToRow[sku];
-    if (!row) continue;
+    // Rellenar precios
+    for (const sku of Object.keys(tarifasBase)) {
+      const fila = skuToRow[sku];
+      if (!fila) continue;
 
-    const pvp = tarifasBase[sku].pvp;
-    if (!pvp) continue;
+      const prod = tarifasBase[sku] || {};
+      const pvp = Number(prod.pvp || 0);
+      if (!pvp) continue;
 
-    columnas.forEach((c) => {
-      const val =
-        c.id === "msrp" ? pvp : Number((pvp * (1 - c.descuento)).toFixed(2));
+      columnas.forEach((c) => {
+        const col = c.col;
+        if (!col || col < 1) return;
 
-      const addr = XLSX.utils.encode_cell({
-        r: row - 1,
-        c: c.col - 1,
+        let valor = pvp;
+        const dto = c.descuento || 0;
+        if (c.id !== "msrp") {
+          valor = pvp * (1 - dto);
+        }
+        const addr = XLSX.utils.encode_cell({
+          r: fila - 1,
+          c: col - 1,
+        });
+        ws[addr] = { t: "n", v: Number(valor.toFixed(2)) };
       });
-      ws[addr] = { t: "n", v: val };
-    });
+    }
+
+    const nombreBase = tipo.nombre || tipo.id || "Tarifa_2N";
+    const fileName =
+      nombreBase.replace(/[^a-zA-Z0-9_\-]+/g, "_") + ".xlsx";
+
+    XLSX.writeFile(wb, fileName);
+  } catch (e) {
+    console.error("[Tarifas] Error exportando Excel:", e);
+    alert(
+      "Se ha producido un error al generar la tarifa en Excel. Revisa la ruta de la plantilla y los datos."
+    );
   }
-
-  const name =
-    tipo.nombre.replace(/[^a-zA-Z0-9_\-]/g, "_") + "_2N.xlsx";
-
-  XLSX.writeFile(wb, name);
 }
 
-console.log("%c[UI Tarifas cargado]", "color:#0ea5e9;");
+console.log("%c[UI Tarifas cargada]", "color:#0ea5e9;");
 
 window.renderTarifasView = renderTarifasView;
