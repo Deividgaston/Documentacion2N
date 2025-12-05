@@ -70,7 +70,12 @@ function selectView(viewName) {
   ) {
     // Nueva vista: Simulador de márgenes
     renderSimuladorView();
-  }
+  } else if (
+  viewName === "tarifas" &&
+  typeof renderTarifasView === "function"
+  ) {
+    renderTarifasView();
+
 
   // 2. Actualizar pestañas activas
   document.querySelectorAll(".top-nav-link").forEach((el) => {
