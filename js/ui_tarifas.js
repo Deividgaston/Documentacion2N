@@ -111,6 +111,14 @@ const GRUPOS_LABELS = {
   GRUPO_D: "Grupo D · My2N / repuestos",
 };
 
+// Paleta de color suave por grupo (para las celdas de precio en el Excel)
+const GROUP_COLORS = {
+  GRUPO_A: "FFF7ED", // naranja muy claro
+  GRUPO_B: "ECFEFF", // cian muy claro
+  GRUPO_C: "EEF2FF", // índigo muy claro
+  GRUPO_D: "F9FAFB", // gris casi blanco
+};
+
 // Clasificación aproximada por descripción (tarifa base Firestore)
 // Lo usamos para decidir a qué grupo pertenece un SKU.
 const GROUP_PATTERNS = {
@@ -606,7 +614,7 @@ function mostrarFormularioTipoTarifa(tipoOriginal) {
           ${opcionesTemplate}
         </select>
         <p style="font-size:0.75rem; color:#6b7280;">
-          Define el formato (columnas NFR/Dist/RP2/RP1/MSRP). Los precios siempre salen de la tarifa PVP en Firestore.
+          Define el formato (columnas NFR/Dist/SubD/RP2/RP1/MSRP). Los precios siempre salen de la tarifa PVP en Firestore.
         </p>
       </div>
 
@@ -789,7 +797,7 @@ function mostrarMsgTarifaDetalle(texto, esError) {
 }
 
 // ======================================================
-// 9) EXPORTAR EXCEL DESDE PLANTILLA (motor de cálculo)
+// 9) EXPORTAR EXCEL DESDE PLANTILLA (motor de cálculo + color)
 // ======================================================
 
 async function exportarTarifaExcel(tipoId) {
@@ -841,9 +849,8 @@ async function exportarTarifaExcel(tipoId) {
       skuToRow[sku] = r;
     }
 
-    // 3) Rellenar precios calculados
+    // 3) Rellenar precios calculados (con color por grupo)
     const grupos = normalizarGrupos(tipo.grupos);
-
     const columnasPrecio = tpl.columnasPrecio || {};
     const niveles = Object.keys(columnasPrecio); // ej: ['subd','rp2','rp1','msrp']
 
@@ -857,6 +864,7 @@ async function exportarTarifaExcel(tipoId) {
       const desc = prod.descripcion || prod.desc || "";
       const gid = clasificarGrupoPorDescripcion(desc);
       const dtoGrupo = grupos[gid] || {};
+      const colorGrupo = GROUP_COLORS[gid] || null;
 
       niveles.forEach((nivel) => {
         const colIndex = columnasPrecio[nivel];
@@ -874,9 +882,20 @@ async function exportarTarifaExcel(tipoId) {
           r: fila - 1,
           c: colIndex - 1,
         });
+
+        // Estilo suave por grupo (sin tocar la estructura general de la plantilla)
+        const style = {};
+        if (colorGrupo) {
+          style.fill = {
+            fgColor: { rgb: colorGrupo },
+          };
+        }
+        style.numFmt = "0.00";
+
         ws[addr] = {
           t: "n",
           v: Number(valor.toFixed(2)),
+          s: style,
         };
       });
     }
@@ -894,6 +913,6 @@ async function exportarTarifaExcel(tipoId) {
   }
 }
 
-console.log("%c[UI Tarifas cargada · grupos no lineales]", "color:#0ea5e9;");
+console.log("%c[UI Tarifas cargada · grupos no lineales + color]", "color:#0ea5e9;");
 
 window.renderTarifasView = renderTarifasView;
