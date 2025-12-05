@@ -130,7 +130,7 @@ function generarExcel() {
       l.descripcion || "",
       cantidad,
       pvp.toFixed(2),
-      imp.toFixed(2)
+      imp.toFixed(2),
     ]);
   });
 
@@ -143,7 +143,7 @@ function generarExcel() {
 }
 
 // =====================================================================
-// SIMULADOR → PDF (Tabla ajustada sin cadena de márgenes)
+// SIMULADOR → PDF (SIN columna "Dto tarifa")
 // =====================================================================
 function exportSimuladorPDF() {
   if (!window.jspdf || !window.jspdf.jsPDF) {
@@ -177,30 +177,28 @@ function exportSimuladorPDF() {
   pdf.text(`Fecha: ${new Date().toISOString().slice(0, 10)}`, 40, y);
   y += 18;
   pdf.text(
-    `Tarifa base: ${
-      sim.tarifaDefecto || "Distributor Price (EUR)"
-    }`,
+    `Tarifa base: ${sim.tarifaDefecto || "Distributor Price (EUR)"}`,
     40,
     y
   );
 
   y += 30;
 
-  // --------- TABLA ---------
+  // --------- TABLA (SIN "Dto tarifa") ---------
   const headers = [
     "Ref.",
     "Descripción",
     "Ud.",
-    "Dto tarifa",
     "Dto línea",
     "PVP final ud.",
     "Importe final",
   ];
 
-  const colX = [40, 110, 420, 470, 540, 610, 690];
+  // 6 columnas ajustadas dentro de márgenes
+  const colX = [40, 120, 420, 500, 580, 680];
+
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(9);
-
   headers.forEach((h, i) => pdf.text(h, colX[i], y));
   y += 14;
 
@@ -216,8 +214,7 @@ function exportSimuladorPDF() {
       l.ref,
       String(l.descripcion).substring(0, 55),
       l.cantidad,
-      `${l.dtoTarifa.toFixed(1)} %`,
-      `${l.dtoLinea.toFixed(1)} %`,
+      `${l.dtoLinea.toFixed(1)} %`, // solo dto línea
       l.pvpFinalUd.toFixed(2) + " €",
       l.subtotalFinal.toFixed(2) + " €",
     ];
@@ -230,7 +227,7 @@ function exportSimuladorPDF() {
 }
 
 // =====================================================================
-// SIMULADOR → EXCEL (SIN columna Tarifa 2N)
+// SIMULADOR → EXCEL (SIN columna "Dto tarifa")
 // =====================================================================
 function exportSimuladorExcel() {
   if (!window.XLSX) {
@@ -244,11 +241,11 @@ function exportSimuladorExcel() {
 
   const data = [];
 
+  // Cabeceras SIN "Dto tarifa"
   data.push([
     "Ref.",
     "Descripción",
     "Ud.",
-    "Dto tarifa",
     "Dto línea",
     "PVP final ud.",
     "Importe final",
@@ -259,8 +256,7 @@ function exportSimuladorExcel() {
       l.ref,
       l.descripcion,
       l.cantidad,
-      `${l.dtoTarifa.toFixed(1)} %`,
-      `${l.dtoLinea.toFixed(1)} %`,
+      `${l.dtoLinea.toFixed(1)} %`, // solo dto línea
       Number(l.pvpFinalUd),
       Number(l.subtotalFinal),
     ])
@@ -269,13 +265,12 @@ function exportSimuladorExcel() {
   const ws = XLSX.utils.aoa_to_sheet(data);
 
   ws["!cols"] = [
-    { wch: 12 },
-    { wch: 50 },
-    { wch: 6 },
-    { wch: 10 },
-    { wch: 10 },
-    { wch: 12 },
-    { wch: 14 },
+    { wch: 12 }, // Ref.
+    { wch: 50 }, // Descripción
+    { wch: 6 },  // Ud.
+    { wch: 10 }, // Dto línea
+    { wch: 12 }, // PVP final ud.
+    { wch: 14 }, // Importe final
   ];
 
   const wb = XLSX.utils.book_new();
