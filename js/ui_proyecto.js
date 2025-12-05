@@ -415,7 +415,11 @@ function mostrarModalConfirmacionProyecto(numProductos, archivoNombre, seccion, 
 // CACHE EN LOCALSTORAGE
 // ====================
 
-const PROYECTO_CACHE_KEY = "presupuestos2n_proyecto_v1";
+// Evitar redeclaración si ya existe en otro script
+if (typeof PROYECTO_CACHE_KEY === "undefined") {
+  var PROYECTO_CACHE_KEY = "presupuestos2n_proyecto_v1";
+}
+
 
 function cargarProyectoDesdeCache() {
   try {
