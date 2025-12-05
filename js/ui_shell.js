@@ -58,7 +58,14 @@ function selectView(viewName) {
     viewName === "tarifa" &&
     typeof renderTarifaView === "function"
   ) {
+    // Vista antigua de tarifa (2N)
     renderTarifaView();
+  } else if (
+    viewName === "tarifas" &&
+    typeof renderTarifasView === "function"
+  ) {
+    // Nueva vista de tipos de tarifa
+    renderTarifasView();
   } else if (
     viewName === "docs" &&
     typeof renderDocumentacionView === "function"
@@ -68,14 +75,9 @@ function selectView(viewName) {
     viewName === "simulador" &&
     typeof renderSimuladorView === "function"
   ) {
-    // Nueva vista: Simulador de márgenes
+    // Vista: Simulador de márgenes
     renderSimuladorView();
-  } else if (
-  viewName === "tarifas" &&
-  typeof renderTarifasView === "function"
-  ) {
-    renderTarifasView();
-
+  }
 
   // 2. Actualizar pestañas activas
   document.querySelectorAll(".top-nav-link").forEach((el) => {
