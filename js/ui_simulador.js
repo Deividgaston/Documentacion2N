@@ -184,18 +184,33 @@ function renderSimuladorView() {
           <div class="card-header"
                style="padding-bottom:0.35rem; display:flex; align-items:center; justify-content:space-between; gap:0.5rem;">
             <div class="card-title" style="font-size:0.95rem;">2 · Resumen (referencia PVP)</div>
-            <button id="btnSimPdf"
-              style="
-                padding:0.25rem 0.75rem;
-                font-size:0.78rem;
-                border-radius:999px;
-                border:1px solid #d1d5db;
-                background:#ffffff;
-                color:#374151;
-                cursor:pointer;
-              ">
-              Exportar PDF
-            </button>
+            <!-- 🔹 Botones PDF + Excel -->
+            <div style="display:flex; gap:0.35rem;">
+              <button id="btnSimPdf"
+                style="
+                  padding:0.25rem 0.75rem;
+                  font-size:0.78rem;
+                  border-radius:999px;
+                  border:1px solid #d1d5db;
+                  background:#ffffff;
+                  color:#374151;
+                  cursor:pointer;
+                ">
+                Exportar PDF
+              </button>
+              <button id="btnSimExcel"
+                style="
+                  padding:0.25rem 0.75rem;
+                  font-size:0.78rem;
+                  border-radius:999px;
+                  border:1px solid #d1d5db;
+                  background:#ffffff;
+                  color:#374151;
+                  cursor:pointer;
+                ">
+                Exportar Excel
+              </button>
+            </div>
           </div>
           <div class="card-body" id="simResumenCard"
                style="font-size:0.85rem; color:#111827; padding-top:0.5rem; padding-bottom:0.6rem;">
@@ -273,6 +288,7 @@ function renderSimuladorView() {
   const inpMgnInte = document.getElementById("simMgnInte");
   const inpMgnConst = document.getElementById("simMgnConst");
   const btnPdf = document.getElementById("btnSimPdf");
+  const btnExcel = document.getElementById("btnSimExcel");
 
   if (selTarifaDefecto) {
     selTarifaDefecto.value =
@@ -336,6 +352,17 @@ function renderSimuladorView() {
   if (btnPdf) {
     btnPdf.addEventListener("click", async () => {
       await exportarSimuladorPDF();
+    });
+  }
+
+  // 🔹 Nuevo: Excel específico del simulador (sin columna Tarifa en el fichero)
+  if (btnExcel) {
+    btnExcel.addEventListener("click", () => {
+      if (typeof window.exportSimuladorExcel === "function") {
+        window.exportSimuladorExcel();
+      } else {
+        alert("Función exportSimuladorExcel no disponible.");
+      }
     });
   }
 
