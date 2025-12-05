@@ -1,11 +1,10 @@
-// js/pdf_excel.js
-// ============================================
-// PRESUPUESTO: PDF + EXCEL
-// ============================================
+// ======================================================================
+// pdf_excel.js — EXPORTACIÓN EN PDF Y EXCEL PARA PRESUPUESTO Y SIMULADOR
+// ======================================================================
 
-// --------------------------------------------
-// 1) PRESUPUESTO · PDF
-// --------------------------------------------
+// =========================================================
+//  PRESUPUESTO → PDF
+// =========================================================
 function generarPDF() {
   if (!window.jspdf || !window.jspdf.jsPDF) {
     alert("No se ha cargado jsPDF. Revisa los <script> del index.html.");
@@ -21,45 +20,35 @@ function generarPDF() {
   const { jsPDF } = window.jspdf;
   const pdf = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
 
-  const pageWidth = pdf.internal.pageSize.getWidth();
-  const pageHeight = pdf.internal.pageSize.getHeight();
-  const marginLeft = 40;
-  const marginRight = 40;
-
   const codigo = generarCodigoPresupuesto();
-  const d = appState.infoPresupuesto || {};
+  const d = appState.infoPresupuesto;
 
-  // Cabecera
+  // --------------------------
+  // CABECERA
+  // --------------------------
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(16);
-  pdf.text("PRESUPUESTO 2N", marginLeft, 40);
+  pdf.text("PRESUPUESTO 2N", 40, 40);
 
   pdf.setFontSize(10);
   pdf.setFont("helvetica", "normal");
-  pdf.text(`Código: ${codigo}`, marginLeft, 60);
-  pdf.text(`Cliente: ${d.cliente || "-"}`, marginLeft, 76);
-  pdf.text(`Proyecto: ${d.proyecto || "-"}`, marginLeft, 92);
-  pdf.text(`Dirección: ${d.direccion || "-"}`, marginLeft, 108);
+  pdf.text(`Código: ${codigo}`, 40, 60);
+  pdf.text(`Cliente: ${d.cliente || "-"}`, 40, 76);
+  pdf.text(`Proyecto: ${d.proyecto || "-"}`, 40, 92);
 
-  pdf.text(`Contacto: ${d.contacto || "-"}`, 320, 60);
-  pdf.text(`Email: ${d.email || "-"}`, 320, 76);
-  pdf.text(`Teléfono: ${d.telefono || "-"}`, 320, 92);
-
-  // Línea separadora
-  pdf.setDrawColor(220);
-  pdf.line(marginLeft, 120, pageWidth - marginRight, 120);
-
-  // Tabla de líneas
-  let y = 140;
+  // --------------------------
+  // TABLA
+  // --------------------------
+  const startY = 140;
+  let y = startY;
 
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(9);
-  pdf.text("Ref.", marginLeft, y);
-  pdf.text("Descripción", marginLeft + 50, y);
-  pdf.text("Ud.", marginLeft + 330, y);
-  pdf.text("PVP", marginLeft + 380, y);
-  pdf.text("Importe", marginLeft + 440, y);
-
+  pdf.text("Ref.", 40, y);
+  pdf.text("Descripción", 90, y);
+  pdf.text("Ud.", 380, y);
+  pdf.text("PVP", 420, y);
+  pdf.text("Importe", 500, y);
   pdf.setFont("helvetica", "normal");
   y += 16;
 
@@ -68,25 +57,28 @@ function generarPDF() {
     const pvp = Number(l.pvp) || 0;
     const importe = cantidad * pvp;
 
-    if (y > pageHeight - 120) {
+    if (y > 520) {
       pdf.addPage();
       y = 60;
     }
 
-    pdf.text(String(l.ref || ""), marginLeft, y);
-    pdf.text(String(l.descripcion || "").substring(0, 70), marginLeft + 50, y);
-    pdf.text(String(cantidad), marginLeft + 330, y, { align: "right" });
-    pdf.text(`${pvp.toFixed(2)} €`, marginLeft + 390, y, { align: "right" });
-    pdf.text(`${importe.toFixed(2)} €`, marginLeft + 480, y, { align: "right" });
+    pdf.text(String(l.ref || ""), 40, y);
+    pdf.text(String(l.descripcion || "").substring(0, 70), 90, y);
+    pdf.text(String(cantidad), 380, y);
+    pdf.text(`${pvp.toFixed(2)} €`, 430, y, { align: "right" });
+    pdf.text(`${importe.toFixed(2)} €`, 520, y, { align: "right" });
 
     y += 14;
   });
 
-  // Totales
-  let subtotal = 0;
-  lineas.forEach((l) => {
-    subtotal += (Number(l.cantidad) || 0) * (Number(l.pvp) || 0);
-  });
+  // --------------------------
+  // TOTALES
+  // --------------------------
+  let subtotal = lineas.reduce(
+    (acc, l) => acc + (Number(l.cantidad) || 0) * (Number(l.pvp) || 0),
+    0
+  );
+
   const descEu = subtotal * (appState.descuentoGlobal / 100);
   const baseImp = subtotal - descEu;
   const iva = appState.aplicarIVA ? baseImp * 0.21 : 0;
@@ -96,54 +88,33 @@ function generarPDF() {
 
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(10);
-  pdf.text("RESUMEN ECONÓMICO", marginLeft, blockY);
+  pdf.text("RESUMEN ECONÓMICO", 40, blockY);
 
   pdf.setFont("helvetica", "normal");
   pdf.setFontSize(9);
-
-  pdf.text(`Subtotal: ${subtotal.toFixed(2)} €`, marginLeft, blockY + 18);
-  pdf.text(
-    `Descuento (${appState.descuentoGlobal}%): -${descEu.toFixed(2)} €`,
-    marginLeft,
-    blockY + 34
-  );
-  pdf.text(`Base imponible: ${baseImp.toFixed(2)} €`, marginLeft, blockY + 50);
-  pdf.text(
-    `IVA ${appState.aplicarIVA ? "21%" : "(no aplicado)"}: ${iva.toFixed(2)} €`,
-    marginLeft,
-    blockY + 66
-  );
-  pdf.text(`TOTAL: ${total.toFixed(2)} €`, marginLeft, blockY + 86);
-
-  // Notas
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(9);
-  pdf.text("Notas:", 320, blockY + 18);
-
-  pdf.setFont("helvetica", "normal");
-  const notas = d.notas || "";
-  const notasSplit = pdf.splitTextToSize(notas, 260);
-  pdf.text(notasSplit, 320, blockY + 32);
+  pdf.text(`Subtotal: ${subtotal.toFixed(2)} €`, 40, blockY + 18);
+  pdf.text(`Descuento: -${descEu.toFixed(2)} €`, 40, blockY + 34);
+  pdf.text(`Base imponible: ${baseImp.toFixed(2)} €`, 40, blockY + 50);
+  pdf.text(`IVA 21%: ${iva.toFixed(2)} €`, 40, blockY + 66);
+  pdf.text(`TOTAL: ${total.toFixed(2)} €`, 40, blockY + 86);
 
   pdf.save(`${codigo}.pdf`);
 }
 
-// --------------------------------------------
-// 2) PRESUPUESTO · EXCEL
-// --------------------------------------------
+// =========================================================
+//  PRESUPUESTO → EXCEL
+// =========================================================
 function generarExcel() {
   if (!window.XLSX) {
-    alert("No se ha cargado XLSX. Revisa los <script> del index.html.");
+    alert("No está cargado XLSX.");
     return;
   }
 
   const lineas = getLineasSeleccionadas();
-  if (!lineas.length) {
-    alert("No hay líneas seleccionadas para el presupuesto.");
-    return;
-  }
+  if (!lineas.length) return alert("No hay líneas.");
 
   const data = [];
+
   data.push(["Ref.", "Descripción", "Ud.", "PVP", "Importe"]);
 
   let subtotal = 0;
@@ -151,242 +122,171 @@ function generarExcel() {
   lineas.forEach((l) => {
     const cantidad = Number(l.cantidad) || 0;
     const pvp = Number(l.pvp) || 0;
-    const importe = cantidad * pvp;
-    subtotal += importe;
+    const imp = cantidad * pvp;
+    subtotal += imp;
 
     data.push([
       l.ref || "",
       l.descripcion || "",
       cantidad,
-      pvp,
-      importe
+      pvp.toFixed(2),
+      imp.toFixed(2)
     ]);
   });
-
-  const descEu = subtotal * (appState.descuentoGlobal / 100);
-  const baseImp = subtotal - descEu;
-  const iva = appState.aplicarIVA ? baseImp * 0.21 : 0;
-  const total = baseImp + iva;
-
-  data.push([]);
-  data.push(["Subtotal", "", "", "", subtotal]);
-  data.push([
-    `Descuento (${appState.descuentoGlobal}%)`,
-    "",
-    "",
-    "",
-    -descEu
-  ]);
-  data.push(["Base imponible", "", "", "", baseImp]);
-  data.push([
-    `IVA ${appState.aplicarIVA ? "21%" : "(no aplicado)"}`,
-    "",
-    "",
-    "",
-    iva
-  ]);
-  data.push(["TOTAL", "", "", "", total]);
 
   const ws = XLSX.utils.aoa_to_sheet(data);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Presupuesto");
 
-  const codigo = generarCodigoPresupuesto();
   const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-
-  const blob = new Blob([wbout], {
-    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-  });
-
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${codigo}.xlsx`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  saveAs(new Blob([wbout]), "presupuesto_2N.xlsx");
 }
 
-// ============================================
-// SIMULADOR: PDF (sin cadena de márgenes)
-// ============================================
-
+// =====================================================================
+// SIMULADOR → PDF (Tabla ajustada sin cadena de márgenes)
+// =====================================================================
 function exportSimuladorPDF() {
-  if (!window.jspdf || !window.jspdf.jsPDF || !window.jspdf.autoTable) {
-    alert("No está disponible jsPDF/autoTable. Revisa los <script> del index.html.");
-    return;
+  if (!window.jspdf || !window.jspdf.jsPDF) {
+    return alert("jsPDF no cargado.");
   }
 
-  const sim = appState.simulador || {};
-  const lineasSim = sim.lineasSimuladas || [];
-
-  if (!lineasSim.length) {
-    alert("No hay líneas simuladas. Recalcula la simulación primero.");
-    return;
-  }
+  const sim = appState.simulador;
+  const lineas = sim.lineasSimuladas || [];
+  if (!lineas.length) return alert("No hay líneas simuladas.");
 
   const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
-
-  const pageWidth  = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
-  const marginLeft = 40;
-  const marginRight = 40;
-
-  const info = appState.infoPresupuesto || {};
-  const hoy = new Date();
-  const fechaStr = hoy.toISOString().slice(0, 10);
-
-  const tarifaDef = sim.tarifaDefecto || "DIST_PRICE";
-  const objTarifa =
-    (window.TARIFAS_MAP && window.TARIFAS_MAP[tarifaDef]) || null;
-  const etiquetaTarifaBase =
-    (objTarifa && objTarifa.label) || "Tarifa seleccionada";
-
-  // ---------- Cabecera ----------
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(18);
-  doc.text("Simulación de tarifas 2N", marginLeft, 40);
-
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "normal");
-
-  let y = 40 + 22;
-  doc.text(`Proyecto: ${info.proyecto || "Proyecto sin nombre"}`, marginLeft, y);
-  y += 14;
-  doc.text(`Fecha: ${fechaStr}`, marginLeft, y);
-  y += 14;
-  doc.text(`Tarifa base: ${etiquetaTarifaBase}`, marginLeft, y);
-  y += 22;
-
-  // ---------- Resumen (recalcular totales a partir de las líneas) ----------
-  let totalPvpBase = 0;
-  let totalBaseTarifa = 0;
-  let totalFinal = 0;
-
-  lineasSim.forEach((l) => {
-    const cantidad  = Number(l.cantidad || 0) || 0;
-    const base      = Number(l.basePvp || 0) || 0;
-    const dtoTarifa = Number(l.dtoTarifa || 0) || 0;
-    const dtoLinea  = Number(l.dtoLinea || 0) || 0;
-
-    const factorTarifa = 1 - dtoTarifa / 100;
-    const factorLinea  = 1 - dtoLinea  / 100;
-
-    const pvpTarifaUd = base * factorTarifa;
-    const pvpFinalUd  = base * factorTarifa * factorLinea;
-
-    totalPvpBase    += base        * cantidad;
-    totalBaseTarifa += pvpTarifaUd * cantidad;
-    totalFinal      += pvpFinalUd  * cantidad;
+  const pdf = new jsPDF({
+    orientation: "landscape",
+    unit: "pt",
+    format: "a4",
   });
 
-  const dtoTarifaEf =
-    totalPvpBase > 0 ? (1 - totalBaseTarifa / totalPvpBase) * 100 : 0;
-  const dtoTotalEf =
-    totalPvpBase > 0 ? (1 - totalFinal / totalPvpBase) * 100 : 0;
-  const dtoExtraEf =
-    totalBaseTarifa > 0 ? (1 - totalFinal / totalBaseTarifa) * 100 : 0;
+  let y = 40;
 
-  doc.setFont("helvetica", "bold");
-  doc.text("Resumen de simulación (referencia PVP)", marginLeft, y);
-  y += 16;
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(18);
+  pdf.text("Simulación de tarifas 2N", 40, y);
 
-  doc.setFont("helvetica", "normal");
-  doc.text(`PVP base total: ${totalPvpBase.toFixed(2)} €`, marginLeft, y);
-  y += 14;
-  doc.text(
-    `Total tras tarifa ${etiquetaTarifaBase}: ${totalBaseTarifa.toFixed(
-      2
-    )} €   (${dtoTarifaEf.toFixed(1)} % dto vs PVP)`,
-    marginLeft,
-    y
-  );
-  y += 14;
-  doc.text(
-    `Total simulado: ${totalFinal.toFixed(
-      2
-    )} €   (${dtoTotalEf.toFixed(1)} % dto total vs PVP)`,
-    marginLeft,
-    y
-  );
-  y += 14;
-  doc.text(
-    `Descuento extra sobre tarifa (dto adicional de línea): ${dtoExtraEf.toFixed(
-      1
-    )} %`,
-    marginLeft,
+  y += 30;
+
+  // --------- ENCABEZADO ---------
+  pdf.setFontSize(11);
+  pdf.setFont("helvetica", "normal");
+  pdf.text(`Proyecto: ${appState.infoPresupuesto?.proyecto || "-"}`, 40, y);
+  y += 18;
+  pdf.text(`Fecha: ${new Date().toISOString().slice(0, 10)}`, 40, y);
+  y += 18;
+  pdf.text(
+    `Tarifa base: ${
+      sim.tarifaDefecto || "Distributor Price (EUR)"
+    }`,
+    40,
     y
   );
 
-  // Separador
-  y += 24;
-  doc.setDrawColor(220);
-  doc.line(marginLeft, y - 10, pageWidth - marginRight, y - 10);
+  y += 30;
 
-  // ---------- Tabla líneas simuladas ----------
-  const body = lineasSim.map((l) => ({
-    ref: l.ref || "",
-    descripcion: l.descripcion || "",
-    cantidad: l.cantidad || 0,
-    tarifa:
-      (window.TARIFAS_MAP && window.TARIFAS_MAP[l.tarifaId]?.label) || "",
-    dtoTarifa: `${(l.dtoTarifa || 0).toFixed(1)} %`,
-    dtoLinea: `${(l.dtoLinea || 0).toFixed(1)} %`,
-    pvpFinalUd: `${(l.pvpFinalUd || 0).toFixed(2)} €`,
-    subtotalFinal: `${(l.subtotalFinal || 0).toFixed(2)} €`,
-  }));
+  // --------- TABLA ---------
+  const headers = [
+    "Ref.",
+    "Descripción",
+    "Ud.",
+    "Dto tarifa",
+    "Dto línea",
+    "PVP final ud.",
+    "Importe final",
+  ];
 
-  doc.autoTable({
-    startY: y,
-    margin: { left: marginLeft, right: marginRight },
-    tableWidth: pageWidth - marginLeft - marginRight,
-    styles: {
-      font: "helvetica",
-      fontSize: 7,
-      cellPadding: 2,
-      overflow: "linebreak",
-      valign: "middle",
-    },
-    headStyles: {
-      fillColor: [15, 23, 42],
-      textColor: 255,
-      fontStyle: "bold",
-      fontSize: 7,
-    },
-    columnStyles: {
-      cantidad:     { halign: "center" },
-      dtoTarifa:    { halign: "right" },
-      dtoLinea:     { halign: "right" },
-      pvpFinalUd:   { halign: "right" },
-      subtotalFinal:{ halign: "right" },
-    },
-    columns: [
-      { header: "Ref.",        dataKey: "ref" },
-      { header: "Descripción", dataKey: "descripcion" },
-      { header: "Ud.",         dataKey: "cantidad" },
-      { header: "Tarifa 2N",   dataKey: "tarifa" },
-      { header: "Dto tarifa",  dataKey: "dtoTarifa" },
-      { header: "Dto línea",   dataKey: "dtoLinea" },
-      { header: "PVP ud.",     dataKey: "pvpFinalUd" },  // encabezado corto
-      { header: "Imp. final",  dataKey: "subtotalFinal" } // encabezado corto
-    ],
-    body,
-    didDrawPage: (data) => {
-      const pageCount   = doc.internal.getNumberOfPages();
-      const pageCurrent = doc.internal.getCurrentPageInfo().pageNumber;
-      doc.setFontSize(8);
-      doc.setTextColor(130);
-      doc.text(
-        `Página ${pageCurrent} / ${pageCount}`,
-        pageWidth - marginRight,
-        pageHeight - 20,
-        { align: "right" }
-      );
-    },
+  const colX = [40, 110, 420, 470, 540, 610, 690];
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(9);
+
+  headers.forEach((h, i) => pdf.text(h, colX[i], y));
+  y += 14;
+
+  pdf.setFont("helvetica", "normal");
+
+  lineas.forEach((l) => {
+    if (y > 530) {
+      pdf.addPage();
+      y = 40;
+    }
+
+    const cols = [
+      l.ref,
+      String(l.descripcion).substring(0, 55),
+      l.cantidad,
+      `${l.dtoTarifa.toFixed(1)} %`,
+      `${l.dtoLinea.toFixed(1)} %`,
+      l.pvpFinalUd.toFixed(2) + " €",
+      l.subtotalFinal.toFixed(2) + " €",
+    ];
+
+    cols.forEach((c, i) => pdf.text(String(c), colX[i], y));
+    y += 12;
   });
 
-  const nombre = `Simulacion_2N_${fechaStr}.pdf`;
-  doc.save(nombre);
+  pdf.save("Simulacion_2N.pdf");
 }
+
+// =====================================================================
+// SIMULADOR → EXCEL (SIN columna Tarifa 2N)
+// =====================================================================
+function exportSimuladorExcel() {
+  if (!window.XLSX) {
+    return alert("No está cargado XLSX.");
+  }
+
+  const sim = appState.simulador;
+  const lineas = sim.lineasSimuladas || [];
+
+  if (!lineas.length) return alert("No hay líneas simuladas.");
+
+  const data = [];
+
+  data.push([
+    "Ref.",
+    "Descripción",
+    "Ud.",
+    "Dto tarifa",
+    "Dto línea",
+    "PVP final ud.",
+    "Importe final",
+  ]);
+
+  lineas.forEach((l) =>
+    data.push([
+      l.ref,
+      l.descripcion,
+      l.cantidad,
+      `${l.dtoTarifa.toFixed(1)} %`,
+      `${l.dtoLinea.toFixed(1)} %`,
+      Number(l.pvpFinalUd),
+      Number(l.subtotalFinal),
+    ])
+  );
+
+  const ws = XLSX.utils.aoa_to_sheet(data);
+
+  ws["!cols"] = [
+    { wch: 12 },
+    { wch: 50 },
+    { wch: 6 },
+    { wch: 10 },
+    { wch: 10 },
+    { wch: 12 },
+    { wch: 14 },
+  ];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Simulación");
+
+  const out = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+  saveAs(new Blob([out]), "Simulacion_2N.xlsx");
+}
+
+// Exponer funciones globalmente
+window.exportSimuladorPDF = exportSimuladorPDF;
+window.exportSimuladorExcel = exportSimuladorExcel;
+window.generarPDF = generarPDF;
+window.generarExcel = generarExcel;
