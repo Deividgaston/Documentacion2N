@@ -53,6 +53,7 @@ function renderProyectoView() {
                 Procesar proyecto
               </button>
 
+              <!-- NUEVO: Importar presupuesto desde Excel -->
               <div class="form-group mt-4" style="border-top:1px solid #e5e7eb; padding-top:0.75rem;">
                 <label>Importar presupuesto existente</label>
                 <p style="font-size:0.78rem; color:#6b7280; margin-top:0.25rem;">
@@ -107,6 +108,7 @@ function renderProyectoView() {
     btnProcesar.addEventListener("click", onProcesarProyectoClick);
   }
 
+  // NUEVO: listeners para importar presupuesto desde Excel
   const btnImportarPresu = document.getElementById("btnImportarPresu");
   const inputPresuFile = document.getElementById("presuImportFile");
   if (btnImportarPresu && inputPresuFile) {
@@ -205,6 +207,10 @@ async function onProcesarProyectoClick() {
   }
 }
 
+// NUEVO ===============================
+// Importar presupuesto desde Excel (exportado en página Presupuesto)
+// Reconstruye appState.presupuesto y salta a la vista de Presupuesto
+// ====================================
 async function importarPresupuestoDesdeExcel(file) {
   const msg = document.getElementById("proyectoMensaje");
   if (msg) {
@@ -372,7 +378,8 @@ async function importarPresupuestoDesdeExcel(file) {
 
     if (msg) {
       msg.className = "alert alert-success mt-3";
-      msg.textContent = "Presupuesto importado correctamente desde Excel. Abriendo la página de Presupuesto.";
+      msg.textContent =
+        "Presupuesto importado correctamente desde Excel. Abriendo la página de Presupuesto.";
       msg.style.display = "flex";
     }
 
@@ -406,84 +413,14 @@ function mostrarModalConfirmacionProyecto(numProductos, archivoNombre, seccion, 
     <strong>${archivoNombre}</strong>.
     ${secTxt}
     ${titTxt}
+    <br/><br/>
+    ¿Quieres importar este proyecto y pasar directamente a la página de <strong>Presupuesto</strong>?
   `;
 
   overlay.style.display = "flex";
 }
 
-// ====================
-// CACHE EN LOCALSTORAGE
-// ====================
-
-// Evitar redeclaración si ya existe en otro script
-if (typeof PROYECTO_CACHE_KEY === "undefined") {
-  var PROYECTO_CACHE_KEY = "presupuestos2n_proyecto_v1";
-}
-
-
-function cargarProyectoDesdeCache() {
-  try {
-    const raw = localStorage.getItem(PROYECTO_CACHE_KEY);
-    if (!raw) return;
-    const obj = JSON.parse(raw);
-    if (!obj || typeof obj !== "object") return;
-
-    appState.proyecto = {
-      filas: obj.filas || [],
-      archivoNombre: obj.archivoNombre || null,
-      fechaImportacion: obj.fechaImportacion || null,
-      seccion: obj.seccion || null,
-      titulo: obj.titulo || null,
-    };
-  } catch (e) {
-    console.warn("No se pudo leer el proyecto desde cache:", e);
-  }
-}
-
-function actualizarEstadoProyecto() {
-  const estadoEl = document.getElementById("proyectoEstado");
-  if (!estadoEl) return;
-
-  const p = appState.proyecto || {};
-  if (!p.filas || !p.filas.length) {
-    estadoEl.innerHTML = `
-      <p style="margin-bottom:0.5rem;">
-        Todavía no se ha importado ningún archivo de proyecto.
-      </p>
-      <p style="font-size:0.82rem; color:#6b7280;">
-        Cuando importes un Excel o Project Designer 2N, aquí verás un resumen
-        con el número de productos y datos básicos.
-      </p>
-    `;
-    return;
-  }
-
-  const num = p.filas.length;
-  const nombre = p.archivoNombre || "Proyecto sin nombre";
-  const fecha = p.fechaImportacion
-    ? new Date(p.fechaImportacion).toLocaleString()
-    : "Fecha no disponible";
-
-  const seccionTxt = p.seccion
-    ? `<br/>Sección detectada: <strong>${p.seccion}</strong>`
-    : "";
-  const tituloTxt = p.titulo
-    ? `<br/>Título detectado: <strong>${p.titulo}</strong>`
-    : "";
-
-  estadoEl.innerHTML = `
-    <p style="margin-bottom:0.5rem;">
-      Se ha importado un proyecto con <strong>${num}</strong> líneas de producto.
-    </p>
-    <p class="mt-2" style="font-size:0.82rem; color:#4b5563;">
-      Archivo: <strong>${nombre}</strong><br/>
-      Importado: ${fecha}
-      ${seccionTxt}
-      ${tituloTxt}
-    </p>
-  `;
-}
-
+// Confirmar importación definitiva y pasar a Presupuesto
 function confirmarImportacionProyecto() {
   const overlay = document.getElementById("proyectoConfirmOverlay");
   const msg = document.getElementById("proyectoMensaje");
@@ -502,6 +439,7 @@ function confirmarImportacionProyecto() {
   };
   appState.proyectoPreview = null;
 
+  // Guardar en localStorage
   try {
     localStorage.setItem(PROYECTO_CACHE_KEY, JSON.stringify(appState.proyecto));
   } catch (e) {
@@ -518,6 +456,7 @@ function confirmarImportacionProyecto() {
 
   actualizarEstadoProyecto();
 
+  // Ir directamente a Presupuesto
   if (typeof selectView === "function") {
     selectView("presupuesto");
   }
@@ -537,38 +476,23 @@ function leerProyectoDesdeExcel(file) {
         const data = new Uint8Array(e.target.result);
         const wb = XLSX.read(data, { type: "array" });
 
+        // Primera hoja
         const wsName = wb.SheetNames[0];
         const ws = wb.Sheets[wsName];
 
+        // Array crudo para detectar formato Project Designer
         const hojaArray = XLSX.utils.sheet_to_json(ws, {
           header: 1,
           defval: "",
         });
 
-        const filasExcel = hojaArray;
-        let esProjectDesigner = false;
-
-        for (let i = 0; i < Math.min(10, filasExcel.length); i++) {
-          const row = filasExcel[i];
-          if (!row) continue;
-          const c0 = String(row[0] || "").toLowerCase();
-          const c1 = String(row[1] || "").toLowerCase();
-
-          if (
-            c0.includes("2n") &&
-            (c1.includes("project designer") || c1.includes("project"))
-          ) {
-            esProjectDesigner = true;
-            break;
-          }
-        }
-
-        if (esProjectDesigner) {
-          const resultado = parseProjectDesigner(hojaArray);
-          resolve(resultado);
+        const resultadoPD = intentarParsearProjectDesigner(hojaArray);
+        if (resultadoPD) {
+          resolve(resultadoPD);
           return;
         }
 
+        // Si no es formato Project Designer, usamos el parser genérico (cabeceras normales)
         const json = XLSX.utils.sheet_to_json(ws, { defval: "" });
 
         const filas = json
@@ -598,30 +522,25 @@ function leerProyectoDesdeExcel(file) {
             const desc =
               row["Descripción"] ||
               row["Descripcion"] ||
+              row["DESCRIPCION"] ||
+              row["DESCRIPCIÓN"] ||
+              row["Nombre producto"] ||
               row["Nombre del producto"] ||
               row["Producto"] ||
               "";
 
-            if (!ref || !cant) return null;
-
-            const cantidadNum = Number(cant);
-            if (!cantidadNum || isNaN(cantidadNum)) return null;
+            const referencia = normalizarRef(ref);
+            const cantidad = Number(cant) || 0;
 
             return {
-              referencia: String(ref).trim(),
-              cantidad: cantidadNum,
-              descripcion: String(desc || "").trim(),
-              seccion: row["Sección"] || row["SECCION"] || row["Grupo"] || "",
-              titulo: row["Título"] || row["TITULO"] || "",
+              referencia,
+              cantidad,
+              descripcion: limpiarTexto(desc),
             };
           })
-          .filter(Boolean);
+          .filter((r) => r.referencia && r.cantidad > 0);
 
-        resolve({
-          filas,
-          seccion: null,
-          titulo: null,
-        });
+        resolve({ filas, seccion: null, titulo: null });
       } catch (err) {
         reject(err);
       }
@@ -637,90 +556,242 @@ function leerProyectoDesdeExcel(file) {
 
 /**
  * Parser específico para Project Designer 2N.
+ * Soporta varias secciones y sub-secciones (ej. Cerraduras + Accesorios + Recepción).
+ *
+ * - "titulo"  = grupo azul (ej. "Cerraduras electrónicas")
+ * - "seccion" = bloque gris (ej. "CONTROL DE ACCESOS VIVIENDAS", "Accesorios", "Recepción")
+ *
+ * Si no existe título gris, se usa el azul como sección.
  */
-function parseProjectDesigner(hojaArray) {
-  let startIndex = -1;
+function intentarParsearProjectDesigner(hojaArray) {
+  if (!Array.isArray(hojaArray) || hojaArray.length === 0) return null;
+
+  const limpiar = (t) => (t ?? "").toString().trim();
+
+  const rowHasText = (row) =>
+    Array.isArray(row) &&
+    row.some((c) => (c ?? "").toString().trim() !== "");
+
+  const firstText = (row) => {
+    if (!Array.isArray(row)) return "";
+    for (const c of row) {
+      const s = (c ?? "").toString().trim();
+      if (s) return s;
+    }
+    return "";
+  };
+
+  const filas = [];
+  let idxNombre = -1;
+  let idxRef = -1;
+  let idxCant = -1;
+
+  let currentMain = ""; // azul
+  let currentSub = "";  // gris
+  let firstMain = null;
+  let firstSub = null;
+
   for (let i = 0; i < hojaArray.length; i++) {
     const row = hojaArray[i];
-    if (!row) continue;
+    if (!Array.isArray(row)) continue;
 
-    const c0 = String(row[0] || "").toLowerCase();
-    const c1 = String(row[1] || "").toLowerCase();
-    const c2 = String(row[2] || "").toLowerCase();
+    const lowerRow = row.map((c) =>
+      (c ?? "").toString().toLowerCase().trim()
+    );
 
-    if (
-      c0 === "product name" &&
-      c1.includes("ordering") &&
-      c2.includes("quantity")
-    ) {
-      startIndex = i + 1;
-      break;
+    const iNombre = lowerRow.findIndex((c) =>
+      c.includes("nombre del producto")
+    );
+    const iRef = lowerRow.findIndex(
+      (c) => c.includes("número de pedido") || c.includes("numero de pedido")
+    );
+    const iCant = lowerRow.findIndex((c) => c === "cantidad");
+
+    // === Cabecera "Foto / Nombre del producto / Nº pedido / Cantidad" ===
+    if (iNombre !== -1 && iRef !== -1 && iCant !== -1) {
+      idxNombre = iNombre;
+      idxRef = iRef;
+      idxCant = iCant;
+
+      // Buscamos hacia arriba:
+      // j1 = última fila con texto  -> suele ser la gris (sub-sección)
+      // j0 = la anterior con texto -> suele ser la azul (grupo)
+      let j1 = -1;
+      let j0 = -1;
+
+      for (let j = i - 1; j >= 0; j--) {
+        if (rowHasText(hojaArray[j])) {
+          j1 = j;
+          break;
+        }
+      }
+      if (j1 !== -1) {
+        for (let j = j1 - 1; j >= 0; j--) {
+          if (rowHasText(hojaArray[j])) {
+            j0 = j;
+            break;
+          }
+        }
+      }
+
+      let sub = j1 !== -1 ? firstText(hojaArray[j1]) : "";
+      let main = j0 !== -1 ? firstText(hojaArray[j0]) : "";
+
+      // Si solo hay una fila de texto, úsala como main y sub
+      if (!main && sub) {
+        main = sub;
+      }
+
+      currentMain = limpiar(main || currentMain || "Grupo sin nombre");
+      currentSub = limpiar(sub || currentMain || "Sección sin título");
+
+      if (firstMain === null) {
+        firstMain = currentMain;
+        firstSub = currentSub;
+      }
+
+      continue; // siguiente fila, no es producto
     }
-  }
 
-  if (startIndex === -1) {
-    return {
-      filas: [],
-      seccion: null,
-      titulo: null,
-    };
-  }
+    // Hasta que no encontremos la primera cabecera, ignoramos filas
+    if (idxNombre === -1) continue;
 
-  let tituloActual = "";
-  let seccionActual = "";
-  const filas = [];
+    const nombre = row[idxNombre];
+    const refRaw = row[idxRef];
+    const cantRaw = row[idxCant];
 
-  for (let i = startIndex; i < hojaArray.length; i++) {
-    const row = hojaArray[i];
-    if (!row || row.length === 0) continue;
+    const nombreTxt = limpiar(nombre);
+    const refTxt = limpiar(refRaw);
+    const cantTxt = limpiar(cantRaw);
+    const firstTxtRow = firstText(row);
 
-    const name = String(row[0] || "").trim();
-    const orderingNumber = String(row[1] || "").trim();
-    const qty = row[2];
+    // === Fila de título gris / azul sin productos ===
+    // Tiene texto en alguna celda, pero no en nombre/ref/cantidad.
+    if (firstTxtRow && !nombreTxt && !refTxt && !cantTxt) {
+      const t = limpiar(firstTxtRow);
+      const tl = t.toLowerCase();
 
-    if (name && !orderingNumber && (qty === "" || qty == null)) {
-      tituloActual = name;
+      // CASO ESPECIAL: "Accesorios" o "Recepción" (solo banda azul, sin gris)
+      if (tl === "accesorios" || tl === "recepción" || tl === "recepcion") {
+        currentMain = t; // nueva sección principal
+        currentSub = t;  // sin sub-sección propia, usamos la misma
+        if (firstMain === null) {
+          firstMain = currentMain;
+          firstSub = currentSub;
+        }
+      } else {
+        // Comportamiento normal: solo cambiamos la sub-sección gris
+        currentSub = t;
+      }
       continue;
     }
 
-    if (name && !orderingNumber && (qty === "0" || qty === 0)) {
-      seccionActual = name;
+    // Fila completamente vacía
+    if (!nombreTxt && !refTxt && !cantTxt) {
       continue;
     }
 
-    if (!orderingNumber || orderingNumber === "0") {
-      continue;
-    }
+    // === Fila de producto ===
+    const referencia = normalizarRef(refTxt);
+    if (!referencia) continue;
 
-    const cantidadNum = Number(qty);
-    if (!cantidadNum || isNaN(cantidadNum)) continue;
+    const cantidadNum = Number(
+      (cantTxt || "0").toString().replace(",", ".")
+    );
+    if (!cantidadNum || cantidadNum <= 0) continue;
 
     filas.push({
-      referencia: orderingNumber,
+      seccion: currentSub || currentMain, // bloque gris (o azul si no hay gris)
+      titulo: currentMain,                // grupo azul
+      descripcion: nombreTxt,
+      referencia,
       cantidad: cantidadNum,
-      descripcion: name,
-      seccion: seccionActual,
-      titulo: tituloActual,
     });
   }
 
-  let seccion = null;
-  let titulo = null;
-  const primeras = filas.slice(0, 10);
-  if (primeras.length > 0) {
-    seccion = primeras[0].seccion || null;
-    titulo = primeras[0].titulo || null;
+  if (!filas.length) return null;
+
+  // Resumen global
+  let seccionGlobal = firstMain || "";
+  let tituloGlobal = firstSub || "";
+
+  if (seccionGlobal && !tituloGlobal) {
+    tituloGlobal = seccionGlobal;
   }
 
   return {
     filas,
-    seccion,
-    titulo,
+    seccion: seccionGlobal,
+    titulo: tituloGlobal,
   };
+}
+
+// ====================
+// CACHE LOCAL
+// ====================
+
+function cargarProyectoDesdeCache() {
+  try {
+    const cached = localStorage.getItem(PROYECTO_CACHE_KEY);
+    if (!cached) return;
+
+    const data = JSON.parse(cached);
+    if (!data || !Array.isArray(data.filas)) return;
+
+    appState.proyecto = {
+      filas: data.filas,
+      archivoNombre: data.archivoNombre || null,
+      fechaImportacion: data.fechaImportacion || null,
+      seccion: data.seccion || null,
+      titulo: data.titulo || null,
+    };
+  } catch (e) {
+    console.warn("No se pudo cargar proyecto desde cache:", e);
+  }
+}
+
+// ====================
+// ESTADO VISUAL
+// ====================
+
+function actualizarEstadoProyecto() {
+  const estado = document.getElementById("proyectoEstado");
+  if (!estado) return;
+
+  const proyecto = appState.proyecto;
+  if (!proyecto || !proyecto.filas || proyecto.filas.length === 0) {
+    estado.textContent = "Todavía no se ha importado ningún proyecto.";
+    return;
+  }
+
+  const numFilas = proyecto.filas.length;
+  const nombre = proyecto.archivoNombre || "Proyecto";
+  const fecha = proyecto.fechaImportacion
+    ? new Date(proyecto.fechaImportacion).toLocaleString("es-ES")
+    : "N/D";
+
+  const seccionTxt = proyecto.seccion
+    ? `<br/>Sección: <strong>${proyecto.seccion}</strong>`
+    : "";
+  const tituloTxt = proyecto.titulo
+    ? `<br/>Título: <strong>${proyecto.titulo}</strong>`
+    : "";
+
+  estado.innerHTML = `
+    <div class="metric-card">
+      <span class="metric-label">Proyecto importado</span>
+      <span class="metric-value">${numFilas} líneas</span>
+    </div>
+    <p class="mt-2" style="font-size:0.82rem; color:#4b5563;">
+      Archivo: <strong>${nombre}</strong><br/>
+      Importado: ${fecha}
+      ${seccionTxt}
+      ${tituloTxt}
+    </p>
+  `;
 }
 
 console.log(
   "%cUI Proyecto cargada (ui_proyecto.js · Project Designer OK)",
   "color:#1d4fd8; font-weight:600;"
 );
-window.renderProyectoView = renderProyectoView;
