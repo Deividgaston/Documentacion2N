@@ -713,7 +713,7 @@ async function recalcularSimulador() {
 }
 
 // ===============================
-// EXPORTAR A PDF (sin columna Tarifa 2N ni Dto tarifa)
+// EXPORTAR A PDF (sin columna Tarifa 2N, PERO con Dto tarifa)
 // ===============================
 async function exportarSimuladorPDF() {
   // Aseguramos que los datos están frescos
@@ -816,11 +816,12 @@ async function exportarSimuladorPDF() {
   );
   y += 8;
 
-  // Tabla de líneas SIN "Tarifa 2N" ni "Dto tarifa"
+  // Tabla de líneas: SIN "Tarifa 2N", PERO CON "Dto tarifa"
   const head = [[
     "Ref.",
     "Descripción",
     "Ud.",
+    "Dto tarifa",
     "Dto línea",
     "PVP final ud.",
     "Importe final",
@@ -830,6 +831,7 @@ async function exportarSimuladorPDF() {
     l.ref || "",
     (l.descripcion || "").slice(0, 70),
     String(l.cantidad || ""),
+    `${Number(l.dtoTarifa || 0).toFixed(1)} %`,
     `${Number(l.dtoLinea || 0).toFixed(1)} %`,
     `${Number(l.pvpFinalUd || 0).toFixed(2)} €`,
     `${Number(l.subtotalFinal || 0).toFixed(2)} €`,
@@ -854,16 +856,17 @@ async function exportarSimuladorPDF() {
       valign: "middle",
     },
     headStyles: {
-      fillColor: [17, 24, 39], // gris oscuro
+      fillColor: [17, 24, 39],
       textColor: 255,
     },
     columnStyles: {
-      0: { cellWidth: 22 }, // Ref
+      0: { cellWidth: 18 }, // Ref
       1: { cellWidth: 70 }, // Descripción
       2: { cellWidth: 10 }, // Ud
-      3: { cellWidth: 18 }, // Dto línea
-      4: { cellWidth: 22 }, // PVP ud
-      5: { cellWidth: 25 }, // Importe
+      3: { cellWidth: 18 }, // Dto tarifa
+      4: { cellWidth: 18 }, // Dto línea
+      5: { cellWidth: 22 }, // PVP ud
+      6: { cellWidth: 25 }, // Importe
     },
   });
 
