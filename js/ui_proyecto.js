@@ -719,3 +719,4 @@ console.log(
   "%cUI Proyecto cargada (ui_proyecto.js · Project Designer OK)",
   "color:#1d4fd8; font-weight:600;"
 );
+window.renderProyectoView = renderProyectoView;
