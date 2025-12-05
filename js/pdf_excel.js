@@ -241,11 +241,12 @@ function exportSimuladorExcel() {
 
   const data = [];
 
-  // Cabeceras SIN "Dto tarifa"
+  // Cabeceras: añadimos "Dto tarifa"
   data.push([
     "Ref.",
     "Descripción",
     "Ud.",
+    "Dto tarifa",
     "Dto línea",
     "PVP final ud.",
     "Importe final",
@@ -256,7 +257,8 @@ function exportSimuladorExcel() {
       l.ref,
       l.descripcion,
       l.cantidad,
-      `${l.dtoLinea.toFixed(1)} %`, // solo dto línea
+      `${Number(l.dtoTarifa || 0).toFixed(1)} %`, // Dto tarifa
+      `${Number(l.dtoLinea || 0).toFixed(1)} %`,  // Dto línea
       Number(l.pvpFinalUd),
       Number(l.subtotalFinal),
     ])
@@ -268,6 +270,7 @@ function exportSimuladorExcel() {
     { wch: 12 }, // Ref.
     { wch: 50 }, // Descripción
     { wch: 6 },  // Ud.
+    { wch: 10 }, // Dto tarifa
     { wch: 10 }, // Dto línea
     { wch: 12 }, // PVP final ud.
     { wch: 14 }, // Importe final
@@ -279,6 +282,7 @@ function exportSimuladorExcel() {
   const out = XLSX.write(wb, { bookType: "xlsx", type: "array" });
   saveAs(new Blob([out]), "Simulacion_2N.xlsx");
 }
+
 
 // Exponer funciones globalmente
 window.exportSimuladorPDF = exportSimuladorPDF;
