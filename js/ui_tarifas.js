@@ -825,13 +825,15 @@ async function exportarTarifaExcel(tipoId) {
   }
 
   try {
-    // 1) Cargar plantilla Excel base (formato completo)
+    // 1) Cargar plantilla Excel base (formato completo) **con estilos**
     const resp = await fetch(tpl.url);
     if (!resp.ok) {
       throw new Error("No se pudo cargar la plantilla: " + tpl.url);
     }
     const buf = await resp.arrayBuffer();
-    const wb = XLSX.read(buf, { type: "array" });
+
+    // 👇 clave: cellStyles: true para preservar el formato
+    const wb = XLSX.read(buf, { type: "array", cellStyles: true });
 
     const ws = wb.Sheets[tpl.hoja || "Price List"];
     if (!ws) {
@@ -883,8 +885,9 @@ async function exportarTarifaExcel(tipoId) {
         });
 
         const existente = ws[addr] || {};
+        // 👇 mantenemos el estilo existente (s) y solo cambiamos tipo/valor
         ws[addr] = {
-          ...existente,          // mantiene el estilo original (s), comentarios, etc.
+          ...existente,
           t: "n",
           v: Number(valor.toFixed(2)),
         };
@@ -895,7 +898,8 @@ async function exportarTarifaExcel(tipoId) {
     const fileName =
       nombreBase.replace(/[^a-zA-Z0-9_\-]+/g, "_") + ".xlsx";
 
-    XLSX.writeFile(wb, fileName);
+    // 👇 clave: cellStyles: true al escribir para no perder formato
+    XLSX.writeFile(wb, fileName, { cellStyles: true });
   } catch (e) {
     console.error("[Tarifas] Error exportando Excel:", e);
     alert(
