@@ -8,6 +8,7 @@ appState.documentacion = appState.documentacion || {
   customBlocks: [], // bloques añadidos manualmente
   fichasIncluidas: {}, // mapa: idLinea -> true/false
   ultimaAutoGen: null,
+  modo: "comercial", // "comercial" | "tecnica"
 };
 
 // Helper local para obtener el contenedor de la app
@@ -219,6 +220,7 @@ function renderDocumentacionView() {
   }
 
   const idiomaActual = appState.documentacion.idioma || "es";
+  const modoActual = appState.documentacion.modo || "comercial";
 
   container.innerHTML = `
     <div class="doc-layout">
@@ -252,6 +254,25 @@ function renderDocumentacionView() {
           </div>
 
           <div class="doc-actions">
+            <div class="doc-mode-switch">
+              <button
+                class="btn btn-sm ${
+                  modoActual === "comercial" ? "btn-primary" : "btn-outline"
+                }"
+                id="docModoComercialBtn"
+              >
+                🧑‍💼 Comercial
+              </button>
+              <button
+                class="btn btn-sm ${
+                  modoActual === "tecnica" ? "btn-primary" : "btn-outline"
+                }"
+                id="docModoTecnicoBtn"
+              >
+                🧑‍🔬 Técnica
+              </button>
+            </div>
+
             <button class="btn btn-sm" id="docRegenerarBtn">
               🔁 Regenerar contenido automático
             </button>
@@ -407,6 +428,7 @@ function attachDocumentacionHandlers() {
   const container = getDocAppContent();
   if (!container) return;
 
+  // Idiomas
   container.querySelectorAll("[data-doc-lang]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const lang = btn.getAttribute("data-doc-lang") || "es";
@@ -415,6 +437,24 @@ function attachDocumentacionHandlers() {
     });
   });
 
+  // Modo comercial / técnico
+  const modoComBtn = container.querySelector("#docModoComercialBtn");
+  const modoTecBtn = container.querySelector("#docModoTecnicoBtn");
+
+  if (modoComBtn) {
+    modoComBtn.addEventListener("click", () => {
+      appState.documentacion.modo = "comercial";
+      renderDocumentacionView();
+    });
+  }
+  if (modoTecBtn) {
+    modoTecBtn.addEventListener("click", () => {
+      appState.documentacion.modo = "tecnica";
+      renderDocumentacionView();
+    });
+  }
+
+  // Regenerar automático
   const regenBtn = container.querySelector("#docRegenerarBtn");
   if (regenBtn) {
     regenBtn.addEventListener("click", () => {
@@ -423,6 +463,7 @@ function attachDocumentacionHandlers() {
     });
   }
 
+  // Textareas de secciones
   container.querySelectorAll(".doc-section-textarea").forEach((ta) => {
     ta.addEventListener("input", () => {
       const secKey = ta.getAttribute("data-doc-section-text");
@@ -432,6 +473,7 @@ function attachDocumentacionHandlers() {
     });
   });
 
+  // Checkboxes de fichas
   container.querySelectorAll("[data-doc-ficha-index]").forEach((chk) => {
     chk.addEventListener("change", () => {
       const idx = chk.getAttribute("data-doc-ficha-index");
@@ -440,16 +482,23 @@ function attachDocumentacionHandlers() {
     });
   });
 
+  // Nuevo bloque custom
   const nuevoBloqueBtn = container.querySelector("#docNuevoBloqueBtn");
   if (nuevoBloqueBtn) {
     nuevoBloqueBtn.addEventListener("click", openDocCustomModal);
   }
 
+  // Exportar PDF
   const exportBtn = container.querySelector("#docExportarBtn");
   if (exportBtn) {
-    exportBtn.addEventListener("click", exportarDocumentacionPDF);
+    exportBtn.addEventListener("click", () => {
+      exportarDocumentacionPDF().catch((err) =>
+        console.error("Error exportando PDF documentación:", err)
+      );
+    });
   }
 
+  // Modal custom
   const modal = document.getElementById("docCustomModal");
   const backdrop = document.getElementById("docModalBackdrop");
   const cancelBtn = modal?.querySelector("#docCustomCancelBtn");
@@ -524,10 +573,46 @@ function saveDocCustomBlock() {
 }
 
 // ===========================
-// EXPORTAR PDF REAL
+// IMÁGENES DE DISPOSITIVOS
 // ===========================
 
-function exportarDocumentacionPDF() {
+// Convención: si no hay mapa, usa /img/devices/<REF>.png
+function getImagenRef(ref) {
+  if (!ref) return null;
+  const clean = String(ref).trim().toUpperCase();
+  if (window.DOC_IMAGENES_POR_REF && window.DOC_IMAGENES_POR_REF[clean]) {
+    return window.DOC_IMAGENES_POR_REF[clean];
+  }
+  return `img/devices/${clean}.png`;
+}
+
+function loadImageAsDataUrl(url) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "Anonymous";
+    img.onload = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0);
+        const dataUrl = canvas.toDataURL("image/png");
+        resolve(dataUrl);
+      } catch (e) {
+        reject(e);
+      }
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
+// ===========================
+// EXPORTAR PDF (modo dual)
+// ===========================
+
+async function exportarDocumentacionPDF() {
   if (!window.jspdf || !window.jspdf.jsPDF) {
     alert(
       "No se ha podido cargar jsPDF. Revisa la inclusión de la librería en index.html."
@@ -535,12 +620,19 @@ function exportarDocumentacionPDF() {
     return;
   }
 
+  const modo = appState.documentacion.modo || "comercial";
+  if (modo === "comercial") {
+    await exportarPDFComercial();
+  } else {
+    await exportarPDFTecnico();
+  }
+}
+
+// ===== Versión técnica: memoria clásica + anexo de fichas =====
+
+async function exportarPDFTecnico() {
   const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({
-    orientation: "portrait",
-    unit: "mm",
-    format: "a4",
-  });
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
   const idioma = appState.documentacion.idioma || "es";
   const secciones = appState.documentacion.secciones || {};
@@ -567,7 +659,6 @@ function exportarDocumentacionPDF() {
   if (idioma === "en") tituloDoc = "Technical specification";
   if (idioma === "pt") tituloDoc = "Memória descritiva";
 
-  // Cabecera
   doc.setFont("helvetica", "bold");
   doc.setFontSize(16);
   doc.text(tituloDoc, 20, 20);
@@ -596,7 +687,6 @@ function exportarDocumentacionPDF() {
     }
   }
 
-  // Secciones
   DOC_SECTION_ORDER.forEach((key) => {
     const contenido = (secciones[key] || "").trim();
     if (!contenido) return;
@@ -617,7 +707,6 @@ function exportarDocumentacionPDF() {
     y += textLines.length * 5 + 4;
   });
 
-  // Anexo fichas
   const fichasSeleccionadas = [];
   if (presupuesto && Array.isArray(presupuesto.lineas)) {
     presupuesto.lineas.forEach((l, idx) => {
@@ -625,11 +714,7 @@ function exportarDocumentacionPDF() {
       const ref = l.ref || l.codigo || l.code || "";
       const desc = l.descripcion || l.desc || "";
       const qty = l.cantidad || l.qty || 1;
-      fichasSeleccionadas.push({
-        ref,
-        desc,
-        qty,
-      });
+      fichasSeleccionadas.push({ ref, desc, qty });
     });
   }
 
@@ -677,6 +762,146 @@ function exportarDocumentacionPDF() {
   let filenameBase = "memoria_calidades";
   if (idioma === "en") filenameBase = "technical_specification";
   if (idioma === "pt") filenameBase = "memoria_descritiva";
+
+  const safeName = String(nombreProyecto || "proyecto")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/gi, "_")
+    .replace(/^_+|_+$/g, "");
+
+  const filename = `${filenameBase}_${safeName || "2n"}.pdf`;
+  doc.save(filename);
+}
+
+// ===== Versión comercial: portada + página visual por dispositivo =====
+
+async function exportarPDFComercial() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+
+  const idioma = appState.documentacion.idioma || "es";
+  const secciones = appState.documentacion.secciones || {};
+
+  const presupuesto =
+    typeof window.getPresupuestoActual === "function"
+      ? window.getPresupuestoActual()
+      : null;
+  const proyecto = appState.proyecto || {};
+
+  const nombreProyecto =
+    proyecto.nombre ||
+    proyecto.nombreProyecto ||
+    presupuesto?.nombreProyecto ||
+    "Proyecto";
+
+  const promotora =
+    proyecto.promotora ||
+    proyecto.cliente ||
+    presupuesto?.cliente ||
+    "";
+
+  let tituloDoc = "Solución de accesos y videoportero IP";
+  if (idioma === "en") tituloDoc = "IP access and video intercom solution";
+  if (idioma === "pt") tituloDoc = "Solução IP de acessos e videoporteiro";
+
+  // Portada
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(18);
+  doc.text(tituloDoc, 20, 30);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(12);
+  let y = 40;
+
+  const headerLines = [];
+  headerLines.push(nombreProyecto);
+  if (promotora) headerLines.push(promotora);
+
+  headerLines.forEach((line) => {
+    const splitted = doc.splitTextToSize(line, 170);
+    doc.text(splitted, 20, y);
+    y += splitted.length * 6;
+  });
+
+  y += 8;
+
+  const resumen = (secciones.resumen || "").trim();
+  if (resumen) {
+    const resumenLines = doc.splitTextToSize(resumen, 170);
+    doc.setFontSize(11);
+    doc.text(resumenLines, 20, y);
+  }
+
+  // Páginas por dispositivo
+  const fichas = [];
+  if (presupuesto && Array.isArray(presupuesto.lineas)) {
+    presupuesto.lineas.forEach((l, idx) => {
+      if (!appState.documentacion.fichasIncluidas[idx]) return;
+      const ref = l.ref || l.codigo || l.code || "";
+      const desc = l.descripcion || l.desc || "";
+      const qty = l.cantidad || l.qty || 1;
+      fichas.push({ ref, desc, qty });
+    });
+  }
+
+  for (const f of fichas) {
+    doc.addPage();
+
+    // Título dispositivo
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text(f.desc || f.ref, 20, 25);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.text(`Ref: ${f.ref}  ·  x${f.qty}`, 20, 32);
+
+    // Imagen grande
+    const imgUrl = getImagenRef(f.ref);
+    try {
+      const dataUrl = await loadImageAsDataUrl(imgUrl);
+      const imgW = 120;
+      const imgH = 75;
+      const imgX = (210 - imgW) / 2;
+      const imgY = 40;
+      doc.addImage(dataUrl, "PNG", imgX, imgY, imgW, imgH);
+    } catch (e) {
+      console.warn("No se pudo cargar imagen para", f.ref, imgUrl, e);
+    }
+
+    // Bullets comerciales
+    let bullets = [];
+    if (idioma === "en") {
+      bullets = [
+        "Premium IP video intercom device.",
+        "Ideal for high-end residential projects and common areas.",
+        "Scalable and fully integrated with access control and mobile app.",
+      ];
+    } else if (idioma === "pt") {
+      bullets = [
+        "Dispositivo de videoporteiro IP premium.",
+        "Ideal para empreendimentos residenciais de alto padrão e zonas comuns.",
+        "Escalável e totalmente integrado com controlo de acessos e app móvel.",
+      ];
+    } else {
+      bullets = [
+        "Dispositivo de videoportero IP de gama alta.",
+        "Ideal para residenciales premium y zonas comunes representativas.",
+        "Escalable e integrado con control de accesos y app móvil.",
+      ];
+    }
+
+    let yBullets = 125;
+    doc.setFontSize(11);
+    bullets.forEach((b) => {
+      const lines = doc.splitTextToSize("• " + b, 170);
+      doc.text(lines, 20, yBullets);
+      yBullets += lines.length * 6;
+    });
+  }
+
+  let filenameBase = "presentacion_accesos";
+  if (idioma === "en") filenameBase = "access_solution_presentation";
+  if (idioma === "pt") filenameBase = "apresentacao_acessos";
 
   const safeName = String(nombreProyecto || "proyecto")
     .toLowerCase()
