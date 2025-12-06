@@ -1293,7 +1293,7 @@ function recalcularResumenDesdeSeleccion(lineasVisibles, dto) {
 }
 
 // ===============================================
-// EXPORTAR A EXCEL (XLSX) – versión simple y robusta
+// EXPORTAR A EXCEL (XLSX) – con formato “tipo tarifas”
 // + NOTAS POR SECCIÓN
 // ===============================================
 function exportarPresupuestoExcel() {
@@ -1333,7 +1333,16 @@ function exportarPresupuestoExcel() {
   // ==========================
   const rows = [];
 
+  // Indices para dar formato luego
+  let titleRowIdx = -1;
+  let tableHeaderRowIdx = -1;
+  const sectionTitleRowIdxs = [];
+  let subtotalRowIdx = -1;
+  let ivaRowIdx = -1;
+  let totalRowIdx = -1;
+
   // Cabecera
+  titleRowIdx = rows.length;
   rows.push(["PRESUPUESTO VIDEO PORTERO Y CONTROL DE ACCESOS"]);
   rows.push([]);
   rows.push(["Empresa", COMPANY_INFO.nombre]);
@@ -1397,6 +1406,7 @@ function exportarPresupuestoExcel() {
   }
 
   // Cabecera tabla de líneas
+  tableHeaderRowIdx = rows.length;
   rows.push([
     "Sección",
     "Título",
@@ -1434,6 +1444,7 @@ function exportarPresupuestoExcel() {
     // Fila separadora de sección
     rows.push([]);
     rows.push([sec.toUpperCase()]);
+    sectionTitleRowIdxs.push(rows.length - 1);
 
     list.forEach((l) => {
       const tituloLinea =
@@ -1458,15 +1469,18 @@ function exportarPresupuestoExcel() {
   });
 
   rows.push([]);
+  subtotalRowIdx = rows.length;
   rows.push(["Subtotal (base imponible)", "", "", "", "", "", base]);
+  ivaRowIdx = rows.length;
   rows.push(["IVA 21%", "", "", "", "", "", iva]);
+  totalRowIdx = rows.length;
   rows.push(["TOTAL OFERTA", "", "", "", "", "", total]);
   rows.push([]);
   rows.push(["Información fiscal", textoIVAEstado]);
   rows.push(["Validez de la oferta", textoValidez]);
 
   // ==========================
-  // CREAR LIBRO Y DESCARGAR
+  // CREAR LIBRO Y DAR FORMATO
   // ==========================
   const ws = XLSX.utils.aoa_to_sheet(rows);
 
@@ -1480,6 +1494,94 @@ function exportarPresupuestoExcel() {
     { wch: 14 }, // PVP
     { wch: 16 }, // Importe
   ];
+
+  // === Estilos parecidos a la hoja de tarifas ===
+  const borderThin = {
+    top: { style: "thin", color: { rgb: "D1D5DB" } },
+    bottom: { style: "thin", color: { rgb: "D1D5DB" } },
+    left: { style: "thin", color: { rgb: "D1D5DB" } },
+    right: { style: "thin", color: { rgb: "D1D5DB" } },
+  };
+
+  function styleCell(r, c, style) {
+    const addr = XLSX.utils.encode_cell({ r, c });
+    const cell = ws[addr];
+    if (!cell) return;
+    cell.s = Object.assign({}, cell.s || {}, style);
+  }
+
+  // Título principal
+  if (titleRowIdx >= 0) {
+    styleCell(titleRowIdx, 0, {
+      font: { bold: true, sz: 16, color: { rgb: "111827" } },
+      alignment: { horizontal: "left", vertical: "center" },
+    });
+  }
+
+  // Etiquetas de cabecera (Empresa, Proyecto, etc.) -> negrita en col A
+  const labelRows = [2, 3, 4, 5, 6, 8, 9, 10, 12]; // índices de fila dentro de rows
+  labelRows.forEach((r) => {
+    if (r < rows.length) {
+      styleCell(r, 0, {
+        font: { bold: true },
+      });
+    }
+  });
+
+  // Cabecera de la tabla
+  if (tableHeaderRowIdx >= 0) {
+    for (let c = 0; c <= 6; c++) {
+      styleCell(tableHeaderRowIdx, c, {
+        font: { bold: true, color: { rgb: "111827" } },
+        fill: { fgColor: { rgb: "E5E7EB" } },
+        alignment: { horizontal: "center", vertical: "center" },
+        border: borderThin,
+      });
+    }
+  }
+
+  // Filas de sección (nombre de la sección en mayúsculas)
+  sectionTitleRowIdxs.forEach((r) => {
+    styleCell(r, 0, {
+      font: { bold: true, color: { rgb: "111827" } },
+      fill: { fgColor: { rgb: "EEF2FF" } },
+      alignment: { horizontal: "left", vertical: "center" },
+      border: borderThin,
+    });
+  });
+
+  // Bordes + formato numérico para la tabla (desde header hasta fila de totales)
+  if (tableHeaderRowIdx >= 0 && totalRowIdx >= 0) {
+    for (let r = tableHeaderRowIdx + 1; r <= totalRowIdx; r++) {
+      // saltar filas vacías
+      if (!rows[r] || rows[r].length === 0) continue;
+      for (let c = 0; c <= 6; c++) {
+        styleCell(r, c, {
+          border: borderThin,
+          alignment:
+            c >= 4
+              ? { horizontal: "right", vertical: "center" }
+              : { horizontal: "left", vertical: "center" },
+        });
+
+        // Cantidades y precios con formato numérico
+        if (c === 4 || c === 5 || c === 6) {
+          const addr = XLSX.utils.encode_cell({ r, c });
+          if (ws[addr]) {
+            ws[addr].z = "0.00";
+          }
+        }
+      }
+    }
+  }
+
+  // Totales en negrita
+  [subtotalRowIdx, ivaRowIdx, totalRowIdx].forEach((r) => {
+    if (r >= 0) {
+      styleCell(r, 0, { font: { bold: true } });
+      styleCell(r, 6, { font: { bold: true } });
+    }
+  });
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Presupuesto");
