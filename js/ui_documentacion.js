@@ -1150,7 +1150,7 @@ async function saveMediaFileToStorageAndFirestore(file, options = {}) {
   const name = file.name || "archivo";
   const nowIso = new Date().toISOString();
   const isImage = file.type.startsWith("image/");
-  ￼const type = isImage ? "image" : "file";
+  const type = isImage ? "image" : "file";
 
   const folderName = options.folderName || "";
   const docCategory = options.docCategory || "imagen";
