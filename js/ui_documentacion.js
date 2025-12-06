@@ -18,12 +18,6 @@ function getDocAppContent() {
   return document.getElementById("appContent");
 }
 
-// Helpers globales ya usados en otros módulos
-const getPresupuestoActual =
-  typeof window.getPresupuestoActual === "function"
-    ? window.getPresupuestoActual
-    : null;
-
 // ===========================
 // CONFIGURACIÓN BASE
 // ===========================
