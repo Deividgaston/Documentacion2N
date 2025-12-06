@@ -15,6 +15,43 @@ appState.documentacion = appState.documentacion || {
   selectedFichasMediaIds: [], // 🆕 fichas técnicas seleccionadas desde la biblioteca
 };
 
+// 🆕 Persistencia local de la memoria de documentación
+const DOC_STORAGE_KEY = "docState_v1";
+
+(function loadDocStateFromLocalStorage() {
+  try {
+    const raw = window.localStorage && localStorage.getItem(DOC_STORAGE_KEY);
+    if (!raw) return;
+    const saved = JSON.parse(raw);
+    // mezclamos con lo que ya haya en appState.documentacion
+    appState.documentacion = {
+      ...appState.documentacion,
+      ...saved,
+    };
+  } catch (e) {
+    console.error("Error cargando estado de documentación desde localStorage:", e);
+  }
+})();
+
+function saveDocStateToLocalStorage() {
+  try {
+    if (!window.localStorage) return;
+    const toSave = {
+      idioma: appState.documentacion.idioma,
+      secciones: appState.documentacion.secciones,
+      customBlocks: appState.documentacion.customBlocks,
+      fichasIncluidas: appState.documentacion.fichasIncluidas,
+      modo: appState.documentacion.modo,
+      sectionMedia: appState.documentacion.sectionMedia,
+      selectedFichasMediaIds: appState.documentacion.selectedFichasMediaIds,
+    };
+    localStorage.setItem(DOC_STORAGE_KEY, JSON.stringify(toSave));
+  } catch (e) {
+    console.error("Error guardando estado de documentación en localStorage:", e);
+  }
+}
+
+
 // Helper local para obtener el contenedor de la app
 function getDocAppContent() {
   if (typeof window.getAppContent === "function") {
