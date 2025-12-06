@@ -796,23 +796,13 @@ function mostrarMsgTarifaDetalle(texto, esError) {
   msg.className = "alert mt-3 " + (esError ? "alert-error" : "alert-success");
 }
 
-// ======================================================
-// 9) EXPORTAR EXCEL DESDE PLANTILLA (motor de cálculo + color)
-// ======================================================
-
+// ===============================================
+// EXPORTAR TARIFA CON EXCELJS (formato bonito)
+// ===============================================
 async function exportarTarifaExcel(tipoId) {
   const tipo = appState.tarifasTipos[tipoId];
   if (!tipo) {
     alert("Tipo de tarifa no encontrado.");
-    return;
-  }
-
-  const tpl = TARIFA_TEMPLATES[tipo.templateId];
-  if (!tpl) {
-    alert(
-      "La plantilla base configurada para este tipo no existe en el código: " +
-        tipo.templateId
-    );
     return;
   }
 
@@ -825,85 +815,138 @@ async function exportarTarifaExcel(tipoId) {
   }
 
   try {
-    // 1) Cargar plantilla Excel base (formato completo) **con estilos**
-    const resp = await fetch(tpl.url);
-    if (!resp.ok) {
-      throw new Error("No se pudo cargar la plantilla: " + tpl.url);
-    }
-    const buf = await resp.arrayBuffer();
-
-    // 👇 clave: cellStyles: true para preservar el formato
-    const wb = XLSX.read(buf, { type: "array", cellStyles: true });
-
-    const ws = wb.Sheets[tpl.hoja || "Price List"];
-    if (!ws) {
-      alert(`La hoja "${tpl.hoja}" no existe en la plantilla.`);
-      return;
-    }
-
-    // 2) Mapear SKU -> fila (columna A)
-    const skuToRow = {};
-    for (let r = 1; r <= 30000; r++) {
-      const cell = ws["A" + r];
-      if (!cell || cell.v == null) continue;
-      const sku = String(cell.v).trim();
-      if (!sku) continue;
-      skuToRow[sku] = r;
-    }
-
-    // 3) Rellenar precios calculados (sin tocar estilos)
     const grupos = normalizarGrupos(tipo.grupos);
-    const columnasPrecio = tpl.columnasPrecio || {};
-    const niveles = Object.keys(columnasPrecio); // ej: ['subd','rp2','rp1','msrp']
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet("Price List");
 
-    for (const [sku, prod] of Object.entries(tarifasBase)) {
-      const fila = skuToRow[sku];
-      if (!fila) continue;
+    // ====== ESTILOS BÁSICOS ======
+    const fontHeader = { name: "Aptos Narrow", size: 11, bold: true, color: { argb: "FF000000" } };
+    const fontBody = { name: "Aptos Narrow", size: 10, color: { argb: "FF000000" } };
+    const fillHeader = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE5E7EB" } }; // gris claro
+    const borderThin = {
+      top:    { style: "thin", color: { argb: "FFCCCCCC" } },
+      left:   { style: "thin", color: { argb: "FFCCCCCC" } },
+      bottom: { style: "thin", color: { argb: "FFCCCCCC" } },
+      right:  { style: "thin", color: { argb: "FFCCCCCC" } },
+    };
 
+    // ====== CABECERAS (similar a SubD ES) ======
+    ws.mergeCells("A1:B1");
+    ws.getCell("A1").value = "2N Price List";
+    ws.getCell("A1").font = { name: "Aptos Narrow", size: 13, bold: true };
+    ws.getCell("A1").alignment = { vertical: "middle", horizontal: "left" };
+
+    ws.addRow([]);
+    const headerRow = ws.addRow([
+      "2N SKU",
+      "Nombre",
+      "SubD price (EUR)",
+      "Recommended Reseller",
+      "Recommended Reseller 2",
+      "MSRP (EUR)",
+      "Nota",
+      "Anchura (mm)",
+      "Altura (mm)",
+      "Profundidad (mm)",
+      "Peso (kg)",
+      "HS code",
+      "EAN code",
+      "Website",
+    ]);
+
+    headerRow.eachCell((cell) => {
+      cell.font = fontHeader;
+      cell.fill = fillHeader;
+      cell.border = borderThin;
+      cell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+    });
+
+    ws.columns = [
+      { key: "sku", width: 12 },
+      { key: "name", width: 45 },
+      { key: "subd", width: 14 },
+      { key: "rp2", width: 16 },
+      { key: "rp1", width: 16 },
+      { key: "msrp", width: 14 },
+      { key: "note", width: 25 },
+      { key: "w", width: 10 },
+      { key: "h", width: 10 },
+      { key: "d", width: 10 },
+      { key: "weight", width: 10 },
+      { key: "hs", width: 12 },
+      { key: "ean", width: 16 },
+      { key: "url", width: 25 },
+    ];
+
+    // ====== RELLENAR LÍNEAS (tarifa PVP + descuentos del tipo) ======
+    // Por ahora sin familias ("Access Unit", etc.), se pueden añadir después.
+    const productos = Object.entries(tarifasBase).sort(([a], [b]) =>
+      a.localeCompare(b)
+    );
+
+    for (const [sku, prod] of productos) {
       const pvp = Number(prod.pvp || 0);
       if (!pvp) continue;
 
-      const desc = prod.descripcion || prod.desc || "";
+      const desc = prod.descripcion || prod.desc || prod.nombre || "";
       const gid = clasificarGrupoPorDescripcion(desc);
       const dtoGrupo = grupos[gid] || {};
 
-      niveles.forEach((nivel) => {
-        const colIndex = columnasPrecio[nivel];
-        if (!colIndex) return;
+      const dtoSubd = Number(dtoGrupo.subd || 0);
+      const dtoRp2  = Number(dtoGrupo.rp2 || 0);
+      const dtoRp1  = Number(dtoGrupo.rp1 || 0);
 
-        let dto = 0;
-        if (nivel === "msrp") {
-          dto = 0;
+      const precioSubd = pvp * (1 - dtoSubd);
+      const precioRp2  = pvp * (1 - dtoRp2);
+      const precioRp1  = pvp * (1 - dtoRp1);
+
+      const row = ws.addRow({
+        sku: sku,
+        name: desc,
+        subd: precioSubd || null,
+        rp2: precioRp2 || null,
+        rp1: precioRp1 || null,
+        msrp: pvp,
+        note: "",
+        w: prod.width || null,
+        h: prod.height || null,
+        d: prod.depth || null,
+        weight: prod.weight || null,
+        hs: prod.hs || null,
+        ean: prod.ean || null,
+        url: prod.url || null,
+      });
+
+      row.eachCell((cell, colNumber) => {
+        cell.font = fontBody;
+        cell.border = borderThin;
+        if ([3, 4, 5, 6].includes(colNumber)) {
+          cell.numFmt = '#,##0.00';
+          cell.alignment = { vertical: "middle", horizontal: "right" };
         } else {
-          dto = Number(dtoGrupo[nivel] || 0);
+          cell.alignment = { vertical: "middle", horizontal: "left", wrapText: true };
         }
-
-        const valor = pvp * (1 - dto);
-        const addr = XLSX.utils.encode_cell({
-          r: fila - 1,
-          c: colIndex - 1,
-        });
-
-        const existente = ws[addr] || {};
-        // 👇 mantenemos el estilo existente (s) y solo cambiamos tipo/valor
-        ws[addr] = {
-          ...existente,
-          t: "n",
-          v: Number(valor.toFixed(2)),
-        };
       });
     }
+
+    // ====== FOOTER SIMPLE ======
+    ws.addRow([]);
+    const footer = ws.addRow([
+      "Generated from 2N PVP base price list and discount profile: " + (tipo.nombre || tipo.id),
+    ]);
+    ws.mergeCells(footer.number, 1, footer.number, 8);
+    footer.getCell(1).font = { name: "Aptos Narrow", size: 9, color: { argb: "FF6B7280" } };
 
     const nombreBase = tipo.nombre || tipo.id || "Tarifa_2N";
     const fileName =
       nombreBase.replace(/[^a-zA-Z0-9_\-]+/g, "_") + ".xlsx";
 
-    // 👇 clave: cellStyles: true al escribir para no perder formato
-    XLSX.writeFile(wb, fileName, { cellStyles: true });
+    const bufOut = await wb.xlsx.writeBuffer();
+    saveAs(new Blob([bufOut], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), fileName);
   } catch (e) {
-    console.error("[Tarifas] Error exportando Excel:", e);
+    console.error("[Tarifas] Error exportando Excel con ExcelJS:", e);
     alert(
-      "Se ha producido un error al generar la tarifa en Excel. Revisa la plantilla base y los datos."
+      "Se ha producido un error al generar la tarifa en Excel."
     );
   }
 }
