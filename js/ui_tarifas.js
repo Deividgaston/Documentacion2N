@@ -797,7 +797,7 @@ function mostrarMsgTarifaDetalle(texto, esError) {
 }
 
 // ===============================================
-// EXPORTAR TARIFA CON EXCELJS (formato bonito)
+// EXPORTAR TARIFA CON EXCELJS (formato 2N con color)
 // ===============================================
 async function exportarTarifaExcel(tipoId) {
   const tipo = appState.tarifasTipos[tipoId];
@@ -819,24 +819,33 @@ async function exportarTarifaExcel(tipoId) {
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet("Price List");
 
-    // ====== ESTILOS BÁSICOS ======
+    // ====== COLORES 2N ======
+    const COLOR_HEADER = "FF1BB1C7"; // Verde corporativo 2N
+    const COLOR_HEADER_LIGHT = "FFE5E7EB"; // Gris cabecera columnas
+    const COLOR_SECTION = "FFF3F4F6"; // Gris suave para familias
+
+    // ====== ESTILOS ======
+    const fontHeaderBig = { name: "Aptos Narrow", size: 13, bold: true, color: { argb: "FFFFFFFF" } };
     const fontHeader = { name: "Aptos Narrow", size: 11, bold: true, color: { argb: "FF000000" } };
+    const fontSection = { name: "Aptos Narrow", size: 11, bold: true, color: { argb: "FF374151" } };
     const fontBody = { name: "Aptos Narrow", size: 10, color: { argb: "FF000000" } };
-    const fillHeader = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE5E7EB" } }; // gris claro
     const borderThin = {
-      top:    { style: "thin", color: { argb: "FFCCCCCC" } },
-      left:   { style: "thin", color: { argb: "FFCCCCCC" } },
+      top: { style: "thin", color: { argb: "FFCCCCCC" } },
+      left: { style: "thin", color: { argb: "FFCCCCCC" } },
       bottom: { style: "thin", color: { argb: "FFCCCCCC" } },
-      right:  { style: "thin", color: { argb: "FFCCCCCC" } },
+      right: { style: "thin", color: { argb: "FFCCCCCC" } },
     };
 
-    // ====== CABECERAS (similar a SubD ES) ======
-    ws.mergeCells("A1:B1");
+    // ====== CABECERA PRINCIPAL ======
+    ws.mergeCells("A1:N1");
     ws.getCell("A1").value = "2N Price List";
-    ws.getCell("A1").font = { name: "Aptos Narrow", size: 13, bold: true };
+    ws.getCell("A1").font = fontHeaderBig;
     ws.getCell("A1").alignment = { vertical: "middle", horizontal: "left" };
+    ws.getCell("A1").fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLOR_HEADER } };
 
     ws.addRow([]);
+
+    // ====== CABECERAS DE COLUMNA ======
     const headerRow = ws.addRow([
       "2N SKU",
       "Nombre",
@@ -856,7 +865,7 @@ async function exportarTarifaExcel(tipoId) {
 
     headerRow.eachCell((cell) => {
       cell.font = fontHeader;
-      cell.fill = fillHeader;
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLOR_HEADER_LIGHT } };
       cell.border = borderThin;
       cell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
     });
@@ -878,76 +887,76 @@ async function exportarTarifaExcel(tipoId) {
       { key: "url", width: 25 },
     ];
 
-    // ====== RELLENAR LÍNEAS (tarifa PVP + descuentos del tipo) ======
-    // Por ahora sin familias ("Access Unit", etc.), se pueden añadir después.
+    // ====== GENERAR FAMILIAS ======
+    function familiaDesdeSKU(sku, prod) {
+      const name = (prod.descripcion || prod.desc || "").toLowerCase();
+
+      if (name.includes("access unit")) return "Access Unit";
+      if (name.includes("intercom") || name.includes("verso") || name.includes("ip style")) return "Videoporteros";
+      if (name.includes("fortis")) return "Fortis";
+      if (name.includes("indoor")) return "Indoor Units";
+      if (name.includes("my2n")) return "Licencias My2N";
+
+      return "Otros";
+    }
+
     const productos = Object.entries(tarifasBase).sort(([a], [b]) =>
       a.localeCompare(b)
     );
 
+    let familiaActual = null;
+
     for (const [sku, prod] of productos) {
+      const fam = familiaDesdeSKU(sku, prod);
+
+      if (fam !== familiaActual) {
+        const row = ws.addRow([fam]);
+        row.font = fontSection;
+        row.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLOR_SECTION } };
+        ws.mergeCells(`A${row.number}:N${row.number}`);
+        familiaActual = fam;
+      }
+
       const pvp = Number(prod.pvp || 0);
-      if (!pvp) continue;
-
-      const desc = prod.descripcion || prod.desc || prod.nombre || "";
+      const desc = prod.descripcion || prod.desc || "";
       const gid = clasificarGrupoPorDescripcion(desc);
-      const dtoGrupo = grupos[gid] || {};
-
-      const dtoSubd = Number(dtoGrupo.subd || 0);
-      const dtoRp2  = Number(dtoGrupo.rp2 || 0);
-      const dtoRp1  = Number(dtoGrupo.rp1 || 0);
-
-      const precioSubd = pvp * (1 - dtoSubd);
-      const precioRp2  = pvp * (1 - dtoRp2);
-      const precioRp1  = pvp * (1 - dtoRp1);
+      const dto = grupos[gid] || {};
 
       const row = ws.addRow({
-        sku: sku,
+        sku,
         name: desc,
-        subd: precioSubd || null,
-        rp2: precioRp2 || null,
-        rp1: precioRp1 || null,
+        subd: pvp * (1 - (dto.subd || 0)),
+        rp2: pvp * (1 - (dto.rp2 || 0)),
+        rp1: pvp * (1 - (dto.rp1 || 0)),
         msrp: pvp,
         note: "",
-        w: prod.width || null,
-        h: prod.height || null,
-        d: prod.depth || null,
-        weight: prod.weight || null,
-        hs: prod.hs || null,
-        ean: prod.ean || null,
-        url: prod.url || null,
+        w: prod.width || "",
+        h: prod.height || "",
+        d: prod.depth || "",
+        weight: prod.weight || "",
+        hs: prod.hs || "",
+        ean: prod.ean || "",
+        url: prod.url || "",
       });
 
-      row.eachCell((cell, colNumber) => {
+      row.eachCell((cell, col) => {
         cell.font = fontBody;
         cell.border = borderThin;
-        if ([3, 4, 5, 6].includes(colNumber)) {
-          cell.numFmt = '#,##0.00';
-          cell.alignment = { vertical: "middle", horizontal: "right" };
-        } else {
-          cell.alignment = { vertical: "middle", horizontal: "left", wrapText: true };
+        if ([3, 4, 5, 6].includes(col)) {
+          cell.numFmt = "#,##0.00";
+          cell.alignment = { horizontal: "right" };
         }
       });
     }
 
-    // ====== FOOTER SIMPLE ======
-    ws.addRow([]);
-    const footer = ws.addRow([
-      "Generated from 2N PVP base price list and discount profile: " + (tipo.nombre || tipo.id),
-    ]);
-    ws.mergeCells(footer.number, 1, footer.number, 8);
-    footer.getCell(1).font = { name: "Aptos Narrow", size: 9, color: { argb: "FF6B7280" } };
-
-    const nombreBase = tipo.nombre || tipo.id || "Tarifa_2N";
-    const fileName =
-      nombreBase.replace(/[^a-zA-Z0-9_\-]+/g, "_") + ".xlsx";
-
+    // ====== EXPORTAR ======
     const bufOut = await wb.xlsx.writeBuffer();
-    saveAs(new Blob([bufOut], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), fileName);
+    const fileName = (tipo.nombre || tipo.id) + ".xlsx";
+    saveAs(new Blob([bufOut]), fileName);
+
   } catch (e) {
     console.error("[Tarifas] Error exportando Excel con ExcelJS:", e);
-    alert(
-      "Se ha producido un error al generar la tarifa en Excel."
-    );
+    alert("Error al generar la tarifa en Excel con colores.");
   }
 }
 
