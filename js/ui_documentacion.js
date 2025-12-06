@@ -553,6 +553,47 @@ function renderSectionMediaHTML(sectionKey) {
     .join("");
 }
 
+// 🆕 Render de las secciones con sus textareas y zona de media
+function renderDocSectionsHTML() {
+  const secciones = appState.documentacion.secciones || {};
+  return DOC_SECTION_ORDER.map((key) => {
+    const contenido = secciones[key] || "";
+    return `
+      <div class="card doc-section-card" data-doc-section="${key}">
+        <div class="card-header">
+          <div class="card-title">${labelForSection(key)}</div>
+          <div class="doc-section-header-actions">
+            <button
+              type="button"
+              class="btn btn-xs btn-outline"
+              data-doc-ai-section="${key}"
+              title="Preguntar a IA para mejorar o completar el texto"
+            >
+              ✨ Preguntar a IA
+            </button>
+          </div>
+        </div>
+        <div class="card-body">
+          <textarea
+            class="form-control doc-section-textarea"
+            data-doc-section-text="${key}"
+            rows="8"
+          >${contenido}</textarea>
+
+          <div class="doc-section-media-drop" data-doc-section-drop="${key}">
+            <div class="doc-section-media-items">
+              ${renderSectionMediaHTML(key)}
+            </div>
+            <div class="doc-section-media-hint">
+              Arrastra aquí imágenes o documentos desde la columna derecha para adjuntarlos a esta sección.
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
 // ===========================
 // FICHAS TÉCNICAS (equipos + biblioteca)
 // ===========================
@@ -1109,7 +1150,7 @@ async function saveMediaFileToStorageAndFirestore(file, options = {}) {
   const name = file.name || "archivo";
   const nowIso = new Date().toISOString();
   const isImage = file.type.startsWith("image/");
-  const type = isImage ? "image" : "file";
+  ￼const type = isImage ? "image" : "file";
 
   const folderName = options.folderName || "";
   const docCategory = options.docCategory || "imagen";
