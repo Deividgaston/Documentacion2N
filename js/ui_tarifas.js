@@ -545,7 +545,7 @@ function pintarListadoTiposTarifa() {
 }
 
 // ======================================================
-// 8) FORMULARIO DETALLE / EDICIÓN
+// 8) FORMULARIO DETALLE / EDICIÓN (VERSIÓN COMPACTA)
 // ======================================================
 
 function mostrarFormularioTipoTarifa(tipoOriginal) {
@@ -578,127 +578,166 @@ function mostrarFormularioTipoTarifa(tipoOriginal) {
     .join("");
 
   detalle.innerHTML = `
-    <div class="form-grid">
+    <style>
+      .tarifas-detalle-compact .form-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.5rem 1rem;
+      }
+      @media (max-width: 960px) {
+        .tarifas-detalle-compact .form-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+      @media (max-width: 720px) {
+        .tarifas-detalle-compact .form-grid {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+      .tarifas-detalle-compact .form-group {
+        margin-bottom: 0.35rem;
+      }
+      .tarifas-detalle-compact .small-hint {
+        font-size: 0.7rem;
+        color: #6b7280;
+        margin-top: 0.15rem;
+      }
+      .tarifas-detalle-compact .table-wrapper-compact {
+        max-height: 260px;
+        overflow: auto;
+        border-radius: 0.5rem;
+        border: 1px solid #e5e7eb;
+        background: #f9fafb;
+        padding: 0.25rem;
+      }
+      .tarifas-detalle-compact table.table {
+        margin-bottom: 0;
+      }
+    </style>
 
-      <div class="form-group">
-        <label>ID tipo (único)</label>
-        <input id="tipoId" type="text" value="${tipo.id}" ${
+    <div class="tarifas-detalle-compact">
+
+      <div class="form-grid">
+
+        <div class="form-group">
+          <label>ID tipo (único)</label>
+          <input id="tipoId" type="text" value="${tipo.id}" ${
     esNuevo ? "" : "readonly"
   } />
-        <p style="font-size:0.75rem; color:#6b7280;">
-          Ej: ES_SUBD, ES_BBD, TARIFA_INSTALADOR_15
+          <p class="small-hint">
+            Ej: ES_SUBD, ES_BBD, TARIFA_INSTALADOR_15
+          </p>
+        </div>
+
+        <div class="form-group">
+          <label>Nombre visible</label>
+          <input id="tipoNombre" type="text" value="${tipo.nombre}" />
+        </div>
+
+        <div class="form-group">
+          <label>Idioma</label>
+          <select id="tipoIdioma">
+            <option value="ES" ${tipo.idioma === "ES" ? "selected" : ""}>ES</option>
+            <option value="EN" ${tipo.idioma === "EN" ? "selected" : ""}>EN</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Moneda</label>
+          <input id="tipoMoneda" type="text" value="${tipo.moneda || "EUR"}" />
+        </div>
+
+        <div class="form-group">
+          <label>Plantilla base</label>
+          <select id="tipoTemplateId">
+            ${opcionesTemplate}
+          </select>
+          <p class="small-hint">
+            Solo define el formato (columnas NFR/Dist/SubD/RP2/RP1/MSRP).
+          </p>
+        </div>
+
+        <div class="form-group">
+          <label>Orden</label>
+          <input id="tipoOrden" type="number" value="${tipo.orden || 100}" />
+        </div>
+
+        <div class="form-group">
+          <label>Activo</label>
+          <label style="display:flex; align-items:center; gap:0.35rem;">
+            <input id="tipoActivo" type="checkbox" ${
+              tipo.activo !== false ? "checked" : ""
+            } />
+            <span style="font-size:0.8rem;">Disponible para exportar</span>
+          </label>
+        </div>
+
+      </div>
+
+      <div style="margin-top:0.8rem;">
+        <h4 style="font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">
+          Descuentos por grupo
+        </h4>
+        <p class="small-hint">
+          Valores en % sobre PVP. Se aplican por grupo (A/B/C/D) y nivel (NFR, Dist, SubD, RP2, RP1).
         </p>
+
+        <div class="table-wrapper-compact">
+          <table class="table" style="font-size:0.76rem; min-width:100%;">
+            <thead>
+              <tr>
+                <th>Grupo</th>
+                ${DISCOUNT_FIELDS.map(
+                  (f) => `<th style="text-align:right;">${f}</th>`
+                ).join("")}
+              </tr>
+            </thead>
+            <tbody>
+              ${GRUPOS_IDS.map((gid) => {
+                const g = (tipo.grupos && tipo.grupos[gid]) || {};
+                return `
+                <tr data-gid="${gid}">
+                  <td style="white-space:nowrap;">${GRUPOS_LABELS[gid] || gid}</td>
+                  ${DISCOUNT_FIELDS.map((f) => {
+                    const val = typeof g[f] === "number" ? g[f] * 100 : "";
+                    return `
+                      <td style="text-align:right;">
+                        <input
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          max="90"
+                          class="input input-xs input-dto-grupo"
+                          data-gid="${gid}"
+                          data-field="${f}"
+                          value="${val !== "" ? val : ""}"
+                          style="max-width:60px; text-align:right;"
+                        />
+                      </td>
+                    `;
+                  }).join("")}
+                </tr>`;
+              }).join("")}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      <div class="form-group">
-        <label>Nombre visible</label>
-        <input id="tipoNombre" type="text" value="${tipo.nombre}" />
+      <div style="margin-top:0.8rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
+        <button id="btnGuardarTipoTarifa" class="btn btn-primary btn-sm">
+          Guardar
+        </button>
+        ${
+          !esNuevo
+            ? `<button id="btnExportarTipoTarifa" class="btn btn-secondary btn-sm">
+                 Exportar Excel
+               </button>`
+            : ""
+        }
       </div>
 
-      <div class="form-group">
-        <label>Idioma</label>
-        <select id="tipoIdioma">
-          <option value="ES" ${tipo.idioma === "ES" ? "selected" : ""}>ES</option>
-          <option value="EN" ${tipo.idioma === "EN" ? "selected" : ""}>EN</option>
-        </select>
-      </div>
-
-      <div class="form-group">
-        <label>Moneda</label>
-        <input id="tipoMoneda" type="text" value="${tipo.moneda || "EUR"}" />
-      </div>
-
-      <div class="form-group">
-        <label>Plantilla base</label>
-        <select id="tipoTemplateId">
-          ${opcionesTemplate}
-        </select>
-        <p style="font-size:0.75rem; color:#6b7280;">
-          Define el formato (columnas NFR/Dist/SubD/RP2/RP1/MSRP). Los precios siempre salen de la tarifa PVP en Firestore.
-        </p>
-      </div>
-
-      <div class="form-group">
-        <label>Orden</label>
-        <input id="tipoOrden" type="number" value="${tipo.orden || 100}" />
-      </div>
-
-      <div class="form-group">
-        <label>Activo</label>
-        <label style="display:flex; align-items:center; gap:0.35rem;">
-          <input id="tipoActivo" type="checkbox" ${
-            tipo.activo !== false ? "checked" : ""
-          } />
-          Disponible para exportar
-        </label>
-      </div>
-
+      <div id="tarifasDetalleMsg" class="alert mt-3" style="display:none;"></div>
     </div>
-
-    <div style="margin-top:1rem;">
-      <h4 style="font-size:0.85rem; font-weight:600; margin-bottom:0.5rem;">
-        Descuentos por grupo de producto
-      </h4>
-      <p style="font-size:0.75rem; color:#6b7280; margin-bottom:0.5rem;">
-        Valores en % sobre PVP. Se guardan por grupo A/B/C/D y por nivel (NFR, Dist, SubD, RP2, RP1).
-      </p>
-
-      <div class="table-wrapper" style="overflow-x:auto;">
-        <table class="table" style="font-size:0.8rem; min-width:100%;">
-          <thead>
-            <tr>
-              <th>Grupo</th>
-              ${DISCOUNT_FIELDS.map(
-                (f) => `<th style="text-align:right;">${f}</th>`
-              ).join("")}
-            </tr>
-          </thead>
-          <tbody>
-            ${GRUPOS_IDS.map((gid) => {
-              const g = (tipo.grupos && tipo.grupos[gid]) || {};
-              return `
-              <tr data-gid="${gid}">
-                <td style="white-space:nowrap;">${GRUPOS_LABELS[gid] ||
-                gid}</td>
-                ${DISCOUNT_FIELDS.map((f) => {
-                  const val = typeof g[f] === "number" ? g[f] * 100 : "";
-                  return `
-                    <td style="text-align:right;">
-                      <input
-                        type="number"
-                        step="0.1"
-                        min="0"
-                        max="90"
-                        class="input input-xs input-dto-grupo"
-                        data-gid="${gid}"
-                        data-field="${f}"
-                        value="${val !== "" ? val : ""}"
-                        style="max-width:70px; text-align:right;"
-                      />
-                    </td>
-                  `;
-                }).join("")}
-              </tr>`;
-            }).join("")}
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <div style="margin-top:1rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
-      <button id="btnGuardarTipoTarifa" class="btn btn-primary btn-sm">
-        Guardar
-      </button>
-      ${
-        !esNuevo
-          ? `<button id="btnExportarTipoTarifa" class="btn btn-secondary btn-sm">
-               Exportar Excel
-             </button>`
-          : ""
-      }
-    </div>
-
-    <div id="tarifasDetalleMsg" class="alert mt-3" style="display:none;"></div>
   `;
 
   const btnGuardar = document.getElementById("btnGuardarTipoTarifa");
