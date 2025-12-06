@@ -12,6 +12,7 @@ appState.documentacion = appState.documentacion || {
   mediaLibrary: [], // [{id, nombre, type, mimeType, url, storagePath, folderName, docCategory,...}]
   mediaLoaded: false,
   sectionMedia: {}, // mapa: sectionKey -> [mediaId]
+  selectedFichasMediaIds: [], // 🆕 fichas técnicas seleccionadas desde la biblioteca
 };
 
 // Helper local para obtener el contenedor de la app
@@ -551,6 +552,10 @@ function renderDocSectionsHTML() {
   }).join("");
 }
 
+// ===========================
+// FICHAS TÉCNICAS (equipos + biblioteca)
+// ===========================
+
 function renderDocFichasHTML() {
   const presupuesto =
     typeof window.getPresupuestoActual === "function"
@@ -558,32 +563,90 @@ function renderDocFichasHTML() {
       : null;
   const lineas = Array.isArray(presupuesto?.lineas) ? presupuesto.lineas : [];
 
+  const media = appState.documentacion.mediaLibrary || [];
+  const fichasMedia = media.filter((m) => m.docCategory === "ficha"); // 🆕
+  const selIds = appState.documentacion.selectedFichasMediaIds || []; // 🆕
+
+  let htmlEquipos;
   if (!lineas.length) {
-    return `
-      <p class="text-muted">
+    htmlEquipos = `
+      <p class="text-muted" style="font-size:0.85rem;">
         No se ha encontrado lista de materiales en el presupuesto actual.
       </p>
+    `;
+  } else {
+    htmlEquipos = `
+      <div class="doc-fichas-list">
+        ${lineas
+          .map((l, idx) => {
+            const id = `docFichaChk_${idx}`;
+            const ref = l.ref || l.codigo || l.code || "";
+            const desc = l.descripcion || l.desc || "";
+            const checked = appState.documentacion.fichasIncluidas[idx]
+              ? "checked"
+              : "";
+            return `
+              <label class="doc-ficha-item">
+                <input type="checkbox" id="${id}" data-doc-ficha-index="${idx}" ${checked} />
+                <span class="doc-ficha-main">
+                  <strong>${ref}</strong> – ${desc}
+                </span>
+              </label>
+            `;
+          })
+          .join("")}
+      </div>
+    `;
+  }
+
+  let htmlMedia;
+  if (!fichasMedia.length) {
+    htmlMedia = `
+      <p class="text-muted" style="font-size:0.8rem;">
+        Todavía no has subido fichas técnicas a la biblioteca.
+        Súbelas desde el botón 📁 eligiendo el tipo "Ficha técnica".
+      </p>
+    `;
+  } else {
+    htmlMedia = `
+      <div class="doc-fichas-list doc-fichas-media-list">
+        ${fichasMedia
+          .map((m) => {
+            const checked = selIds.includes(m.id) ? "checked" : "";
+            const labelExtra = m.folderName ? ` – ${m.folderName}` : "";
+            return `
+              <label class="doc-ficha-item">
+                <input type="checkbox" data-doc-ficha-media-id="${m.id}" ${checked} />
+                <span class="doc-ficha-main">
+                  <strong>${m.nombre}</strong>${labelExtra}
+                </span>
+              </label>
+            `;
+          })
+          .join("")}
+      </div>
     `;
   }
 
   return `
-    <div class="doc-fichas-list">
-      ${lineas
-        .map((l, idx) => {
-          const id = `docFichaChk_${idx}`;
-          const ref = l.ref || l.codigo || l.code || "";
-          const desc = l.descripcion || l.desc || "";
-          const checked = appState.documentacion.fichasIncluidas[idx] ? "checked" : "";
-          return `
-            <label class="doc-ficha-item">
-              <input type="checkbox" id="${id}" data-doc-ficha-index="${idx}" ${checked} />
-              <span class="doc-ficha-main">
-                <strong>${ref}</strong> – ${desc}
-              </span>
-            </label>
-          `;
-        })
-        .join("")}
+    <div class="doc-fichas-section">
+      <div class="doc-fichas-block">
+        <div class="doc-fichas-title">Equipos del presupuesto</div>
+        <p class="doc-fichas-help">
+          Marca los equipos de la lista de materiales que quieres incluir en el anexo técnico.
+        </p>
+        ${htmlEquipos}
+      </div>
+
+      <hr class="doc-fichas-separator" />
+
+      <div class="doc-fichas-block">
+        <div class="doc-fichas-title">Fichas técnicas de biblioteca</div>
+        <p class="doc-fichas-help">
+          Selecciona las fichas técnicas genéricas (PDF, docs) que quieres anexar a la memoria.
+        </p>
+        ${htmlMedia}
+      </div>
     </div>
   `;
 }
@@ -705,12 +768,28 @@ function attachDocumentacionHandlers() {
     });
   });
 
-  // Checkboxes de fichas
+  // Checkboxes de fichas (equipos)
   container.querySelectorAll("[data-doc-ficha-index]").forEach((chk) => {
     chk.addEventListener("change", () => {
       const idx = chk.getAttribute("data-doc-ficha-index");
       if (idx == null) return;
       appState.documentacion.fichasIncluidas[idx] = chk.checked;
+    });
+  });
+
+  // 🆕 Checkboxes de fichas técnicas de biblioteca
+  container.querySelectorAll("[data-doc-ficha-media-id]").forEach((chk) => {
+    chk.addEventListener("change", () => {
+      const id = chk.getAttribute("data-doc-ficha-media-id");
+      if (!id) return;
+      const list = appState.documentacion.selectedFichasMediaIds || [];
+      const pos = list.indexOf(id);
+      if (chk.checked) {
+        if (pos === -1) list.push(id);
+      } else {
+        if (pos !== -1) list.splice(pos, 1);
+      }
+      appState.documentacion.selectedFichasMediaIds = list;
     });
   });
 
@@ -1172,7 +1251,7 @@ async function exportarDocumentacionPDF() {
   }
 }
 
-// ===== Versión técnica: memoria clásica + anexo de fichas =====
+// ===== Versión técnica: memoria clásica + anexos =====
 
 async function exportarPDFTecnico() {
   const { jsPDF } = window.jspdf;
@@ -1251,6 +1330,7 @@ async function exportarPDFTecnico() {
     y += textLines.length * 5 + 4;
   });
 
+  // Anexo 1: equipos del presupuesto
   const fichasSeleccionadas = [];
   if (presupuesto && Array.isArray(presupuesto.lineas)) {
     presupuesto.lineas.forEach((l, idx) => {
@@ -1266,9 +1346,9 @@ async function exportarPDFTecnico() {
     doc.addPage();
     y = 20;
 
-    let tituloAnexo = "Anexo – Fichas técnicas";
-    if (idioma === "en") tituloAnexo = "Appendix – Technical datasheets";
-    if (idioma === "pt") tituloAnexo = "Anexo – Fichas técnicas";
+    let tituloAnexo = "Anexo – Equipos principales";
+    if (idioma === "en") tituloAnexo = "Appendix – Main devices";
+    if (idioma === "pt") tituloAnexo = "Anexo – Equipamentos principais";
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
@@ -1301,6 +1381,40 @@ async function exportarPDFTecnico() {
         y += splitted.length * 5 + 2;
       });
     }
+  }
+
+  // 🆕 Anexo 2: fichas técnicas de biblioteca
+  const mediaLib = appState.documentacion.mediaLibrary || [];
+  const selIds = appState.documentacion.selectedFichasMediaIds || [];
+  const fichasMediaSeleccionadas = mediaLib.filter(
+    (m) => m.docCategory === "ficha" && selIds.includes(m.id)
+  );
+
+  if (fichasMediaSeleccionadas.length > 0) {
+    doc.addPage();
+    y = 20;
+
+    let tituloDocs = "Anexo – Fichas técnicas adjuntas";
+    if (idioma === "en") tituloDocs = "Appendix – Technical documentation";
+    if (idioma === "pt") tituloDocs = "Anexo – Documentação técnica";
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.text(tituloDocs, 20, y);
+    y += 8;
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+
+    fichasMediaSeleccionadas.forEach((m) => {
+      const extra = m.folderName ? ` – ${m.folderName}` : "";
+      const urlText = m.url ? ` (${m.url})` : "";
+      const line = `${m.nombre}${extra}${urlText}`;
+      const splitted = doc.splitTextToSize(line, 170);
+      ensureSpace(splitted.length);
+      doc.text(splitted, 20, y);
+      y += splitted.length * 5 + 2;
+    });
   }
 
   let filenameBase = "memoria_calidades";
