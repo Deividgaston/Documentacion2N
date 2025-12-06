@@ -655,12 +655,15 @@ function renderDocFichasHTML() {
         ${fichasMedia
           .map((m) => {
             const checked = selIds.includes(m.id) ? "checked" : "";
-            const labelExtra = m.folderName ? ` – ${m.folderName}` : "";
+            // 👉 primero carpeta, luego nombre de archivo
+            const mainLabel = m.folderName
+              ? `<strong>${m.folderName}</strong> – ${m.nombre}`
+              : `<strong>${m.nombre}</strong>`;
             return `
               <label class="doc-ficha-item">
                 <input type="checkbox" data-doc-ficha-media-id="${m.id}" ${checked} />
                 <span class="doc-ficha-main">
-                  <strong>${m.nombre}</strong>${labelExtra}
+                  ${mainLabel}
                 </span>
               </label>
             `;
@@ -708,28 +711,32 @@ function renderDocMediaLibraryHTML() {
     <div class="doc-media-grid">
       ${media
         .map((m) => {
-          const isImage =
-            m.type === "image" || (m.mimeType || "").startsWith("image/");
-          const icon = isImage ? "" : "📄";
+          // 👉 siempre icono, sin previsualización de imagen
+          const icon =
+            m.docCategory === "ficha"
+              ? "📄"
+              : "🖼️";
+
+          const captionText = m.folderName
+            ? `${m.folderName} – ${m.nombre}`
+            : m.nombre;
+
           const tag =
             m.docCategory === "ficha"
               ? "Ficha técnica"
               : m.docCategory === "imagen"
               ? "Imagen"
               : "";
+
           return `
             <div class="doc-media-item"
                  draggable="true"
                  data-media-id="${m.id}">
               <div class="doc-media-thumb">
-                ${
-                  isImage && m.url
-                    ? `<img src="${m.url}" alt="${m.nombre}" />`
-                    : `<div class="doc-media-icon">${icon}</div>`
-                }
+                <div class="doc-media-icon">${icon}</div>
               </div>
               <div class="doc-media-caption">
-                ${m.nombre}
+                ${captionText}
               </div>
               ${
                 tag
