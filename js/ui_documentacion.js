@@ -96,7 +96,10 @@ const DOC_BASE_TEMPLATES = {
 
 function buildDocTokens() {
   const proyecto = appState.proyecto || {};
-  const presupuesto = typeof getPresupuestoActual === "function" ? getPresupuestoActual() : null;
+  const presupuesto =
+  typeof window.getPresupuestoActual === "function"
+    ? window.getPresupuestoActual()
+    : null;
 
   const nombreProyecto =
     proyecto.nombre ||
