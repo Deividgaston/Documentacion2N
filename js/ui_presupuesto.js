@@ -1293,13 +1293,19 @@ function recalcularResumenDesdeSeleccion(lineasVisibles, dto) {
 }
 
 // ===============================================
-// EXPORTAR A EXCEL (XLSX) – con formato “tipo tarifas”
-// + NOTAS POR SECCIÓN
+// EXPORTAR A EXCEL (XLSX) – con ExcelJS y estilos
 // ===============================================
-function exportarPresupuestoExcel() {
+async function exportarPresupuestoExcel() {
   const presu = appState.presupuesto || {};
   if (!presu.lineas || !presu.lineas.length) {
     alert("No hay líneas de presupuesto para exportar.");
+    return;
+  }
+
+  if (!window.ExcelJS || !window.saveAs) {
+    alert(
+      "No se ha podido cargar ExcelJS o FileSaver. Revisa que están incluidos como en la página de Tarifas."
+    );
     return;
   }
 
@@ -1328,40 +1334,7 @@ function exportarPresupuestoExcel() {
   const textoValidez =
     "Este presupuesto tiene una validez de 60 días desde la fecha de emisión, salvo indicación contraria por escrito.";
 
-  // ==========================
-  // CONSTRUIR ARRAY DE ARRAYS
-  // ==========================
-  const rows = [];
-
-  // Índices para estilos
-  let titleRowIdx = -1;
-  let tableHeaderRowIdx = -1;
-  const sectionTitleRowIdxs = [];
-  let subtotalRowIdx = -1;
-  let ivaRowIdx = -1;
-  let totalRowIdx = -1;
-
-  // Cabecera
-  titleRowIdx = rows.length;
-  rows.push(["PRESUPUESTO VIDEO PORTERO Y CONTROL DE ACCESOS"]);
-  rows.push([]);
-  rows.push(["Empresa", COMPANY_INFO.nombre]);
-  rows.push(["Dirección", COMPANY_INFO.direccion]);
-  rows.push(["NIF", COMPANY_INFO.nif]);
-  rows.push(["Teléfono", COMPANY_INFO.telefono]);
-  rows.push(["Email", COMPANY_INFO.email]);
-  rows.push([]);
-  rows.push(["Proyecto", nombreProyecto]);
-  rows.push(["Cliente", cliente || "-"]);
-  rows.push(["Fecha", fechaHoy]);
-  rows.push([]);
-  rows.push(["Observaciones generales"]);
-  rows.push([
-    presu.notas || "Se requiere switch PoE para alimentación de equipos.",
-  ]);
-  rows.push([]);
-
-  // === NOTAS POR SECCIÓN (PÁGINA PRESUPUESTO) ===
+  // ====== NOTAS POR SECCIÓN (igual que en PDF/Excel antiguo) ======
   const sectionNotes = presu.sectionNotes || {};
   const extraSections = presu.extraSections || [];
   const sectionOrder = presu.sectionOrder || [];
@@ -1398,30 +1371,8 @@ function exportarPresupuestoExcel() {
     notasSecciones.push({ seccion: titulo, nota: txt });
   });
 
-  if (notasSecciones.length) {
-    rows.push([]);
-    rows.push(["NOTAS POR SECCIÓN"]);
-    rows.push(["Sección", "Nota"]);
-    notasSecciones.forEach((entry) => {
-      rows.push([entry.seccion, entry.nota]);
-    });
-    rows.push([]);
-  }
-
-  // Cabecera tabla de líneas
-  tableHeaderRowIdx = rows.length;
-  rows.push([
-    "Sección",
-    "Título",
-    "Referencia",
-    "Descripción",
-    "Cantidad",
-    "PVP UD (€)",
-    "Importe (€)",
-  ]);
-
-  // Agrupar por sección respetando el orden de la app
-  const secciones = presu.sectionOrder || [];
+  // ====== AGRUPAR LÍNEAS POR SECCIÓN (como antes) ======
+  const seccionesOrden = presu.sectionOrder || [];
   const mapSec = {};
   presu.lineas.forEach((l) => {
     const sec =
@@ -1440,14 +1391,185 @@ function exportarPresupuestoExcel() {
     mapSec[sec].push(l);
   });
 
-  secciones.forEach((sec) => {
+  // ==========================
+  // CREAR LIBRO CON EXCELJS
+  // ==========================
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet("Presupuesto 2N");
+
+  // Colores / fuentes IGUAL que en Tarifas
+  const COLOR_PRIMARY = "FF1BB1C7"; // azul 2N cabecera
+  const COLOR_SECTION = "FFF3F4F6"; // gris suave para secciones
+  const COLOR_TABLE_HEADER = "FFE5F3F7"; // cabecera tabla
+
+  const fontHeaderBig = {
+    name: "Aptos Narrow",
+    size: 13,
+    bold: true,
+    color: { argb: "FFFFFFFF" },
+  };
+  const fontHeader = {
+    name: "Aptos Narrow",
+    size: 11,
+    bold: true,
+    color: { argb: "FF000000" },
+  };
+  const fontSection = {
+    name: "Aptos Narrow",
+    size: 11,
+    bold: true,
+    color: { argb: "FF374151" },
+  };
+  const fontBody = {
+    name: "Aptos Narrow",
+    size: 10,
+    color: { argb: "FF000000" },
+  };
+  const borderThin = {
+    top: { style: "thin", color: { argb: "FFCCCCCC" } },
+    left: { style: "thin", color: { argb: "FFCCCCCC" } },
+    bottom: { style: "thin", color: { argb: "FFCCCCCC" } },
+    right: { style: "thin", color: { argb: "FFCCCCCC" } },
+  };
+
+  // Anchos de columna (similar a la versión XLSX antigua)
+  ws.columns = [
+    { key: "c1", width: 18 }, // Sección / etiquetas
+    { key: "c2", width: 28 }, // Título / valor
+    { key: "c3", width: 14 }, // Ref
+    { key: "c4", width: 50 }, // Descripción
+    { key: "c5", width: 10 }, // Cantidad
+    { key: "c6", width: 14 }, // PVP
+    { key: "c7", width: 16 }, // Importe
+  ];
+
+  const emptyRow = () => ws.addRow([]);
+
+  const addInfoRow = (label, value) => {
+    const r = ws.addRow([label, value]);
+    r.getCell(1).font = fontHeader;
+    r.getCell(2).font = fontBody;
+    return r;
+  };
+
+  // ====== CABECERA PRINCIPAL ======
+  const titleRow = ws.addRow([
+    "PRESUPUESTO VIDEO PORTERO Y CONTROL DE ACCESOS",
+  ]);
+  ws.mergeCells(titleRow.number, 1, titleRow.number, 7);
+  titleRow.font = fontHeaderBig;
+  titleRow.alignment = { horizontal: "center", vertical: "middle" };
+  titleRow.fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: COLOR_PRIMARY },
+  };
+
+  emptyRow();
+
+  addInfoRow("Empresa", COMPANY_INFO.nombre);
+  addInfoRow("Dirección", COMPANY_INFO.direccion);
+  addInfoRow("NIF", COMPANY_INFO.nif);
+  addInfoRow("Teléfono", COMPANY_INFO.telefono);
+  addInfoRow("Email", COMPANY_INFO.email);
+
+  emptyRow();
+  addInfoRow("Proyecto", nombreProyecto);
+  addInfoRow("Cliente", cliente || "-");
+  addInfoRow("Fecha", fechaHoy);
+
+  emptyRow();
+
+  const obsTitleRow = ws.addRow(["Observaciones generales"]);
+  obsTitleRow.getCell(1).font = fontHeader;
+  const obsRow = ws.addRow([
+    presu.notas || "Se requiere switch PoE para alimentación de equipos.",
+  ]);
+  obsRow.getCell(1).font = fontBody;
+  obsRow.getCell(1).alignment = { wrapText: true };
+
+  // ====== NOTAS POR SECCIÓN (si existen) ======
+  if (notasSecciones.length) {
+    emptyRow();
+    const notasTitle = ws.addRow(["NOTAS POR SECCIÓN"]);
+    notasTitle.getCell(1).font = fontHeader;
+
+    const notasHeader = ws.addRow(["Sección", "Nota"]);
+    notasHeader.eachCell((cell) => {
+      cell.font = fontHeader;
+      cell.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: COLOR_TABLE_HEADER },
+      };
+      cell.border = borderThin;
+      cell.alignment = {
+        vertical: "middle",
+        horizontal: "center",
+        wrapText: true,
+      };
+    });
+
+    notasSecciones.forEach((entry) => {
+      const r = ws.addRow([entry.seccion, entry.nota]);
+      r.font = fontBody;
+      r.eachCell((cell) => {
+        cell.border = borderThin;
+        cell.alignment = { wrapText: true, vertical: "top" };
+      });
+    });
+  }
+
+  emptyRow();
+
+  // ====== CABECERA TABLA DE LÍNEAS ======
+  const headerTabla = ws.addRow([
+    "Sección",
+    "Título",
+    "Referencia",
+    "Descripción",
+    "Cantidad",
+    "PVP UD (€)",
+    "Importe (€)",
+  ]);
+  headerTabla.eachCell((cell) => {
+    cell.font = fontHeader;
+    cell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: COLOR_TABLE_HEADER },
+    };
+    cell.border = borderThin;
+    cell.alignment = {
+      vertical: "middle",
+      horizontal: "center",
+      wrapText: true,
+    };
+  });
+
+  // ====== DETALLE POR SECCIÓN ======
+  seccionesOrden.forEach((sec) => {
     const list = mapSec[sec];
     if (!list || !list.length) return;
 
-    // Fila separadora de sección
-    rows.push([]);
-    rows.push([sec.toUpperCase()]);
-    sectionTitleRowIdxs.push(rows.length - 1);
+    emptyRow();
+
+    // Fila de sección
+    const secRow = ws.addRow([sec.toUpperCase()]);
+    ws.mergeCells(secRow.number, 1, secRow.number, 7);
+    secRow.getCell(1).font = fontSection;
+    secRow.getCell(1).fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: COLOR_SECTION },
+    };
+    secRow.getCell(1).border = borderThin;
+    secRow.getCell(1).alignment = {
+      horizontal: "left",
+      vertical: "middle",
+    };
+
+    let currentTitle = null;
 
     list.forEach((l) => {
       const tituloLinea =
@@ -1459,7 +1581,26 @@ function exportarPresupuestoExcel() {
         "";
       const importe = l.subtotal || l.pvp * l.cantidad || 0;
 
-      rows.push([
+      // Fila de subtítulo si cambia
+      if (tituloLinea && tituloLinea !== currentTitle) {
+        currentTitle = tituloLinea;
+        const tRow = ws.addRow([tituloLinea]);
+        ws.mergeCells(tRow.number, 1, tRow.number, 7);
+        tRow.getCell(1).font = fontHeader;
+        tRow.getCell(1).fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "FFF9FAFB" },
+        };
+        tRow.getCell(1).border = borderThin;
+        tRow.getCell(1).alignment = {
+          horizontal: "left",
+          vertical: "middle",
+        };
+      }
+
+      // Fila de detalle
+      const r = ws.addRow([
         sec,
         tituloLinea,
         l.ref || "",
@@ -1468,133 +1609,81 @@ function exportarPresupuestoExcel() {
         Number(l.pvp || 0),
         Number(importe),
       ]);
+
+      r.font = fontBody;
+      r.eachCell((cell, col) => {
+        cell.border = borderThin;
+
+        if (col === 5) {
+          // Cantidad
+          cell.numFmt = "#,##0";
+          cell.alignment = { horizontal: "right", vertical: "top" };
+        } else if (col === 6 || col === 7) {
+          // PVP / Importe
+          cell.numFmt = "#,##0.00";
+          cell.alignment = { horizontal: "right", vertical: "top" };
+        } else if (col === 4) {
+          // Descripción
+          cell.alignment = { wrapText: true, vertical: "top" };
+        } else {
+          cell.alignment = { horizontal: "left", vertical: "top" };
+        }
+      });
     });
   });
 
-  rows.push([]);
-  subtotalRowIdx = rows.length;
-  rows.push(["Subtotal (base imponible)", "", "", "", "", "", base]);
-  ivaRowIdx = rows.length;
-  rows.push(["IVA 21%", "", "", "", "", "", iva]);
-  totalRowIdx = rows.length;
-  rows.push(["TOTAL OFERTA", "", "", "", "", "", total]);
-  rows.push([]);
-  rows.push(["Información fiscal", textoIVAEstado]);
-  rows.push(["Validez de la oferta", textoValidez]);
+  // ====== TOTALES ======
+  emptyRow();
+  const subtotalRow = ws.addRow([
+    "Subtotal (base imponible)",
+    "",
+    "",
+    "",
+    "",
+    "",
+    base,
+  ]);
+  const ivaRow = ws.addRow(["IVA 21%", "", "", "", "", "", iva]);
+  const totalRow = ws.addRow(["TOTAL OFERTA", "", "", "", "", "", total]);
 
-  // ==========================
-  // CREAR LIBRO Y DAR FORMATO
-  // ==========================
-  const ws = XLSX.utils.aoa_to_sheet(rows);
-
-  // Anchos de columna
-  ws["!cols"] = [
-    { wch: 18 }, // Sección
-    { wch: 28 }, // Título
-    { wch: 14 }, // Ref
-    { wch: 45 }, // Descripción
-    { wch: 10 }, // Cantidad
-    { wch: 14 }, // PVP
-    { wch: 16 }, // Importe
-  ];
-
-  // === Estilos (igual patrón que en Tarifas) ===
-  const borderThin = {
-    top: { style: "thin", color: { rgb: "D1D5DB" } },
-    bottom: { style: "thin", color: { rgb: "D1D5DB" } },
-    left: { style: "thin", color: { rgb: "D1D5DB" } },
-    right: { style: "thin", color: { rgb: "D1D5DB" } },
+  [subtotalRow, ivaRow, totalRow].forEach((r) => {
+    r.getCell(1).font = fontHeader;
+    r.eachCell((cell, col) => {
+      cell.border = borderThin;
+      if (col === 7 && typeof cell.value === "number") {
+        cell.numFmt = "#,##0.00";
+        cell.alignment = { horizontal: "right", vertical: "middle" };
+      }
+    });
+  });
+  totalRow.getCell(1).font = {
+    ...fontHeader,
+    bold: true,
   };
 
-  function styleCell(r, c, style) {
-    const addr = XLSX.utils.encode_cell({ r, c });
-    const cell = ws[addr];
-    if (!cell) return;
-    cell.s = Object.assign({}, cell.s || {}, style);
-  }
+  emptyRow();
+  const infoFiscalRow = ws.addRow(["Información fiscal", textoIVAEstado]);
+  infoFiscalRow.getCell(1).font = fontHeader;
+  const validezRow = ws.addRow(["Validez de la oferta", textoValidez]);
+  validezRow.getCell(1).font = fontHeader;
 
-  // Título principal
-  if (titleRowIdx >= 0) {
-    styleCell(titleRowIdx, 0, {
-      font: { bold: true, sz: 16, color: { rgb: "111827" } },
-      alignment: { horizontal: "left", vertical: "center" },
-    });
-  }
-
-  // Etiquetas de cabecera (Empresa, Proyecto, etc.) -> col A en negrita
-  const labelRows = [2, 3, 4, 5, 6, 8, 9, 10, 12];
-  labelRows.forEach((r) => {
-    if (r < rows.length) {
-      styleCell(r, 0, {
-        font: { bold: true },
-      });
-    }
-  });
-
-  // Cabecera de la tabla
-  if (tableHeaderRowIdx >= 0) {
-    for (let c = 0; c <= 6; c++) {
-      styleCell(tableHeaderRowIdx, c, {
-        font: { bold: true, color: { rgb: "111827" } },
-        fill: { patternType: "solid", fgColor: { rgb: "E5E7EB" } },
-        alignment: { horizontal: "center", vertical: "center" },
-        border: borderThin,
-      });
-    }
-  }
-
-  // Filas de título de sección
-  sectionTitleRowIdxs.forEach((r) => {
-    styleCell(r, 0, {
-      font: { bold: true, color: { rgb: "111827" } },
-      fill: { patternType: "solid", fgColor: { rgb: "EEF2FF" } },
-      alignment: { horizontal: "left", vertical: "center" },
-      border: borderThin,
-    });
-  });
-
-  // Bordes + alineación + formato numérico en toda la tabla (desde header hasta TOTAL)
-  if (tableHeaderRowIdx >= 0 && totalRowIdx >= 0) {
-    for (let r = tableHeaderRowIdx + 1; r <= totalRowIdx; r++) {
-      if (!rows[r] || rows[r].length === 0) continue;
-      for (let c = 0; c <= 6; c++) {
-        styleCell(r, c, {
-          border: borderThin,
-          alignment:
-            c >= 4
-              ? { horizontal: "right", vertical: "center" }
-              : { horizontal: "left", vertical: "center" },
-        });
-
-        // Cantidad / precios / importe
-        if (c === 4 || c === 5 || c === 6) {
-          const addr = XLSX.utils.encode_cell({ r, c });
-          if (ws[addr]) ws[addr].z = "0.00";
-        }
-      }
-    }
-  }
-
-  // Totales en negrita
-  [subtotalRowIdx, ivaRowIdx, totalRowIdx].forEach((r) => {
-    if (r >= 0) {
-      styleCell(r, 0, { font: { bold: true } });
-      styleCell(r, 6, { font: { bold: true } });
-    }
-  });
-
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Presupuesto");
-
+  // ==========================
+  // DESCARGAR ARCHIVO
+  // ==========================
+  const safeName = (nombreProyecto || "2N").replace(
+    /[^a-zA-Z0-9_-]+/g,
+    "_"
+  );
   const fileName =
-    "Presupuesto_" +
-    (nombreProyecto || "2N") +
-    "_" +
-    fechaHoy.replace(/-/g, "") +
-    ".xlsx";
+    "Presupuesto_" + safeName + "_" + fechaHoy.replace(/-/g, "") + ".xlsx";
 
-  XLSX.writeFile(wb, fileName);
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  saveAs(blob, fileName);
 }
+
 
 // ===============================================
 // EXPORTAR A CSV SALESFORCE (SKU;Quantity;Discount)
