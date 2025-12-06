@@ -132,7 +132,11 @@ function buildDocTokens() {
 }
 
 function buildListadoEquiposTexto(idioma) {
-  const presupuesto = typeof getPresupuestoActual === "function" ? getPresupuestoActual() : null;
+  const presupuesto =
+  typeof window.getPresupuestoActual === "function"
+    ? window.getPresupuestoActual()
+    : null;
+
   const lineas = Array.isArray(presupuesto?.lineas) ? presupuesto.lineas : [];
 
   if (!lineas.length) {
