@@ -9,7 +9,7 @@ appState.documentacion = appState.documentacion || {
   fichasIncluidas: {}, // mapa: idLinea -> true/false
   ultimaAutoGen: null,
   modo: "comercial", // "comercial" | "tecnica"
-  mediaLibrary: [], // [{id, nombre, type, mimeType, url, storagePath, uploadedAt, ...}]
+  mediaLibrary: [], // [{id, nombre, type, mimeType, url, storagePath, folderName, docCategory,...}]
   mediaLoaded: false,
   sectionMedia: {}, // mapa: sectionKey -> [mediaId]
 };
@@ -32,13 +32,16 @@ const DOC_LANGS = {
   pt: { code: "pt", label: "Português (PT)" },
 };
 
+// Añadimos secciones específicas de normativa
 const DOC_SECTION_ORDER = [
   "resumen",
   "sistema",
   "equipos",
   "infraestructura",
   "servicios",
-  "normativa",
+  "normativa_red",
+  "normativa_lpd",
+  "normativa_ciber",
   "otros",
 ];
 
@@ -55,8 +58,12 @@ const DOC_BASE_TEMPLATES = {
       "Toda la infraestructura de comunicaciones se apoya en una red IP basada en cableado estructurado, armarios de comunicaciones y electrónica de red gestionada. El diseño contempla rutas redundantes, alimentación adecuada (PoE cuando aplica) y espacio de reserva para futuras ampliaciones.",
     servicios:
       "La solución puede complementarse con servicios cloud para gestión remota, apertura desde app móvil, actualizaciones de firmware y monitorización del sistema. Estos servicios permiten mejorar la experiencia del usuario final y facilitar el mantenimiento preventivo.",
-    normativa:
-      "Todos los equipos seleccionados cumplen con la normativa europea vigente en materia de seguridad eléctrica, compatibilidad electromagnética y normativa de telecomunicaciones. Adicionalmente, se sigue la normativa local aplicable en materia de accesibilidad y seguridad de uso.",
+    normativa_red:
+      "Normativa RED (Radio Equipment Directive) – 1 de agosto de 2025\n\nTodos los equipos de comunicaciones incluidos en la solución cumplen con la Directiva RED (2014/53/EU) y su actualización de aplicación obligatoria a partir del 1 de agosto de 2025. Los dispositivos 2N incorporan las medidas necesarias en materia de ciberseguridad, gestión del espectro radioeléctrico y seguridad del usuario, incluyendo:\n\n- Gestión segura de firmware y actualizaciones remotas.\n- Mecanismos de protección frente a accesos no autorizados.\n- Conformidad con los requisitos esenciales de seguridad, compatibilidad electromagnética y uso eficiente del espectro.\n\nLa solución se ha diseñado teniendo en cuenta estos requisitos para garantizar la máxima seguridad y cumplimiento normativo a largo plazo.",
+    normativa_lpd:
+      "Protección de datos (LPD / GDPR)\n\nLa solución propuesta permite un tratamiento responsable de los datos personales, especialmente en lo relativo a imágenes de vídeo, registros de acceso y credenciales digitales.\n\nLa arquitectura recomendada se ha planteado para:\n\n- Minimizar la cantidad de datos personales almacenados.\n- Limitar el acceso a los datos a perfiles autorizados (administradores, seguridad, mantenimiento).\n- Facilitar el cumplimiento del Reglamento General de Protección de Datos (RGPD / GDPR) y de la normativa local de protección de datos.\n\nSe recomienda que la propiedad y/o la empresa gestora del edificio definan sus políticas de conservación de datos, información al usuario y ejercicio de derechos (acceso, rectificación, supresión, etc.), apoyándose en las capacidades técnicas de la solución.",
+    normativa_ciber:
+      "Ciberseguridad y certificaciones 2N\n\nLos dispositivos 2N incorporados en la solución se han diseñado siguiendo buenas prácticas de ciberseguridad, incluyendo:\n\n- Sistema operativo embebido endurecido, sin servicios innecesarios expuestos.\n- Autenticación segura y gestión de credenciales para administradores y usuarios.\n- Soporte de comunicaciones cifradas (HTTPS / TLS) para la gestión y, cuando aplica, para la señalización.\n- Posibilidad de integración con infraestructuras de red seguras (VLAN, segmentación, firewalls, etc.).\n\nAdicionalmente, 2N forma parte del grupo Axis, que aplica políticas estrictas de seguridad de producto, gestión de vulnerabilidades y ciclo de vida de firmware. Esto contribuye a reducir la superficie de ataque de la instalación y a facilitar el cumplimiento de políticas internas de ciberseguridad del cliente.",
     otros:
       "En caso de requerirlo, se pueden incorporar soluciones adicionales como control de accesos por zonas, integración con CCTV, gestión de visitantes o sistemas de reserva de zonas comunes.",
   },
@@ -71,8 +78,12 @@ const DOC_BASE_TEMPLATES = {
       "All communication infrastructure is based on an IP network using structured cabling, communication racks and managed network switches. The design considers redundant paths, adequate power supply (PoE when applicable) and spare capacity for future expansions.",
     servicios:
       "The solution can be complemented with cloud services for remote management, mobile app door opening, firmware updates and system monitoring. These services enhance the end-user experience and simplify preventive maintenance.",
-    normativa:
-      "All selected devices comply with the applicable European regulations regarding electrical safety, electromagnetic compatibility and telecom standards. Additionally, local accessibility and safety-of-use regulations are followed.",
+    normativa_red:
+      "RED Directive – 1 August 2025\n\nAll communication devices included in the solution comply with the Radio Equipment Directive (2014/53/EU) and its updated cybersecurity requirements, which become mandatory on 1 August 2025. 2N devices implement the necessary measures regarding cybersecurity, radio spectrum management and user safety, including:\n\n- Secure firmware management and remote updates.\n- Protection mechanisms against unauthorised access.\n- Compliance with the essential requirements on safety, EMC and efficient use of the spectrum.\n\nThe solution has been designed with these requirements in mind to ensure long-term regulatory compliance and system security.",
+    normativa_lpd:
+      "Data protection (GDPR)\n\nThe proposed solution supports responsible processing of personal data, especially for video images, access logs and digital credentials.\n\nThe recommended architecture is designed to:\n\n- Minimise the amount of personal data stored.\n- Restrict access to data to authorised roles only (administrators, security, maintenance).\n- Facilitate compliance with the General Data Protection Regulation (GDPR) and local data protection laws.\n\nThe building owner and/or operator should define data retention policies, user information and procedures to exercise data subject rights (access, rectification, erasure, etc.), leveraging the technical capabilities of the solution.",
+    normativa_ciber:
+      "Cybersecurity and 2N security practices\n\n2N devices included in the solution are designed following industry best practices in cybersecurity, including:\n\n- Hardened embedded operating system, with no unnecessary services exposed.\n- Secure authentication and credentials management for administrators and users.\n- Support for encrypted communications (HTTPS / TLS) for management and, when applicable, for signalling.\n- Possibility to integrate into secure network infrastructures (VLANs, segmentation, firewalls, etc.).\n\nFurthermore, 2N is part of Axis group, which applies strict product security policies, vulnerability management and firmware lifecycle processes. This helps reduce the attack surface of the installation and supports the client’s internal cybersecurity policies.",
     otros:
       "If required, additional solutions can be added such as zoned access control, CCTV integration, visitor management or common area booking systems.",
   },
@@ -87,8 +98,12 @@ const DOC_BASE_TEMPLATES = {
       "Toda a infraestrutura de comunicações assenta numa rede IP com cablagem estruturada, bastidores de comunicações e electrónica de rede gerida. O desenho contempla caminhos redundantes, alimentação adequada (PoE quando aplicável) e capacidade de reserva para futuras ampliações.",
     servicios:
       "A solução pode ser complementada com serviços cloud para gestão remota, abertura de portas através de aplicação móvel, atualizações de firmware e monitorização do sistema. Estes serviços melhoram a experiência do utilizador final e facilitam a manutenção preventiva.",
-    normativa:
-      "Todos os equipamentos selecionados cumprem a regulamentação europeia aplicável em matéria de segurança elétrica, compatibilidade eletromagnética e normas de telecomunicações. Adicionalmente, é cumprida a regulamentação local em matéria de acessibilidade e segurança de utilização.",
+    normativa_red:
+      "Norma RED (Radio Equipment Directive) – 1 de agosto de 2025\n\nTodos os equipamentos de comunicações incluídos na solução cumprem a Diretiva RED (2014/53/EU) e os requisitos de cibersegurança que se tornam obrigatórios a partir de 1 de agosto de 2025. Os dispositivos 2N incorporam as medidas necessárias em termos de cibersegurança, gestão do espectro radioelétrico e segurança do utilizador, incluindo:\n\n- Gestão segura de firmware e atualizações remotas.\n- Mecanismos de proteção contra acessos não autorizados.\n- Conformidade com os requisitos essenciais de segurança, compatibilidade eletromagnética e utilização eficiente do espectro.\n\nA solução foi desenhada tendo em conta estes requisitos para garantir segurança e conformidade normativa a longo prazo.",
+    normativa_lpd:
+      "Proteção de dados (RGPD)\n\nA solução proposta permite um tratamento responsável dos dados pessoais, em especial no que respeita a imagens de vídeo, registos de acesso e credenciais digitais.\n\nA arquitetura recomendada foi concebida para:\n\n- Minimizar a quantidade de dados pessoais armazenados.\n- Restringir o acesso aos dados a perfis autorizados (administradores, segurança, manutenção).\n- Facilitar o cumprimento do Regulamento Geral de Proteção de Dados (RGPD) e da legislação local em matéria de proteção de dados.\n\nRecomenda-se que a propriedade e/ou a entidade gestora do edifício definam políticas de conservação de dados, informação ao utilizador e exercício de direitos (acesso, retificação, apagamento, etc.), tirando partido das capacidades técnicas da solução.",
+    normativa_ciber:
+      "Cibersegurança e práticas de segurança 2N\n\nOs dispositivos 2N incluídos na solução são desenhados seguindo boas práticas de cibersegurança, incluindo:\n\n- Sistema operativo embebido reforçado, sem serviços desnecessários expostos.\n- Autenticação segura e gestão de credenciais para administradores e utilizadores.\n- Suporte de comunicações cifradas (HTTPS / TLS) para gestão e, quando aplicável, para sinalização.\n- Possibilidade de integração em infraestruturas de rede seguras (VLAN, segmentação, firewalls, etc.).\n\nAdicionalmente, a 2N faz parte do grupo Axis, que aplica políticas rigorosas de segurança de produto, gestão de vulnerabilidades e ciclo de vida de firmware. Isto contribui para reduzir a superfície de ataque da instalação e para facilitar o cumprimento das políticas internas de cibersegurança do cliente.",
     otros:
       "Se necessário, podem ser incorporadas soluções adicionais como controlo de acessos por zonas, integração com CCTV, gestão de visitantes ou sistemas de reserva de zonas comuns.",
   },
@@ -236,7 +251,7 @@ function renderDocumentacionView() {
           <div>
             <div class="card-title">Documentación</div>
             <div class="card-subtitle">
-              Genera la memoria de calidades de forma automática a partir del proyecto y la lista de materiales. Añade textos personalizados cuando lo necesites.
+              Genera la memoria de calidades de forma automática a partir del proyecto y la lista de materiales. Añade textos personalizados y documentación gráfica cuando lo necesites.
             </div>
           </div>
         </div>
@@ -310,13 +325,6 @@ function renderDocumentacionView() {
                 <button class="btn btn-sm btn-outline" id="docMediaUploadBtn" title="Subir archivos">
                   📁
                 </button>
-                <input
-                  type="file"
-                  id="docMediaFileInput"
-                  multiple
-                  style="display:none"
-                  accept="image/*,.pdf,.doc,.docx,.docm"
-                />
               </div>
             </div>
             <div class="card-body doc-media-body">
@@ -336,6 +344,7 @@ function renderDocumentacionView() {
         </aside>
       </div>
 
+      <!-- Modal para texto personalizado -->
       <div id="docCustomModal" class="doc-modal hidden">
         <div class="doc-modal-content card">
           <div class="card-header">
@@ -364,6 +373,51 @@ function renderDocumentacionView() {
         </div>
       </div>
 
+      <!-- Modal para subir documentación gráfica -->
+      <div id="docMediaModal" class="doc-modal hidden">
+        <div class="doc-modal-content card">
+          <div class="card-header">
+            <div class="card-title">Subir documentación gráfica</div>
+            <div class="card-subtitle">
+              Define una carpeta y el tipo de documento para organizar las imágenes y fichas técnicas.
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="form-group mb-2">
+              <label>Nombre de carpeta / categoría</label>
+              <input
+                type="text"
+                id="docMediaFolderInput"
+                class="form-control"
+                placeholder="Ej. IP Style, Fichas técnicas, Render fachada..."
+              />
+            </div>
+            <div class="form-group mb-2">
+              <label>Tipo de documento</label>
+              <select id="docMediaTypeSelect" class="form-control">
+                <option value="imagen">Imagen / Render</option>
+                <option value="ficha">Ficha técnica</option>
+                <option value="otro">Otro documento</option>
+              </select>
+            </div>
+            <div class="form-group mb-3">
+              <label>Archivos</label>
+              <input
+                type="file"
+                id="docMediaFileInput"
+                multiple
+                class="form-control"
+                accept="image/*,.pdf,.doc,.docx,.docm"
+              />
+            </div>
+          </div>
+          <div class="card-footer doc-modal-footer">
+            <button class="btn btn-sm" id="docMediaCancelBtn">Cancelar</button>
+            <button class="btn btn-sm btn-primary" id="docMediaSaveBtn">Subir</button>
+          </div>
+        </div>
+      </div>
+
       <div id="docModalBackdrop" class="doc-backdrop hidden"></div>
     </div>
   `;
@@ -387,8 +441,12 @@ function labelForSection(key) {
       return "Infraestructura y red IP";
     case "servicios":
       return "Servicios cloud y operación";
-    case "normativa":
-      return "Normativa y cumplimiento";
+    case "normativa_red":
+      return "Normativa RED (1 agosto 2025)";
+    case "normativa_lpd":
+      return "Protección de datos (LPD / GDPR)";
+    case "normativa_ciber":
+      return "Ciberseguridad y cumplimiento";
     case "otros":
       return "Otros aspectos / observaciones";
     default:
@@ -417,6 +475,12 @@ function renderSectionMediaHTML(sectionKey) {
         m.type === "image" || (m.mimeType || "").startsWith("image/");
       const icon = isImage ? "" : "📄";
       const caption = m.nombre || "";
+      const tag =
+        m.docCategory === "ficha"
+          ? "Ficha técnica"
+          : m.docCategory === "imagen"
+          ? "Imagen"
+          : "";
       return `
         <div class="doc-section-media-chip">
           <div class="doc-section-media-thumb">
@@ -427,7 +491,14 @@ function renderSectionMediaHTML(sectionKey) {
             }
           </div>
           <div class="doc-section-media-foot">
-            <span class="doc-section-media-caption">${caption}</span>
+            <div class="doc-section-media-caption-wrap">
+              <span class="doc-section-media-caption">${caption}</span>
+              ${
+                tag
+                  ? `<span class="doc-section-media-tag">${tag}</span>`
+                  : ""
+              }
+            </div>
             <button
               type="button"
               class="doc-section-media-remove"
@@ -451,6 +522,16 @@ function renderDocSectionsHTML() {
       <div class="card doc-section-card" data-doc-section="${key}">
         <div class="card-header">
           <div class="card-title">${labelForSection(key)}</div>
+          <div class="doc-section-header-actions">
+            <button
+              type="button"
+              class="btn btn-xs btn-outline"
+              data-doc-ai-section="${key}"
+              title="Preguntar a IA para mejorar o completar el texto"
+            >
+              ✨ Preguntar a IA
+            </button>
+          </div>
         </div>
         <div class="card-body">
           <textarea
@@ -528,6 +609,12 @@ function renderDocMediaLibraryHTML() {
           const isImage =
             m.type === "image" || (m.mimeType || "").startsWith("image/");
           const icon = isImage ? "" : "📄";
+          const tag =
+            m.docCategory === "ficha"
+              ? "Ficha técnica"
+              : m.docCategory === "imagen"
+              ? "Imagen"
+              : "";
           return `
             <div class="doc-media-item"
                  draggable="true"
@@ -542,6 +629,15 @@ function renderDocMediaLibraryHTML() {
               <div class="doc-media-caption">
                 ${m.nombre}
               </div>
+              ${
+                tag
+                  ? `<div class="doc-media-tag-badge">${tag}${
+                      m.folderName ? " · " + m.folderName : ""
+                    }</div>`
+                  : m.folderName
+                  ? `<div class="doc-media-tag-badge">${m.folderName}</div>`
+                  : ""
+              }
             </div>
           `;
         })
@@ -603,6 +699,15 @@ function attachDocumentacionHandlers() {
     });
   });
 
+  // Botón IA por sección
+  container.querySelectorAll("[data-doc-ai-section]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const sectionKey = btn.getAttribute("data-doc-ai-section");
+      if (!sectionKey) return;
+      askAIForSection(sectionKey);
+    });
+  });
+
   // Checkboxes de fichas
   container.querySelectorAll("[data-doc-ficha-index]").forEach((chk) => {
     chk.addEventListener("change", () => {
@@ -612,17 +717,62 @@ function attachDocumentacionHandlers() {
     });
   });
 
-  // Subida de documentación gráfica
+  // Subida de documentación gráfica (abre modal)
   const uploadBtn = container.querySelector("#docMediaUploadBtn");
-  const fileInput = container.querySelector("#docMediaFileInput");
-  if (uploadBtn && fileInput) {
-    uploadBtn.addEventListener("click", () => fileInput.click());
-    fileInput.addEventListener("change", async () => {
-      const files = fileInput.files;
-      if (files && files.length) {
-        await handleMediaUpload(files);
-        fileInput.value = "";
+  const mediaModal = document.getElementById("docMediaModal");
+  const backdrop = document.getElementById("docModalBackdrop");
+  const mediaCancelBtn = document.getElementById("docMediaCancelBtn");
+  const mediaSaveBtn = document.getElementById("docMediaSaveBtn");
+
+  if (uploadBtn && mediaModal && backdrop) {
+    uploadBtn.addEventListener("click", () => {
+      mediaModal.classList.remove("hidden");
+      backdrop.classList.remove("hidden");
+      const folderInput = document.getElementById("docMediaFolderInput");
+      const typeSelect = document.getElementById("docMediaTypeSelect");
+      const fileInput = document.getElementById("docMediaFileInput");
+      if (folderInput) folderInput.value = "";
+      if (typeSelect) typeSelect.value = "imagen";
+      if (fileInput) fileInput.value = "";
+    });
+  }
+
+  if (mediaCancelBtn && mediaModal && backdrop) {
+    mediaCancelBtn.addEventListener("click", () => {
+      mediaModal.classList.add("hidden");
+      backdrop.classList.add("hidden");
+    });
+  }
+
+  if (backdrop) {
+    backdrop.addEventListener("click", () => {
+      const customModal = document.getElementById("docCustomModal");
+      const mediaModal2 = document.getElementById("docMediaModal");
+      if (customModal) customModal.classList.add("hidden");
+      if (mediaModal2) mediaModal2.classList.add("hidden");
+      backdrop.classList.add("hidden");
+    });
+  }
+
+  if (mediaSaveBtn && mediaModal && backdrop) {
+    mediaSaveBtn.addEventListener("click", async () => {
+      const folderInput = document.getElementById("docMediaFolderInput");
+      const typeSelect = document.getElementById("docMediaTypeSelect");
+      const fileInput = document.getElementById("docMediaFileInput");
+
+      const folderName = folderInput ? folderInput.value.trim() : "";
+      const docCategory = typeSelect ? typeSelect.value : "imagen";
+      const files = fileInput ? fileInput.files : null;
+
+      if (!files || !files.length) {
+        alert("Selecciona al menos un archivo para subir.");
+        return;
       }
+
+      await handleMediaUpload(files, { folderName, docCategory });
+
+      mediaModal.classList.add("hidden");
+      backdrop.classList.add("hidden");
     });
   }
 
@@ -685,14 +835,20 @@ function attachDocumentacionHandlers() {
   }
 
   // Modal custom
-  const modal = document.getElementById("docCustomModal");
-  const backdrop = document.getElementById("docModalBackdrop");
-  const cancelBtn = modal?.querySelector("#docCustomCancelBtn");
-  const saveBtn = modal?.querySelector("#docCustomSaveBtn");
+  const customModal = document.getElementById("docCustomModal");
+  const customCancelBtn = customModal?.querySelector("#docCustomCancelBtn");
+  const customSaveBtn = customModal?.querySelector("#docCustomSaveBtn");
 
-  if (cancelBtn) cancelBtn.addEventListener("click", closeDocCustomModal);
-  if (backdrop) backdrop.addEventListener("click", closeDocCustomModal);
-  if (saveBtn) saveBtn.addEventListener("click", saveDocCustomBlock);
+  if (customCancelBtn && customModal && backdrop) {
+    customCancelBtn.addEventListener("click", () => {
+      customModal.classList.add("hidden");
+      backdrop.classList.add("hidden");
+    });
+  }
+
+  if (customSaveBtn) {
+    customSaveBtn.addEventListener("click", saveDocCustomBlock);
+  }
 }
 
 // ===========================
@@ -747,6 +903,55 @@ function saveDocCustomBlock() {
 }
 
 // ===========================
+// IA POR SECCIÓN (HOOK)
+// ===========================
+
+async function askAIForSection(sectionKey) {
+  const idioma = appState.documentacion.idioma || "es";
+  const secciones = appState.documentacion.secciones || {};
+  const textoActual = secciones[sectionKey] || "";
+  const proyecto = appState.proyecto || {};
+  const presupuesto =
+    typeof window.getPresupuestoActual === "function"
+      ? window.getPresupuestoActual()
+      : null;
+
+  // Hook externo: puedes implementar window.handleDocSectionAI en tu propia app
+  if (typeof window.handleDocSectionAI === "function") {
+    try {
+      const nuevoTexto = await window.handleDocSectionAI({
+        sectionKey,
+        idioma,
+        texto: textoActual,
+        proyecto,
+        presupuesto,
+      });
+      if (typeof nuevoTexto === "string" && nuevoTexto.trim()) {
+        appState.documentacion.secciones[sectionKey] = nuevoTexto;
+        renderDocumentacionView();
+      }
+      return;
+    } catch (e) {
+      console.error("Error en handleDocSectionAI:", e);
+      alert(
+        "Se ha producido un error al llamar a la IA. Revisa la consola para más detalles."
+      );
+      return;
+    }
+  }
+
+  // Fallback si no hay hook configurado
+  alert(
+    "Función de IA no configurada.\n\n" +
+      "Para activar 'Preguntar a IA', implementa en tu código:\n\n" +
+      "window.handleDocSectionAI = async ({ sectionKey, idioma, texto, proyecto, presupuesto }) => {\n" +
+      "  // Llama a tu backend / Cloud Function con OpenAI, etc.\n" +
+      "  return textoMejorado;\n" +
+      "};"
+  );
+}
+
+// ===========================
 // MEDIA: FIRESTORE + STORAGE
 // ===========================
 
@@ -776,29 +981,24 @@ async function ensureDocMediaLoaded() {
     let query = db.collection("documentacion_media");
     if (uid) query = query.where("uid", "==", uid);
 
-    const snap = await query.orderBy("uploadedAt", "desc").limit(100).get();
+    const snap = await query.orderBy("uploadedAt", "desc").limit(200).get();
     const media = [];
     snap.forEach((doc) => {
       media.push({ id: doc.id, ...doc.data() });
     });
     appState.documentacion.mediaLibrary = media;
-
-    const container = getDocAppContent();
-    if (container && container.querySelector(".doc-media-body")) {
-      renderDocumentacionView();
-    }
   } catch (e) {
     console.error("Error cargando documentación gráfica:", e);
   }
 }
 
-async function handleMediaUpload(files) {
+async function handleMediaUpload(files, options = {}) {
   if (!files || !files.length) return;
   const list = Array.from(files);
   const newItems = [];
   for (const file of list) {
     try {
-      const media = await saveMediaFileToStorageAndFirestore(file);
+      const media = await saveMediaFileToStorageAndFirestore(file, options);
       newItems.push(media);
     } catch (e) {
       console.error("Error subiendo archivo de documentación:", e);
@@ -809,11 +1009,25 @@ async function handleMediaUpload(files) {
   renderDocumentacionView();
 }
 
-async function saveMediaFileToStorageAndFirestore(file) {
+function slugifyFolderName(name) {
+  if (!name) return "general";
+  return String(name)
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "") || "general";
+}
+
+async function saveMediaFileToStorageAndFirestore(file, options = {}) {
   const name = file.name || "archivo";
   const nowIso = new Date().toISOString();
   const isImage = file.type.startsWith("image/");
   const type = isImage ? "image" : "file";
+
+  const folderName = options.folderName || "";
+  const docCategory = options.docCategory || "imagen";
+  const folderSlug = slugifyFolderName(folderName);
 
   const storage =
     window.storage ||
@@ -841,7 +1055,9 @@ async function saveMediaFileToStorageAndFirestore(file) {
   }
 
   if (storage) {
-    storagePath = `documentacion_media/${uid || "anon"}/${Date.now()}_${name}`;
+    storagePath = `documentacion_media/${uid || "anon"}/${folderSlug}/${
+      Date.now() + "_" + name
+    }`;
     const ref = storage.ref().child(storagePath);
     await ref.put(file);
     url = await ref.getDownloadURL();
@@ -857,6 +1073,8 @@ async function saveMediaFileToStorageAndFirestore(file) {
     url,
     storagePath,
     uploadedAt: nowIso,
+    folderName: folderName || null,
+    docCategory,
   };
 
   if (db) {
@@ -1034,9 +1252,6 @@ async function exportarPDFTecnico() {
     ensureSpace(textLines.length);
     doc.text(textLines, 20, y);
     y += textLines.length * 5 + 4;
-
-    // (Opcional) Aquí podrías añadir una lista de "Figuras adjuntas" por sección,
-    // usando appState.documentacion.sectionMedia, si quieres reflejarlo también en el PDF.
   });
 
   const fichasSeleccionadas = [];
