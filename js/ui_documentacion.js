@@ -57,7 +57,7 @@ const DOC_BASE_TEMPLATES = {
     infraestructura:
       "Toda la infraestructura de comunicaciones se apoya en una red IP basada en cableado estructurado, armarios de comunicaciones y electrónica de red gestionada. El diseño contempla rutas redundantes, alimentación adecuada (PoE cuando aplica) y espacio de reserva para futuras ampliaciones.",
     servicios:
-      "La solución puede complementarse con servicios cloud para gestión remota, apertura desde app móvil, actualizaciones de firmware y monitorización del sistema. Estos servicios permiten mejorar la experiencia del usuario final y facilitar el mantenimiento preventivo.",
+      "La solución puede complementarse con servicios cloud para gestión remota, apertura desde app móvil, actualizaciones de firmware y monitorización del sistema. Estos servicios permiten mejorar la experiencia del usuario final y facilitar la mantenimiento preventivo.",
     normativa_red:
       "Normativa RED (Radio Equipment Directive) – 1 de agosto de 2025\n\nTodos los equipos de comunicaciones incluidos en la solución cumplen con la Directiva RED (2014/53/EU) y su actualización de aplicación obligatoria a partir del 1 de agosto de 2025. Los dispositivos 2N incorporan las medidas necesarias en materia de ciberseguridad, gestión del espectro radioeléctrico y seguridad del usuario, incluyendo:\n\n- Gestión segura de firmware y actualizaciones remotas.\n- Mecanismos de protección frente a accesos no autorizados.\n- Conformidad con los requisitos esenciales de seguridad, compatibilidad electromagnética y uso eficiente del espectro.\n\nLa solución se ha diseñado teniendo en cuenta estos requisitos para garantizar la máxima seguridad y cumplimiento normativo a largo plazo.",
     normativa_lpd:
@@ -313,32 +313,29 @@ function renderDocumentacionView() {
         </div>
 
         <aside class="doc-side">
-          <div class="card doc-media-card">
+          <div class="card">
             <div class="card-header doc-media-header">
               <div>
-                <div class="card-title">Documentación gráfica</div>
-                <div class="card-subtitle">
-                  Sube imágenes y documentos y arrástralos a las secciones de la memoria.
-                </div>
+                <div class="card-title">Fichas técnicas</div>
+                <div class="card-subtitle">Selecciona qué equipos incluir como anexo y sube documentación gráfica.</div>
               </div>
               <div>
-                <button class="btn btn-sm btn-outline" id="docMediaUploadBtn" title="Subir archivos">
+                <button class="btn btn-sm btn-outline" id="docMediaUploadBtn" title="Subir documentación gráfica">
                   📁
                 </button>
               </div>
             </div>
-            <div class="card-body doc-media-body">
-              ${renderDocMediaLibraryHTML()}
-            </div>
-          </div>
-
-          <div class="card">
-            <div class="card-header">
-              <div class="card-title">Fichas técnicas</div>
-              <div class="card-subtitle">Selecciona qué equipos incluir como anexo.</div>
-            </div>
             <div class="doc-side-body">
               ${renderDocFichasHTML()}
+
+              <hr style="margin:0.75rem 0;" />
+
+              <div class="card-subtitle" style="margin-bottom:0.35rem;">
+                Documentación gráfica
+              </div>
+              <div class="doc-media-body">
+                ${renderDocMediaLibraryHTML()}
+              </div>
             </div>
           </div>
         </aside>
