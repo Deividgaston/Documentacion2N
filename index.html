@@ -32,9 +32,7 @@
           Entrar
         </button>
 
-        <div class="text-center mt-2" style="font-size:0.78rem; color:#6b7280;">
-          o
-        </div>
+        <div class="text-center mt-2" style="font-size:0.78rem; color:#6b7280;">o</div>
 
         <button id="btnLoginGoogle" class="btn btn-secondary mt-2" style="width: 100%">
           Acceder con Google
@@ -46,8 +44,9 @@
       </div>
     </div>
 
+
     <!-- =========================================================
-         APLICACIÓN (OCULTA HASTA LOGIN)
+         APLICACIÓN PRINCIPAL (OCULTA HASTA LOGIN)
     ========================================================== -->
     <div id="appShell" class="app-shell" style="display: none">
       <header class="app-topbar">
@@ -59,10 +58,11 @@
         <nav class="app-topbar-center">
           <a href="#" class="top-nav-link active" data-view="proyecto" id="navProyecto">Proyecto</a>
           <a href="#" class="top-nav-link" data-view="presupuesto">Presupuesto</a>
-          <!-- 🔹 NUEVA PESTAÑA SIMULADOR -->
           <a href="#" class="top-nav-link" data-view="simulador">Simulador</a>
           <a href="#" class="top-nav-link" data-view="tarifa">Tarifa 2N</a>
           <a href="#" class="top-nav-link" data-view="tarifas">Tarifas</a>
+
+          <!-- 🔹 NUEVA PESTAÑA -->
           <a href="#" class="top-nav-link" data-view="docs">Documentación</a>
         </nav>
 
@@ -75,8 +75,9 @@
       <main id="appContent" class="app-content"></main>
     </div>
 
+
     <!-- =========================================================
-         LIBRERÍAS
+         LIBRERÍAS EXTERNAS
     ========================================================== -->
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
@@ -87,16 +88,17 @@
     <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
 
- <!-- 🔹 NUEVO: jsPDF + AutoTable (para Presupuesto y Simulador) -->
+    <!-- jsPDF + AutoTable -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
 
-    
-        <!-- =========================================================
+
+
+    <!-- =========================================================
          ARCHIVOS JS DEL PROYECTO
     ========================================================== -->
 
-    <!-- Firebase de tu proyecto, ahora como módulo (puede exportar db, auth, etc.) -->
+    <!-- Firebase inicialización -->
     <script src="js/firebase.js"></script>
 
     <script src="js/state.js"></script>
@@ -104,25 +106,25 @@
 
     <script src="js/ui_login.js"></script>
     <script src="js/ui_shell.js"></script>
+
     <script src="js/ui_proyecto.js"></script>
     <script src="js/ui_presupuesto.js"></script>
-    <!-- 🔹 UI del simulador -->
+
+    <!-- Simulador -->
     <script src="js/ui_simulador.js"></script>
 
-    <!-- Tarifa 2N como módulo -->
-    <script type="module" src="js/ui_tarifa.js"></script>
+    <!-- Tarifa -->
+    <script src="js/ui_tarifa.js"></script>
     <script src="js/ui_tarifas.js"></script>
 
-    <!-- documentacion como módulo -->
+    <!-- Documentación -->
     <script src="js/ui_documentacion.js"></script>
-
-
-
     <script src="js/ui_dashboard_doc.js"></script>
 
-    <!-- Export a PDF / Excel -->
+    <!-- Exportación PDF / Excel -->
     <script src="js/pdf_excel.js"></script>
 
+    <!-- App core -->
     <script src="app.js"></script>
     <script src="js/main.js"></script>
   </body>
