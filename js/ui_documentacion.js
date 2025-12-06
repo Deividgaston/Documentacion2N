@@ -1055,9 +1055,12 @@ async function ensureDocMediaLoaded() {
     const uid = user ? user.uid : null;
 
     let query = db.collection("documentacion_media");
+    // si quieres filtrar por usuario, dejamos solo el where (sin orderBy) → NO necesita índice compuesto
     if (uid) query = query.where("uid", "==", uid);
 
-    const snap = await query.orderBy("uploadedAt", "desc").limit(200).get();
+    // 🔁 IMPORTANTE: sin orderBy para que no pida índice compuesto
+    const snap = await query.limit(200).get();
+
     const media = [];
     snap.forEach((doc) => {
       media.push({ id: doc.id, ...doc.data() });
