@@ -97,9 +97,9 @@ const DOC_BASE_TEMPLATES = {
 function buildDocTokens() {
   const proyecto = appState.proyecto || {};
   const presupuesto =
-  typeof window.getPresupuestoActual === "function"
-    ? window.getPresupuestoActual()
-    : null;
+    typeof window.getPresupuestoActual === "function"
+      ? window.getPresupuestoActual()
+      : null;
 
   const nombreProyecto =
     proyecto.nombre ||
@@ -133,15 +133,17 @@ function buildDocTokens() {
 
 function buildListadoEquiposTexto(idioma) {
   const presupuesto =
-  typeof window.getPresupuestoActual === "function"
-    ? window.getPresupuestoActual()
-    : null;
+    typeof window.getPresupuestoActual === "function"
+      ? window.getPresupuestoActual()
+      : null;
 
   const lineas = Array.isArray(presupuesto?.lineas) ? presupuesto.lineas : [];
 
   if (!lineas.length) {
-    if (idioma === "en") return "No devices have been loaded from the current bill of materials.";
-    if (idioma === "pt") return "Ainda não foram carregados equipamentos a partir da lista de materiais.";
+    if (idioma === "en")
+      return "No devices have been loaded from the current bill of materials.";
+    if (idioma === "pt")
+      return "Ainda não foram carregados equipamentos a partir da lista de materiais.";
     return "Todavía no se han cargado equipos desde la lista de materiales.";
   }
 
@@ -237,7 +239,9 @@ function renderDocumentacionView() {
               .map(
                 (l) => `
               <button
-                class="btn btn-sm ${l.code === idiomaActual ? "btn-primary" : "btn-outline"}"
+                class="btn btn-sm ${
+                  l.code === idiomaActual ? "btn-primary" : "btn-outline"
+                }"
                 data-doc-lang="${l.code}"
               >
                 ${l.label}
@@ -359,7 +363,10 @@ function renderDocSectionsHTML() {
 }
 
 function renderDocFichasHTML() {
-  const presupuesto = typeof getPresupuestoActual === "function" ? getPresupuestoActual() : null;
+  const presupuesto =
+    typeof window.getPresupuestoActual === "function"
+      ? window.getPresupuestoActual()
+      : null;
   const lineas = Array.isArray(presupuesto?.lineas) ? presupuesto.lineas : [];
 
   if (!lineas.length) {
@@ -440,7 +447,7 @@ function attachDocumentacionHandlers() {
 
   const exportBtn = container.querySelector("#docExportarBtn");
   if (exportBtn) {
-    exportBtn.addEventListener("click", exportarDocumentacionPDFStub);
+    exportBtn.addEventListener("click", exportarDocumentacionPDF);
   }
 
   const modal = document.getElementById("docCustomModal");
@@ -492,7 +499,8 @@ function saveDocCustomBlock() {
     actual.trim().length > 0 ? actual.trim() + "\n\n" + text : text;
 
   appState.documentacion.secciones[secKey] = nuevo;
-  appState.documentacion.customBlocks = appState.documentacion.customBlocks || [];
+  appState.documentacion.customBlocks =
+    appState.documentacion.customBlocks || [];
   appState.documentacion.customBlocks.push({
     section: secKey,
     text,
@@ -516,17 +524,167 @@ function saveDocCustomBlock() {
 }
 
 // ===========================
-// EXPORTAR PDF (STUB)
+// EXPORTAR PDF REAL
 // ===========================
 
-function exportarDocumentacionPDFStub() {
-  console.log("[Documentación] Exportar PDF con idioma:", appState.documentacion.idioma);
-  console.log("[Documentación] Secciones:", appState.documentacion.secciones);
-  console.log("[Documentación] Fichas incluidas:", appState.documentacion.fichasIncluidas);
-  alert(
-    "Exportar PDF todavía no está implementado en esta versión.\n\n" +
-      "Pero el contenido de la memoria ya está generado y listo para usar."
-  );
+function exportarDocumentacionPDF() {
+  if (!window.jspdf || !window.jspdf.jsPDF) {
+    alert(
+      "No se ha podido cargar jsPDF. Revisa la inclusión de la librería en index.html."
+    );
+    return;
+  }
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({
+    orientation: "portrait",
+    unit: "mm",
+    format: "a4",
+  });
+
+  const idioma = appState.documentacion.idioma || "es";
+  const secciones = appState.documentacion.secciones || {};
+
+  const presupuesto =
+    typeof window.getPresupuestoActual === "function"
+      ? window.getPresupuestoActual()
+      : null;
+  const proyecto = appState.proyecto || {};
+
+  const nombreProyecto =
+    proyecto.nombre ||
+    proyecto.nombreProyecto ||
+    presupuesto?.nombreProyecto ||
+    "Proyecto";
+
+  const promotora =
+    proyecto.promotora ||
+    proyecto.cliente ||
+    presupuesto?.cliente ||
+    "";
+
+  let tituloDoc = "Memoria de calidades";
+  if (idioma === "en") tituloDoc = "Technical specification";
+  if (idioma === "pt") tituloDoc = "Memória descritiva";
+
+  // Cabecera
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(16);
+  doc.text(tituloDoc, 20, 20);
+
+  doc.setFontSize(11);
+  doc.setFont("helvetica", "normal");
+  let y = 28;
+
+  const headerLines = [];
+  headerLines.push(`${nombreProyecto}`);
+  if (promotora) headerLines.push(promotora);
+
+  headerLines.forEach((line) => {
+    const splitted = doc.splitTextToSize(line, 170);
+    doc.text(splitted, 20, y);
+    y += splitted.length * 5 + 1;
+  });
+
+  y += 4;
+
+  function ensureSpace(linesCount) {
+    const needed = linesCount * 5 + 8;
+    if (y + needed > 280) {
+      doc.addPage();
+      y = 20;
+    }
+  }
+
+  // Secciones
+  DOC_SECTION_ORDER.forEach((key) => {
+    const contenido = (secciones[key] || "").trim();
+    if (!contenido) return;
+
+    const tituloSeccion = labelForSection(key);
+
+    ensureSpace(3);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.text(tituloSeccion, 20, y);
+    y += 7;
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    const textLines = doc.splitTextToSize(contenido, 170);
+    ensureSpace(textLines.length);
+    doc.text(textLines, 20, y);
+    y += textLines.length * 5 + 4;
+  });
+
+  // Anexo fichas
+  const fichasSeleccionadas = [];
+  if (presupuesto && Array.isArray(presupuesto.lineas)) {
+    presupuesto.lineas.forEach((l, idx) => {
+      if (!appState.documentacion.fichasIncluidas[idx]) return;
+      const ref = l.ref || l.codigo || l.code || "";
+      const desc = l.descripcion || l.desc || "";
+      const qty = l.cantidad || l.qty || 1;
+      fichasSeleccionadas.push({
+        ref,
+        desc,
+        qty,
+      });
+    });
+  }
+
+  if (fichasSeleccionadas.length > 0) {
+    doc.addPage();
+    y = 20;
+
+    let tituloAnexo = "Anexo – Fichas técnicas";
+    if (idioma === "en") tituloAnexo = "Appendix – Technical datasheets";
+    if (idioma === "pt") tituloAnexo = "Anexo – Fichas técnicas";
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.text(tituloAnexo, 20, y);
+    y += 8;
+
+    if (doc.autoTable) {
+      const body = fichasSeleccionadas.map((f) => [
+        f.ref,
+        f.desc,
+        String(f.qty),
+      ]);
+
+      doc.autoTable({
+        startY: y,
+        head: [["Ref.", "Descripción", "Cantidad"]],
+        body,
+        styles: { fontSize: 9 },
+        headStyles: { fillColor: [240, 240, 240] },
+        margin: { left: 20, right: 20 },
+      });
+    } else {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      fichasSeleccionadas.forEach((f) => {
+        const line = `${f.ref}  –  ${f.desc}  (x${f.qty})`;
+        const splitted = doc.splitTextToSize(line, 170);
+        ensureSpace(splitted.length);
+        doc.text(splitted, 20, y);
+        y += splitted.length * 5 + 2;
+      });
+    }
+  }
+
+  let filenameBase = "memoria_calidades";
+  if (idioma === "en") filenameBase = "technical_specification";
+  if (idioma === "pt") filenameBase = "memoria_descritiva";
+
+  const safeName = String(nombreProyecto || "proyecto")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/gi, "_")
+    .replace(/^_+|_+$/g, "");
+
+  const filename = `${filenameBase}_${safeName || "2n"}.pdf`;
+  doc.save(filename);
 }
 
 // Exponer función principal al global para poder llamarla desde el router/menu
