@@ -1333,7 +1333,7 @@ function exportarPresupuestoExcel() {
   // ==========================
   const rows = [];
 
-  // Indices para dar formato luego
+  // Índices para estilos
   let titleRowIdx = -1;
   let tableHeaderRowIdx = -1;
   const sectionTitleRowIdxs = [];
@@ -1356,7 +1356,9 @@ function exportarPresupuestoExcel() {
   rows.push(["Fecha", fechaHoy]);
   rows.push([]);
   rows.push(["Observaciones generales"]);
-  rows.push([presu.notas || "Se requiere switch PoE para alimentación de equipos."]);
+  rows.push([
+    presu.notas || "Se requiere switch PoE para alimentación de equipos.",
+  ]);
   rows.push([]);
 
   // === NOTAS POR SECCIÓN (PÁGINA PRESUPUESTO) ===
@@ -1376,7 +1378,8 @@ function exportarPresupuestoExcel() {
   }
 
   Object.keys(sectionNotes || {}).forEach((sec) => {
-    if (sectionOrder && sectionOrder.includes && sectionOrder.includes(sec)) return;
+    if (sectionOrder && sectionOrder.includes && sectionOrder.includes(sec))
+      return;
     const txt = (sectionNotes[sec] || "").trim();
     if (txt) {
       notasSecciones.push({ seccion: sec, nota: txt });
@@ -1484,7 +1487,7 @@ function exportarPresupuestoExcel() {
   // ==========================
   const ws = XLSX.utils.aoa_to_sheet(rows);
 
-  // Anchos de columna para que sea más legible
+  // Anchos de columna
   ws["!cols"] = [
     { wch: 18 }, // Sección
     { wch: 28 }, // Título
@@ -1495,7 +1498,7 @@ function exportarPresupuestoExcel() {
     { wch: 16 }, // Importe
   ];
 
-  // === Estilos parecidos a la hoja de tarifas ===
+  // === Estilos (igual patrón que en Tarifas) ===
   const borderThin = {
     top: { style: "thin", color: { rgb: "D1D5DB" } },
     bottom: { style: "thin", color: { rgb: "D1D5DB" } },
@@ -1518,8 +1521,8 @@ function exportarPresupuestoExcel() {
     });
   }
 
-  // Etiquetas de cabecera (Empresa, Proyecto, etc.) -> negrita en col A
-  const labelRows = [2, 3, 4, 5, 6, 8, 9, 10, 12]; // índices de fila dentro de rows
+  // Etiquetas de cabecera (Empresa, Proyecto, etc.) -> col A en negrita
+  const labelRows = [2, 3, 4, 5, 6, 8, 9, 10, 12];
   labelRows.forEach((r) => {
     if (r < rows.length) {
       styleCell(r, 0, {
@@ -1533,27 +1536,26 @@ function exportarPresupuestoExcel() {
     for (let c = 0; c <= 6; c++) {
       styleCell(tableHeaderRowIdx, c, {
         font: { bold: true, color: { rgb: "111827" } },
-        fill: { fgColor: { rgb: "E5E7EB" } },
+        fill: { patternType: "solid", fgColor: { rgb: "E5E7EB" } },
         alignment: { horizontal: "center", vertical: "center" },
         border: borderThin,
       });
     }
   }
 
-  // Filas de sección (nombre de la sección en mayúsculas)
+  // Filas de título de sección
   sectionTitleRowIdxs.forEach((r) => {
     styleCell(r, 0, {
       font: { bold: true, color: { rgb: "111827" } },
-      fill: { fgColor: { rgb: "EEF2FF" } },
+      fill: { patternType: "solid", fgColor: { rgb: "EEF2FF" } },
       alignment: { horizontal: "left", vertical: "center" },
       border: borderThin,
     });
   });
 
-  // Bordes + formato numérico para la tabla (desde header hasta fila de totales)
+  // Bordes + alineación + formato numérico en toda la tabla (desde header hasta TOTAL)
   if (tableHeaderRowIdx >= 0 && totalRowIdx >= 0) {
     for (let r = tableHeaderRowIdx + 1; r <= totalRowIdx; r++) {
-      // saltar filas vacías
       if (!rows[r] || rows[r].length === 0) continue;
       for (let c = 0; c <= 6; c++) {
         styleCell(r, c, {
@@ -1564,12 +1566,10 @@ function exportarPresupuestoExcel() {
               : { horizontal: "left", vertical: "center" },
         });
 
-        // Cantidades y precios con formato numérico
+        // Cantidad / precios / importe
         if (c === 4 || c === 5 || c === 6) {
           const addr = XLSX.utils.encode_cell({ r, c });
-          if (ws[addr]) {
-            ws[addr].z = "0.00";
-          }
+          if (ws[addr]) ws[addr].z = "0.00";
         }
       }
     }
