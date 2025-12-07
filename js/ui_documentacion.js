@@ -1181,10 +1181,9 @@ async function askAIForSection(sectionKey) {
 // ===========================
 // MEDIA: FIRESTORE + STORAGE
 // ===========================
-
 async function ensureDocMediaLoaded() {
-  if (appState.documentacion.mediaLoaded) return;
-
+  // Siempre intentamos cargar desde Firestore cuando se entra en la vista,
+  // para evitar tener que refrescar al cambiar de página.
   appState.documentacion.mediaLibrary =
     appState.documentacion.mediaLibrary || [];
 
@@ -1211,7 +1210,7 @@ async function ensureDocMediaLoaded() {
     const snap = await query.limit(200).get();
 
     const media = [];
-    snap.forEach(function (doc) {
+    snap.forEach((doc) => {
       media.push({ id: doc.id, ...doc.data() });
     });
 
