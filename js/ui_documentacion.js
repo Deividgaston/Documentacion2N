@@ -150,7 +150,7 @@ const DOC_BASE_TEMPLATES = {
     servicios:
       "A solução pode ser complementada com serviços cloud para gestão remota, abertura de portas através de aplicação móvel, atualizações de firmware e monitorização do sistema. Estes serviços melhoram a experiência do utilizador final e facilitam a manutenção preventiva.",
     normativa_red:
-      "Norma RED (Radio Equipment Directive) – 1 de agosto de 2025\n\nTodos os equipamentos de comunicações incluídos na solução cumprem a Diretiva RED (2014/53/EU) e os requisitos de cibersegurança que se tornam obrigatórios a partir de 1 de agosto de 2025. Os dispositivos 2N incorporam as medidas necessárias em termos de cibersegurança, gestão do espectro radioelétrico e segurança do utilizador, incluindo:\n\n- Gestão segura de firmware e atualizações remotas.\n- Mecanismos de proteção contra acessos não autorizados.\n- Conformidade com os requisitos essenciais de segurança, compatibilidade eletromagnética e utilização eficiente do espectro.\n\nA solução foi desenhada tendo em conta estes requisitos para garantir segurança e conformidade normativa a longo prazo.",
+      "Norma RED (Radio Equipment Directive) – 1 de agosto de 2025\n\nTodos os equipamentos de comunicações incluídos na solução cumprem a Diretiva RED (2014/53/EU) e os requisitos de cibersegurança que se tornam obrigatórios a partir de 1 de agosto de 2025. Os dispositivos 2N incorporam as medidas necessárias em termos de cibersegurança, gestão do espectro radioeléctrico e segurança do utilizador, incluindo:\n\n- Gestão segura de firmware e atualizações remotas.\n- Mecanismos de proteção contra acessos não autorizados.\n- Conformidade com os requisitos essenciais de segurança, compatibilidade eletromagnética e utilização eficiente do espectro.\n\nA solução foi desenhada tendo em conta estes requisitos para garantir segurança e conformidade normativa a longo prazo.",
     normativa_lpd:
       "Proteção de dados (RGPD)\n\nA solução proposta permite um tratamento responsável dos dados pessoais, em especial no que respeita a imagens de vídeo, registos de acesso e credenciais digitais.\n\nA arquitetura recomendada foi concebida para:\n\n- Minimizar a quantidade de dados pessoais armazenados.\n- Restringir o acesso aos dados a perfis autorizados (administradores, segurança, manutenção).\n- Facilitar o cumprimento do Regulamento Geral de Proteção de Dados (RGPD) e da legislação local em matéria de proteção de dados.\n\nRecomenda-se que a propriedade e/ou a entidade gestora do edifício definam políticas de conservação de dados, informação ao utilizador e exercício de direitos (acesso, retificação, apagamento, etc.), tirando partido das capacidades técnicas da solução.",
     normativa_ciber:
@@ -256,6 +256,17 @@ function applyTokensToTemplate(template, tokens) {
     out = out.replaceAll(key, tokens[key]);
   });
   return out;
+}
+
+// Escapar HTML para títulos en el overlay de imagen
+function docEscapeHtml(str) {
+  if (str == null) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 // ===========================
@@ -434,21 +445,6 @@ function renderDocumentacionView() {
         </div>
       </div>
 
-      <!-- Modal para vista previa de imágenes -->
-      <div id="docMediaPreviewModal" class="doc-modal hidden">
-        <div class="doc-modal-content card doc-media-preview-card">
-          <div class="card-header">
-            <div class="card-title" id="docMediaPreviewTitle">Vista previa</div>
-            <button type="button" class="btn btn-xs" id="docMediaPreviewCloseBtn">✕</button>
-          </div>
-          <div class="card-body">
-            <div class="doc-media-preview-img-wrap">
-              <img id="docMediaPreviewImg" src="" alt="Vista previa" />
-            </div>
-          </div>
-        </div>
-      </div>
-
       <div id="docModalBackdrop" class="doc-backdrop hidden"></div>
     </div>
   `;
@@ -488,7 +484,7 @@ function labelForSection(key) {
 function renderSectionMediaHTML(sectionKey) {
   const mediaMap = {};
   (appState.documentacion.mediaLibrary || []).forEach((m) => {
-    if (m && m.id) mediaMap[m.id] = m;
+    if (m.id) mediaMap[m.id] = m;
   });
 
   const ids =
@@ -593,7 +589,6 @@ function renderDocFichasHTML() {
   const media = appState.documentacion.mediaLibrary || [];
 
   const fichasMedia = media.filter((m) => {
-    if (!m || !m.id) return false;
     const cat = (m.docCategory || "").toLowerCase();
     const mime = (m.mimeType || "").toLowerCase();
     // Consideramos ficha técnica: categoría 'ficha' o PDF / DOC
@@ -688,19 +683,21 @@ function renderDocFichasHTML() {
 }
 
 // ===========================
-// DOCUMENTACIÓN GRÁFICA (solo imágenes)
+// LIMPIEZA Y DOCUMENTACIÓN GRÁFICA (solo imágenes)
 // ===========================
 
-// Limpieza de elementos corruptos sin id/url/mimeType/docCategory
+// *** CAMBIO 1: limpieza muy sencilla, solo exige id + url
 function cleanInvalidMediaItems() {
   const list = appState.documentacion.mediaLibrary || [];
   const cleaned = list.filter(
     (m) =>
       m &&
       m.id &&
+      typeof m.id === "string" &&
+      m.id.trim() !== "" &&
       m.url &&
-      typeof m.mimeType === "string" &&
-      typeof m.docCategory === "string"
+      typeof m.url === "string" &&
+      m.url.trim() !== ""
   );
   if (cleaned.length !== list.length) {
     appState.documentacion.mediaLibrary = cleaned;
@@ -708,27 +705,34 @@ function cleanInvalidMediaItems() {
 }
 
 function renderDocMediaLibraryHTML() {
-  // Limpieza previa
+  // *** CAMBIO 2: usamos limpieza y detectamos imágenes por mime/type/extensión
   cleanInvalidMediaItems();
 
   const allMedia = appState.documentacion.mediaLibrary || [];
 
-  // Solo imágenes válidas marcadas como 'imagen'
   const media = allMedia.filter((m) => {
     if (!m || !m.id || !m.url) return false;
-    if (!m.mimeType || !m.docCategory) return false;
 
-    const cat = m.docCategory.toLowerCase();
-    const mime = m.mimeType.toLowerCase();
-    const isImageType = mime.startsWith("image/");
+    const mime = (m.mimeType || "").toLowerCase();
+    const type = (m.type || "").toLowerCase();
+    const url = (m.url || "").toLowerCase();
 
-    return isImageType && cat === "imagen";
+    const isImageByMime = mime.startsWith("image/");
+    const isImageByType = type === "image";
+    const isImageByExt =
+      url.endsWith(".png") ||
+      url.endsWith(".jpg") ||
+      url.endsWith(".jpeg") ||
+      url.endsWith(".webp") ||
+      url.endsWith(".gif");
+
+    return isImageByMime || isImageByType || isImageByExt;
   });
 
   if (!media.length) {
     return `
       <p class="text-muted" style="font-size:0.85rem;">
-        Todavía no has subido documentación gráfica de tipo imagen válida.
+        Todavía no has subido documentación gráfica de tipo imagen.
         Sube las imágenes desde <strong>Gestión de documentación</strong>.
       </p>
     `;
@@ -807,6 +811,118 @@ function refreshDocMediaGridOnly() {
   if (!body) return;
   body.innerHTML = renderDocMediaLibraryHTML();
   attachDocMediaGridHandlers(container);
+}
+
+// ===========================
+// OVERLAY FLOTANTE PARA IMÁGENES
+// ===========================
+
+function openDocImageFloatingPreview(item) {
+  if (!item || !item.url) {
+    console.warn("[DOC] openDocImageFloatingPreview sin url", item);
+    alert("No se ha encontrado la URL de la imagen para previsualizarla.");
+    return;
+  }
+
+  console.log("[DOC] Abriendo preview flotante de imagen:", item.id, item.url);
+
+  const existing = document.getElementById("docMediaFloatingPreview");
+  if (existing) existing.remove();
+
+  const title =
+    item.folderName && item.nombre
+      ? `${item.folderName} – ${item.nombre}`
+      : item.nombre || "Imagen";
+
+  const overlay = document.createElement("div");
+  overlay.id = "docMediaFloatingPreview";
+  overlay.style.position = "fixed";
+  overlay.style.inset = "0";
+  overlay.style.background = "rgba(0,0,0,0.65)";
+  overlay.style.display = "flex";
+  overlay.style.alignItems = "center";
+  overlay.style.justifyContent = "center";
+  overlay.style.zIndex = "2147483647";
+
+  overlay.innerHTML = `
+    <div style="
+      position:relative;
+      max-width:90vw;
+      max-height:90vh;
+      background:#111827;
+      padding:12px;
+      border-radius:12px;
+      box-shadow:0 15px 40px rgba(0,0,0,0.6);
+      display:flex;
+      flex-direction:column;
+    ">
+      <div style="
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        margin-bottom:8px;
+        gap:8px;
+      ">
+        <div style="
+          color:#e5e7eb;
+          font-size:0.9rem;
+          font-weight:500;
+          overflow:hidden;
+          text-overflow:ellipsis;
+          white-space:nowrap;
+          max-width:70vw;
+        ">
+          ${docEscapeHtml(title)}
+        </div>
+        <button
+          type="button"
+          id="docMediaFloatingCloseBtn"
+          style="
+            border:none;
+            background:#374151;
+            color:#f9fafb;
+            border-radius:999px;
+            padding:4px 10px;
+            font-size:0.8rem;
+            cursor:pointer;
+          "
+        >✕ Cerrar</button>
+      </div>
+      <div style="
+        flex:1;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+      ">
+        <img src="${item.url}"
+             alt="${docEscapeHtml(title)}"
+             style="
+               max-width:86vw;
+               max-height:80vh;
+               object-fit:contain;
+               border-radius:6px;
+               background:#000;
+             " />
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+
+  const close = () => {
+    overlay.remove();
+  };
+
+  const closeBtn = document.getElementById("docMediaFloatingCloseBtn");
+  if (closeBtn) {
+    closeBtn.addEventListener("click", close);
+  }
+
+  overlay.addEventListener("click", (ev) => {
+    if (ev.target === overlay) {
+      close();
+    }
+  });
 }
 
 // ===========================
@@ -983,25 +1099,11 @@ function attachDocumentacionHandlers() {
     customSaveBtn.addEventListener("click", saveDocCustomBlock);
   }
 
-  // Modal vista previa: cerrar
-  const previewModal = document.getElementById("docMediaPreviewModal");
-  const previewCloseBtn =
-    previewModal?.querySelector("#docMediaPreviewCloseBtn");
-
-  if (previewCloseBtn && previewModal && backdrop) {
-    previewCloseBtn.addEventListener("click", () => {
-      previewModal.classList.add("hidden");
-      backdrop.classList.add("hidden");
-    });
-  }
-
-  // Cerrar modales al pulsar el backdrop
+  // Cerrar modales al pulsar el backdrop (solo afecta al modal custom)
   if (backdrop) {
     backdrop.addEventListener("click", () => {
       const customModal2 = document.getElementById("docCustomModal");
       if (customModal2) customModal2.classList.add("hidden");
-      const previewModal2 = document.getElementById("docMediaPreviewModal");
-      if (previewModal2) previewModal2.classList.add("hidden");
       backdrop.classList.add("hidden");
     });
   }
@@ -1022,37 +1124,47 @@ function attachDocMediaGridHandlers(root) {
     });
   });
 
-  // Ver documento (imagen) en modal flotante
+  // Ver documento (imagen) en overlay flotante
   container.querySelectorAll("[data-media-view-id]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const id = btn.getAttribute("data-media-view-id");
       if (!id) return;
+
+      console.log("[DOC] Click en botón Ver imagen, id:", id);
+
       const item =
         (appState.documentacion.mediaLibrary || []).find(
-          (m) => m && m.id === id
+          (m) => m.id === id
         ) || null;
-      if (!item || !item.url) return;
+
+      console.log("[DOC] Item encontrado para preview:", item);
+
+      if (!item || !item.url) {
+        alert(
+          "No se ha encontrado la imagen en la biblioteca o falta la URL.\nRevisa la consola para más detalles."
+        );
+        return;
+      }
 
       const mime = (item.mimeType || "").toLowerCase();
-      const type = item.type || "";
-      const isImage = type === "image" || mime.startsWith("image/");
+      const type = (item.type || "");
+      const url = (item.url || "").toLowerCase();
 
-      const modal = document.getElementById("docMediaPreviewModal");
-      const imgEl = document.getElementById("docMediaPreviewImg");
-      const titleEl = document.getElementById("docMediaPreviewTitle");
-      const backdropEl = document.getElementById("docModalBackdrop");
+      // *** CAMBIO 3: considerar también la extensión del archivo
+      const isImageByMime = mime.startsWith("image/");
+      const isImageByType = type === "image";
+      const isImageByExt =
+        url.endsWith(".png") ||
+        url.endsWith(".jpg") ||
+        url.endsWith(".jpeg") ||
+        url.endsWith(".webp") ||
+        url.endsWith(".gif");
 
-      if (modal && imgEl && isImage) {
-        imgEl.src = item.url;
-        if (titleEl) {
-          titleEl.textContent = item.folderName
-            ? `${item.folderName} – ${item.nombre || ""}`
-            : item.nombre || "Vista previa";
-        }
-        modal.classList.remove("hidden");
-        if (backdropEl) backdropEl.classList.remove("hidden");
+      const isImage = isImageByMime || isImageByType || isImageByExt;
+
+      if (isImage) {
+        openDocImageFloatingPreview(item);
       } else {
-        // Si por lo que sea no es imagen, abrimos en nueva pestaña
         window.open(item.url, "_blank");
       }
     });
@@ -1164,10 +1276,7 @@ async function askAIForSection(sectionKey) {
 // ===========================
 
 async function ensureDocMediaLoaded() {
-  if (appState.documentacion.mediaLoaded) {
-    cleanInvalidMediaItems();
-    return;
-  }
+  if (appState.documentacion.mediaLoaded) return;
   appState.documentacion.mediaLoaded = true;
   appState.documentacion.mediaLibrary =
     appState.documentacion.mediaLibrary || [];
@@ -1199,7 +1308,6 @@ async function ensureDocMediaLoaded() {
       media.push({ id: doc.id, ...doc.data() });
     });
     appState.documentacion.mediaLibrary = media;
-    cleanInvalidMediaItems();
   } catch (e) {
     console.error("Error cargando documentación gráfica:", e);
   }
@@ -1219,7 +1327,6 @@ async function handleMediaUpload(files, options = {}) {
   }
   appState.documentacion.mediaLibrary =
     (newItems || []).concat(appState.documentacion.mediaLibrary || []);
-  cleanInvalidMediaItems();
   saveDocStateToLocalStorage();
   renderDocumentacionView();
 }
@@ -1363,7 +1470,6 @@ async function deleteMediaById(mediaId) {
   if (pos >= 0) sel.splice(pos, 1);
   appState.documentacion.selectedFichasMediaIds = sel;
 
-  cleanInvalidMediaItems();
   saveDocStateToLocalStorage();
   renderDocumentacionView();
 }
