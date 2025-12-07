@@ -6,7 +6,7 @@ appState.documentacion = appState.documentacion || {
   idioma: "es", // "es" | "en" | "pt"
   secciones: {}, // mapa: clave -> texto
   customBlocks: [], // bloques añadidos manualmente
-  fichasIncluidas: {}, // mapa: idLinea -> true/false
+  fichasIncluidas: {}, // mapa: idLinea -> true/false (se sigue usando solo para autogenerar texto de equipos)
   ultimaAutoGen: null,
   modo: "comercial", // "comercial" | "tecnica"
   mediaLibrary: [], // [{id, nombre, type, mimeType, url, storagePath, folderName, docCategory,...}]
@@ -220,6 +220,7 @@ function buildListadoEquiposTexto(idioma) {
       qty: l.cantidad || l.qty || 1,
     });
 
+    // Auto-marcar como incluidos para anexos si se usan
     if (!appState.documentacion.fichasIncluidas[idx]) {
       appState.documentacion.fichasIncluidas[idx] = true;
     }
@@ -361,12 +362,10 @@ function renderDocumentacionView() {
             <div class="card-header doc-media-header">
               <div>
                 <div class="card-title">Fichas técnicas</div>
-                <div class="card-subtitle">Selecciona qué equipos incluir como anexo y sube documentación gráfica.</div>
-              </div>
-              <div>
-                <button class="btn btn-sm btn-outline" id="docMediaUploadBtn" title="Subir documentación gráfica">
-                  📁
-                </button>
+                <div class="card-subtitle">
+                  Selecciona las fichas técnicas y documentación gráfica desde la biblioteca.
+                  La subida de archivos se realiza en <strong>Gestión de documentación</strong>.
+                </div>
               </div>
             </div>
             <div class="doc-side-body">
@@ -375,7 +374,7 @@ function renderDocumentacionView() {
               <hr style="margin:0.75rem 0;" />
 
               <div class="card-subtitle" style="margin-bottom:0.35rem;">
-                Documentación gráfica
+                Documentación gráfica (imágenes)
               </div>
 
               <div class="form-group mb-2">
@@ -421,51 +420,6 @@ function renderDocumentacionView() {
           <div class="card-footer doc-modal-footer">
             <button class="btn btn-sm" id="docCustomCancelBtn">Cancelar</button>
             <button class="btn btn-sm btn-primary" id="docCustomSaveBtn">Añadir a la memoria</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Modal para subir documentación gráfica -->
-      <div id="docMediaModal" class="doc-modal hidden">
-        <div class="doc-modal-content card">
-          <div class="card-header">
-            <div class="card-title">Subir documentación gráfica</div>
-            <div class="card-subtitle">
-              Define una carpeta y el tipo de documento para organizar las imágenes y fichas técnicas.
-            </div>
-          </div>
-          <div class="card-body">
-            <div class="form-group mb-2">
-              <label>Nombre de carpeta / categoría</label>
-              <input
-                type="text"
-                id="docMediaFolderInput"
-                class="form-control"
-                placeholder="Ej. IP Style, Fichas técnicas, Render fachada..."
-              />
-            </div>
-            <div class="form-group mb-2">
-              <label>Tipo de documento</label>
-              <select id="docMediaTypeSelect" class="form-control">
-                <option value="imagen">Imagen / Render</option>
-                <option value="ficha">Ficha técnica</option>
-                <option value="otro">Outro documento</option>
-              </select>
-            </div>
-            <div class="form-group mb-3">
-              <label>Archivos</label>
-              <input
-                type="file"
-                id="docMediaFileInput"
-                multiple
-                class="form-control"
-                accept="image/*,.pdf,.doc,.docx,.docm"
-              />
-            </div>
-          </div>
-          <div class="card-footer doc-modal-footer">
-            <button class="btn btn-sm" id="docMediaCancelBtn">Cancelar</button>
-            <button class="btn btn-sm btn-primary" id="docMediaSaveBtn">Subir</button>
           </div>
         </div>
       </div>
@@ -607,113 +561,93 @@ function renderDocSectionsHTML() {
 }
 
 // ===========================
-// FICHAS TÉCNICAS (equipos + biblioteca)
+// FICHAS TÉCNICAS (solo biblioteca)
 // ===========================
 
 function renderDocFichasHTML() {
-  const presupuesto =
-    typeof window.getPresupuestoActual === "function"
-      ? window.getPresupuestoActual()
-      : null;
-  const lineas = Array.isArray(presupuesto?.lineas) ? presupuesto.lineas : [];
-
   const media = appState.documentacion.mediaLibrary || [];
-  const fichasMedia = media.filter((m) => m.docCategory === "ficha");
-  const selIds = appState.documentacion.selectedFichasMediaIds || [];
 
-  let htmlEquipos;
-  if (!lineas.length) {
-    htmlEquipos = `
-      <p class="text-muted" style="font-size:0.85rem;">
-        No se ha encontrado lista de materiales en el presupuesto actual.
-      </p>
-    `;
-  } else {
-    htmlEquipos = `
-      <div class="doc-fichas-list">
-        ${lineas
-          .map((l, idx) => {
-            const id = `docFichaChk_${idx}`;
-            const ref = l.ref || l.codigo || l.code || "";
-            const desc = l.descripcion || l.desc || "";
-            const checked = appState.documentacion.fichasIncluidas[idx]
-              ? "checked"
-              : "";
-            return `
-              <label class="doc-ficha-item">
-                <input type="checkbox" id="${id}" data-doc-ficha-index="${idx}" ${checked} />
-                <span class="doc-ficha-main">
-                  <strong>${ref}</strong> – ${desc}
-                </span>
-              </label>
-            `;
-          })
-          .join("")}
-      </div>
-    `;
-  }
+  const fichasMedia = media.filter((m) => {
+    const cat = (m.docCategory || "").toLowerCase();
+    const mime = (m.mimeType || "").toLowerCase();
+    // Consideramos ficha técnica: categoría 'ficha' o PDF / DOC
+    if (cat === "ficha") return true;
+    if (mime === "application/pdf") return true;
+    if (
+      mime ===
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+      mime === "application/msword"
+    )
+      return true;
+    return false;
+  });
 
-  let htmlMedia;
+  const selIds = new Set(appState.documentacion.selectedFichasMediaIds || []);
+
   if (!fichasMedia.length) {
-    htmlMedia = `
-      <p class="text-muted" style="font-size:0.8rem;">
-        Todavía no has subido fichas técnicas a la biblioteca.
-        Súbelas desde el botón 📁 eligiendo el tipo "Ficha técnica".
-      </p>
-    `;
-  } else {
-    htmlMedia = `
-      <div class="doc-fichas-list doc-fichas-media-list">
-        ${fichasMedia
-          .map((m) => {
-            const checked = selIds.includes(m.id) ? "checked" : "";
-            const mainLabel = m.folderName
-              ? `<strong>${m.folderName}</strong> – ${m.nombre}`
-              : `<strong>${m.nombre}</strong>`;
-            return `
-              <label class="doc-ficha-item">
-                <input type="checkbox" data-doc-ficha-media-id="${m.id}" ${checked} />
-                <span class="doc-ficha-main">
-                  ${mainLabel}
-                </span>
-              </label>
-            `;
-          })
-          .join("")}
+    return `
+      <div class="doc-fichas-section">
+        <p class="text-muted" style="font-size:0.8rem;">
+          Todavía no hay fichas técnicas en la biblioteca de documentación.
+          Súbelas desde <strong>Gestión de documentación</strong>.
+        </p>
       </div>
     `;
   }
+
+  const listHTML = fichasMedia
+    .map((m) => {
+      const checked = selIds.has(m.id) ? "checked" : "";
+      const mainLabel = m.folderName
+        ? `<strong>${m.folderName}</strong> – ${m.nombre}`
+        : `<strong>${m.nombre}</strong>`;
+      return `
+        <label class="doc-ficha-item">
+          <input type="checkbox" data-doc-ficha-media-id="${m.id}" ${checked} />
+          <span class="doc-ficha-main">
+            ${mainLabel}
+          </span>
+        </label>
+      `;
+    })
+    .join("");
 
   return `
     <div class="doc-fichas-section">
       <div class="doc-fichas-block">
-        <div class="doc-fichas-title">Equipos del presupuesto</div>
-        <p class="doc-fichas-help">
-          Marca los equipos de la lista de materiales que quieres incluir en el anexo técnico.
-        </p>
-        ${htmlEquipos}
-      </div>
-
-      <hr class="doc-fichas-separator" />
-
-      <div class="doc-fichas-block">
         <div class="doc-fichas-title">Fichas técnicas de biblioteca</div>
         <p class="doc-fichas-help">
-          Selecciona las fichas técnicas genéricas (PDF, docs) que quieres anexar a la memoria.
+          Selecciona las fichas técnicas y documentos que quieres anexar a la memoria.
         </p>
-        ${htmlMedia}
+        <div class="doc-fichas-list doc-fichas-media-list">
+          ${listHTML}
+        </div>
       </div>
     </div>
   `;
 }
 
+// ===========================
+// DOCUMENTACIÓN GRÁFICA (solo imágenes)
+// ===========================
+
 function renderDocMediaLibraryHTML() {
-  const media = appState.documentacion.mediaLibrary || [];
+  const allMedia = appState.documentacion.mediaLibrary || [];
+
+  // Solo imágenes marcadas como 'imagen'
+  const media = allMedia.filter((m) => {
+    const cat = (m.docCategory || "").toLowerCase();
+    const mime = (m.mimeType || "").toLowerCase();
+    const type = m.type || "";
+    const isImageType = type === "image" || mime.startsWith("image/");
+    return isImageType && cat === "imagen";
+  });
+
   if (!media.length) {
     return `
       <p class="text-muted" style="font-size:0.85rem;">
-        Todavía no has subido documentación gráfica.
-        Usa el icono 📁 para añadir imágenes o documentos.
+        Todavía no has subido documentación gráfica de tipo imagen.
+        Sube las imágenes desde <strong>Gestión de documentación</strong>.
       </p>
     `;
   }
@@ -737,7 +671,7 @@ function renderDocMediaLibraryHTML() {
   if (!filtered.length) {
     return `
       <p class="text-muted" style="font-size:0.85rem;">
-        No se han encontrado documentos que coincidan con la búsqueda.
+        No se han encontrado imágenes que coincidan con la búsqueda.
       </p>
     `;
   }
@@ -746,44 +680,31 @@ function renderDocMediaLibraryHTML() {
     <div class="doc-media-grid">
       ${filtered
         .map((m) => {
-          const icon = m.docCategory === "ficha" ? "📄" : "🖼️";
-
           const captionText = m.folderName
             ? `${m.folderName} – ${m.nombre}`
             : m.nombre;
 
-          const tag =
-            m.docCategory === "ficha"
-              ? "Ficha técnica"
-              : m.docCategory === "imagen"
-              ? "Imagen"
-              : "";
+          const tag = "Imagen";
 
           return `
             <div class="doc-media-item"
                  draggable="true"
                  data-media-id="${m.id}">
               <div class="doc-media-thumb">
-                <div class="doc-media-icon">${icon}</div>
+                <div class="doc-media-icon">🖼️</div>
               </div>
               <div class="doc-media-caption">
                 ${captionText}
               </div>
-              ${
-                tag
-                  ? `<div class="doc-media-tag-badge">${tag}${
-                      m.folderName ? " · " + m.folderName : ""
-                    }</div>`
-                  : m.folderName
-                  ? `<div class="doc-media-tag-badge">${m.folderName}</div>`
-                  : ""
-              }
+              <div class="doc-media-tag-badge">
+                ${tag}${m.folderName ? " · " + m.folderName : ""}
+              </div>
               <div class="doc-media-actions">
                 <button
                   type="button"
                   class="btn btn-xs"
                   data-media-view-id="${m.id}"
-                  title="Ver documento"
+                  title="Ver imagen"
                 >
                   👁 Ver
                 </button>
@@ -791,7 +712,7 @@ function renderDocMediaLibraryHTML() {
                   type="button"
                   class="btn btn-xs btn-outline"
                   data-media-delete-id="${m.id}"
-                  title="Borrar documento"
+                  title="Borrar imagen"
                 >
                   🗑 Borrar
                 </button>
@@ -824,6 +745,8 @@ function refreshDocMediaGridOnly() {
 function attachDocumentacionHandlers() {
   const container = getDocAppContent();
   if (!container) return;
+
+  const backdrop = document.getElementById("docModalBackdrop");
 
   // Buscador de documentación gráfica (no recarga toda la página)
   const searchInput = container.querySelector("#docMediaSearchInput");
@@ -892,16 +815,6 @@ function attachDocumentacionHandlers() {
     });
   });
 
-  // Checkboxes de fichas (equipos)
-  container.querySelectorAll("[data-doc-ficha-index]").forEach((chk) => {
-    chk.addEventListener("change", () => {
-      const idx = chk.getAttribute("data-doc-ficha-index");
-      if (idx == null) return;
-      appState.documentacion.fichasIncluidas[idx] = chk.checked;
-      saveDocStateToLocalStorage();
-    });
-  });
-
   // Checkboxes de fichas técnicas de biblioteca
   container.querySelectorAll("[data-doc-ficha-media-id]").forEach((chk) => {
     chk.addEventListener("change", () => {
@@ -919,65 +832,6 @@ function attachDocumentacionHandlers() {
     });
   });
 
-  // Subida de documentación gráfica (abre modal)
-  const uploadBtn = container.querySelector("#docMediaUploadBtn");
-  const mediaModal = document.getElementById("docMediaModal");
-  const backdrop = document.getElementById("docModalBackdrop");
-  const mediaCancelBtn = document.getElementById("docMediaCancelBtn");
-  const mediaSaveBtn = document.getElementById("docMediaSaveBtn");
-
-  if (uploadBtn && mediaModal && backdrop) {
-    uploadBtn.addEventListener("click", () => {
-      mediaModal.classList.remove("hidden");
-      backdrop.classList.remove("hidden");
-      const folderInput = document.getElementById("docMediaFolderInput");
-      const typeSelect = document.getElementById("docMediaTypeSelect");
-      const fileInput = document.getElementById("docMediaFileInput");
-      if (folderInput) folderInput.value = "";
-      if (typeSelect) typeSelect.value = "imagen";
-      if (fileInput) fileInput.value = "";
-    });
-  }
-
-  if (mediaCancelBtn && mediaModal && backdrop) {
-    mediaCancelBtn.addEventListener("click", () => {
-      mediaModal.classList.add("hidden");
-      backdrop.classList.add("hidden");
-    });
-  }
-
-  if (backdrop) {
-    backdrop.addEventListener("click", () => {
-      const customModal = document.getElementById("docCustomModal");
-      const mediaModal2 = document.getElementById("docMediaModal");
-      if (customModal) customModal.classList.add("hidden");
-      if (mediaModal2) mediaModal2.classList.add("hidden");
-      backdrop.classList.add("hidden");
-    });
-  }
-
-  if (mediaSaveBtn && mediaModal && backdrop) {
-    mediaSaveBtn.addEventListener("click", async () => {
-      const folderInput = document.getElementById("docMediaFolderInput");
-      const typeSelect = document.getElementById("docMediaTypeSelect");
-      const fileInput = document.getElementById("docMediaFileInput");
-
-      const folderName = folderInput ? folderInput.value.trim() : "";
-      const docCategory = typeSelect ? typeSelect.value : "imagen";
-      const files = fileInput ? fileInput.files : null;
-
-      if (!files || !files.length) {
-        alert("Selecciona al menos un archivo para subir.");
-        return;
-      }
-
-      await handleMediaUpload(files, { folderName, docCategory });
-
-      mediaModal.classList.add("hidden");
-      backdrop.classList.add("hidden");
-    });
-  }
-
   // Drag & drop en secciones (zona destino)
   container.querySelectorAll("[data-doc-section-drop]").forEach((zone) => {
     zone.addEventListener("dragover", (ev) => {
@@ -991,7 +845,7 @@ function attachDocumentacionHandlers() {
     zone.addEventListener("drop", (ev) => {
       ev.preventDefault();
       zone.classList.remove("is-drag-over");
-      const mediaId = ev.dataTransfer.getData("text/plain");
+      const mediaId = ev.dataTransfer && ev.dataTransfer.getData("text/plain");
       const sectionKey = zone.getAttribute("data-doc-section-drop");
       if (!mediaId || !sectionKey) return;
       attachMediaToSection(sectionKey, mediaId);
@@ -1045,6 +899,14 @@ function attachDocumentacionHandlers() {
   if (customSaveBtn) {
     customSaveBtn.addEventListener("click", saveDocCustomBlock);
   }
+
+  if (backdrop) {
+    backdrop.addEventListener("click", () => {
+      const customModal2 = document.getElementById("docCustomModal");
+      if (customModal2) customModal2.classList.add("hidden");
+      backdrop.classList.add("hidden");
+    });
+  }
 }
 
 // Handlers solo del grid de documentación gráfica
@@ -1080,7 +942,7 @@ function attachDocMediaGridHandlers(root) {
       const id = btn.getAttribute("data-media-delete-id");
       if (!id) return;
       const ok = window.confirm(
-        "¿Seguro que quieres borrar este documento de la biblioteca?"
+        "¿Seguro que quieres borrar esta imagen de la biblioteca?"
       );
       if (!ok) return;
       await deleteMediaById(id);
@@ -1404,19 +1266,31 @@ function getImagenRef(ref) {
   return `img/devices/${clean}.png`;
 }
 
+// Carga imagen, la limita a una resolución máxima y devuelve dataUrl + tamaño
 function loadImageAsDataUrl(url) {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.crossOrigin = "Anonymous";
     img.onload = () => {
       try {
+        const maxDim = 1200; // px máximo en el lado mayor
+        let width = img.naturalWidth || img.width;
+        let height = img.naturalHeight || img.height;
+        const maxActual = Math.max(width, height);
+        const scale = maxActual > maxDim ? maxDim / maxActual : 1;
+
         const canvas = document.createElement("canvas");
-        canvas.width = img.naturalWidth;
-        canvas.height = img.naturalHeight;
+        canvas.width = Math.round(width * scale);
+        canvas.height = Math.round(height * scale);
         const ctx = canvas.getContext("2d");
-        ctx.drawImage(img, 0, 0);
-        const dataUrl = canvas.toDataURL("image/png");
-        resolve(dataUrl);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+        resolve({
+          dataUrl,
+          width: canvas.width,
+          height: canvas.height,
+        });
       } catch (e) {
         reject(e);
       }
@@ -1475,7 +1349,7 @@ async function exportarDocumentacionPDF() {
   }
 }
 
-// ===== Versión técnica: memoria clásica + anexos =====
+// ===== Versión técnica: memoria clásica + imágenes + fichas técnicas de biblioteca =====
 
 async function exportarPDFTecnico() {
   const { jsPDF } = window.jspdf;
@@ -1534,9 +1408,69 @@ async function exportarPDFTecnico() {
     }
   }
 
-  DOC_SECTION_ORDER.forEach((key) => {
+  const sectionMediaMap = appState.documentacion.sectionMedia || {};
+  const mediaLib = appState.documentacion.mediaLibrary || [];
+
+  function getSectionImages(sectionKey) {
+    const ids = sectionMediaMap[sectionKey] || [];
+    return ids
+      .map((id) => mediaLib.find((m) => m.id === id))
+      .filter((m) => {
+        if (!m || !m.url) return false;
+        const mime = (m.mimeType || "").toLowerCase();
+        const type = m.type || "";
+        return type === "image" || mime.startsWith("image/");
+      });
+  }
+
+  async function insertImagesForSection(sectionKey) {
+    const images = getSectionImages(sectionKey);
+    if (!images.length) return;
+
+    for (const m of images) {
+      try {
+        const { dataUrl, width, height } = await loadImageAsDataUrl(m.url);
+        const ratio = width && height ? width / height : 4 / 3;
+
+        const maxWidthMm = 80;
+        const maxHeightMm = 60;
+        let imgW = maxWidthMm;
+        let imgH = imgW / ratio;
+        if (imgH > maxHeightMm) {
+          imgH = maxHeightMm;
+          imgW = imgH * ratio;
+        }
+
+        const neededHeight = imgH + 10;
+        if (y + neededHeight > 280) {
+          doc.addPage();
+          y = 20;
+        }
+
+        const imgX = 20;
+        const imgY = y;
+        doc.addImage(dataUrl, "JPEG", imgX, imgY, imgW, imgH);
+        y += imgH + 4;
+
+        if (m.nombre) {
+          doc.setFont("helvetica", "italic");
+          doc.setFontSize(8);
+          const capLines = doc.splitTextToSize(m.nombre, 170);
+          doc.text(capLines, 20, y);
+          y += capLines.length * 4 + 2;
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(10);
+        }
+      } catch (e) {
+        console.warn("No se pudo insertar imagen de sección en PDF:", e);
+      }
+    }
+  }
+
+  // Contenido por secciones + imágenes asociadas
+  for (const key of DOC_SECTION_ORDER) {
     const contenido = (secciones[key] || "").trim();
-    if (!contenido) return;
+    if (!contenido && !getSectionImages(key).length) continue;
 
     const tituloSeccion = labelForSection(key);
 
@@ -1546,72 +1480,24 @@ async function exportarPDFTecnico() {
     doc.text(tituloSeccion, 20, y);
     y += 7;
 
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    const textLines = doc.splitTextToSize(contenido, 170);
-    ensureSpace(textLines.length);
-    doc.text(textLines, 20, y);
-    y += textLines.length * 5 + 4;
-  });
-
-  // Anexo 1: equipos del presupuesto
-  const fichasSeleccionadas = [];
-  if (presupuesto && Array.isArray(presupuesto.lineas)) {
-    presupuesto.lineas.forEach((l, idx) => {
-      if (!appState.documentacion.fichasIncluidas[idx]) return;
-      const ref = l.ref || l.codigo || l.code || "";
-      const desc = l.descripcion || l.desc || "";
-      const qty = l.cantidad || l.qty || 1;
-      fichasSeleccionadas.push({ ref, desc, qty });
-    });
-  }
-
-  if (fichasSeleccionadas.length > 0) {
-    doc.addPage();
-    y = 20;
-
-    let tituloAnexo = "Anexo – Equipos principales";
-    if (idioma === "en") tituloAnexo = "Appendix – Main devices";
-    if (idioma === "pt") tituloAnexo = "Anexo – Equipamentos principais";
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(12);
-    doc.text(tituloAnexo, 20, y);
-    y += 8;
-
-    if (doc.autoTable) {
-      const body = fichasSeleccionadas.map((f) => [
-        f.ref,
-        f.desc,
-        String(f.qty),
-      ]);
-
-      doc.autoTable({
-        startY: y,
-        head: [["Ref.", "Descripción", "Cantidad"]],
-        body,
-        styles: { fontSize: 9 },
-        headStyles: { fillColor: [240, 240, 240] },
-        margin: { left: 20, right: 20 },
-      });
-    } else {
+    if (contenido) {
       doc.setFont("helvetica", "normal");
-      doc.setFontSize(9);
-      fichasSeleccionadas.forEach((f) => {
-        const line = `${f.ref}  –  ${f.desc}  (x${f.qty})`;
-        const splitted = doc.splitTextToSize(line, 170);
-        ensureSpace(splitted.length);
-        doc.text(splitted, 20, y);
-        y += splitted.length * 5 + 2;
-      });
+      doc.setFontSize(10);
+      const textLines = doc.splitTextToSize(contenido, 170);
+      ensureSpace(textLines.length);
+      doc.text(textLines, 20, y);
+      y += textLines.length * 5 + 4;
     }
+
+    // Imágenes asociadas a esta sección
+    await insertImagesForSection(key);
+    y += 2;
   }
 
-  // Anexo 2: fichas técnicas de biblioteca
-  const mediaLib = appState.documentacion.mediaLibrary || [];
+  // Anexo: fichas técnicas de biblioteca seleccionadas
   const selIds = appState.documentacion.selectedFichasMediaIds || [];
   const fichasMediaSeleccionadas = mediaLib.filter(
-    (m) => m.docCategory === "ficha" && selIds.includes(m.id)
+    (m) => selIds.includes(m.id)
   );
 
   if (fichasMediaSeleccionadas.length > 0) {
@@ -1713,7 +1599,7 @@ async function exportarPDFComercial() {
     doc.text(resumenLines, 20, y);
   }
 
-  // Páginas por dispositivo
+  // Páginas por dispositivo (si hay presupuesto)
   const fichas = [];
   if (presupuesto && Array.isArray(presupuesto.lineas)) {
     presupuesto.lineas.forEach((l, idx) => {
@@ -1741,12 +1627,21 @@ async function exportarPDFComercial() {
     const imgUrl = getImagenRef(f.ref);
     if (imgUrl) {
       try {
-        const dataUrl = await loadImageAsDataUrl(imgUrl);
-        const imgW = 120;
-        const imgH = 75;
+        const { dataUrl, width, height } = await loadImageAsDataUrl(imgUrl);
+        const ratio = width && height ? width / height : 4 / 3;
+
+        const maxWidthMm = 120;
+        const maxHeightMm = 75;
+        let imgW = maxWidthMm;
+        let imgH = imgW / ratio;
+        if (imgH > maxHeightMm) {
+          imgH = maxHeightMm;
+          imgW = imgH * ratio;
+        }
+
         const imgX = (210 - imgW) / 2;
         const imgY = 40;
-        doc.addImage(dataUrl, "PNG", imgX, imgY, imgW, imgH);
+        doc.addImage(dataUrl, "JPEG", imgX, imgY, imgW, imgH);
       } catch (e) {
         console.warn("No se pudo cargar imagen para", f.ref, imgUrl, e);
       }
