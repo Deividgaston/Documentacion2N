@@ -34,7 +34,10 @@ const DOC_STORAGE_KEY = "docState_v1";
       ...saved,
     };
   } catch (e) {
-    console.error("Error cargando estado de documentación desde localStorage:", e);
+    console.error(
+      "Error cargando estado de documentación desde localStorage:",
+      e
+    );
   }
 })();
 
@@ -55,7 +58,10 @@ function saveDocStateToLocalStorage() {
     };
     localStorage.setItem(DOC_STORAGE_KEY, JSON.stringify(toSave));
   } catch (e) {
-    console.error("Error guardando estado de documentación en localStorage:", e);
+    console.error(
+      "Error guardando estado de documentación en localStorage:",
+      e
+    );
   }
 }
 
@@ -191,7 +197,9 @@ function buildDocTokens() {
     "{{NOMBRE_PROYECTO}}": nombreProyecto,
     "{{PROMOTORA}}": promotora,
     "{{NUM_VIVIENDAS}}": numViviendas ? String(numViviendas) : "las viviendas",
-    "{{LISTADO_EQUIPOS}}": buildListadoEquiposTexto(appState.documentacion.idioma),
+    "{{LISTADO_EQUIPOS}}": buildListadoEquiposTexto(
+      appState.documentacion.idioma
+    ),
   };
 }
 
@@ -426,20 +434,17 @@ function renderDocumentacionView() {
         </div>
       </div>
 
-      <!-- Modal para ver imagen de documentación gráfica -->
-      <div id="docImageModal" class="doc-modal hidden">
-        <div class="doc-modal-content card doc-image-modal-content" style="max-width:90vw; max-height:90vh;">
-          <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
-            <div class="card-title">Vista de imagen</div>
-            <button class="btn btn-xs" id="docImageCloseBtn">Cerrar</button>
+      <!-- Modal para vista previa de imágenes -->
+      <div id="docMediaPreviewModal" class="doc-modal hidden">
+        <div class="doc-modal-content card doc-media-preview-card">
+          <div class="card-header">
+            <div class="card-title" id="docMediaPreviewTitle">Vista previa</div>
+            <button type="button" class="btn btn-xs" id="docMediaPreviewCloseBtn">✕</button>
           </div>
-          <div class="card-body doc-image-modal-body" style="text-align:center;">
-            <img
-              id="docImageModalImg"
-              src=""
-              alt="Imagen documentación"
-              style="max-width:100%; max-height:70vh; object-fit:contain; display:block; margin:0 auto;"
-            />
+          <div class="card-body">
+            <div class="doc-media-preview-img-wrap">
+              <img id="docMediaPreviewImg" src="" alt="Vista previa" />
+            </div>
           </div>
         </div>
       </div>
@@ -587,7 +592,7 @@ function renderDocSectionsHTML() {
 function renderDocFichasHTML() {
   const media = appState.documentacion.mediaLibrary || [];
 
-  const fichasMediaBase = media.filter((m) => {
+  const fichasMedia = media.filter((m) => {
     const cat = (m.docCategory || "").toLowerCase();
     const mime = (m.mimeType || "").toLowerCase();
     // Consideramos ficha técnica: categoría 'ficha' o PDF / DOC
@@ -604,25 +609,7 @@ function renderDocFichasHTML() {
 
   const selIds = new Set(appState.documentacion.selectedFichasMediaIds || []);
 
-  const term = (appState.documentacion.fichasSearchTerm || "")
-    .trim()
-    .toLowerCase();
-
-  const fichasMedia = term
-    ? fichasMediaBase.filter((m) => {
-        const txt = (
-          (m.nombre || "") +
-          " " +
-          (m.folderName || "") +
-          " " +
-          (m.docCategory || "")
-        ).toLowerCase();
-        return txt.includes(term);
-      })
-    : fichasMediaBase;
-
-  // Si no hay ninguna ficha en la biblioteca en absoluto
-  if (!fichasMediaBase.length) {
+  if (!fichasMedia.length) {
     return `
       <div class="doc-fichas-section">
         <p class="text-muted" style="font-size:0.8rem;">
@@ -633,7 +620,24 @@ function renderDocFichasHTML() {
     `;
   }
 
-  const listHTML = fichasMedia
+  const term = (appState.documentacion.fichasSearchTerm || "")
+    .trim()
+    .toLowerCase();
+
+  const filtered = term
+    ? fichasMedia.filter((m) => {
+        const txt = (
+          (m.nombre || "") +
+          " " +
+          (m.folderName || "") +
+          " " +
+          (m.docCategory || "")
+        ).toLowerCase();
+        return txt.includes(term);
+      })
+    : fichasMedia;
+
+  const listHTML = filtered
     .map((m) => {
       const checked = selIds.has(m.id) ? "checked" : "";
       const mainLabel = m.folderName
@@ -650,14 +654,6 @@ function renderDocFichasHTML() {
     })
     .join("");
 
-  const noResultsMsg = !fichasMedia.length
-    ? `
-      <p class="text-muted" style="font-size:0.8rem; margin-top:0.25rem;">
-        No se han encontrado fichas técnicas que coincidan con la búsqueda.
-      </p>
-    `
-    : "";
-
   return `
     <div class="doc-fichas-section">
       <div class="doc-fichas-block">
@@ -665,35 +661,40 @@ function renderDocFichasHTML() {
         <p class="doc-fichas-help">
           Selecciona las fichas técnicas y documentos que quieres anexar a la memoria.
         </p>
-
         <div class="form-group mb-2">
           <input
             type="text"
             id="docFichasSearchInput"
             class="form-control"
-            placeholder="Buscar fichas técnicas..."
+            placeholder="Buscar por nombre o carpeta..."
             value="${appState.documentacion.fichasSearchTerm || ""}"
           />
         </div>
-
-        <div class="doc-fichas-list doc-fichas-media-list">
-          ${listHTML}
-        </div>
-        ${noResultsMsg}
+        ${
+          filtered.length
+            ? `
+          <div class="doc-fichas-list doc-fichas-media-list">
+            ${listHTML}
+          </div>`
+            : `
+          <p class="text-muted" style="font-size:0.8rem;">
+            No se han encontrado fichas que coincidan con la búsqueda.
+          </p>`
+        }
       </div>
     </div>
   `;
 }
 
 // ===========================
-// DOCUMENTACIÓN GRÁFICA (solo imágenes, en lista scrollable)
+// DOCUMENTACIÓN GRÁFICA (solo imágenes)
 // ===========================
 
 function renderDocMediaLibraryHTML() {
   const allMedia = appState.documentacion.mediaLibrary || [];
 
   // Solo imágenes marcadas como 'imagen'
-  const mediaBase = allMedia.filter((m) => {
+  const media = allMedia.filter((m) => {
     const cat = (m.docCategory || "").toLowerCase();
     const mime = (m.mimeType || "").toLowerCase();
     const type = m.type || "";
@@ -701,7 +702,7 @@ function renderDocMediaLibraryHTML() {
     return isImageType && cat === "imagen";
   });
 
-  if (!mediaBase.length) {
+  if (!media.length) {
     return `
       <p class="text-muted" style="font-size:0.85rem;">
         Todavía no has subido documentación gráfica de tipo imagen.
@@ -713,8 +714,8 @@ function renderDocMediaLibraryHTML() {
   const term = (appState.documentacion.mediaSearchTerm || "")
     .trim()
     .toLowerCase();
-  const media = term
-    ? mediaBase.filter((m) => {
+  const filtered = term
+    ? media.filter((m) => {
         const txt = (
           (m.nombre || "") +
           " " +
@@ -724,9 +725,9 @@ function renderDocMediaLibraryHTML() {
         ).toLowerCase();
         return txt.includes(term);
       })
-    : mediaBase;
+    : media;
 
-  if (!media.length) {
+  if (!filtered.length) {
     return `
       <p class="text-muted" style="font-size:0.85rem;">
         No se han encontrado imágenes que coincidan con la búsqueda.
@@ -734,32 +735,25 @@ function renderDocMediaLibraryHTML() {
     `;
   }
 
-  // Lista vertical scrollable (reutilizamos estilos de lista de fichas)
   return `
     <div class="doc-media-list doc-fichas-list">
-      ${media
+      ${filtered
         .map((m) => {
           const captionText = m.folderName
             ? `${m.folderName} – ${m.nombre}`
             : m.nombre;
 
-          const tag = "Imagen";
-
           return `
             <div class="doc-media-item doc-media-row"
                  draggable="true"
                  data-media-id="${m.id}">
-              <div class="doc-media-main">
-                <div class="doc-media-name">
-                  🖼️ ${captionText}
-                </div>
-                <div class="doc-media-meta">
-                  <span class="doc-media-tag-badge">
-                    ${tag}${m.folderName ? " · " + m.folderName : ""}
-                  </span>
-                </div>
+              <div class="doc-media-row-main">
+                <span class="doc-media-row-icon">🖼️</span>
+                <span class="doc-media-caption">
+                  ${captionText}
+                </span>
               </div>
-              <div class="doc-media-actions">
+              <div class="doc-media-row-actions">
                 <button
                   type="button"
                   class="btn btn-xs"
@@ -807,8 +801,6 @@ function attachDocumentacionHandlers() {
   if (!container) return;
 
   const backdrop = document.getElementById("docModalBackdrop");
-  const customModal = document.getElementById("docCustomModal");
-  const imageModal = document.getElementById("docImageModal");
 
   // Buscador de documentación gráfica (no recarga toda la página)
   const searchInput = container.querySelector("#docMediaSearchInput");
@@ -824,9 +816,9 @@ function attachDocumentacionHandlers() {
   const fichasSearchInput = container.querySelector("#docFichasSearchInput");
   if (fichasSearchInput) {
     fichasSearchInput.addEventListener("input", () => {
-      appState.documentacion.fichasSearchTerm = fichasSearchInput.value || "";
+      appState.documentacion.fichasSearchTerm =
+        fichasSearchInput.value || "";
       saveDocStateToLocalStorage();
-      // Redibujamos la vista para refrescar la lista de fichas
       renderDocumentacionView();
     });
   }
@@ -873,7 +865,8 @@ function attachDocumentacionHandlers() {
     ta.addEventListener("input", () => {
       const secKey = ta.getAttribute("data-doc-section-text");
       if (!secKey) return;
-      appState.documentacion.secciones = appState.documentacion.secciones || {};
+      appState.documentacion.secciones =
+        appState.documentacion.secciones || {};
       appState.documentacion.secciones[secKey] = ta.value;
       saveDocStateToLocalStorage();
     });
@@ -938,7 +931,7 @@ function attachDocumentacionHandlers() {
     });
   });
 
-  // Handlers específicos de la lista de media (drag, ver, borrar)
+  // Handlers específicos del grid de media (drag, ver, borrar)
   attachDocMediaGridHandlers(container);
 
   // Nuevo bloque custom
@@ -957,10 +950,10 @@ function attachDocumentacionHandlers() {
     });
   }
 
-  // Modal custom
+  // Modal custom: cerrar
+  const customModal = document.getElementById("docCustomModal");
   const customCancelBtn = customModal?.querySelector("#docCustomCancelBtn");
   const customSaveBtn = customModal?.querySelector("#docCustomSaveBtn");
-  const imageCloseBtn = imageModal?.querySelector("#docImageCloseBtn");
 
   if (customCancelBtn && customModal && backdrop) {
     customCancelBtn.addEventListener("click", () => {
@@ -973,31 +966,31 @@ function attachDocumentacionHandlers() {
     customSaveBtn.addEventListener("click", saveDocCustomBlock);
   }
 
-  if (imageCloseBtn && imageModal && backdrop) {
-    imageCloseBtn.addEventListener("click", () => {
-      imageModal.classList.add("hidden");
-      const img = document.getElementById("docImageModalImg");
-      if (img) img.src = "";
+  // Modal vista previa: cerrar
+  const previewModal = document.getElementById("docMediaPreviewModal");
+  const previewCloseBtn =
+    previewModal?.querySelector("#docMediaPreviewCloseBtn");
+
+  if (previewCloseBtn && previewModal && backdrop) {
+    previewCloseBtn.addEventListener("click", () => {
+      previewModal.classList.add("hidden");
       backdrop.classList.add("hidden");
     });
   }
 
+  // Cerrar modales al pulsar el backdrop
   if (backdrop) {
     backdrop.addEventListener("click", () => {
       const customModal2 = document.getElementById("docCustomModal");
-      const imageModal2 = document.getElementById("docImageModal");
       if (customModal2) customModal2.classList.add("hidden");
-      if (imageModal2) {
-        imageModal2.classList.add("hidden");
-        const img = document.getElementById("docImageModalImg");
-        if (img) img.src = "";
-      }
+      const previewModal2 = document.getElementById("docMediaPreviewModal");
+      if (previewModal2) previewModal2.classList.add("hidden");
       backdrop.classList.add("hidden");
     });
   }
 }
 
-// Handlers solo de la lista de documentación gráfica
+// Handlers solo del grid de documentación gráfica
 function attachDocMediaGridHandlers(root) {
   const container = root || getDocAppContent();
   if (!container) return;
@@ -1012,15 +1005,39 @@ function attachDocMediaGridHandlers(root) {
     });
   });
 
-  // Ver documento (en modal flotante)
+  // Ver documento (imagen) en modal flotante
   container.querySelectorAll("[data-media-view-id]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const id = btn.getAttribute("data-media-view-id");
       if (!id) return;
       const item =
-        (appState.documentacion.mediaLibrary || []).find((m) => m.id === id);
+        (appState.documentacion.mediaLibrary || []).find(
+          (m) => m.id === id
+        ) || null;
       if (!item || !item.url) return;
-      openDocImageModal(item.url);
+
+      const mime = (item.mimeType || "").toLowerCase();
+      const type = item.type || "";
+      const isImage = type === "image" || mime.startsWith("image/");
+
+      const modal = document.getElementById("docMediaPreviewModal");
+      const imgEl = document.getElementById("docMediaPreviewImg");
+      const titleEl = document.getElementById("docMediaPreviewTitle");
+      const backdropEl = document.getElementById("docModalBackdrop");
+
+      if (modal && imgEl && isImage) {
+        imgEl.src = item.url;
+        if (titleEl) {
+          titleEl.textContent = item.folderName
+            ? `${item.folderName} – ${item.nombre || ""}`
+            : item.nombre || "Vista previa";
+        }
+        modal.classList.remove("hidden");
+        if (backdropEl) backdropEl.classList.remove("hidden");
+      } else {
+        // Si por lo que sea no es imagen, abrimos en nueva pestaña
+        window.open(item.url, "_blank");
+      }
     });
   });
 
@@ -1039,7 +1056,7 @@ function attachDocMediaGridHandlers(root) {
 }
 
 // ===========================
-// MODALES
+// MODAL EDITOR CUSTOM
 // ===========================
 
 function openDocCustomModal() {
@@ -1058,20 +1075,6 @@ function closeDocCustomModal() {
   if (modal) modal.classList.add("hidden");
   if (backdrop) backdrop.classList.add("hidden");
 }
-
-function openDocImageModal(url) {
-  const modal = document.getElementById("docImageModal");
-  const img = document.getElementById("docImageModalImg");
-  const backdrop = document.getElementById("docModalBackdrop");
-  if (!modal || !img || !backdrop) return;
-  img.src = url;
-  modal.classList.remove("hidden");
-  backdrop.classList.remove("hidden");
-}
-
-// ===========================
-// MODAL EDITOR CUSTOM (guardar)
-// ===========================
 
 function saveDocCustomBlock() {
   const select = document.getElementById("docCustomSectionSelect");
@@ -1265,7 +1268,6 @@ async function saveMediaFileToStorageAndFirestore(file, options = {}) {
     await ref.put(file);
     url = await ref.getDownloadURL();
   } else {
-    // Fallback local si no hay Storage (modo demo)
     url = URL.createObjectURL(file);
   }
 
@@ -1599,8 +1601,8 @@ async function exportarPDFTecnico() {
 
   // Anexo: fichas técnicas de biblioteca seleccionadas
   const selIds = appState.documentacion.selectedFichasMediaIds || [];
-  const fichasMediaSeleccionadas = mediaLib.filter(
-    (m) => selIds.includes(m.id)
+  const fichasMediaSeleccionadas = mediaLib.filter((m) =>
+    selIds.includes(m.id)
   );
 
   if (fichasMediaSeleccionadas.length > 0) {
