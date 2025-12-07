@@ -674,12 +674,7 @@ function renderDocFichasHTML() {
 function cleanInvalidMediaItems() {
   const list = appState.documentacion.mediaLibrary || [];
   const cleaned = list.filter(function (m) {
-    return (
-      m &&
-      m.id &&
-      typeof m.id === "string" &&
-      m.id.trim() !== ""
-    );
+    return m && m.id && typeof m.id === "string" && m.id.trim() !== "";
   });
   if (cleaned.length !== list.length) {
     appState.documentacion.mediaLibrary = cleaned;
@@ -706,7 +701,7 @@ function renderDocMediaLibraryHTML() {
   // saneamos por si hay registros antiguos rotos
   cleanInvalidMediaItems();
 
-  // Nos quedamos solo con IMÁGENES
+  // Nos quedamos solo con IMÁGENES (robusto para registros viejos de Storage)
   const images = (appState.documentacion.mediaLibrary || []).filter(function (
     m
   ) {
@@ -715,18 +710,30 @@ function renderDocMediaLibraryHTML() {
     const cat = (m.docCategory || "").toLowerCase();
     const mime = (m.mimeType || "").toLowerCase();
     const type = (m.type || "").toLowerCase();
-    const url = (m.url || "").toLowerCase();
+    const urlRaw = (m.url || "").split("?")[0]; // quitamos query de Storage
+    const url = urlRaw.toLowerCase();
+    const storagePath = (m.storagePath || "").toLowerCase();
+    const name = (m.nombre || "").toLowerCase();
 
-    return (
-      cat === "imagen" ||
-      mime.indexOf("image/") === 0 ||
-      type === "image" ||
-      url.endsWith(".png") ||
-      url.endsWith(".jpg") ||
-      url.endsWith(".jpeg") ||
-      url.endsWith(".webp") ||
-      url.endsWith(".gif")
-    );
+    const isCatImage =
+      cat === "imagen" || cat === "image" || cat === "img" || cat === "foto";
+    const isMimeImage = mime.indexOf("image/") === 0;
+    const isTypeImage = type === "image";
+
+    const hasImageExt = function (s) {
+      return (
+        s.endsWith(".png") ||
+        s.endsWith(".jpg") ||
+        s.endsWith(".jpeg") ||
+        s.endsWith(".webp") ||
+        s.endsWith(".gif")
+      );
+    };
+
+    const isByPathOrName =
+      hasImageExt(url) || hasImageExt(storagePath) || hasImageExt(name);
+
+    return isCatImage || isMimeImage || isTypeImage || isByPathOrName;
   });
 
   console.log("[DOC] renderDocMediaLibraryHTML – images:", images.length);
@@ -1094,7 +1101,8 @@ function attachDocMediaGridHandlers(root) {
       const cat = (item.docCategory || "").toLowerCase();
       const mime = (item.mimeType || "").toLowerCase();
       const type = (item.type || "").toLowerCase();
-      const url = (item.url || "").toLowerCase();
+      const urlRaw = (item.url || "").split("?")[0];
+      const url = urlRaw.toLowerCase();
 
       const isImageByMime = mime.indexOf("image/") === 0;
       const isImageByType = type === "image";
@@ -1106,7 +1114,7 @@ function attachDocMediaGridHandlers(root) {
         url.endsWith(".gif");
 
       const isImage =
-        cat === "imagen" || isImageByMime || isImageByType || isImageByExt;
+        cat === "imagen" || cat === "image" || isImageByMime || isImageByType || isImageByExt;
 
       if (isImage) {
         openDocImageFloatingPreview(item);
