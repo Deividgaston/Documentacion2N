@@ -50,8 +50,11 @@ function updateViewSubtitle(viewKey) {
     case "tarifas":
       text = "Gestiona los tipos de tarifa y descuentos avanzados.";
       break;
-    case "docs":
+    case "documentacion":
       text = "Genera la memoria de calidades y documentación del proyecto.";
+      break;
+    case "docGestion":
+      text = "Gestiona la documentación subida: fichas, imágenes, certificados y declaraciones.";
       break;
     default:
       text = "";
@@ -97,9 +100,14 @@ function renderViewByKey(viewKey) {
       }
       break;
 
-    case "docs":
-      // Nueva página de Documentación
+    case "documentacion":
+      // Página de Documentación (memoria de calidades / PDF)
       callIfFn("renderDocumentacionView");
+      break;
+
+    case "docGestion":
+      // Nueva página de Gestión de documentación (CRUD ficheros)
+      callIfFn("renderDocGestionView");
       break;
 
     default:
