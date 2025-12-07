@@ -45,18 +45,20 @@ async function loadDocMediaForGestion() {
   appState.documentacion.mediaLibrary =
     appState.documentacion.mediaLibrary || [];
 
-  const alreadyLoaded =
+  // 🔧 Cambio mínimo:
+  // Si el flag dice que está cargado pero el array está vacío,
+  // forzamos recarga desde Firestore.
+  if (
     appState.documentacion.mediaLoaded &&
-    appState.documentacion.mediaLibrary.length > 0;
-
-  if (alreadyLoaded) {
-    return;
+    appState.documentacion.mediaLibrary.length === 0
+  ) {
+    appState.documentacion.mediaLoaded = false;
   }
 
+  // Delegamos toda la lógica de carga en ensureDocMediaLoaded (ui_documentacion.js)
   if (typeof window.ensureDocMediaLoaded === "function") {
     try {
       const maybePromise = window.ensureDocMediaLoaded();
-      // Si devuelve una Promise, esperamos a que termine la carga
       if (maybePromise && typeof maybePromise.then === "function") {
         await maybePromise;
       }
