@@ -426,6 +426,24 @@ function renderDocumentacionView() {
         </div>
       </div>
 
+      <!-- Modal para ver imagen de documentación gráfica -->
+      <div id="docImageModal" class="doc-modal hidden">
+        <div class="doc-modal-content card doc-image-modal-content" style="max-width:90vw; max-height:90vh;">
+          <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+            <div class="card-title">Vista de imagen</div>
+            <button class="btn btn-xs" id="docImageCloseBtn">Cerrar</button>
+          </div>
+          <div class="card-body doc-image-modal-body" style="text-align:center;">
+            <img
+              id="docImageModalImg"
+              src=""
+              alt="Imagen documentación"
+              style="max-width:100%; max-height:70vh; object-fit:contain; display:block; margin:0 auto;"
+            />
+          </div>
+        </div>
+      </div>
+
       <div id="docModalBackdrop" class="doc-backdrop hidden"></div>
     </div>
   `;
@@ -789,6 +807,8 @@ function attachDocumentacionHandlers() {
   if (!container) return;
 
   const backdrop = document.getElementById("docModalBackdrop");
+  const customModal = document.getElementById("docCustomModal");
+  const imageModal = document.getElementById("docImageModal");
 
   // Buscador de documentación gráfica (no recarga toda la página)
   const searchInput = container.querySelector("#docMediaSearchInput");
@@ -806,7 +826,7 @@ function attachDocumentacionHandlers() {
     fichasSearchInput.addEventListener("input", () => {
       appState.documentacion.fichasSearchTerm = fichasSearchInput.value || "";
       saveDocStateToLocalStorage();
-      // Redibujamos solo la parte de fichas (más simple: toda la vista, sigue siendo rápido)
+      // Redibujamos la vista para refrescar la lista de fichas
       renderDocumentacionView();
     });
   }
@@ -918,7 +938,7 @@ function attachDocumentacionHandlers() {
     });
   });
 
-  // Handlers específicos del grid/lista de media (drag, ver, borrar)
+  // Handlers específicos de la lista de media (drag, ver, borrar)
   attachDocMediaGridHandlers(container);
 
   // Nuevo bloque custom
@@ -938,9 +958,9 @@ function attachDocumentacionHandlers() {
   }
 
   // Modal custom
-  const customModal = document.getElementById("docCustomModal");
   const customCancelBtn = customModal?.querySelector("#docCustomCancelBtn");
   const customSaveBtn = customModal?.querySelector("#docCustomSaveBtn");
+  const imageCloseBtn = imageModal?.querySelector("#docImageCloseBtn");
 
   if (customCancelBtn && customModal && backdrop) {
     customCancelBtn.addEventListener("click", () => {
@@ -953,16 +973,31 @@ function attachDocumentacionHandlers() {
     customSaveBtn.addEventListener("click", saveDocCustomBlock);
   }
 
+  if (imageCloseBtn && imageModal && backdrop) {
+    imageCloseBtn.addEventListener("click", () => {
+      imageModal.classList.add("hidden");
+      const img = document.getElementById("docImageModalImg");
+      if (img) img.src = "";
+      backdrop.classList.add("hidden");
+    });
+  }
+
   if (backdrop) {
     backdrop.addEventListener("click", () => {
       const customModal2 = document.getElementById("docCustomModal");
+      const imageModal2 = document.getElementById("docImageModal");
       if (customModal2) customModal2.classList.add("hidden");
+      if (imageModal2) {
+        imageModal2.classList.add("hidden");
+        const img = document.getElementById("docImageModalImg");
+        if (img) img.src = "";
+      }
       backdrop.classList.add("hidden");
     });
   }
 }
 
-// Handlers solo del grid/lista de documentación gráfica
+// Handlers solo de la lista de documentación gráfica
 function attachDocMediaGridHandlers(root) {
   const container = root || getDocAppContent();
   if (!container) return;
@@ -977,7 +1012,7 @@ function attachDocMediaGridHandlers(root) {
     });
   });
 
-  // Ver documento
+  // Ver documento (en modal flotante)
   container.querySelectorAll("[data-media-view-id]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const id = btn.getAttribute("data-media-view-id");
@@ -985,7 +1020,7 @@ function attachDocMediaGridHandlers(root) {
       const item =
         (appState.documentacion.mediaLibrary || []).find((m) => m.id === id);
       if (!item || !item.url) return;
-      window.open(item.url, "_blank");
+      openDocImageModal(item.url);
     });
   });
 
@@ -1004,7 +1039,7 @@ function attachDocMediaGridHandlers(root) {
 }
 
 // ===========================
-// MODAL EDITOR CUSTOM
+// MODALES
 // ===========================
 
 function openDocCustomModal() {
@@ -1023,6 +1058,20 @@ function closeDocCustomModal() {
   if (modal) modal.classList.add("hidden");
   if (backdrop) backdrop.classList.add("hidden");
 }
+
+function openDocImageModal(url) {
+  const modal = document.getElementById("docImageModal");
+  const img = document.getElementById("docImageModalImg");
+  const backdrop = document.getElementById("docModalBackdrop");
+  if (!modal || !img || !backdrop) return;
+  img.src = url;
+  modal.classList.remove("hidden");
+  backdrop.classList.remove("hidden");
+}
+
+// ===========================
+// MODAL EDITOR CUSTOM (guardar)
+// ===========================
 
 function saveDocCustomBlock() {
   const select = document.getElementById("docCustomSectionSelect");
@@ -1175,7 +1224,7 @@ function slugifyFolderName(name) {
 
 async function saveMediaFileToStorageAndFirestore(file, options = {}) {
   const name = file.name || "archivo";
-  const nowIso = new Date().toISOString();
+  ￼const nowIso = new Date().toISOString();
   const isImage = file.type.startsWith("image/");
   const type = isImage ? "image" : "file";
 
