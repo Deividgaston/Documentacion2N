@@ -1051,7 +1051,6 @@ function attachDocumentacionHandlers() {
     customSaveBtn.addEventListener("click", saveDocCustomBlock);
   }
 
-  const backdrop = document.getElementById("docModalBackdrop");
   if (backdrop) {
     backdrop.addEventListener("click", function () {
       const customModal2 = document.getElementById("docCustomModal");
