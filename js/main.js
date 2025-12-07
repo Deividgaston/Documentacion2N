@@ -11,6 +11,10 @@ const VIEW_STORAGE_KEY = "presup2n_currentView";
 // ==============================
 
 function setCurrentView(viewKey) {
+  // ⭐ compat: normalizar posibles claves antiguas
+  if (viewKey === "docs") viewKey = "documentacion";
+  if (viewKey === "docs-gestion") viewKey = "docGestion";
+
   appState.currentView = viewKey;
 
   // Guardar la vista actual en localStorage para mantenerla tras F5
@@ -24,7 +28,15 @@ function setCurrentView(viewKey) {
   const navLinks = document.querySelectorAll(".top-nav-link[data-view]");
   navLinks.forEach((link) => {
     const v = link.getAttribute("data-view");
-    if (v === viewKey) {
+    // ⭐ compat: considerar equivalencias docs <-> documentacion
+    const normalized =
+      v === "docs"
+        ? "documentacion"
+        : v === "docs-gestion"
+        ? "docGestion"
+        : v;
+
+    if (normalized === viewKey) {
       link.classList.add("active");
     } else {
       link.classList.remove("active");
@@ -59,10 +71,12 @@ function updateViewSubtitle(viewKey) {
     case "tarifas":
       text = "Gestiona los tipos de tarifa y descuentos avanzados.";
       break;
-    case "documentacion":
+    case "documentacion":       // docs normales
+    case "docs":                // ⭐ compat
       text = "Genera la memoria de calidades y documentación del proyecto.";
       break;
-    case "docGestion":
+    case "docGestion":          // gestión CRUD
+    case "docs-gestion":        // ⭐ compat
       text = "Gestiona la documentación subida: fichas, imágenes, certificados y declaraciones.";
       break;
     default:
@@ -82,6 +96,10 @@ function callIfFn(fnName) {
 }
 
 function renderViewByKey(viewKey) {
+  // ⭐ compat: normalizar por si llega alguna clave antigua
+  if (viewKey === "docs") viewKey = "documentacion";
+  if (viewKey === "docs-gestion") viewKey = "docGestion";
+
   switch (viewKey) {
     case "proyecto":
       callIfFn("renderProyectoView");
