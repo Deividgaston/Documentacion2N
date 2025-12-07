@@ -1076,14 +1076,16 @@ function attachDocMediaGridHandlers(root) {
     });
   });
 
-  container.querySelectorAll("[data-media-view-id]").forEach(function (btn) {
+    container.querySelectorAll("[data-media-view-id]").forEach(function (btn) {
     btn.addEventListener("click", function () {
       const id = btn.getAttribute("data-media-view-id");
       if (!id) return;
+
       const item =
         (appState.documentacion.mediaLibrary || []).find(function (m) {
           return m.id === id;
         }) || null;
+
       if (!item || !item.url) {
         alert(
           "No se ha encontrado la imagen en la biblioteca o falta la URL.\nRevisa la consola para más detalles."
@@ -1091,9 +1093,11 @@ function attachDocMediaGridHandlers(root) {
         return;
       }
 
+      const cat = (item.docCategory || "").toLowerCase();
       const mime = (item.mimeType || "").toLowerCase();
       const type = (item.type || "").toLowerCase();
       const url = (item.url || "").toLowerCase();
+
       const isImageByMime = mime.indexOf("image/") === 0;
       const isImageByType = type === "image";
       const isImageByExt =
@@ -1102,15 +1106,19 @@ function attachDocMediaGridHandlers(root) {
         url.endsWith(".jpeg") ||
         url.endsWith(".webp") ||
         url.endsWith(".gif");
-      const isImage = isImageByMime || isImageByType || isImageByExt;
+
+      // ✅ también usamos la categoría
+      const isImage =
+        cat === "imagen" || isImageByMime || isImageByType || isImageByExt;
 
       if (isImage) {
-        openDocImageFloatingPreview(item);
+        openDocImageFloatingPreview(item);   // ✅ previsualización en overlay
       } else {
         window.open(item.url, "_blank");
       }
     });
   });
+
 }
 
 // ===========================
