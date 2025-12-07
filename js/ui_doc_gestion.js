@@ -39,23 +39,13 @@ function persistDocStateSafe() {
   }
 }
 
-// Cargar documentación para la vista de gestión, respetando la caché
+// Cargar documentación para la vista de gestión
 async function loadDocMediaForGestion() {
   appState.documentacion = appState.documentacion || {};
   appState.documentacion.mediaLibrary =
     appState.documentacion.mediaLibrary || [];
 
-  // 🔧 Cambio mínimo:
-  // Si el flag dice que está cargado pero el array está vacío,
-  // forzamos recarga desde Firestore.
-  if (
-    appState.documentacion.mediaLoaded &&
-    appState.documentacion.mediaLibrary.length === 0
-  ) {
-    appState.documentacion.mediaLoaded = false;
-  }
-
-  // Delegamos toda la lógica de carga en ensureDocMediaLoaded (ui_documentacion.js)
+  // Siempre usamos ensureDocMediaLoaded para traer el estado real de Firestore
   if (typeof window.ensureDocMediaLoaded === "function") {
     try {
       const maybePromise = window.ensureDocMediaLoaded();
@@ -172,10 +162,41 @@ async function deleteDocMediaById(mediaId) {
   // 6) Guardar en localStorage
   persistDocStateSafe();
 
-  // No marcamos mediaLoaded=false para evitar recargar de Firestore innecesariamente.
-  // El estado en memoria ya está consistente.
-
   return true;
+}
+
+// Borrado MASIVO: todos los documentos de documentacion_media
+async function deleteAllDocMedia() {
+  const ok = window.confirm(
+    "⚠️ Esto borrará TODOS los documentos de documentación (imágenes, fichas, certificados, etc.)\n\n" +
+      "Se eliminarán de Firestore, Storage y de la memoria de calidades.\n\n" +
+      "¿Quieres continuar?"
+  );
+  if (!ok) return;
+
+  await loadDocMediaForGestion();
+  const mediaLib = appState.documentacion.mediaLibrary || [];
+  if (!mediaLib.length) {
+    alert("No hay documentos que borrar.");
+    return;
+  }
+
+  // Borramos uno a uno reutilizando deleteDocMediaById
+  for (const item of mediaLib) {
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      await deleteDocMediaById(item.id);
+    } catch (e) {
+      console.error("Error borrando documento en borrado masivo:", e);
+    }
+  }
+
+  // Dejamos el estado limpio
+  appState.documentacion.mediaLibrary = [];
+  persistDocStateSafe();
+
+  alert("✅ Biblioteca de documentación vaciada completamente.");
+  renderDocGestionView();
 }
 
 // ==============================
@@ -302,7 +323,7 @@ async function renderDocGestionView() {
         ? renderGroup("Otros", grouped.otros)
         : ""
     }
-  `;
+ `;
 
   container.innerHTML = `
     <div class="proyecto-layout">
@@ -316,7 +337,17 @@ async function renderDocGestionView() {
               fichas técnicas, declaración de conformidad, imágenes y certificados.
             </div>
           </div>
-          <span class="chip">Documentación</span>
+          <div style="display:flex; gap:0.5rem; align-items:center;">
+            <span class="chip">Documentación</span>
+            <button
+              id="docGestionDeleteAllBtn"
+              class="btn btn-xs btn-outline"
+              type="button"
+              title="Borrar todos los documentos de documentación"
+            >
+              🧹 Vaciar biblioteca
+            </button>
+          </div>
         </div>
 
         <div class="card-body">
@@ -414,7 +445,7 @@ function attachDocGestionHandlers() {
       }
 
       const docCategory = typeSelect ? typeSelect.value : "imagen";
-      const folderName = (folderInput?.value || "").trim();
+      const folderName = (folderInput && folderInput.value || "").trim();
       const files = Array.from(fileInput.files || []);
       if (!files.length) return;
 
@@ -422,12 +453,19 @@ function attachDocGestionHandlers() {
         console.error(
           "saveMediaFileToStorageAndFirestore no está disponible (ui_documentacion.js)."
         );
+        alert(
+          "No se ha encontrado la función de subida de documentación.\nRevisa ui_documentacion.js."
+        );
         return;
       }
 
       const newItems = [];
       for (const file of files) {
         try {
+          // Esta función ya guarda correctamente mimeType, type, docCategory, url, etc.
+          // docCategory lo usamos para distinguir fichas / imágenes / certificados...
+          // folderName sirve para agrupar visualmente (ej. IP Style, Showroom, etc.)
+          // eslint-disable-next-line no-await-in-loop
           const media = await window.saveMediaFileToStorageAndFirestore(file, {
             folderName,
             docCategory,
@@ -452,12 +490,21 @@ function attachDocGestionHandlers() {
         fileInput.value = "";
       }
 
-      // Re-render solo esta vista
       renderDocGestionView();
     });
   }
 
-  // Borrado de documentos
+  // Botón de borrado masivo
+  const deleteAllBtn = container.querySelector("#docGestionDeleteAllBtn");
+  if (deleteAllBtn) {
+    deleteAllBtn.addEventListener("click", () => {
+      deleteAllDocMedia().catch((e) =>
+        console.error("Error en borrado masivo de documentación:", e)
+      );
+    });
+  }
+
+  // Borrado de documentos individuales
   container.querySelectorAll("[data-doc-media-delete]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const id = btn.getAttribute("data-doc-media-delete");
@@ -470,7 +517,6 @@ function attachDocGestionHandlers() {
       if (deleted) {
         alert("✅ Archivo eliminado correctamente.");
 
-        // Quitar la fila directamente del DOM para que desaparezca al momento
         const row = btn.closest(".doc-gestion-row");
         if (row) row.remove();
       }
@@ -494,13 +540,13 @@ function attachDocGestionHandlers() {
         "Nueva carpeta / descripción:",
         currentFolder
       );
-      if (newFolder === null) return; // cancelado
+      if (newFolder === null) return;
 
       const newCat = window.prompt(
-        'Nuevo tipo (ficha / declaracion / imagen / certificado):',
+        "Nuevo tipo (ficha / declaracion / imagen / certificado):",
         currentCat || "ficha"
       );
-      if (newCat === null) return; // cancelado
+      if (newCat === null) return;
 
       const trimmedFolder = newFolder.trim();
       const trimmedCat = newCat.trim().toLowerCase();
