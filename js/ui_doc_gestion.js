@@ -155,6 +155,9 @@ async function deleteDocMediaById(mediaId) {
     persistDocStateSafe();
   }
 
+  // 🔹 Forzar que en el siguiente render se recargue desde Firestore
+  appState.documentacion.mediaLoaded = false;
+
   return true;
 }
 
