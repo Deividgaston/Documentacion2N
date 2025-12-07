@@ -258,17 +258,6 @@ function applyTokensToTemplate(template, tokens) {
   return out;
 }
 
-// Escapar HTML para títulos en el overlay de imagen
-function docEscapeHtml(str) {
-  if (str == null) return "";
-  return String(str)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
 // ===========================
 // AUTO-GENERACIÓN DE SECCIONES
 // ===========================
@@ -445,6 +434,21 @@ function renderDocumentacionView() {
         </div>
       </div>
 
+      <!-- Modal para vista previa de imágenes -->
+      <div id="docMediaPreviewModal" class="doc-modal hidden">
+        <div class="doc-modal-content card doc-media-preview-card">
+          <div class="card-header">
+            <div class="card-title" id="docMediaPreviewTitle">Vista previa</div>
+            <button type="button" class="btn btn-xs" id="docMediaPreviewCloseBtn">✕</button>
+          </div>
+          <div class="card-body">
+            <div class="doc-media-preview-img-wrap">
+              <img id="docMediaPreviewImg" src="" alt="Vista previa" />
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div id="docModalBackdrop" class="doc-backdrop hidden"></div>
     </div>
   `;
@@ -484,7 +488,7 @@ function labelForSection(key) {
 function renderSectionMediaHTML(sectionKey) {
   const mediaMap = {};
   (appState.documentacion.mediaLibrary || []).forEach((m) => {
-    if (m.id) mediaMap[m.id] = m;
+    if (m && m.id) mediaMap[m.id] = m;
   });
 
   const ids =
@@ -589,6 +593,7 @@ function renderDocFichasHTML() {
   const media = appState.documentacion.mediaLibrary || [];
 
   const fichasMedia = media.filter((m) => {
+    if (!m || !m.id) return false;
     const cat = (m.docCategory || "").toLowerCase();
     const mime = (m.mimeType || "").toLowerCase();
     // Consideramos ficha técnica: categoría 'ficha' o PDF / DOC
@@ -686,22 +691,44 @@ function renderDocFichasHTML() {
 // DOCUMENTACIÓN GRÁFICA (solo imágenes)
 // ===========================
 
+// Limpieza de elementos corruptos sin id/url/mimeType/docCategory
+function cleanInvalidMediaItems() {
+  const list = appState.documentacion.mediaLibrary || [];
+  const cleaned = list.filter(
+    (m) =>
+      m &&
+      m.id &&
+      m.url &&
+      typeof m.mimeType === "string" &&
+      typeof m.docCategory === "string"
+  );
+  if (cleaned.length !== list.length) {
+    appState.documentacion.mediaLibrary = cleaned;
+  }
+}
+
 function renderDocMediaLibraryHTML() {
+  // Limpieza previa
+  cleanInvalidMediaItems();
+
   const allMedia = appState.documentacion.mediaLibrary || [];
 
-  // Solo imágenes marcadas como 'imagen'
+  // Solo imágenes válidas marcadas como 'imagen'
   const media = allMedia.filter((m) => {
-    const cat = (m.docCategory || "").toLowerCase();
-    const mime = (m.mimeType || "").toLowerCase();
-    const type = m.type || "";
-    const isImageType = type === "image" || mime.startsWith("image/");
+    if (!m || !m.id || !m.url) return false;
+    if (!m.mimeType || !m.docCategory) return false;
+
+    const cat = m.docCategory.toLowerCase();
+    const mime = m.mimeType.toLowerCase();
+    const isImageType = mime.startsWith("image/");
+
     return isImageType && cat === "imagen";
   });
 
   if (!media.length) {
     return `
       <p class="text-muted" style="font-size:0.85rem;">
-        Todavía no has subido documentación gráfica de tipo imagen.
+        Todavía no has subido documentación gráfica de tipo imagen válida.
         Sube las imágenes desde <strong>Gestión de documentación</strong>.
       </p>
     `;
@@ -723,7 +750,9 @@ function renderDocMediaLibraryHTML() {
       })
     : media;
 
-  if (!filtered.length) {
+  const visible = filtered.filter((m) => m && m.id && m.url);
+
+  if (!visible.length) {
     return `
       <p class="text-muted" style="font-size:0.85rem;">
         No se han encontrado imágenes que coincidan con la búsqueda.
@@ -733,7 +762,7 @@ function renderDocMediaLibraryHTML() {
 
   return `
     <div class="doc-media-list doc-fichas-list">
-      ${filtered
+      ${visible
         .map((m) => {
           const captionText = m.folderName
             ? `${m.folderName} – ${m.nombre}`
@@ -778,118 +807,6 @@ function refreshDocMediaGridOnly() {
   if (!body) return;
   body.innerHTML = renderDocMediaLibraryHTML();
   attachDocMediaGridHandlers(container);
-}
-
-// ===========================
-// OVERLAY FLOTANTE PARA IMÁGENES
-// ===========================
-
-function openDocImageFloatingPreview(item) {
-  if (!item || !item.url) {
-    console.warn("[DOC] openDocImageFloatingPreview sin url", item);
-    alert("No se ha encontrado la URL de la imagen para previsualizarla.");
-    return;
-  }
-
-  console.log("[DOC] Abriendo preview flotante de imagen:", item.id, item.url);
-
-  const existing = document.getElementById("docMediaFloatingPreview");
-  if (existing) existing.remove();
-
-  const title =
-    item.folderName && item.nombre
-      ? `${item.folderName} – ${item.nombre}`
-      : item.nombre || "Imagen";
-
-  const overlay = document.createElement("div");
-  overlay.id = "docMediaFloatingPreview";
-  overlay.style.position = "fixed";
-  overlay.style.inset = "0";
-  overlay.style.background = "rgba(0,0,0,0.65)";
-  overlay.style.display = "flex";
-  overlay.style.alignItems = "center";
-  overlay.style.justifyContent = "center";
-  overlay.style.zIndex = "2147483647";
-
-  overlay.innerHTML = `
-    <div style="
-      position:relative;
-      max-width:90vw;
-      max-height:90vh;
-      background:#111827;
-      padding:12px;
-      border-radius:12px;
-      box-shadow:0 15px 40px rgba(0,0,0,0.6);
-      display:flex;
-      flex-direction:column;
-    ">
-      <div style="
-        display:flex;
-        align-items:center;
-        justify-content:space-between;
-        margin-bottom:8px;
-        gap:8px;
-      ">
-        <div style="
-          color:#e5e7eb;
-          font-size:0.9rem;
-          font-weight:500;
-          overflow:hidden;
-          text-overflow:ellipsis;
-          white-space:nowrap;
-          max-width:70vw;
-        ">
-          ${docEscapeHtml(title)}
-        </div>
-        <button
-          type="button"
-          id="docMediaFloatingCloseBtn"
-          style="
-            border:none;
-            background:#374151;
-            color:#f9fafb;
-            border-radius:999px;
-            padding:4px 10px;
-            font-size:0.8rem;
-            cursor:pointer;
-          "
-        >✕ Cerrar</button>
-      </div>
-      <div style="
-        flex:1;
-        display:flex;
-        align-items:center;
-        justify-content:center;
-      ">
-        <img src="${item.url}"
-             alt="${docEscapeHtml(title)}"
-             style="
-               max-width:86vw;
-               max-height:80vh;
-               object-fit:contain;
-               border-radius:6px;
-               background:#000;
-             " />
-      </div>
-    </div>
-  `;
-
-  document.body.appendChild(overlay);
-
-  const close = () => {
-    overlay.remove();
-  };
-
-  const closeBtn = document.getElementById("docMediaFloatingCloseBtn");
-  if (closeBtn) {
-    closeBtn.addEventListener("click", close);
-  }
-
-  overlay.addEventListener("click", (ev) => {
-    if (ev.target === overlay) {
-      close();
-    }
-  });
 }
 
 // ===========================
@@ -1066,11 +983,25 @@ function attachDocumentacionHandlers() {
     customSaveBtn.addEventListener("click", saveDocCustomBlock);
   }
 
-  // Cerrar modales al pulsar el backdrop (solo afecta al modal custom)
+  // Modal vista previa: cerrar
+  const previewModal = document.getElementById("docMediaPreviewModal");
+  const previewCloseBtn =
+    previewModal?.querySelector("#docMediaPreviewCloseBtn");
+
+  if (previewCloseBtn && previewModal && backdrop) {
+    previewCloseBtn.addEventListener("click", () => {
+      previewModal.classList.add("hidden");
+      backdrop.classList.add("hidden");
+    });
+  }
+
+  // Cerrar modales al pulsar el backdrop
   if (backdrop) {
     backdrop.addEventListener("click", () => {
       const customModal2 = document.getElementById("docCustomModal");
       if (customModal2) customModal2.classList.add("hidden");
+      const previewModal2 = document.getElementById("docMediaPreviewModal");
+      if (previewModal2) previewModal2.classList.add("hidden");
       backdrop.classList.add("hidden");
     });
   }
@@ -1091,35 +1022,37 @@ function attachDocMediaGridHandlers(root) {
     });
   });
 
-  // Ver documento (imagen) en overlay flotante
+  // Ver documento (imagen) en modal flotante
   container.querySelectorAll("[data-media-view-id]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const id = btn.getAttribute("data-media-view-id");
       if (!id) return;
-
-      console.log("[DOC] Click en botón Ver imagen, id:", id);
-
       const item =
         (appState.documentacion.mediaLibrary || []).find(
-          (m) => m.id === id
+          (m) => m && m.id === id
         ) || null;
-
-      console.log("[DOC] Item encontrado para preview:", item);
-
-      if (!item || !item.url) {
-        alert(
-          "No se ha encontrado la imagen en la biblioteca o falta la URL.\nRevisa la consola para más detalles."
-        );
-        return;
-      }
+      if (!item || !item.url) return;
 
       const mime = (item.mimeType || "").toLowerCase();
       const type = item.type || "";
       const isImage = type === "image" || mime.startsWith("image/");
 
-      if (isImage) {
-        openDocImageFloatingPreview(item);
+      const modal = document.getElementById("docMediaPreviewModal");
+      const imgEl = document.getElementById("docMediaPreviewImg");
+      const titleEl = document.getElementById("docMediaPreviewTitle");
+      const backdropEl = document.getElementById("docModalBackdrop");
+
+      if (modal && imgEl && isImage) {
+        imgEl.src = item.url;
+        if (titleEl) {
+          titleEl.textContent = item.folderName
+            ? `${item.folderName} – ${item.nombre || ""}`
+            : item.nombre || "Vista previa";
+        }
+        modal.classList.remove("hidden");
+        if (backdropEl) backdropEl.classList.remove("hidden");
       } else {
+        // Si por lo que sea no es imagen, abrimos en nueva pestaña
         window.open(item.url, "_blank");
       }
     });
@@ -1231,7 +1164,10 @@ async function askAIForSection(sectionKey) {
 // ===========================
 
 async function ensureDocMediaLoaded() {
-  if (appState.documentacion.mediaLoaded) return;
+  if (appState.documentacion.mediaLoaded) {
+    cleanInvalidMediaItems();
+    return;
+  }
   appState.documentacion.mediaLoaded = true;
   appState.documentacion.mediaLibrary =
     appState.documentacion.mediaLibrary || [];
@@ -1263,6 +1199,7 @@ async function ensureDocMediaLoaded() {
       media.push({ id: doc.id, ...doc.data() });
     });
     appState.documentacion.mediaLibrary = media;
+    cleanInvalidMediaItems();
   } catch (e) {
     console.error("Error cargando documentación gráfica:", e);
   }
@@ -1282,6 +1219,7 @@ async function handleMediaUpload(files, options = {}) {
   }
   appState.documentacion.mediaLibrary =
     (newItems || []).concat(appState.documentacion.mediaLibrary || []);
+  cleanInvalidMediaItems();
   saveDocStateToLocalStorage();
   renderDocumentacionView();
 }
@@ -1425,6 +1363,7 @@ async function deleteMediaById(mediaId) {
   if (pos >= 0) sel.splice(pos, 1);
   appState.documentacion.selectedFichasMediaIds = sel;
 
+  cleanInvalidMediaItems();
   saveDocStateToLocalStorage();
   renderDocumentacionView();
 }
