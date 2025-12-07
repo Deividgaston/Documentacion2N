@@ -1224,7 +1224,7 @@ function slugifyFolderName(name) {
 
 async function saveMediaFileToStorageAndFirestore(file, options = {}) {
   const name = file.name || "archivo";
-  ￼const nowIso = new Date().toISOString();
+  const nowIso = new Date().toISOString();
   const isImage = file.type.startsWith("image/");
   const type = isImage ? "image" : "file";
 
@@ -1265,6 +1265,7 @@ async function saveMediaFileToStorageAndFirestore(file, options = {}) {
     await ref.put(file);
     url = await ref.getDownloadURL();
   } else {
+    // Fallback local si no hay Storage (modo demo)
     url = URL.createObjectURL(file);
   }
 
