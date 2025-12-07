@@ -686,12 +686,21 @@ function renderDocMediaLibraryHTML() {
 
   const allMedia = appState.documentacion.mediaLibrary || [];
 
-  const media = allMedia.filter(function (m) {
-    if (!m || !m.id || !m.url) return false;
+  if (!allMedia.length) {
+    return `
+      <p class="text-muted" style="font-size:0.85rem;">
+        Todavía no has subido documentación gráfica.
+        Sube los archivos desde <strong>Gestión de documentación</strong>.
+      </p>
+    `;
+  }
+
+  // Helper para saber si un item es imagen
+  function isImageItem(m) {
     const mime = (m.mimeType || "").toLowerCase();
     const type = (m.type || "").toLowerCase();
     const url = (m.url || "").toLowerCase();
-    const isImageByMime = mime.indexOf("image/") === 0;
+    const isImageByMime = mime.startsWith("image/");
     const isImageByType = type === "image";
     const isImageByExt =
       url.endsWith(".png") ||
@@ -700,69 +709,82 @@ function renderDocMediaLibraryHTML() {
       url.endsWith(".webp") ||
       url.endsWith(".gif");
     return isImageByMime || isImageByType || isImageByExt;
-  });
-
-  if (!media.length) {
-    return (
-      '<p class="text-muted" style="font-size:0.85rem;">' +
-      "  Todavía no has subido documentación gráfica de tipo imagen." +
-      "  Sube las imágenes desde <strong>Gestión de documentación</strong>." +
-      "</p>"
-    );
   }
+
+  const imagesOnly = allMedia.filter((m) => m && m.id && m.url && isImageItem(m));
+
+  // Si hay fotos, usamos solo fotos; si no hay, usamos toda la media como fallback
+  let baseList = imagesOnly.length ? imagesOnly : allMedia;
 
   const term = (appState.documentacion.mediaSearchTerm || "")
     .trim()
     .toLowerCase();
 
-  const filtered = term
-    ? media.filter(function (m) {
-        const txt =
-          (m.nombre || "") +
-          " " +
-          (m.folderName || "") +
-          " " +
-          (m.docCategory || "");
-        return txt.toLowerCase().indexOf(term) !== -1;
-      })
-    : media;
-
-  const visible = filtered.filter(function (m) {
-    return m && m.id && m.url;
-  });
-
-  if (!visible.length) {
-    return (
-      '<p class="text-muted" style="font-size:0.85rem;">' +
-      "  No se han encontrado imágenes que coincidan con la búsqueda." +
-      "</p>"
-    );
+  if (term) {
+    baseList = baseList.filter((m) => {
+      const txt = (
+        (m.nombre || "") +
+        " " +
+        (m.folderName || "") +
+        " " +
+        (m.docCategory || "")
+      ).toLowerCase();
+      return txt.includes(term);
+    });
   }
 
-  const itemsHTML = visible
-    .map(function (m) {
-      const captionText = m.folderName
-        ? m.folderName + " – " + m.nombre
-        : m.nombre;
-      return (
-        '<div class="doc-media-item doc-media-row" draggable="true" data-media-id="' +
-        m.id +
-        '">' +
-        '  <div class="doc-media-row-main">' +
-        '    <span class="doc-media-row-icon">🖼️</span>' +
-        '    <span class="doc-media-caption">' +
-        captionText +
-        "</span>" +
-        "  </div>" +
-        '  <div class="doc-media-row-actions">' +
-        '    <button type="button" class="btn btn-xs" data-media-view-id="' +
-        m.id +
-        '" title="Ver imagen">👁 Ver</button>' +
-        "  </div>" +
-        "</div>"
-      );
-    })
-    .join("");
+  const visible = baseList.filter((m) => m && m.id && m.url);
+
+  if (!visible.length) {
+    const msg =
+      imagesOnly.length > 0
+        ? "No se han encontrado imágenes que coincidan con la búsqueda."
+        : "No se han encontrado documentos que coincidan con la búsqueda.";
+    return `
+      <p class="text-muted" style="font-size:0.85rem;">
+        ${msg}
+      </p>
+    `;
+  }
+
+  return `
+    <div class="doc-media-list doc-fichas-list">
+      ${visible
+        .map((m) => {
+          const captionText = m.folderName
+            ? `${m.folderName} – ${m.nombre}`
+            : m.nombre;
+
+          const isImg = isImageItem(m);
+          const icon = isImg ? "🖼️" : "📄";
+
+          return `
+            <div class="doc-media-item doc-media-row"
+                 draggable="true"
+                 data-media-id="${m.id}">
+              <div class="doc-media-row-main">
+                <span class="doc-media-row-icon">${icon}</span>
+                <span class="doc-media-caption">
+                  ${captionText}
+                </span>
+              </div>
+              <div class="doc-media-row-actions">
+                <button
+                  type="button"
+                  class="btn btn-xs"
+                  data-media-view-id="${m.id}"
+                  title="Ver documento"
+                >
+                  👁 Ver
+                </button>
+              </div>
+            </div>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+}
 
   return '<div class="doc-media-list doc-fichas-list">' + itemsHTML + "</div>";
 }
