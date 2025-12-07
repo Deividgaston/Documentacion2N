@@ -678,10 +678,7 @@ function cleanInvalidMediaItems() {
       m &&
       m.id &&
       typeof m.id === "string" &&
-      m.id.trim() !== "" &&
-      m.url &&
-      typeof m.url === "string" &&
-      m.url.trim() !== ""
+      m.id.trim() !== ""
     );
   });
   if (cleaned.length !== list.length) {
@@ -693,7 +690,8 @@ function renderDocMediaLibraryHTML() {
   const allMedia = appState.documentacion.mediaLibrary || [];
   console.log(
     "[DOC] renderDocMediaLibraryHTML – total items:",
-    allMedia.length
+    allMedia.length,
+    allMedia
   );
 
   if (!allMedia.length) {
@@ -712,7 +710,7 @@ function renderDocMediaLibraryHTML() {
   const images = (appState.documentacion.mediaLibrary || []).filter(function (
     m
   ) {
-    if (!m || !m.id || !m.url) return false;
+    if (!m || !m.id) return false;
 
     const cat = (m.docCategory || "").toLowerCase();
     const mime = (m.mimeType || "").toLowerCase();
@@ -731,10 +729,7 @@ function renderDocMediaLibraryHTML() {
     );
   });
 
-  console.log(
-    "[DOC] renderDocMediaLibraryHTML – images:",
-    images.length
-  );
+  console.log("[DOC] renderDocMediaLibraryHTML – images:", images.length);
 
   if (!images.length) {
     return `
@@ -1056,6 +1051,7 @@ function attachDocumentacionHandlers() {
     customSaveBtn.addEventListener("click", saveDocCustomBlock);
   }
 
+  const backdrop = document.getElementById("docModalBackdrop");
   if (backdrop) {
     backdrop.addEventListener("click", function () {
       const customModal2 = document.getElementById("docCustomModal");
