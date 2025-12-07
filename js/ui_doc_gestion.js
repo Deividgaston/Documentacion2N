@@ -1,8 +1,8 @@
 // js/ui_doc_gestion.js
 // Página de GESTIÓN DE DOCUMENTACIÓN:
 // CRUD de ficheros (subir, editar metadatos, borrar) sobre documentacion_media
-// Reutiliza helpers de ui_documentacion.js (ensureDocMediaLoaded,
-// saveMediaFileToStorageAndFirestore, deleteMediaById, saveDocStateToLocalStorage)
+// Reutiliza helpers de ui_documentacion.js cuando existen (ensureDocMediaLoaded,
+// saveMediaFileToStorageAndFirestore, saveDocStateToLocalStorage).
 
 window.appState = window.appState || {};
 appState.documentacion = appState.documentacion || {
@@ -21,6 +21,24 @@ function getDocGestionAppContent() {
   return document.getElementById("appContent");
 }
 
+// ==============================
+// Helpers de datos
+// ==============================
+
+// Guardar estado de documentación en localStorage si existe el helper
+function persistDocStateSafe() {
+  if (typeof window.saveDocStateToLocalStorage === "function") {
+    try {
+      window.saveDocStateToLocalStorage();
+    } catch (e) {
+      console.error(
+        "Error guardando estado de documentación en localStorage:",
+        e
+      );
+    }
+  }
+}
+
 // Actualizar metadatos de un documento en Firestore + estado local
 async function updateDocMediaMetaById(mediaId, updates) {
   if (!mediaId || !updates || typeof updates !== "object") return;
@@ -36,19 +54,10 @@ async function updateDocMediaMetaById(mediaId, updates) {
   mediaLib[idx] = updated;
   appState.documentacion.mediaLibrary = mediaLib;
 
-  // Guardar en localStorage si existe el helper
-  if (typeof window.saveDocStateToLocalStorage === "function") {
-    try {
-      window.saveDocStateToLocalStorage();
-    } catch (e) {
-      console.error(
-        "Error guardando estado de documentación tras editar metadatos:",
-        e
-      );
-    }
-  }
+  // Guardar en localStorage
+  persistDocStateSafe();
 
-  // Actualizar en Firestore (no añadimos lecturas nuevas, solo update directo)
+  // Actualizar en Firestore (sin lecturas nuevas, solo update directo)
   const db =
     window.db ||
     (window.firebase &&
@@ -63,7 +72,63 @@ async function updateDocMediaMetaById(mediaId, updates) {
   }
 }
 
-// Render principal de la página de gestión
+// BORRADO COMPLETO: Storage + Firestore + estado local
+async function deleteDocMediaById(mediaId) {
+  if (!mediaId) return false;
+
+  appState.documentacion.mediaLibrary =
+    appState.documentacion.mediaLibrary || [];
+  const mediaLib = appState.documentacion.mediaLibrary;
+  const idx = mediaLib.findIndex((m) => m.id === mediaId);
+  const item = idx !== -1 ? mediaLib[idx] : null;
+
+  const storagePath = item && item.storagePath ? item.storagePath : null;
+
+  // 1) Borrar en Storage (si tenemos path)
+  try {
+    const storage =
+      window.storage ||
+      (window.firebase &&
+        window.firebase.storage &&
+        window.firebase.storage());
+
+    if (storage && storagePath) {
+      const ref = storage.ref(storagePath);
+      await ref.delete();
+    }
+  } catch (e) {
+    // Si ya no existe en Storage, no pasa nada; lo importante es limpiar Firestore + estado
+    console.warn("Error borrando archivo en Storage (puede no existir):", e);
+  }
+
+  // 2) Borrar en Firestore (metadatos)
+  try {
+    const db =
+      window.db ||
+      (window.firebase &&
+        window.firebase.firestore &&
+        window.firebase.firestore());
+    if (db) {
+      await db.collection("documentacion_media").doc(mediaId).delete();
+    }
+  } catch (e) {
+    console.error("Error borrando documento de documentación en Firestore:", e);
+  }
+
+  // 3) Quitar de estado local (mediaLibrary) y guardar en localStorage
+  if (idx !== -1) {
+    mediaLib.splice(idx, 1);
+    appState.documentacion.mediaLibrary = mediaLib;
+    persistDocStateSafe();
+  }
+
+  return true;
+}
+
+// ==============================
+// Render principal
+// ==============================
+
 function renderDocGestionView() {
   const container = getDocGestionAppContent();
   if (!container) return;
@@ -281,7 +346,10 @@ function renderDocGestionView() {
   attachDocGestionHandlers();
 }
 
-// Handlers de la página de gestión
+// ==============================
+// Handlers
+// ==============================
+
 function attachDocGestionHandlers() {
   const container = getDocGestionAppContent();
   if (!container) return;
@@ -327,28 +395,19 @@ function attachDocGestionHandlers() {
         appState.documentacion.mediaLibrary = newItems.concat(
           appState.documentacion.mediaLibrary || []
         );
-        if (typeof window.saveDocStateToLocalStorage === "function") {
-          try {
-            window.saveDocStateToLocalStorage();
-          } catch (e) {
-            console.error(
-              "Error guardando estado de documentación tras subir archivos:",
-              e
-            );
-          }
-        }
+        persistDocStateSafe();
       }
 
       if (fileInput) {
         fileInput.value = "";
       }
 
-      // Re-render solo esta vista (no tocamos la página de memoria)
+      // Re-render solo esta vista
       renderDocGestionView();
     });
   }
 
-  // Borrado de documentos
+  // Borrado de documentos (usa la función buena: Storage + Firestore + estado local)
   container.querySelectorAll("[data-doc-media-delete]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const id = btn.getAttribute("data-doc-media-delete");
@@ -357,14 +416,7 @@ function attachDocGestionHandlers() {
       const ok = window.confirm("¿Seguro que quieres borrar este documento?");
       if (!ok) return;
 
-      if (typeof window.deleteMediaById !== "function") {
-        console.error(
-          "deleteMediaById no está disponible (ui_documentacion.js)."
-        );
-        return;
-      }
-
-      await window.deleteMediaById(id);
+      await deleteDocMediaById(id);
       renderDocGestionView();
     });
   });
