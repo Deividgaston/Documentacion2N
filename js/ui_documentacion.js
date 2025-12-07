@@ -15,6 +15,7 @@ appState.documentacion = appState.documentacion || {
   selectedFichasMediaIds: [], // fichas técnicas seleccionadas desde la biblioteca
   mediaSearchTerm: "", // término de búsqueda para documentación gráfica
   fichasSearchTerm: "", // término de búsqueda para fichas técnicas
+  includedSections: {}, // mapa: sectionKey -> true/false (incluir en PDF técnico)
 };
 
 // ===========================
@@ -55,6 +56,7 @@ function saveDocStateToLocalStorage() {
       selectedFichasMediaIds: appState.documentacion.selectedFichasMediaIds,
       mediaSearchTerm: appState.documentacion.mediaSearchTerm || "",
       fichasSearchTerm: appState.documentacion.fichasSearchTerm || "",
+      includedSections: appState.documentacion.includedSections || {},
     };
     localStorage.setItem(DOC_STORAGE_KEY, JSON.stringify(toSave));
   } catch (e) {
@@ -454,6 +456,13 @@ function labelForSection(key) {
   }
 }
 
+function getSectionIncluded(key) {
+  const map = appState.documentacion.includedSections || {};
+  if (typeof map[key] === "boolean") return map[key];
+  // Por defecto, todas incluidas
+  return true;
+}
+
 function renderSectionMediaHTML(sectionKey) {
   const mediaMap = {};
   (appState.documentacion.mediaLibrary || []).forEach(function (m) {
@@ -519,6 +528,7 @@ function renderDocSectionsHTML() {
   const secciones = appState.documentacion.secciones || {};
   return DOC_SECTION_ORDER.map(function (key) {
     const contenido = secciones[key] || "";
+    const included = getSectionIncluded(key);
     return (
       '<div class="card doc-section-card" data-doc-section="' +
       key +
@@ -528,6 +538,14 @@ function renderDocSectionsHTML() {
       labelForSection(key) +
       "</div>" +
       '    <div class="doc-section-header-actions">' +
+      '      <label class="doc-section-include-toggle" style="font-size:0.75rem;display:flex;align-items:center;gap:0.25rem;margin-right:0.5rem;">' +
+      '        <input type="checkbox" data-doc-section-enable="' +
+      key +
+      '"' +
+      (included ? " checked" : "") +
+      ' />' +
+      "        Incluir en PDF" +
+      "      </label>" +
       '      <button type="button" class="btn btn-xs btn-outline" data-doc-ai-section="' +
       key +
       '" title="Preguntar a IA para mejorar o completar el texto">✨ Preguntar a IA</button>' +
@@ -957,6 +975,20 @@ function attachDocumentacionHandlers() {
       saveDocStateToLocalStorage();
     });
   });
+
+  // Checkbox incluir sección en PDF
+  container
+    .querySelectorAll("[data-doc-section-enable]")
+    .forEach(function (chk) {
+      chk.addEventListener("change", function () {
+        const key = chk.getAttribute("data-doc-section-enable");
+        if (!key) return;
+        appState.documentacion.includedSections =
+          appState.documentacion.includedSections || {};
+        appState.documentacion.includedSections[key] = chk.checked;
+        saveDocStateToLocalStorage();
+      });
+    });
 
   // Botón IA por sección
   container.querySelectorAll("[data-doc-ai-section]").forEach(function (btn) {
@@ -1525,6 +1557,7 @@ async function exportarPDFTecnico() {
 
   const idioma = appState.documentacion.idioma || "es";
   const secciones = appState.documentacion.secciones || {};
+  const includedSections = appState.documentacion.includedSections || {};
 
   const presupuesto =
     typeof window.getPresupuestoActual === "function"
@@ -1581,7 +1614,7 @@ async function exportarPDFTecnico() {
 
   function getSectionImages(sectionKey) {
     const ids = sectionMediaMap[sectionKey] || [];
-    return ids
+    const list = ids
       .map(function (id) {
         return mediaLib.find(function (m) {
           return m.id === id;
@@ -1593,6 +1626,8 @@ async function exportarPDFTecnico() {
         const type = m.type || "";
         return type === "image" || mime.indexOf("image/") === 0;
       });
+    // Máximo 4 imágenes por sección
+    return list.slice(0, 4);
   }
 
   async function insertImagesForSection(sectionKey) {
@@ -1643,8 +1678,14 @@ async function exportarPDFTecnico() {
   }
 
   for (const key of DOC_SECTION_ORDER) {
+    // respetar el check "Incluir en PDF"
+    if (includedSections.hasOwnProperty(key) && !includedSections[key]) {
+      continue;
+    }
+
     const contenido = (secciones[key] || "").trim();
-    if (!contenido && !getSectionImages(key).length) continue;
+    const hasImages = getSectionImages(key).length > 0;
+    if (!contenido && !hasImages) continue;
 
     const tituloSeccion = labelForSection(key);
 
