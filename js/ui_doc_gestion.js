@@ -110,7 +110,7 @@ async function deleteDocMediaById(mediaId) {
     appState.documentacion.mediaLibrary || [];
   const mediaLib = appState.documentacion.mediaLibrary;
 
-  // 🔹 Obtener el item por id (para usar storagePath)
+  // Obtener el item por id (para usar storagePath)
   const item = mediaLib.find((m) => m.id === mediaId) || null;
   const storagePath = item && item.storagePath ? item.storagePath : null;
 
@@ -168,7 +168,7 @@ async function renderDocGestionView() {
   const container = getDocGestionAppContent();
   if (!container) return;
 
-  // 🔹 Aseguramos que la documentación está cargada antes de pintar
+  // Aseguramos que la documentación está cargada antes de pintar
   await loadDocMediaForGestion();
 
   const media = appState.documentacion.mediaLibrary || [];
@@ -448,7 +448,11 @@ function attachDocGestionHandlers() {
       const ok = window.confirm("¿Seguro que quieres borrar este documento?");
       if (!ok) return;
 
-      await deleteDocMediaById(id);
+      const deleted = await deleteDocMediaById(id);
+      if (deleted) {
+        alert("✅ Archivo eliminado correctamente.");
+      }
+
       renderDocGestionView();
     });
   });
