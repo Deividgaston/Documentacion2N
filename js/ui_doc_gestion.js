@@ -148,14 +148,30 @@ async function deleteDocMediaById(mediaId) {
     );
   }
 
-  // 3) Quitar de estado local (mediaLibrary) y guardar en localStorage
+  // 3) Quitar de estado local (mediaLibrary)
   appState.documentacion.mediaLibrary = mediaLib.filter(
     (m) => m.id !== mediaId
   );
+
+  // 4) Limpiar referencias en sectionMedia (memoria de calidades)
+  const map = appState.documentacion.sectionMedia || {};
+  Object.keys(map).forEach((sec) => {
+    const arr = map[sec] || [];
+    map[sec] = arr.filter((id) => id !== mediaId);
+  });
+  appState.documentacion.sectionMedia = map;
+
+  // 5) Limpiar referencias en selectedFichasMediaIds (anexos de fichas)
+  const sel = appState.documentacion.selectedFichasMediaIds || [];
+  appState.documentacion.selectedFichasMediaIds = sel.filter(
+    (id) => id !== mediaId
+  );
+
+  // 6) Guardar en localStorage
   persistDocStateSafe();
 
-  // Forzar que en el siguiente render se recargue desde Firestore si hace falta
-  appState.documentacion.mediaLoaded = false;
+  // No marcamos mediaLoaded=false para evitar recargar de Firestore innecesariamente.
+  // El estado en memoria ya está consistente.
 
   return true;
 }
@@ -439,7 +455,7 @@ function attachDocGestionHandlers() {
     });
   }
 
-  // Borrado de documentos (usa la función buena: Storage + Firestore + estado local)
+  // Borrado de documentos
   container.querySelectorAll("[data-doc-media-delete]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const id = btn.getAttribute("data-doc-media-delete");
@@ -452,7 +468,7 @@ function attachDocGestionHandlers() {
       if (deleted) {
         alert("✅ Archivo eliminado correctamente.");
 
-        // 🔹 Quitar la fila directamente del DOM para que desaparezca al momento
+        // Quitar la fila directamente del DOM para que desaparezca al momento
         const row = btn.closest(".doc-gestion-row");
         if (row) row.remove();
       }
