@@ -4,12 +4,21 @@
 window.appState = window.appState || {};
 appState.currentView = appState.currentView || "proyecto";
 
+const VIEW_STORAGE_KEY = "presup2n_currentView";
+
 // ==============================
 // Helpers de router / UI
 // ==============================
 
 function setCurrentView(viewKey) {
   appState.currentView = viewKey;
+
+  // Guardar la vista actual en localStorage para mantenerla tras F5
+  try {
+    window.localStorage.setItem(VIEW_STORAGE_KEY, viewKey);
+  } catch (e) {
+    console.warn("No se pudo guardar la vista actual en localStorage:", e);
+  }
 
   // 1) Marcar pestaña activa en la topbar
   const navLinks = document.querySelectorAll(".top-nav-link[data-view]");
@@ -142,8 +151,20 @@ document.addEventListener("DOMContentLoaded", () => {
   // Inicializar navegación de la barra superior
   initTopbarNavigation();
 
-  // Si ya hay una vista en appState, úsala; si no, "proyecto"
-  const initialView = appState.currentView || "proyecto";
+  // Intentar recuperar la vista anterior desde localStorage
+  let initialView = "proyecto";
+  try {
+    const storedView = window.localStorage.getItem(VIEW_STORAGE_KEY);
+    if (storedView) {
+      initialView = storedView;
+    } else if (appState.currentView) {
+      initialView = appState.currentView;
+    }
+  } catch (e) {
+    console.warn("No se pudo leer la vista actual desde localStorage:", e);
+    initialView = appState.currentView || "proyecto";
+  }
+
   setCurrentView(initialView);
 });
 
