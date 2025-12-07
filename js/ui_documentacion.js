@@ -668,36 +668,79 @@ function renderDocFichasHTML() {
 }
 
 // ===========================
-// DOCUMENTACIÓN GRÁFICA (solo imágenes)
+// LIMPIEZA Y DOCUMENTACIÓN GRÁFICA (solo imágenes)
 // ===========================
+
+function cleanInvalidMediaItems() {
+  const list = appState.documentacion.mediaLibrary || [];
+  const cleaned = list.filter(function (m) {
+    return (
+      m &&
+      m.id &&
+      typeof m.id === "string" &&
+      m.id.trim() !== "" &&
+      m.url &&
+      typeof m.url === "string" &&
+      m.url.trim() !== ""
+    );
+  });
+  if (cleaned.length !== list.length) {
+    appState.documentacion.mediaLibrary = cleaned;
+  }
+}
 
 function renderDocMediaLibraryHTML() {
   const allMedia = appState.documentacion.mediaLibrary || [];
+  console.log(
+    "[DOC] renderDocMediaLibraryHTML – total items:",
+    allMedia.length
+  );
 
-  // Solo imágenes reales; detectadas por mime/type/ext (ignoramos docCategory)
-  const media = allMedia.filter((m) => {
-    if (!m) return false;
+  if (!allMedia.length) {
+    return `
+      <p class="text-muted" style="font-size:0.85rem;">
+        Todavía no has subido documentación gráfica.
+        Sube los archivos desde <strong>Gestión de documentación</strong>.
+      </p>
+    `;
+  }
+
+  // saneamos por si hay registros antiguos rotos
+  cleanInvalidMediaItems();
+
+  // Nos quedamos solo con IMÁGENES
+  const images = (appState.documentacion.mediaLibrary || []).filter(function (
+    m
+  ) {
+    if (!m || !m.id || !m.url) return false;
+
+    const cat = (m.docCategory || "").toLowerCase();
     const mime = (m.mimeType || "").toLowerCase();
     const type = (m.type || "").toLowerCase();
     const url = (m.url || "").toLowerCase();
 
-    const isImageByMime = mime.startsWith("image/");
-    const isImageByType = type === "image";
-    const isImageByExt =
+    return (
+      cat === "imagen" ||
+      mime.indexOf("image/") === 0 ||
+      type === "image" ||
       url.endsWith(".png") ||
       url.endsWith(".jpg") ||
       url.endsWith(".jpeg") ||
       url.endsWith(".webp") ||
-      url.endsWith(".gif");
-
-    return isImageByMime || isImageByType || isImageByExt;
+      url.endsWith(".gif")
+    );
   });
 
-  if (!media.length) {
+  console.log(
+    "[DOC] renderDocMediaLibraryHTML – images:",
+    images.length
+  );
+
+  if (!images.length) {
     return `
       <p class="text-muted" style="font-size:0.85rem;">
-        Todavía no has subido documentación gráfica en formato de imagen.
-        Sube las fotos desde <strong>Gestión de documentación</strong>.
+        No se han encontrado imágenes en la biblioteca de documentación.
+        Sube nuevas imágenes desde <strong>Gestión de documentación</strong>.
       </p>
     `;
   }
@@ -706,19 +749,17 @@ function renderDocMediaLibraryHTML() {
     .trim()
     .toLowerCase();
 
-  let filtered = media;
-  if (term) {
-    filtered = media.filter((m) => {
-      const txt = (
-        (m.nombre || "") +
-        " " +
-        (m.folderName || "") +
-        " " +
-        (m.docCategory || "")
-      ).toLowerCase();
-      return txt.includes(term);
-    });
-  }
+  const filtered = term
+    ? images.filter(function (m) {
+        const txt =
+          (m.nombre || "") +
+          " " +
+          (m.folderName || "") +
+          " " +
+          (m.docCategory || "");
+        return txt.toLowerCase().indexOf(term) !== -1;
+      })
+    : images;
 
   if (!filtered.length) {
     return `
@@ -731,10 +772,9 @@ function renderDocMediaLibraryHTML() {
   return `
     <div class="doc-media-list doc-fichas-list">
       ${filtered
-        .filter((m) => m && m.id && m.url)
-        .map((m) => {
+        .map(function (m) {
           const captionText = m.folderName
-            ? `${m.folderName} – ${m.nombre}`
+            ? m.folderName + " – " + m.nombre
             : m.nombre;
 
           return `
