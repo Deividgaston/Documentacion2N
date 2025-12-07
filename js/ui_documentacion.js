@@ -682,8 +682,7 @@ function cleanInvalidMediaItems() {
 }
 
 function renderDocMediaLibraryHTML() {
-  cleanInvalidMediaItems();
-
+  // ⚠️ Importante: ya NO llamamos a cleanInvalidMediaItems aquí
   const allMedia = appState.documentacion.mediaLibrary || [];
 
   if (!allMedia.length) {
@@ -711,7 +710,7 @@ function renderDocMediaLibraryHTML() {
     return isImageByMime || isImageByType || isImageByExt;
   }
 
-  const imagesOnly = allMedia.filter((m) => m && m.id && m.url && isImageItem(m));
+  const imagesOnly = allMedia.filter((m) => m && m.id && isImageItem(m));
 
   // Si hay fotos, usamos solo fotos; si no hay, usamos toda la media como fallback
   let baseList = imagesOnly.length ? imagesOnly : allMedia;
@@ -785,7 +784,6 @@ function renderDocMediaLibraryHTML() {
     </div>
   `;
 }
-
  
 
 // ===========================
