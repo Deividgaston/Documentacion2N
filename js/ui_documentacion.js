@@ -703,11 +703,17 @@ function renderDocMediaLibraryHTML() {
     `;
   }
 
-  // Helper para saber si un item es imagen
+    // Helper para saber si un item es imagen
   function isImageItem(m) {
+    if (!m) return false;
+
+    const cat = (m.docCategory || "").toLowerCase();
+    if (cat === "imagen") return true;   // ✅ clave: categoría manda
+
     const mime = (m.mimeType || "").toLowerCase();
     const type = (m.type || "").toLowerCase();
     const url = (m.url || "").toLowerCase();
+
     const isImageByMime = mime.startsWith("image/");
     const isImageByType = type === "image";
     const isImageByExt =
@@ -716,6 +722,7 @@ function renderDocMediaLibraryHTML() {
       url.endsWith(".jpeg") ||
       url.endsWith(".webp") ||
       url.endsWith(".gif");
+
     return isImageByMime || isImageByType || isImageByExt;
   }
 
