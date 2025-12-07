@@ -1257,7 +1257,8 @@ async function ensureDocMediaLoaded() {
 
     const media = [];
     snap.forEach((doc) => {
-      media.push({ id: doc.id, ...doc.data() });
+      // IMPORTANTE: primero data, luego id para NO machacar el id correcto
+      media.push({ ...doc.data(), id: doc.id });
     });
 
     console.log("[DOC] Media cargada desde Firestore:", media.length, "items");
@@ -1333,8 +1334,8 @@ async function saveMediaFileToStorageAndFirestore(file, options) {
     url = URL.createObjectURL(file);
   }
 
+  // OJO: no incluimos id aquí; solo en cliente
   const mediaData = {
-    id: null,
     nombre: name,
     type: type,
     mimeType: file.type,
@@ -1350,7 +1351,7 @@ async function saveMediaFileToStorageAndFirestore(file, options) {
       ...mediaData,
       uid: uid || null,
     });
-    mediaData.id = docRef.id;
+    mediaData.id = docRef.id; // id solo en el objeto local
   } else {
     mediaData.id =
       Date.now() +
