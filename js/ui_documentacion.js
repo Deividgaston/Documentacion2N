@@ -457,7 +457,7 @@ function labelForSection(key) {
 function renderSectionMediaHTML(sectionKey) {
   const mediaMap = {};
   (appState.documentacion.mediaLibrary || []).forEach(function (m) {
-    if (m.id) mediaMap[m.id] = m;
+    if (m && m.id) mediaMap[m.id] = m;
   });
 
   const ids =
@@ -471,16 +471,25 @@ function renderSectionMediaHTML(sectionKey) {
     .map(function (id) {
       const m = mediaMap[id];
       if (!m) return "";
+
+      const cat = (m.docCategory || "").toLowerCase();
+      const mime = (m.mimeType || "").toLowerCase();
+
+      // ✅ consideramos imagen si la categoría es "imagen"
       const isImage =
-        m.type === "image" || (m.mimeType || "").indexOf("image/") === 0;
+        cat === "imagen" ||
+        m.type === "image" ||
+        mime.indexOf("image/") === 0;
+
       const icon = isImage ? "" : "📄";
       const caption = m.nombre || "";
       const tag =
-        m.docCategory === "ficha"
+        cat === "ficha"
           ? "Ficha técnica"
-          : m.docCategory === "imagen"
+          : cat === "imagen"
           ? "Imagen"
           : "";
+
       return (
         '<div class="doc-section-media-chip">' +
         '  <div class="doc-section-media-thumb">' +
