@@ -475,7 +475,6 @@ function renderSectionMediaHTML(sectionKey) {
       const cat = (m.docCategory || "").toLowerCase();
       const mime = (m.mimeType || "").toLowerCase();
 
-      // consideramos imagen si la categoría es "imagen"
       const isImage =
         cat === "imagen" ||
         m.type === "image" ||
@@ -691,7 +690,6 @@ function cleanInvalidMediaItems() {
 }
 
 function renderDocMediaLibraryHTML() {
-  // ya NO llamamos a cleanInvalidMediaItems aquí
   const allMedia = appState.documentacion.mediaLibrary || [];
 
   if (!allMedia.length) {
@@ -708,7 +706,7 @@ function renderDocMediaLibraryHTML() {
     if (!m) return false;
 
     const cat = (m.docCategory || "").toLowerCase();
-    if (cat === "imagen") return true; // categoría manda
+    if (cat === "imagen") return true;
 
     const mime = (m.mimeType || "").toLowerCase();
     const type = (m.type || "").toLowerCase();
@@ -728,7 +726,7 @@ function renderDocMediaLibraryHTML() {
 
   const imagesOnly = allMedia.filter((m) => m && m.id && isImageItem(m));
 
-  // Si hay fotos, usamos solo fotos; si no hay, usamos toda la media como fallback
+  // Por requisito: intentar mostrar solo fotos si existen
   let baseList = imagesOnly.length ? imagesOnly : allMedia;
 
   const term = (appState.documentacion.mediaSearchTerm || "")
@@ -748,29 +746,25 @@ function renderDocMediaLibraryHTML() {
     });
   }
 
-  // Mostramos cualquier media con id, aunque falte la URL (el botón Ver avisará)
+  // A partir de aquí solo exigimos que tenga id; la URL puede faltar
   const visible = baseList.filter((m) => m && m.id);
 
+  console.log(
+    "[DOC] renderDocMediaLibraryHTML ->",
+    "allMedia:", allMedia.length,
+    "imagesOnly:", imagesOnly.length,
+    "visible:", visible.length
+  );
+
   if (!visible.length) {
-    const msg =
-      imagesOnly.length > 0
-        ? "No se han encontrado imágenes que coincidan con la búsqueda."
-        : "No se han encontrado documentos que coincidan con la búsqueda.";
     return `
       <p class="text-muted" style="font-size:0.85rem;">
-        ${msg}
+        Se ha encontrado documentación en la biblioteca pero ninguna coincide con el filtro actual
+        (o no tiene un identificador válido). Prueba a limpiar la búsqueda o vuelve a subir los
+        archivos desde <strong>Gestión de documentación</strong>.
       </p>
     `;
   }
-
-  // Debug opcional
-  console.log(
-    "[DOC] renderDocMediaLibraryHTML",
-    "allMedia:", allMedia.length,
-    "imagesOnly:", imagesOnly.length,
-    "visible:", visible.length,
-    visible.slice(0, 5)
-  );
 
   return `
     <div class="doc-media-list doc-fichas-list">
@@ -1233,7 +1227,6 @@ async function askAIForSection(sectionKey) {
 // ===========================
 
 async function ensureDocMediaLoaded() {
-  // Siempre intentamos cargar desde Firestore cuando se entra en la vista
   appState.documentacion.mediaLibrary =
     appState.documentacion.mediaLibrary || [];
 
