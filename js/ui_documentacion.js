@@ -1542,14 +1542,91 @@ async function exportarDocumentacionPDF() {
   }
 
   const modo = appState.documentacion.modo || "comercial";
-  if (modo === "comercial") {
-    await exportarPDFComercial();
-  } else {
+
+  if (modo === "tecnica") {
     await exportarPDFTecnico();
+  } else {
+    await exportarPDFComercial();
   }
 }
 
-// ===== Versión técnica =====
+// ===== Helpers imágenes por sección (modo técnico) =====
+
+function getSectionImages(sectionKey) {
+  const sectionMediaMap = appState.documentacion.sectionMedia || {};
+  const mediaLib = appState.documentacion.mediaLibrary || [];
+
+  const ids = sectionMediaMap[sectionKey] || [];
+
+  const list = ids
+    .map(function (id) {
+      return mediaLib.find(function (m) {
+        return m.id === id;
+      });
+    })
+    .filter(function (m) {
+      if (!m || !m.url) return false;
+      const mime = (m.mimeType || "").toLowerCase();
+      const type = (m.type || "").toLowerCase();
+      return type === "image" || mime.indexOf("image/") === 0;
+    });
+
+  // Máximo 4 imágenes por sección
+  return list.slice(0, 4);
+}
+
+async function insertImagesForSection(doc, sectionKey, y) {
+  const images = getSectionImages(sectionKey);
+  if (!images.length) return y;
+
+  for (const m of images) {
+    try {
+      const obj = await loadImageAsDataUrl(m.url);
+      const dataUrl = obj.dataUrl;
+      const width = obj.width;
+      const height = obj.height;
+      const ratio = width && height ? width / height : 4 / 3;
+
+      const maxWidthMm = 75;
+      const maxHeightMm = 55;
+
+      let imgW = maxWidthMm;
+      let imgH = imgW / ratio;
+      if (imgH > maxHeightMm) {
+        imgH = maxHeightMm;
+        imgW = imgH * ratio;
+      }
+
+      // Salto de página si no cabe
+      const neededHeight = imgH + 12;
+      if (y + neededHeight > 275) {
+        doc.addPage();
+        y = 25;
+      }
+
+      const imgX = 20;
+      const imgY = y;
+      doc.addImage(dataUrl, "JPEG", imgX, imgY, imgW, imgH);
+      y += imgH + 4;
+
+      if (m.nombre) {
+        doc.setFont("helvetica", "italic");
+        doc.setFontSize(8);
+        const capLines = doc.splitTextToSize(m.nombre, 170);
+        doc.text(capLines, 20, y);
+        y += capLines.length * 4 + 3;
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(10);
+      }
+    } catch (e) {
+      console.warn("No se pudo insertar imagen de sección en PDF:", e);
+    }
+  }
+
+  return y;
+}
+
+// ===== Versión técnica (memoria de calidades bonita) =====
 
 async function exportarPDFTecnico() {
   const jsPDF = window.jspdf.jsPDF;
@@ -1577,18 +1654,26 @@ async function exportarPDFTecnico() {
     (presupuesto && presupuesto.cliente) ||
     "";
 
+  // ===== Portada =====
   let tituloDoc = "Memoria de calidades";
   if (idioma === "en") tituloDoc = "Technical specification";
   if (idioma === "pt") tituloDoc = "Memória descritiva";
 
+  // Fondo blanco, márgenes claros
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(16);
-  doc.text(tituloDoc, 20, 20);
+  doc.setFontSize(22);
+  doc.setTextColor(40, 40, 40);
+  doc.text(tituloDoc, 20, 35);
 
-  doc.setFontSize(11);
+  doc.setDrawColor(230, 230, 230);
+  doc.setLineWidth(0.4);
+  doc.line(20, 38, 190, 38);
+
   doc.setFont("helvetica", "normal");
-  let y = 28;
+  doc.setFontSize(12);
+  doc.setTextColor(70, 70, 70);
 
+  let y = 50;
   const headerLines = [];
   headerLines.push(nombreProyecto);
   if (promotora) headerLines.push(promotora);
@@ -1596,89 +1681,41 @@ async function exportarPDFTecnico() {
   headerLines.forEach(function (line) {
     const splitted = doc.splitTextToSize(line, 170);
     doc.text(splitted, 20, y);
-    y += splitted.length * 5 + 1;
+    y += splitted.length * 7;
   });
 
-  y += 4;
+  y += 10;
+
+  // Pequeño pie de página
+  doc.setFontSize(9);
+  doc.setTextColor(120, 120, 120);
+  const footerText =
+    idioma === "en"
+      ? "IP video intercom & access control solution – 2N®"
+      : idioma === "pt"
+      ? "Solução IP de videoporteiro e controlo de acessos – 2N®"
+      : "Solución IP de videoportero y control de accesos – 2N®";
+  doc.text(footerText, 20, 285);
+
+  // Salto a cuerpo
+  doc.addPage();
+
+  // ===== Cuerpo de memoria =====
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.setTextColor(50, 50, 50);
+  y = 25;
 
   function ensureSpace(linesCount) {
-    const needed = linesCount * 5 + 8;
-    if (y + needed > 280) {
+    const needed = linesCount * 5 + 12;
+    if (y + needed > 275) {
       doc.addPage();
-      y = 20;
-    }
-  }
-
-  const sectionMediaMap = appState.documentacion.sectionMedia || {};
-  const mediaLib = appState.documentacion.mediaLibrary || [];
-
-  function getSectionImages(sectionKey) {
-    const ids = sectionMediaMap[sectionKey] || [];
-    const list = ids
-      .map(function (id) {
-        return mediaLib.find(function (m) {
-          return m.id === id;
-        });
-      })
-      .filter(function (m) {
-        if (!m || !m.url) return false;
-        const mime = (m.mimeType || "").toLowerCase();
-        const type = m.type || "";
-        return type === "image" || mime.indexOf("image/") === 0;
-      });
-    // Máximo 4 imágenes por sección
-    return list.slice(0, 4);
-  }
-
-  async function insertImagesForSection(sectionKey) {
-    const images = getSectionImages(sectionKey);
-    if (!images.length) return;
-
-    for (const m of images) {
-      try {
-        const obj = await loadImageAsDataUrl(m.url);
-        const dataUrl = obj.dataUrl;
-        const width = obj.width;
-        const height = obj.height;
-        const ratio = width && height ? width / height : 4 / 3;
-
-        const maxWidthMm = 80;
-        const maxHeightMm = 60;
-        let imgW = maxWidthMm;
-        let imgH = imgW / ratio;
-        if (imgH > maxHeightMm) {
-          imgH = maxHeightMm;
-          imgW = imgH * ratio;
-        }
-
-        const neededHeight = imgH + 10;
-        if (y + neededHeight > 280) {
-          doc.addPage();
-          y = 20;
-        }
-
-        const imgX = 20;
-        const imgY = y;
-        doc.addImage(dataUrl, "JPEG", imgX, imgY, imgW, imgH);
-        y += imgH + 4;
-
-        if (m.nombre) {
-          doc.setFont("helvetica", "italic");
-          doc.setFontSize(8);
-          const capLines = doc.splitTextToSize(m.nombre, 170);
-          doc.text(capLines, 20, y);
-          y += capLines.length * 4 + 2;
-          doc.setFont("helvetica", "normal");
-          doc.setFontSize(10);
-        }
-      } catch (e) {
-        console.warn("No se pudo insertar imagen de sección en PDF:", e);
-      }
+      y = 25;
     }
   }
 
   for (const key of DOC_SECTION_ORDER) {
-    // respetar el check "Incluir en PDF"
+    // Respetar el check "Incluir en PDF"
     if (includedSections.hasOwnProperty(key) && !includedSections[key]) {
       continue;
     }
@@ -1689,25 +1726,38 @@ async function exportarPDFTecnico() {
 
     const tituloSeccion = labelForSection(key);
 
+    // Título sección
     ensureSpace(3);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
+    doc.setTextColor(30, 64, 175); // azul suave
     doc.text(tituloSeccion, 20, y);
-    y += 7;
+    y += 4;
 
+    // Línea fina bajo título
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.3);
+    doc.line(20, y, 190, y);
+    y += 5;
+
+    // Texto
     if (contenido) {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(10);
+      doc.setTextColor(55, 65, 81);
       const textLines = doc.splitTextToSize(contenido, 170);
       ensureSpace(textLines.length);
       doc.text(textLines, 20, y);
       y += textLines.length * 5 + 4;
     }
 
-    await insertImagesForSection(key);
-    y += 2;
+    // Imágenes asociadas
+    y = await insertImagesForSection(doc, key, y);
+    y += 4;
   }
 
+  // ===== Anexo de fichas técnicas (solo listado) =====
+  const mediaLib = appState.documentacion.mediaLibrary || [];
   const selIds = appState.documentacion.selectedFichasMediaIds || [];
   const fichasMediaSeleccionadas = mediaLib.filter(function (m) {
     return selIds.indexOf(m.id) !== -1;
@@ -1715,7 +1765,7 @@ async function exportarPDFTecnico() {
 
   if (fichasMediaSeleccionadas.length > 0) {
     doc.addPage();
-    y = 20;
+    y = 25;
 
     let tituloDocs = "Anexo – Fichas técnicas adjuntas";
     if (idioma === "en") tituloDocs = "Appendix – Technical documentation";
@@ -1723,175 +1773,34 @@ async function exportarPDFTecnico() {
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
+    doc.setTextColor(30, 64, 175);
     doc.text(tituloDocs, 20, y);
-    y += 8;
+    y += 6;
+
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.3);
+    doc.line(20, y, 190, y);
+    y += 6;
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
+    doc.setTextColor(55, 65, 81);
 
     fichasMediaSeleccionadas.forEach(function (m) {
       const extra = m.folderName ? " – " + m.folderName : "";
       const urlText = m.url ? " (" + m.url + ")" : "";
       const line = m.nombre + extra + urlText;
-      const splitted = doc.splitTextToSize(line, 170);
+      const splitted = doc.splitTextToSize("• " + line, 170);
       ensureSpace(splitted.length);
       doc.text(splitted, 20, y);
-      y += splitted.length * 5 + 2;
+      y += splitted.length * 4.8 + 2;
     });
   }
 
+  // ===== Nombre de fichero =====
   let filenameBase = "memoria_calidades";
   if (idioma === "en") filenameBase = "technical_specification";
   if (idioma === "pt") filenameBase = "memoria_descritiva";
-
-  const safeName = String(nombreProyecto || "proyecto")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/gi, "_")
-    .replace(/^_+|_+$/g, "");
-
-  const filename = filenameBase + "_" + (safeName || "2n") + ".pdf";
-  doc.save(filename);
-}
-
-// ===== Versión comercial =====
-
-async function exportarPDFComercial() {
-  const jsPDF = window.jspdf.jsPDF;
-  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-
-  const idioma = appState.documentacion.idioma || "es";
-  const secciones = appState.documentacion.secciones || {};
-
-  const presupuesto =
-    typeof window.getPresupuestoActual === "function"
-      ? window.getPresupuestoActual()
-      : null;
-  const proyecto = appState.proyecto || {};
-
-  const nombreProyecto =
-    proyecto.nombre ||
-    proyecto.nombreProyecto ||
-    (presupuesto && presupuesto.nombreProyecto) ||
-    "Proyecto";
-
-  const promotora =
-    proyecto.promotora ||
-    proyecto.cliente ||
-    (presupuesto && presupuesto.cliente) ||
-    "";
-
-  let tituloDoc = "Solución de accesos y videoportero IP";
-  if (idioma === "en") tituloDoc = "IP access and video intercom solution";
-  if (idioma === "pt") tituloDoc = "Solução IP de acessos e videoporteiro";
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(18);
-  doc.text(tituloDoc, 20, 30);
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(12);
-  let y = 40;
-
-  const headerLines = [];
-  headerLines.push(nombreProyecto);
-  if (promotora) headerLines.push(promotora);
-
-  headerLines.forEach(function (line) {
-    const splitted = doc.splitTextToSize(line, 170);
-    doc.text(splitted, 20, y);
-    y += splitted.length * 6;
-  });
-
-  y += 8;
-
-  const resumen = (secciones.resumen || "").trim();
-  if (resumen) {
-    const resumenLines = doc.splitTextToSize(resumen, 170);
-    doc.setFontSize(11);
-    doc.text(resumenLines, 20, y);
-  }
-
-  const fichas = [];
-  if (presupuesto && Array.isArray(presupuesto.lineas)) {
-    presupuesto.lineas.forEach(function (l, idx) {
-      if (!appState.documentacion.fichasIncluidas[idx]) return;
-      const ref = l.ref || l.codigo || l.code || "";
-      const desc = l.descripcion || l.desc || "";
-      const qty = l.cantidad || l.qty || 1;
-      fichas.push({ ref: ref, desc: desc, qty: qty });
-    });
-  }
-
-  for (const f of fichas) {
-    doc.addPage();
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(14);
-    doc.text(f.desc || f.ref, 20, 25);
-
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    doc.text("Ref: " + f.ref + "  ·  x" + f.qty, 20, 32);
-
-    const imgUrl = getImagenRef(f.ref);
-    if (imgUrl) {
-      try {
-        const obj = await loadImageAsDataUrl(imgUrl);
-        const dataUrl = obj.dataUrl;
-        const width = obj.width;
-        const height = obj.height;
-        const ratio = width && height ? width / height : 4 / 3;
-
-        const maxWidthMm = 120;
-        const maxHeightMm = 75;
-        let imgW = maxWidthMm;
-        let imgH = imgW / ratio;
-        if (imgH > maxHeightMm) {
-          imgH = maxHeightMm;
-          imgW = imgH * ratio;
-        }
-
-        const imgX = (210 - imgW) / 2;
-        const imgY = 40;
-        doc.addImage(dataUrl, "JPEG", imgX, imgY, imgW, imgH);
-      } catch (e) {
-        console.warn("No se pudo cargar imagen para", f.ref, imgUrl, e);
-      }
-    }
-
-    let bullets;
-    if (idioma === "en") {
-      bullets = [
-        "Premium IP video intercom device.",
-        "Ideal for high-end residential projects and common areas.",
-        "Scalable and fully integrated with access control and mobile app.",
-      ];
-    } else if (idioma === "pt") {
-      bullets = [
-        "Dispositivo de videoporteiro IP premium.",
-        "Ideal para empreendimentos residenciais de alto padrão e zonas comuns.",
-        "Escalável e totalmente integrado com controlo de acessos e app móvel.",
-      ];
-    } else {
-      bullets = [
-        "Dispositivo de videoportero IP de gama alta.",
-        "Ideal para residenciales premium y zonas comunes representativas.",
-        "Escalable e integrado con control de accesos y app móvil.",
-      ];
-    }
-
-    let yBullets = 125;
-    doc.setFontSize(11);
-    bullets.forEach(function (b) {
-      const lines = doc.splitTextToSize("• " + b, 170);
-      doc.text(lines, 20, yBullets);
-      yBullets += lines.length * 6;
-    });
-  }
-
-  let filenameBase = "presentacion_accesos";
-  if (idioma === "en") filenameBase = "access_solution_presentation";
-  if (idioma === "pt") filenameBase = "apresentacao_acessos";
 
   const safeName = String(nombreProyecto || "proyecto")
     .toLowerCase()
