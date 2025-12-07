@@ -144,7 +144,7 @@ const DOC_BASE_TEMPLATES = {
     sistema:
       "A solução baseia-se num sistema de videoporteiro IP totalmente distribuído, com dispositivos 2N ligados através de rede Ethernet. O sistema permite a gestão de chamadas de acesso, controlo de portas, integração com aplicação móvel e, opcionalmente, com sistemas de domótica e PMS, garantindo elevada disponibilidade e flexibilidade.",
     equipos:
-      "A solução inclui os seguintes equipamentos principais:\n\n{{LISTADO_EQUIPOS}}\n\nCada equipamento foi selecionado para cumprir os requisitos de desenho, funcionalidade e durabilidade do projeto.",
+      "A solução inclui os seguintes equipamentos principais:\n\n{{LISTADO_EQUIPOS}}\n\nCada equipamento fue selecionado para cumprir os requisitos de desenho, funcionalidade e durabilidade do projeto.",
     infraestructura:
       "Toda a infraestrutura de comunicações assenta numa rede IP com cablagem estruturada, bastidores de comunicações e electrónica de rede gerida. O desenho contempla caminhos redundantes, alimentação adequada (PoE quando aplicável) e capacidade de reserva para futuras ampliações.",
     servicios:
@@ -686,7 +686,7 @@ function renderDocFichasHTML() {
 // LIMPIEZA Y DOCUMENTACIÓN GRÁFICA (solo imágenes)
 // ===========================
 
-// *** CAMBIO 1: limpieza muy sencilla, solo exige id + url
+// Limpieza muy sencilla, solo exige id + url válidos
 function cleanInvalidMediaItems() {
   const list = appState.documentacion.mediaLibrary || [];
   const cleaned = list.filter(
@@ -705,7 +705,6 @@ function cleanInvalidMediaItems() {
 }
 
 function renderDocMediaLibraryHTML() {
-  // *** CAMBIO 2: usamos limpieza y detectamos imágenes por mime/type/extensión
   cleanInvalidMediaItems();
 
   const allMedia = appState.documentacion.mediaLibrary || [];
@@ -1150,7 +1149,6 @@ function attachDocMediaGridHandlers(root) {
       const type = (item.type || "");
       const url = (item.url || "").toLowerCase();
 
-      // *** CAMBIO 3: considerar también la extensión del archivo
       const isImageByMime = mime.startsWith("image/");
       const isImageByType = type === "image";
       const isImageByExt =
@@ -1276,8 +1274,9 @@ async function askAIForSection(sectionKey) {
 // ===========================
 
 async function ensureDocMediaLoaded() {
+  // Si ya se ha cargado correctamente, no repetimos
   if (appState.documentacion.mediaLoaded) return;
-  appState.documentacion.mediaLoaded = true;
+
   appState.documentacion.mediaLibrary =
     appState.documentacion.mediaLibrary || [];
 
@@ -1307,9 +1306,18 @@ async function ensureDocMediaLoaded() {
     snap.forEach((doc) => {
       media.push({ id: doc.id, ...doc.data() });
     });
+
+    console.log("[DOC] Media cargada desde Firestore:", media.length, "items");
+
     appState.documentacion.mediaLibrary = media;
+    appState.documentacion.mediaLoaded = true;
+
+    // Refrescar solo el grid de imágenes
+    refreshDocMediaGridOnly();
   } catch (e) {
     console.error("Error cargando documentación gráfica:", e);
+    // Permitimos reintentar si ha fallado
+    appState.documentacion.mediaLoaded = false;
   }
 }
 
