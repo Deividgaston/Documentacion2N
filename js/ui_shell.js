@@ -23,7 +23,13 @@ function initShellUI() {
     link.addEventListener("click", (e) => {
       e.preventDefault();
       const view = link.getAttribute("data-view");
-      if (view) {
+      if (!view) return;
+
+      // 👉 NUEVO: usamos el router central (main.js) si existe
+      if (typeof window.setCurrentView === "function") {
+        window.setCurrentView(view);
+      } else {
+        // Fallback: lógica antigua por si se usa en otro contexto
         selectView(view);
       }
     });
@@ -40,8 +46,9 @@ function initShellUI() {
     });
   }
 
-  // Vista inicial: Proyecto (si no hay otra lógica)
-  selectView("proyecto");
+  // ❌ Importante: ya NO forzamos vista inicial aquí.
+  // Antes: selectView("proyecto");
+  // Ahora la vista inicial la decide main.js con localStorage (última vista usada).
 }
 
 // Cambiar de vista y marcar pestaña activa
