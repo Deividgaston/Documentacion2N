@@ -786,8 +786,7 @@ function renderDocMediaLibraryHTML() {
   `;
 }
 
-  return '<div class="doc-media-list doc-fichas-list">' + itemsHTML + "</div>";
-}
+ 
 
 // ===========================
 // REFRESH PARCIAL DEL GRID MEDIA
