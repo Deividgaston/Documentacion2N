@@ -14,6 +14,7 @@ appState.documentacion = appState.documentacion || {
   sectionMedia: {}, // mapa: sectionKey -> [mediaId]
   selectedFichasMediaIds: [], // fichas técnicas seleccionadas desde la biblioteca
   mediaSearchTerm: "", // término de búsqueda para documentación gráfica
+  fichasSearchTerm: "", // término de búsqueda para fichas técnicas
 };
 
 // ===========================
@@ -50,6 +51,7 @@ function saveDocStateToLocalStorage() {
       sectionMedia: appState.documentacion.sectionMedia,
       selectedFichasMediaIds: appState.documentacion.selectedFichasMediaIds,
       mediaSearchTerm: appState.documentacion.mediaSearchTerm || "",
+      fichasSearchTerm: appState.documentacion.fichasSearchTerm || "",
     };
     localStorage.setItem(DOC_STORAGE_KEY, JSON.stringify(toSave));
   } catch (e) {
@@ -567,7 +569,7 @@ function renderDocSectionsHTML() {
 function renderDocFichasHTML() {
   const media = appState.documentacion.mediaLibrary || [];
 
-  const fichasMedia = media.filter((m) => {
+  const fichasMediaBase = media.filter((m) => {
     const cat = (m.docCategory || "").toLowerCase();
     const mime = (m.mimeType || "").toLowerCase();
     // Consideramos ficha técnica: categoría 'ficha' o PDF / DOC
@@ -584,7 +586,25 @@ function renderDocFichasHTML() {
 
   const selIds = new Set(appState.documentacion.selectedFichasMediaIds || []);
 
-  if (!fichasMedia.length) {
+  const term = (appState.documentacion.fichasSearchTerm || "")
+    .trim()
+    .toLowerCase();
+
+  const fichasMedia = term
+    ? fichasMediaBase.filter((m) => {
+        const txt = (
+          (m.nombre || "") +
+          " " +
+          (m.folderName || "") +
+          " " +
+          (m.docCategory || "")
+        ).toLowerCase();
+        return txt.includes(term);
+      })
+    : fichasMediaBase;
+
+  // Si no hay ninguna ficha en la biblioteca en absoluto
+  if (!fichasMediaBase.length) {
     return `
       <div class="doc-fichas-section">
         <p class="text-muted" style="font-size:0.8rem;">
@@ -612,6 +632,14 @@ function renderDocFichasHTML() {
     })
     .join("");
 
+  const noResultsMsg = !fichasMedia.length
+    ? `
+      <p class="text-muted" style="font-size:0.8rem; margin-top:0.25rem;">
+        No se han encontrado fichas técnicas que coincidan con la búsqueda.
+      </p>
+    `
+    : "";
+
   return `
     <div class="doc-fichas-section">
       <div class="doc-fichas-block">
@@ -619,23 +647,35 @@ function renderDocFichasHTML() {
         <p class="doc-fichas-help">
           Selecciona las fichas técnicas y documentos que quieres anexar a la memoria.
         </p>
+
+        <div class="form-group mb-2">
+          <input
+            type="text"
+            id="docFichasSearchInput"
+            class="form-control"
+            placeholder="Buscar fichas técnicas..."
+            value="${appState.documentacion.fichasSearchTerm || ""}"
+          />
+        </div>
+
         <div class="doc-fichas-list doc-fichas-media-list">
           ${listHTML}
         </div>
+        ${noResultsMsg}
       </div>
     </div>
   `;
 }
 
 // ===========================
-// DOCUMENTACIÓN GRÁFICA (solo imágenes)
+// DOCUMENTACIÓN GRÁFICA (solo imágenes, en lista scrollable)
 // ===========================
 
 function renderDocMediaLibraryHTML() {
   const allMedia = appState.documentacion.mediaLibrary || [];
 
   // Solo imágenes marcadas como 'imagen'
-  const media = allMedia.filter((m) => {
+  const mediaBase = allMedia.filter((m) => {
     const cat = (m.docCategory || "").toLowerCase();
     const mime = (m.mimeType || "").toLowerCase();
     const type = m.type || "";
@@ -643,7 +683,7 @@ function renderDocMediaLibraryHTML() {
     return isImageType && cat === "imagen";
   });
 
-  if (!media.length) {
+  if (!mediaBase.length) {
     return `
       <p class="text-muted" style="font-size:0.85rem;">
         Todavía no has subido documentación gráfica de tipo imagen.
@@ -655,8 +695,8 @@ function renderDocMediaLibraryHTML() {
   const term = (appState.documentacion.mediaSearchTerm || "")
     .trim()
     .toLowerCase();
-  const filtered = term
-    ? media.filter((m) => {
+  const media = term
+    ? mediaBase.filter((m) => {
         const txt = (
           (m.nombre || "") +
           " " +
@@ -666,9 +706,9 @@ function renderDocMediaLibraryHTML() {
         ).toLowerCase();
         return txt.includes(term);
       })
-    : media;
+    : mediaBase;
 
-  if (!filtered.length) {
+  if (!media.length) {
     return `
       <p class="text-muted" style="font-size:0.85rem;">
         No se han encontrado imágenes que coincidan con la búsqueda.
@@ -676,9 +716,10 @@ function renderDocMediaLibraryHTML() {
     `;
   }
 
+  // Lista vertical scrollable (reutilizamos estilos de lista de fichas)
   return `
-    <div class="doc-media-grid">
-      ${filtered
+    <div class="doc-media-list doc-fichas-list">
+      ${media
         .map((m) => {
           const captionText = m.folderName
             ? `${m.folderName} – ${m.nombre}`
@@ -687,17 +728,18 @@ function renderDocMediaLibraryHTML() {
           const tag = "Imagen";
 
           return `
-            <div class="doc-media-item"
+            <div class="doc-media-item doc-media-row"
                  draggable="true"
                  data-media-id="${m.id}">
-              <div class="doc-media-thumb">
-                <div class="doc-media-icon">🖼️</div>
-              </div>
-              <div class="doc-media-caption">
-                ${captionText}
-              </div>
-              <div class="doc-media-tag-badge">
-                ${tag}${m.folderName ? " · " + m.folderName : ""}
+              <div class="doc-media-main">
+                <div class="doc-media-name">
+                  🖼️ ${captionText}
+                </div>
+                <div class="doc-media-meta">
+                  <span class="doc-media-tag-badge">
+                    ${tag}${m.folderName ? " · " + m.folderName : ""}
+                  </span>
+                </div>
               </div>
               <div class="doc-media-actions">
                 <button
@@ -755,6 +797,17 @@ function attachDocumentacionHandlers() {
       appState.documentacion.mediaSearchTerm = searchInput.value || "";
       saveDocStateToLocalStorage();
       refreshDocMediaGridOnly();
+    });
+  }
+
+  // Buscador de fichas técnicas
+  const fichasSearchInput = container.querySelector("#docFichasSearchInput");
+  if (fichasSearchInput) {
+    fichasSearchInput.addEventListener("input", () => {
+      appState.documentacion.fichasSearchTerm = fichasSearchInput.value || "";
+      saveDocStateToLocalStorage();
+      // Redibujamos solo la parte de fichas (más simple: toda la vista, sigue siendo rápido)
+      renderDocumentacionView();
     });
   }
 
@@ -865,7 +918,7 @@ function attachDocumentacionHandlers() {
     });
   });
 
-  // Handlers específicos del grid de media (drag, ver, borrar)
+  // Handlers específicos del grid/lista de media (drag, ver, borrar)
   attachDocMediaGridHandlers(container);
 
   // Nuevo bloque custom
@@ -909,7 +962,7 @@ function attachDocumentacionHandlers() {
   }
 }
 
-// Handlers solo del grid de documentación gráfica
+// Handlers solo del grid/lista de documentación gráfica
 function attachDocMediaGridHandlers(root) {
   const container = root || getDocAppContent();
   if (!container) return;
