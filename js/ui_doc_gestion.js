@@ -109,9 +109,9 @@ async function deleteDocMediaById(mediaId) {
   appState.documentacion.mediaLibrary =
     appState.documentacion.mediaLibrary || [];
   const mediaLib = appState.documentacion.mediaLibrary;
-  const idx = mediaLib.findIndex((m) => m.id === mediaId);
-  const item = idx !== -1 ? mediaLib[idx] : null;
 
+  // 🔹 Obtener el item por id (para usar storagePath)
+  const item = mediaLib.find((m) => m.id === mediaId) || null;
   const storagePath = item && item.storagePath ? item.storagePath : null;
 
   // 1) Borrar en Storage (si tenemos path)
@@ -149,13 +149,12 @@ async function deleteDocMediaById(mediaId) {
   }
 
   // 3) Quitar de estado local (mediaLibrary) y guardar en localStorage
-  if (idx !== -1) {
-    mediaLib.splice(idx, 1);
-    appState.documentacion.mediaLibrary = mediaLib;
-    persistDocStateSafe();
-  }
+  appState.documentacion.mediaLibrary = mediaLib.filter(
+    (m) => m.id !== mediaId
+  );
+  persistDocStateSafe();
 
-  // 🔹 Forzar que en el siguiente render se recargue desde Firestore
+  // Forzar que en el siguiente render se recargue desde Firestore si hace falta
   appState.documentacion.mediaLoaded = false;
 
   return true;
