@@ -39,6 +39,33 @@ function persistDocStateSafe() {
   }
 }
 
+// Cargar documentación para la vista de gestión, respetando la caché
+async function loadDocMediaForGestion() {
+  appState.documentacion = appState.documentacion || {};
+  appState.documentacion.mediaLibrary =
+    appState.documentacion.mediaLibrary || [];
+
+  const alreadyLoaded =
+    appState.documentacion.mediaLoaded &&
+    appState.documentacion.mediaLibrary.length > 0;
+
+  if (alreadyLoaded) {
+    return;
+  }
+
+  if (typeof window.ensureDocMediaLoaded === "function") {
+    try {
+      const maybePromise = window.ensureDocMediaLoaded();
+      // Si devuelve una Promise, esperamos a que termine la carga
+      if (maybePromise && typeof maybePromise.then === "function") {
+        await maybePromise;
+      }
+    } catch (e) {
+      console.error("Error al asegurar carga de media de documentación:", e);
+    }
+  }
+}
+
 // Actualizar metadatos de un documento en Firestore + estado local
 async function updateDocMediaMetaById(mediaId, updates) {
   if (!mediaId || !updates || typeof updates !== "object") return;
@@ -68,7 +95,10 @@ async function updateDocMediaMetaById(mediaId, updates) {
   try {
     await db.collection("documentacion_media").doc(mediaId).update(updates);
   } catch (e) {
-    console.error("Error actualizando metadatos de documentación en Firestore:", e);
+    console.error(
+      "Error actualizando metadatos de documentación en Firestore:",
+      e
+    );
   }
 }
 
@@ -112,7 +142,10 @@ async function deleteDocMediaById(mediaId) {
       await db.collection("documentacion_media").doc(mediaId).delete();
     }
   } catch (e) {
-    console.error("Error borrando documento de documentación en Firestore:", e);
+    console.error(
+      "Error borrando documento de documentación en Firestore:",
+      e
+    );
   }
 
   // 3) Quitar de estado local (mediaLibrary) y guardar en localStorage
@@ -129,18 +162,12 @@ async function deleteDocMediaById(mediaId) {
 // Render principal
 // ==============================
 
-function renderDocGestionView() {
+async function renderDocGestionView() {
   const container = getDocGestionAppContent();
   if (!container) return;
 
-  // Una sola lectura a Firestore por sesión: usamos el helper existente
-  if (typeof window.ensureDocMediaLoaded === "function") {
-    try {
-      window.ensureDocMediaLoaded();
-    } catch (e) {
-      console.error("Error al asegurar carga de media de documentación:", e);
-    }
-  }
+  // 🔹 Aseguramos que la documentación está cargada antes de pintar
+  await loadDocMediaForGestion();
 
   const media = appState.documentacion.mediaLibrary || [];
 
@@ -387,7 +414,10 @@ function attachDocGestionHandlers() {
           });
           newItems.push(media);
         } catch (e) {
-          console.error("Error subiendo archivo de documentación (gestión):", e);
+          console.error(
+            "Error subiendo archivo de documentación (gestión):",
+            e
+          );
         }
       }
 
