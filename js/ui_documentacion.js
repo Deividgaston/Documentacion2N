@@ -475,7 +475,7 @@ function renderSectionMediaHTML(sectionKey) {
       const cat = (m.docCategory || "").toLowerCase();
       const mime = (m.mimeType || "").toLowerCase();
 
-      // ✅ consideramos imagen si la categoría es "imagen"
+      // consideramos imagen si la categoría es "imagen"
       const isImage =
         cat === "imagen" ||
         m.type === "image" ||
@@ -691,7 +691,7 @@ function cleanInvalidMediaItems() {
 }
 
 function renderDocMediaLibraryHTML() {
-  // ⚠️ Importante: ya NO llamamos a cleanInvalidMediaItems aquí
+  // ya NO llamamos a cleanInvalidMediaItems aquí
   const allMedia = appState.documentacion.mediaLibrary || [];
 
   if (!allMedia.length) {
@@ -703,12 +703,12 @@ function renderDocMediaLibraryHTML() {
     `;
   }
 
-    // Helper para saber si un item es imagen
+  // Helper para saber si un item es imagen
   function isImageItem(m) {
     if (!m) return false;
 
     const cat = (m.docCategory || "").toLowerCase();
-    if (cat === "imagen") return true;   // ✅ clave: categoría manda
+    if (cat === "imagen") return true; // categoría manda
 
     const mime = (m.mimeType || "").toLowerCase();
     const type = (m.type || "").toLowerCase();
@@ -748,7 +748,8 @@ function renderDocMediaLibraryHTML() {
     });
   }
 
-  const visible = baseList.filter((m) => m && m.id && m.url);
+  // Mostramos cualquier media con id, aunque falte la URL (el botón Ver avisará)
+  const visible = baseList.filter((m) => m && m.id);
 
   if (!visible.length) {
     const msg =
@@ -761,6 +762,15 @@ function renderDocMediaLibraryHTML() {
       </p>
     `;
   }
+
+  // Debug opcional
+  console.log(
+    "[DOC] renderDocMediaLibraryHTML",
+    "allMedia:", allMedia.length,
+    "imagesOnly:", imagesOnly.length,
+    "visible:", visible.length,
+    visible.slice(0, 5)
+  );
 
   return `
     <div class="doc-media-list doc-fichas-list">
@@ -800,7 +810,6 @@ function renderDocMediaLibraryHTML() {
     </div>
   `;
 }
- 
 
 // ===========================
 // REFRESH PARCIAL DEL GRID MEDIA
@@ -1076,7 +1085,7 @@ function attachDocMediaGridHandlers(root) {
     });
   });
 
-    container.querySelectorAll("[data-media-view-id]").forEach(function (btn) {
+  container.querySelectorAll("[data-media-view-id]").forEach(function (btn) {
     btn.addEventListener("click", function () {
       const id = btn.getAttribute("data-media-view-id");
       if (!id) return;
@@ -1107,18 +1116,16 @@ function attachDocMediaGridHandlers(root) {
         url.endsWith(".webp") ||
         url.endsWith(".gif");
 
-      // ✅ también usamos la categoría
       const isImage =
         cat === "imagen" || isImageByMime || isImageByType || isImageByExt;
 
       if (isImage) {
-        openDocImageFloatingPreview(item);   // ✅ previsualización en overlay
+        openDocImageFloatingPreview(item);
       } else {
         window.open(item.url, "_blank");
       }
     });
   });
-
 }
 
 // ===========================
@@ -1224,9 +1231,9 @@ async function askAIForSection(sectionKey) {
 // ===========================
 // MEDIA: FIRESTORE + STORAGE
 // ===========================
+
 async function ensureDocMediaLoaded() {
-  // Siempre intentamos cargar desde Firestore cuando se entra en la vista,
-  // para evitar tener que refrescar al cambiar de página.
+  // Siempre intentamos cargar desde Firestore cuando se entra en la vista
   appState.documentacion.mediaLibrary =
     appState.documentacion.mediaLibrary || [];
 
