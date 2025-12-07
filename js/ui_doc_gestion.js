@@ -451,9 +451,11 @@ function attachDocGestionHandlers() {
       const deleted = await deleteDocMediaById(id);
       if (deleted) {
         alert("✅ Archivo eliminado correctamente.");
-      }
 
-      renderDocGestionView();
+        // 🔹 Quitar la fila directamente del DOM para que desaparezca al momento
+        const row = btn.closest(".doc-gestion-row");
+        if (row) row.remove();
+      }
     });
   });
 
