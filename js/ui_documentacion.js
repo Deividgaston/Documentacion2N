@@ -258,6 +258,15 @@ function applyTokensToTemplate(template, tokens) {
   return out;
 }
 
+// Pequeño helper para escapar HTML en títulos del modal flotante
+function docEscapeHtml(str) {
+  if (!str) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
 // ===========================
 // AUTO-GENERACIÓN DE SECCIONES
 // ===========================
@@ -430,21 +439,6 @@ function renderDocumentacionView() {
           <div class="card-footer doc-modal-footer">
             <button class="btn btn-sm" id="docCustomCancelBtn">Cancelar</button>
             <button class="btn btn-sm btn-primary" id="docCustomSaveBtn">Añadir a la memoria</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Modal para vista previa de imágenes -->
-      <div id="docMediaPreviewModal" class="doc-modal hidden">
-        <div class="doc-modal-content card doc-media-preview-card">
-          <div class="card-header">
-            <div class="card-title" id="docMediaPreviewTitle">Vista previa</div>
-            <button type="button" class="btn btn-xs" id="docMediaPreviewCloseBtn">✕</button>
-          </div>
-          <div class="card-body">
-            <div class="doc-media-preview-img-wrap">
-              <img id="docMediaPreviewImg" src="" alt="Vista previa" />
-            </div>
           </div>
         </div>
       </div>
@@ -762,14 +756,6 @@ function renderDocMediaLibraryHTML() {
                 >
                   👁 Ver
                 </button>
-                <button
-                  type="button"
-                  class="btn btn-xs btn-outline"
-                  data-media-delete-id="${m.id}"
-                  title="Borrar imagen"
-                >
-                  🗑 Borrar
-                </button>
               </div>
             </div>
           `;
@@ -931,7 +917,7 @@ function attachDocumentacionHandlers() {
     });
   });
 
-  // Handlers específicos del grid de media (drag, ver, borrar)
+  // Handlers específicos del grid de media (drag, ver)
   attachDocMediaGridHandlers(container);
 
   // Nuevo bloque custom
@@ -966,28 +952,119 @@ function attachDocumentacionHandlers() {
     customSaveBtn.addEventListener("click", saveDocCustomBlock);
   }
 
-  // Modal vista previa: cerrar
-  const previewModal = document.getElementById("docMediaPreviewModal");
-  const previewCloseBtn =
-    previewModal?.querySelector("#docMediaPreviewCloseBtn");
-
-  if (previewCloseBtn && previewModal && backdrop) {
-    previewCloseBtn.addEventListener("click", () => {
-      previewModal.classList.add("hidden");
-      backdrop.classList.add("hidden");
-    });
-  }
-
   // Cerrar modales al pulsar el backdrop
   if (backdrop) {
     backdrop.addEventListener("click", () => {
       const customModal2 = document.getElementById("docCustomModal");
       if (customModal2) customModal2.classList.add("hidden");
-      const previewModal2 = document.getElementById("docMediaPreviewModal");
-      if (previewModal2) previewModal2.classList.add("hidden");
       backdrop.classList.add("hidden");
     });
   }
+}
+
+// ====== PREVIEW FLOTANTE DE IMAGEN ======
+
+function openDocImageFloatingPreview(item) {
+  if (!item || !item.url) return;
+
+  // Elimina uno existente si lo hubiera
+  const existing = document.getElementById("docMediaFloatingPreview");
+  if (existing) existing.remove();
+
+  const title =
+    item.folderName && item.nombre
+      ? `${item.folderName} – ${item.nombre}`
+      : item.nombre || "Imagen";
+
+  const overlay = document.createElement("div");
+  overlay.id = "docMediaFloatingPreview";
+  overlay.style.position = "fixed";
+  overlay.style.inset = "0";
+  overlay.style.background = "rgba(0,0,0,0.65)";
+  overlay.style.display = "flex";
+  overlay.style.alignItems = "center";
+  overlay.style.justifyContent = "center";
+  overlay.style.zIndex = "9999";
+
+  overlay.innerHTML = `
+    <div style="
+      position:relative;
+      max-width:90vw;
+      max-height:90vh;
+      background:#111827;
+      padding:12px;
+      border-radius:12px;
+      box-shadow:0 15px 40px rgba(0,0,0,0.6);
+      display:flex;
+      flex-direction:column;
+    ">
+      <div style="
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        margin-bottom:8px;
+        gap:8px;
+      ">
+        <div style="
+          color:#e5e7eb;
+          font-size:0.9rem;
+          font-weight:500;
+          overflow:hidden;
+          text-overflow:ellipsis;
+          white-space:nowrap;
+          max-width:70vw;
+        ">
+          ${docEscapeHtml(title)}
+        </div>
+        <button
+          type="button"
+          id="docMediaFloatingCloseBtn"
+          style="
+            border:none;
+            background:#374151;
+            color:#f9fafb;
+            border-radius:999px;
+            padding:4px 10px;
+            font-size:0.8rem;
+            cursor:pointer;
+          "
+        >✕ Cerrar</button>
+      </div>
+      <div style="
+        flex:1;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+      ">
+        <img src="${item.url}"
+             alt="${docEscapeHtml(title)}"
+             style="
+               max-width:86vw;
+               max-height:80vh;
+               object-fit:contain;
+               border-radius:6px;
+               background:#000;
+             " />
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+
+  const close = () => {
+    overlay.remove();
+  };
+
+  const closeBtn = document.getElementById("docMediaFloatingCloseBtn");
+  if (closeBtn) {
+    closeBtn.addEventListener("click", close);
+  }
+
+  overlay.addEventListener("click", (ev) => {
+    if (ev.target === overlay) {
+      close();
+    }
+  });
 }
 
 // Handlers solo del grid de documentación gráfica
@@ -1005,7 +1082,7 @@ function attachDocMediaGridHandlers(root) {
     });
   });
 
-  // Ver documento (imagen) en modal flotante
+  // Ver documento (imagen) en overlay flotante
   container.querySelectorAll("[data-media-view-id]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const id = btn.getAttribute("data-media-view-id");
@@ -1020,37 +1097,12 @@ function attachDocMediaGridHandlers(root) {
       const type = item.type || "";
       const isImage = type === "image" || mime.startsWith("image/");
 
-      const modal = document.getElementById("docMediaPreviewModal");
-      const imgEl = document.getElementById("docMediaPreviewImg");
-      const titleEl = document.getElementById("docMediaPreviewTitle");
-      const backdropEl = document.getElementById("docModalBackdrop");
-
-      if (modal && imgEl && isImage) {
-        imgEl.src = item.url;
-        if (titleEl) {
-          titleEl.textContent = item.folderName
-            ? `${item.folderName} – ${item.nombre || ""}`
-            : item.nombre || "Vista previa";
-        }
-        modal.classList.remove("hidden");
-        if (backdropEl) backdropEl.classList.remove("hidden");
+      if (isImage) {
+        openDocImageFloatingPreview(item);
       } else {
-        // Si por lo que sea no es imagen, abrimos en nueva pestaña
+        // fallback por si se cuela algo que no es imagen
         window.open(item.url, "_blank");
       }
-    });
-  });
-
-  // Borrar documento
-  container.querySelectorAll("[data-media-delete-id]").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      const id = btn.getAttribute("data-media-delete-id");
-      if (!id) return;
-      const ok = window.confirm(
-        "¿Seguro que quieres borrar esta imagen de la biblioteca?"
-      );
-      if (!ok) return;
-      await deleteMediaById(id);
     });
   });
 }
