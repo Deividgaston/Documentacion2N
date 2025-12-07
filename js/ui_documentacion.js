@@ -1146,7 +1146,11 @@ function attachDocMediaGridHandlers(root) {
         url.endsWith(".gif");
 
       const isImage =
-        cat === "imagen" || cat === "image" || isImageByMime || isImageByType || isImageByExt;
+        cat === "imagen" ||
+        cat === "image" ||
+        isImageByMime ||
+        isImageByType ||
+        isImageByExt;
 
       if (isImage) {
         openDocImageFloatingPreview(item);
@@ -1809,6 +1813,75 @@ async function exportarPDFTecnico() {
 
   const filename = filenameBase + "_" + (safeName || "2n") + ".pdf";
   doc.save(filename);
+}
+
+// ===== Versión comercial (simple, resumen + portada) =====
+
+async function exportarPDFComercial() {
+  const jsPDF = window.jspdf.jsPDF;
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+
+  const idioma = appState.documentacion.idioma || "es";
+  const secciones = appState.documentacion.secciones || {};
+  const presupuesto =
+    typeof window.getPresupuestoActual === "function"
+      ? window.getPresupuestoActual()
+      : null;
+  const proyecto = appState.proyecto || {};
+
+  const nombreProyecto =
+    proyecto.nombre ||
+    proyecto.nombreProyecto ||
+    (presupuesto && presupuesto.nombreProyecto) ||
+    "Proyecto";
+
+  const promotora =
+    proyecto.promotora ||
+    proyecto.cliente ||
+    (presupuesto && presupuesto.cliente) ||
+    "";
+
+  // Título portada
+  let tituloDoc = "Solución de accesos y videoportero IP";
+  if (idioma === "en") tituloDoc = "IP access & video intercom solution";
+  if (idioma === "pt") tituloDoc = "Solução IP de acessos e videoporteiro";
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(20);
+  doc.text(tituloDoc, 20, 30);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(12);
+  let y = 45;
+
+  const headerLines = [];
+  headerLines.push(nombreProyecto);
+  if (promotora) headerLines.push(promotora);
+
+  headerLines.forEach((line) => {
+    const lines = doc.splitTextToSize(line, 170);
+    doc.text(lines, 20, y);
+    y += lines.length * 6;
+  });
+
+  y += 8;
+
+  // Solo el resumen en modo comercial
+  const resumen = (secciones.resumen || "").trim();
+  if (resumen) {
+    doc.setFontSize(11);
+    const lines = doc.splitTextToSize(resumen, 170);
+    doc.text(lines, 20, y);
+  }
+
+  // Guardar PDF
+  let filenameBase = "presentacion_accesos";
+  if (idioma === "en") filenameBase = "access_solution_presentation";
+  if (idioma === "pt") filenameBase = "apresentacao_acessos";
+
+  const safe = nombreProyecto.toLowerCase().replace(/[^a-z0-9]+/g, "_");
+
+  doc.save(filenameBase + "_" + safe + ".pdf");
 }
 
 // ===========================
