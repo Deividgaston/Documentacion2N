@@ -163,7 +163,7 @@ const DOC_BASE_TEMPLATES = {
     normativa_lpd:
       "Proteção de dados (RGPD)\n\nA solução proposta permite um tratamento responsável dos dados pessoais, em especial no que respeita a imagens de vídeo, registos de acesso e credenciais digitais.\n\nA arquitetura recomendada foi concebida para:\n\n- Minimizar a quantidade de dados pessoais armazenados.\n- Restringir o acesso aos dados a perfis autorizados (administradores, segurança, manutenção).\n- Facilitar o cumprimento do Regulamento Geral de Proteção de Dados (RGPD) e da legislação local em matéria de proteção de dados.\n\nRecomenda-se que a propriedade e/ou a entidade gestora do edifício definam políticas de conservação de dados, informação ao utilizador e exercício de direitos (acesso, retificação, apagamento, etc.), tirando partido das capacidades técnicas da solução.",
     normativa_ciber:
-      "Cibersegurança e práticas de segurança 2N\n\nOs dispositivos 2N incluídos na solução são desenhados seguindo boas práticas de cibersegurança, incluindo:\n\n- Sistema operativo embebido reforçado, sem serviços desnecessários expostos.\n- Autenticação segura e gestão de credenciais para administradores e utilizadores.\n- Suporte de comunicações cifradas (HTTPS / TLS) para gestão e, quando aplicável, para sinalização.\n- Possibilidade de integração em infraestruturas de rede seguras (VLAN, segmentação, firewalls, etc.).\n\nAdicionalmente, a 2N faz parte do grupo Axis, que aplica políticas rigorosas de segurança de produto, gestão de vulnerabilidades e ciclo de vida de firmware. Isto contribui para reduzir a superfície de ataque de instalação e para facilitar o cumprimento das políticas internas de cibersegurança do cliente.",
+      "Cibersegurança e práticas de segurança 2N\n\nOs dispositivos 2N incluídos na solução são desenhados seguindo boas práticas de cibersegurança, incluindo:\n\n- Sistema operativo embebido reforçado, sem serviços desnecessários expostos.\n- Autenticação segura e gestão de credenciais para administradores e utilizadores.\n- Suporte de comunicações cifradas (HTTPS / TLS) para gestão e, quando aplicável, para sinalização.\n- Possibilidade de integração em infraestruturas de rede seguras (VLAN, segmentação, firewalls, etc.).\n\nAdicionalmente, a 2N faz parte do grupo Axis, que aplica políticas rigorosas de segurança de produto, gestão de vulnerabilidades e ciclo de vida de firmware. Isto contribui para reduzir a superfície de ataque da instalação e para facilitar o cumprimento das políticas internas de cibersegurança do cliente.",
     otros:
       "Se necessário, podem ser incorporadas soluções adicionais como controlo de acessos por zonas, integração com CCTV, gestão de visitantes ou sistemas de reserva de zonas comuns.",
   },
@@ -1776,16 +1776,35 @@ async function exportarPDFTecnico() {
   const pageWidth = dims.width;
   const pageHeight = dims.height;
 
-  // ===== Portada con imagen de fondo =====
+  // ===== Portada con imagen de fondo (sin deformar) =====
   let tituloDoc = "Memoria de calidades";
   if (idioma === "en") tituloDoc = "Technical specification";
   if (idioma === "pt") tituloDoc = "Memória descritiva";
 
-  // Fondo: imagen PortadaTecnica adaptada a la hoja
   try {
     const coverImg = await loadImageAsDataUrl(DOC_TECH_COVER_URL);
     if (coverImg && coverImg.dataUrl) {
-      doc.addImage(coverImg.dataUrl, "PNG", 0, 0, pageWidth, pageHeight);
+      const imgWpx = coverImg.width || 1200;
+      const imgHpx = coverImg.height || 800;
+      const imgRatio = imgWpx / imgHpx;
+      const pageRatio = pageWidth / pageHeight;
+
+      let drawW, drawH, drawX, drawY;
+      if (imgRatio > pageRatio) {
+        // imagen más horizontal -> se ajusta a alto, se recorta por los lados
+        drawH = pageHeight;
+        drawW = drawH * imgRatio;
+        drawX = (pageWidth - drawW) / 2;
+        drawY = 0;
+      } else {
+        // imagen más vertical -> se ajusta a ancho, se recorta arriba/abajo
+        drawW = pageWidth;
+        drawH = drawW / imgRatio;
+        drawX = 0;
+        drawY = (pageHeight - drawH) / 2;
+      }
+
+      doc.addImage(coverImg.dataUrl, "PNG", drawX, drawY, drawW, drawH);
     }
   } catch (e) {
     console.warn("No se pudo cargar la imagen de portada técnica:", e);
@@ -1806,8 +1825,19 @@ async function exportarPDFTecnico() {
     }
   }
 
-  // Banda blanca inferior para dar contraste (simula degradado suave)
-  const panelHeight = 65;
+  // Gradiente inferior para mejorar legibilidad
+  const gradHeight = 70;
+  const gradStartY = pageHeight - gradHeight;
+  for (let i = 0; i < 6; i++) {
+    const stepY = gradStartY + (i * gradHeight) / 6;
+    const stepH = gradHeight / 6 + 0.5;
+    const shade = 255 - i * 8; // 255, 247, 239...
+    doc.setFillColor(shade, shade, shade);
+    doc.rect(0, stepY, pageWidth, stepH, "F");
+  }
+
+  // Banda blanca sólida inferior
+  const panelHeight = 55;
   const panelY = pageHeight - panelHeight;
   doc.setFillColor(255, 255, 255);
   doc.rect(0, panelY, pageWidth, panelHeight, "F");
@@ -1849,9 +1879,21 @@ async function exportarPDFTecnico() {
   // Pie de portada
   drawTechFooter(doc, { idioma: idioma });
 
-  // ===== Cuerpo de memoria =====
-  // Cada sección empieza en una página nueva
+  // ===== Índice (página 2) =====
   doc.addPage();
+  const tocPageNumber = doc.getNumberOfPages();
+  doc.setPage(tocPageNumber);
+  const tocStartY = setupTechContentPage(doc, {
+    idioma: idioma,
+    nombreProyecto: nombreProyecto,
+    logo: logo,
+  });
+
+  const tocEntries = [];
+
+  // ===== Cuerpo de memoria =====
+  doc.addPage();
+  let currentPage = doc.getNumberOfPages();
   y = setupTechContentPage(doc, {
     idioma: idioma,
     nombreProyecto: nombreProyecto,
@@ -1860,6 +1902,7 @@ async function exportarPDFTecnico() {
 
   function newPage() {
     doc.addPage();
+    currentPage = doc.getNumberOfPages();
     y = setupTechContentPage(doc, {
       idioma: idioma,
       nombreProyecto: nombreProyecto,
@@ -1895,6 +1938,9 @@ async function exportarPDFTecnico() {
     }
 
     const tituloSeccion = labelForSection(key);
+
+    // Añadimos entrada al índice
+    tocEntries.push({ title: tituloSeccion, page: currentPage });
 
     // Título sección
     doc.setFont("helvetica", "bold");
@@ -1947,11 +1993,15 @@ async function exportarPDFTecnico() {
 
   if (fichasMediaSeleccionadas.length > 0) {
     newPage();
-    y = y || 25;
 
     let tituloDocs = "Anexo – Fichas técnicas adjuntas";
     if (idioma === "en") tituloDocs = "Appendix – Technical documentation";
     if (idioma === "pt") tituloDocs = "Anexo – Documentação técnica";
+
+    // Entrada en el índice
+    tocEntries.push({ title: tituloDocs, page: currentPage });
+
+    y = y || 25;
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
@@ -1978,6 +2028,60 @@ async function exportarPDFTecnico() {
       y += splitted.length * 4.8 + 2;
     });
   }
+
+  // ===== Dibujar el índice en la página 2 =====
+  doc.setPage(tocPageNumber);
+
+  let yToc = tocStartY;
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.setTextColor(15, 23, 42);
+  doc.text("Contenido", 20, yToc);
+  yToc += 10;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(11);
+  doc.setTextColor(55, 65, 81);
+
+  tocEntries.forEach(function (entry, index) {
+    if (yToc > pageHeight - 25) {
+      // Si se llenara la página de índice, creamos otra
+      doc.addPage();
+      const newTocPage = doc.getNumberOfPages();
+      doc.setPage(newTocPage);
+      yToc = setupTechContentPage(doc, {
+        idioma: idioma,
+        nombreProyecto: nombreProyecto,
+        logo: logo,
+      });
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(14);
+      doc.text("Contenido (cont.)", 20, yToc);
+      yToc += 10;
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(11);
+      doc.setTextColor(55, 65, 81);
+    }
+
+    const label = entry.title;
+    const pageStr = String(entry.page);
+    const lineY = yToc;
+
+    // Texto de sección
+    doc.text(label, 25, lineY);
+
+    // Número de página a la derecha
+    const tw = doc.getTextWidth(pageStr);
+    doc.text(pageStr, pageWidth - 25 - tw, lineY);
+
+    // Línea suave
+    doc.setDrawColor(230, 230, 230);
+    doc.setLineWidth(0.2);
+    doc.line(25, lineY + 1.5, pageWidth - 25, lineY + 1.5);
+
+    yToc += 7;
+  });
 
   // ===== Nombre de fichero =====
   let filenameBase = "memoria_calidades";
