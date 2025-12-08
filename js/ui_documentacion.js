@@ -1744,6 +1744,7 @@ async function insertImagesForSection(doc, sectionKey, y, onNewPage) {
 
 // ===== Versión técnica (memoria de calidades bonita) =====
 
+// ===== Versión técnica (memoria de calidades bonita, 1 sección por página) =====
 async function exportarPDFTecnico() {
   const jsPDF = window.jspdf.jsPDF;
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
@@ -1775,14 +1776,40 @@ async function exportarPDFTecnico() {
   const pageWidth = dims.width;
   const pageHeight = dims.height;
 
-  // ===== Portada =====
+  // ===== TEXTOS SEGÚN IDIOMA =====
   let tituloDoc = "Memoria de calidades";
-  if (idioma === "en") tituloDoc = "Technical specification";
-  if (idioma === "pt") tituloDoc = "Memória descritiva";
+  let subTitulo = "Videoportero y control de accesos 2N";
+  let labelProyecto = "Proyecto:";
+  let labelPromotor = "Promotor:";
+  let labelFecha = "Fecha:";
+  let labelVersion = "Versión:";
 
-  // Barra superior corporativa (NEGRA)
+  if (idioma === "en") {
+    tituloDoc = "Technical specification";
+    subTitulo = "2N video intercom & access control";
+    labelProyecto = "Project:";
+    labelPromotor = "Developer:";
+    labelFecha = "Date:";
+    labelVersion = "Version:";
+  } else if (idioma === "pt") {
+    tituloDoc = "Memória descritiva";
+    subTitulo = "Videoporteiro e controlo de acessos 2N";
+    labelProyecto = "Projeto:";
+    labelPromotor = "Promotor:";
+    labelFecha = "Data:";
+    labelVersion = "Versão:";
+  }
+
+  // Fecha actual (siempre en formato dd/mm/aaaa)
+  const now = new Date();
+  const fechaStr = now.toLocaleDateString("es-ES");
+  const versionStr = "1.0";
+
+  // ===== PORTADA =====
+
+  // Barra superior corporativa negra
   doc.setFillColor(0, 0, 0);
-  doc.rect(0, 0, pageWidth, 12, "F");
+  doc.rect(0, 0, pageWidth, 14, "F");
 
   // Logo portada (derecha, grande)
   if (logo && logo.dataUrl) {
@@ -1791,7 +1818,7 @@ async function exportarPDFTecnico() {
     const logoW = 40;
     const logoH = logoW / ratio;
     const logoX = pageWidth - 20 - logoW;
-    const logoY = 18;
+    const logoY = 20;
     try {
       doc.addImage(logo.dataUrl, "PNG", logoX, logoY, logoW, logoH);
     } catch (e) {
@@ -1799,82 +1826,122 @@ async function exportarPDFTecnico() {
     }
   }
 
+  // Bloque central de título (fondo gris muy claro)
+  doc.setFillColor(248, 250, 252);
+  doc.roundedRect(18, 35, pageWidth - 36, 26, 2, 2, "F");
+
   // Título grande centrado
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(28);
-  doc.setTextColor(40, 40, 40);
+  doc.setFontSize(22);
+  doc.setTextColor(31, 41, 55);
   const titleWidth = doc.getTextWidth(tituloDoc);
   const titleX = (pageWidth - titleWidth) / 2;
-  doc.text(tituloDoc, titleX, 50);
+  doc.text(tituloDoc, titleX, 45);
 
   // Subtítulo centrado
-  const subTitulo = "Videoportero y control de accesos 2N";
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(14);
+  doc.setFontSize(12);
+  doc.setTextColor(75, 85, 99);
   const subWidth = doc.getTextWidth(subTitulo);
   const subX = (pageWidth - subWidth) / 2;
-  doc.text(subTitulo, subX, 62);
+  doc.text(subTitulo, subX, 53);
 
-  // Línea fina bajo título + subtítulo
-  doc.setDrawColor(230, 230, 230);
+  // Línea fina separadora bajo bloque de título
+  doc.setDrawColor(229, 231, 235);
   doc.setLineWidth(0.4);
-  doc.line(20, 66, pageWidth - 20, 66);
+  doc.line(20, 60, pageWidth - 20, 60);
 
-  // Datos de proyecto
+  // ==== TARJETA CON DATOS DE PROYECTO ====
   doc.setFont("helvetica", "normal");
   doc.setFontSize(11);
-  doc.setTextColor(70, 70, 70);
+  doc.setTextColor(55, 65, 81);
 
-  let y = 80;
+  const cardX = 18;
+  const contentX = 24;
+  let y = 72;
+  const lineH = 6;
 
-  // Proyecto
-  doc.setFont("helvetica", "bold");
-  doc.text("Proyecto:", 20, y);
-  doc.setFont("helvetica", "normal");
   const proyectoLines = doc.splitTextToSize(nombreProyecto, pageWidth - 60);
-  doc.text(proyectoLines, 45, y);
-  y += proyectoLines.length * 6 + 4;
+  const promLines = promotora
+    ? doc.splitTextToSize(promotora, pageWidth - 60)
+    : [];
 
-  // Promotora / Propiedad (si existe)
+  // Calculamos altura de tarjeta para dibujar el fondo primero
+  let boxHeight = 0;
+  boxHeight += lineH; // etiqueta Proyecto
+  boxHeight += proyectoLines.length * lineH;
   if (promotora) {
+    boxHeight += lineH; // etiqueta Promotor
+    boxHeight += promLines.length * lineH;
+  }
+  const boxPadding = 4;
+  const boxY = y - boxPadding;
+  const boxH = boxHeight + boxPadding * 2;
+
+  doc.setFillColor(248, 250, 252);
+  doc.roundedRect(cardX, boxY, pageWidth - cardX * 2, boxH, 2, 2, "F");
+
+  // Contenido tarjeta
+  doc.setFont("helvetica", "bold");
+  doc.text(labelProyecto, contentX, y);
+  doc.setFont("helvetica", "normal");
+  doc.text(proyectoLines, contentX + 25, y);
+  y += proyectoLines.length * lineH + 2;
+
+  if (promotora) {
+    y += 2;
     doc.setFont("helvetica", "bold");
-    doc.text("Promotor:", 20, y);
+    doc.text(labelPromotor, contentX, y);
     doc.setFont("helvetica", "normal");
-    const promLines = doc.splitTextToSize(promotora, pageWidth - 60);
-    doc.text(promLines, 45, y);
-    y += promLines.length * 6 + 4;
+    doc.text(promLines, contentX + 25, y);
+    y += promLines.length * lineH;
   }
 
-  // Pie de portada
+  // ==== BLOQUE INFERIOR FECHA / VERSIÓN ====
+  y = boxY + boxH + 10;
+
+  doc.setFontSize(9);
+  doc.setTextColor(107, 114, 128);
+
+  const metaLabelY = y;
+  const metaValueY = y + 4;
+
+  doc.setFont("helvetica", "bold");
+  doc.text(labelFecha, contentX, metaLabelY);
+  doc.text(labelVersion, contentX + 50, metaLabelY);
+
+  doc.setFont("helvetica", "normal");
+  doc.text(fechaStr, contentX, metaValueY);
+  doc.text(versionStr, contentX + 50, metaValueY);
+
+  // Pie de portada (mismo estilo que resto de páginas)
   drawTechFooter(doc, { idioma: idioma });
 
-  // ===== Cuerpo de memoria =====
-  doc.addPage();
-  y = setupTechContentPage(doc, {
-    idioma: idioma,
-    nombreProyecto: nombreProyecto,
-    logo: logo,
-  });
+  // ===== CUERPO DE LA MEMORIA (1 sección por página) =====
 
-  function newPage() {
+  function createContentPage() {
     doc.addPage();
-    y = setupTechContentPage(doc, {
+    // setupTechContentPage dibuja cabecera+pie y devuelve Y de inicio de contenido
+    const startY = setupTechContentPage(doc, {
       idioma: idioma,
       nombreProyecto: nombreProyecto,
       logo: logo,
     });
-    return y;
+    return startY;
   }
+
+  let yContent = createContentPage();
+  const dimsBody = getDocPageDimensions(doc);
+  const pageHeightBody = dimsBody.height;
 
   function ensureSpace(linesCount) {
     const needed = linesCount * 5 + 12;
-    if (y + needed > pageHeight - 25) {
-      newPage();
+    if (yContent + needed > pageHeightBody - 25) {
+      yContent = createContentPage();
     }
   }
 
-  // ⚠️ CLAVE: cada sección empieza en página nueva
-  let isFirstSectionPage = true;
+  let isFirstSection = true;
 
   for (const key of DOC_SECTION_ORDER) {
     // Respetar el check "Incluir en PDF"
@@ -1886,44 +1953,45 @@ async function exportarPDFTecnico() {
     const hasImages = getSectionImages(key).length > 0;
     if (!contenido && !hasImages) continue;
 
-    // Cada sección en página nueva:
-    if (!isFirstSectionPage) {
-      newPage();
-    } else {
-      // la primera sección usa la página que ya hemos creado
-      isFirstSectionPage = false;
+    // Cada sección empieza SIEMPRE en una página nueva
+    if (!isFirstSection) {
+      yContent = createContentPage();
     }
+    isFirstSection = false;
 
     const tituloSeccion = labelForSection(key);
 
-    // Título sección
-    ensureSpace(3);
+    // Título de sección
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
-    doc.setTextColor(30, 64, 175); // azul suave
-    doc.text(tituloSeccion, 20, y);
-    y += 4;
+    doc.setTextColor(30, 64, 175);
+    doc.text(tituloSeccion, 20, yContent);
+    yContent += 4;
 
-    // Línea fina bajo título
+    // Línea bajo título
     doc.setDrawColor(226, 232, 240);
     doc.setLineWidth(0.3);
-    doc.line(20, y, pageWidth - 20, y);
-    y += 5;
+    doc.line(20, yContent, pageWidth - 20, yContent);
+    yContent += 5;
 
-    // Texto
+    // Texto de la sección
     if (contenido) {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(10);
       doc.setTextColor(55, 65, 81);
       const textLines = doc.splitTextToSize(contenido, pageWidth - 40);
       ensureSpace(textLines.length);
-      doc.text(textLines, 20, y);
-      y += textLines.length * 5 + 4;
+      doc.text(textLines, 20, yContent);
+      yContent += textLines.length * 5 + 4;
     }
 
-    // Imágenes asociadas (centradas, sin pie)
-    y = await insertImagesForSection(doc, key, y, newPage);
-    y += 4;
+    // Imágenes asociadas a la sección (centradas, sin pie)
+    yContent = await insertImagesForSection(doc, key, yContent, function () {
+      yContent = createContentPage();
+      return yContent;
+    });
+
+    yContent += 4;
   }
 
   // ===== Anexo de fichas técnicas (solo listado) =====
@@ -1934,8 +2002,7 @@ async function exportarPDFTecnico() {
   });
 
   if (fichasMediaSeleccionadas.length > 0) {
-    newPage();
-    y = y || 25;
+    yContent = createContentPage();
 
     let tituloDocs = "Anexo – Fichas técnicas adjuntas";
     if (idioma === "en") tituloDocs = "Appendix – Technical documentation";
@@ -1944,13 +2011,13 @@ async function exportarPDFTecnico() {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
     doc.setTextColor(30, 64, 175);
-    doc.text(tituloDocs, 20, y);
-    y += 6;
+    doc.text(tituloDocs, 20, yContent);
+    yContent += 6;
 
     doc.setDrawColor(226, 232, 240);
     doc.setLineWidth(0.3);
-    doc.line(20, y, pageWidth - 20, y);
-    y += 6;
+    doc.line(20, yContent, pageWidth - 20, yContent);
+    yContent += 6;
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
@@ -1962,8 +2029,8 @@ async function exportarPDFTecnico() {
       const line = m.nombre + extra + urlText;
       const splitted = doc.splitTextToSize("• " + line, pageWidth - 40);
       ensureSpace(splitted.length);
-      doc.text(splitted, 20, y);
-      y += splitted.length * 4.8 + 2;
+      doc.text(splitted, 20, yContent);
+      yContent += splitted.length * 4.8 + 2;
     });
   }
 
