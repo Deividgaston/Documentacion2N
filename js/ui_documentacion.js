@@ -1847,18 +1847,18 @@ async function exportarPDFTecnico() {
   doc.setFontSize(22);
   doc.setTextColor(0, 0, 0);
   // SUBIMOS ligeramente el título para separarlo del pie
-  doc.text(tituloDoc, 20, panelY + 14);
+  doc.text(tituloDoc, 20, panelY - 5); 
 
   const subTitulo = "Videoportero y control de accesos 2N";
   doc.setFont("helvetica", "normal");
   doc.setFontSize(12);
-  doc.text(subTitulo, 20, panelY + 26);
+  doc.text(subTitulo, 20, panelY + 7); 
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(11);
 
   // Bloque de proyecto también un poco más arriba
-  let y = panelY + 38;
+  let y = panelY + 18;  
 
   // Proyecto
   doc.setFont("helvetica", "bold");
