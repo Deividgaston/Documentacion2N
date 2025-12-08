@@ -16,6 +16,7 @@ appState.documentacion = appState.documentacion || {
   mediaSearchTerm: "", // término de búsqueda para documentación gráfica
   fichasSearchTerm: "", // término de búsqueda para fichas técnicas
   includedSections: {}, // mapa: sectionKey -> true/false (incluir en PDF técnico)
+  plantilla: "C", // "A" | "B" | "C"  -> A/B técnica, C comercial
 };
 
 // ===========================
@@ -57,6 +58,7 @@ function saveDocStateToLocalStorage() {
       mediaSearchTerm: appState.documentacion.mediaSearchTerm || "",
       fichasSearchTerm: appState.documentacion.fichasSearchTerm || "",
       includedSections: appState.documentacion.includedSections || {},
+      plantilla: appState.documentacion.plantilla || "C",
     };
     localStorage.setItem(DOC_STORAGE_KEY, JSON.stringify(toSave));
   } catch (e) {
@@ -316,15 +318,18 @@ async function renderDocumentacionView() {
 
   const idiomaActual = appState.documentacion.idioma || "es";
   const modoActual = appState.documentacion.modo || "comercial";
+  const plantillaActual =
+    appState.documentacion.plantilla ||
+    (modoActual === "tecnica" ? "A" : "C");
 
   container.innerHTML =
     '<div class="doc-layout">' +
     '  <div class="doc-header card">' +
     '    <div class="card-header">' +
-    '      <div>' +
+    "      <div>" +
     '        <div class="card-title">Documentación</div>' +
     '        <div class="card-subtitle">' +
-    '          Genera la memoria de calidades de forma automática a partir del proyecto y la lista de materiales. Añade textos personalizados y documentación gráfica cuando lo necesites.' +
+    "          Genera la memoria de calidades de forma automática a partir del proyecto y la lista de materiales. Añade textos personalizados y documentación gráfica cuando lo necesites." +
     "        </div>" +
     "      </div>" +
     "    </div>" +
@@ -353,6 +358,18 @@ async function renderDocumentacionView() {
     '          <button class="btn btn-sm ' +
     (modoActual === "tecnica" ? "btn-primary" : "btn-outline") +
     '" id="docModoTecnicoBtn">🧑‍🔬 Técnica</button>' +
+    "        </div>" +
+    '        <div class="doc-template-switch" style="display:flex;align-items:center;gap:0.25rem;margin-left:0.5rem;">' +
+    '          <span style="font-size:0.7rem;opacity:0.8;">Formato:</span>' +
+    '          <button class="btn btn-xs ' +
+    (plantillaActual === "A" ? "btn-primary" : "btn-outline") +
+    '" data-doc-template="A" title="A – Memoria técnica con planos">A</button>' +
+    '          <button class="btn btn-xs ' +
+    (plantillaActual === "B" ? "btn-primary" : "btn-outline") +
+    '" data-doc-template="B" title="B – Memoria técnica sin planos">B</button>' +
+    '          <button class="btn btn-xs ' +
+    (plantillaActual === "C" ? "btn-primary" : "btn-outline") +
+    '" data-doc-template="C" title="C – Memoria comercial">C</button>' +
     "        </div>" +
     '        <button class="btn btn-sm" id="docRegenerarBtn">🔁 Regenerar contenido automático</button>' +
     '        <button class="btn btn-sm" id="docNuevoBloqueBtn">✏️ Añadir texto personalizado</button>' +
@@ -943,6 +960,7 @@ function attachDocumentacionHandlers() {
   if (modoComBtn) {
     modoComBtn.addEventListener("click", function () {
       appState.documentacion.modo = "comercial";
+      appState.documentacion.plantilla = "C"; // Comercial -> C
       saveDocStateToLocalStorage();
       renderDocumentacionView();
     });
@@ -950,10 +968,36 @@ function attachDocumentacionHandlers() {
   if (modoTecBtn) {
     modoTecBtn.addEventListener("click", function () {
       appState.documentacion.modo = "tecnica";
+      if (
+        appState.documentacion.plantilla === "C" ||
+        !appState.documentacion.plantilla
+      ) {
+        appState.documentacion.plantilla = "A"; // Técnica por defecto -> A
+      }
       saveDocStateToLocalStorage();
       renderDocumentacionView();
     });
   }
+
+  // Plantillas A/B/C
+  container
+    .querySelectorAll("[data-doc-template]")
+    .forEach(function (btnTpl) {
+      btnTpl.addEventListener("click", function () {
+        const tpl = btnTpl.getAttribute("data-doc-template") || "C";
+        appState.documentacion.plantilla = tpl;
+
+        // A y B -> modo técnico; C -> modo comercial
+        if (tpl === "C") {
+          appState.documentacion.modo = "comercial";
+        } else {
+          appState.documentacion.modo = "tecnica";
+        }
+
+        saveDocStateToLocalStorage();
+        renderDocumentacionView();
+      });
+    });
 
   // Regenerar automático
   const regenBtn = container.querySelector("#docRegenerarBtn");
@@ -1546,10 +1590,14 @@ async function exportarDocumentacionPDF() {
   }
 
   const modo = appState.documentacion.modo || "comercial";
+  const plantilla =
+    appState.documentacion.plantilla || (modo === "tecnica" ? "A" : "C");
 
   if (modo === "tecnica") {
-    await exportarPDFTecnico();
+    const includePlanos = plantilla === "A"; // A con planos, B sin planos
+    await exportarPDFTecnico(includePlanos);
   } else {
+    // Comercial -> siempre C
     await exportarPDFComercial();
   }
 }
@@ -1632,7 +1680,7 @@ async function insertImagesForSection(doc, sectionKey, y) {
 
 // ===== Versión técnica (memoria de calidades bonita) =====
 
-async function exportarPDFTecnico() {
+async function exportarPDFTecnico(includePlanos) {
   const jsPDF = window.jspdf.jsPDF;
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
@@ -1799,6 +1847,53 @@ async function exportarPDFTecnico() {
       doc.text(splitted, 20, y);
       y += splitted.length * 4.8 + 2;
     });
+  }
+
+  // ===== Anexo de planos (AutoCAD) – solo plantilla A =====
+  if (includePlanos) {
+    const planosMedia = mediaLib.filter(function (m) {
+      const cat = (m.docCategory || "").toLowerCase();
+      const folder = (m.folderName || "").toLowerCase();
+      return (
+        cat === "plano" ||
+        folder.indexOf("plano") !== -1 ||
+        folder.indexOf("plans") !== -1
+      );
+    });
+
+    if (planosMedia.length > 0) {
+      doc.addPage();
+      y = 25;
+
+      let tituloPlanos = "Anexo – Planos de instalación";
+      if (idioma === "en") tituloPlanos = "Appendix – Layout drawings";
+      if (idioma === "pt") tituloPlanos = "Anexo – Plantas de instalação";
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(12);
+      doc.setTextColor(30, 64, 175);
+      doc.text(tituloPlanos, 20, y);
+      y += 6;
+
+      doc.setDrawColor(226, 232, 240);
+      doc.setLineWidth(0.3);
+      doc.line(20, y, 190, y);
+      y += 6;
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.setTextColor(55, 65, 81);
+
+      planosMedia.forEach(function (m) {
+        const extra = m.folderName ? " – " + m.folderName : "";
+        const urlText = m.url ? " (" + m.url + ")" : "";
+        const line = m.nombre + extra + urlText;
+        const splitted = doc.splitTextToSize("• " + line, 170);
+        ensureSpace(splitted.length);
+        doc.text(splitted, 20, y);
+        y += splitted.length * 4.8 + 2;
+      });
+    }
   }
 
   // ===== Nombre de fichero =====
