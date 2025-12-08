@@ -163,7 +163,7 @@ const DOC_BASE_TEMPLATES = {
     normativa_lpd:
       "Proteção de dados (RGPD)\n\nA solução proposta permite um tratamento responsável dos dados pessoais, em especial no que respeita a imagens de vídeo, registos de acesso e credenciais digitais.\n\nA arquitetura recomendada foi concebida para:\n\n- Minimizar a quantidade de dados pessoais armazenados.\n- Restringir o acesso aos dados a perfis autorizados (administradores, segurança, manutenção).\n- Facilitar o cumprimento do Regulamento Geral de Proteção de Dados (RGPD) e da legislação local em matéria de proteção de dados.\n\nRecomenda-se que a propriedade e/ou a entidade gestora do edifício definam políticas de conservação de dados, informação ao utilizador e exercício de direitos (acesso, retificação, apagamento, etc.), tirando partido das capacidades técnicas da solução.",
     normativa_ciber:
-      "Cibersegurança e práticas de segurança 2N\n\nOs dispositivos 2N incluídos na solução são desenhados seguindo boas práticas de cibersegurança, incluindo:\n\n- Sistema operativo embebido reforçado, sem serviços desnecessários expostos.\n- Autenticação segura e gestão de credenciais para administradores e utilizadores.\n- Suporte de comunicações cifradas (HTTPS / TLS) para gestão e, quando aplicável, para sinalização.\n- Possibilidade de integração em infraestruturas de rede seguras (VLAN, segmentação, firewalls, etc.).\n\nAdicionalmente, a 2N faz parte do grupo Axis, que aplica políticas rigorosas de segurança de produto, gestão de vulnerabilidades e ciclo de vida de firmware. Isto contribui para reduzir a superfície de ataque da instalação e para facilitar o cumprimento das políticas internas de cibersegurança do cliente.",
+      "Cibersegurança e práticas de segurança 2N\n\nOs dispositivos 2N incluídos na solução são desenhados seguindo boas práticas de cibersegurança, incluindo:\n\n- Sistema operativo embebido reforçado, sem serviços desnecessários expostos.\n- Autenticação segura e gestão de credenciais para administradores e utilizadores.\n- Suporte de comunicações cifradas (HTTPS / TLS) para gestão e, quando aplicável, para sinalização.\n- Possibilidade de integração em infraestruturas de rede seguras (VLAN, segmentação, firewalls, etc.).\n\nAdicionalmente, a 2N faz parte do grupo Axis, que aplica políticas rigorosas de segurança de produto, gestão de vulnerabilidades e ciclo de vida de firmware. Isto contribui para reduzir a superfície de ataque de instalação e para facilitar o cumprimento das políticas internas de cibersegurança do cliente.",
     otros:
       "Se necessário, podem ser incorporadas soluções adicionais como controlo de acessos por zonas, integração com CCTV, gestão de visitantes ou sistemas de reserva de zonas comuns.",
   },
@@ -681,8 +681,8 @@ function renderDocFichasHTML() {
     "    </p>" +
     '    <div class="form-group mb-2">' +
     '      <input type="text" id="docFichasSearchInput" class="form-control" placeholder="Buscar por nombre o carpeta..." value="' +
-      (appState.documentacion.fichasSearchTerm || "") +
-      '" />' +
+    (appState.documentacion.fichasSearchTerm || "") +
+    '" />' +
     "    </div>" +
     '    <div class="doc-fichas-list doc-fichas-media-list">' +
     listHTML +
@@ -1544,6 +1544,8 @@ function getDocPageDimensions(pdf) {
   return { width: width, height: height };
 }
 
+// ===== CABECERA / PIE PÁGINAS TÉCNICAS =====
+
 function drawTechHeader(pdf, opts) {
   const dims = getDocPageDimensions(pdf);
   const w = dims.width;
@@ -1551,16 +1553,20 @@ function drawTechHeader(pdf, opts) {
   const logo = opts.logo || null;
 
   const marginX = 20;
-  const topY = 18; // un poco más abajo por seguridad
+  const textY = 18; // altura del texto
 
-  // Logo en cabecera (tamaño normal, derecha) SIEMPRE por encima de la línea
+  // Calculamos la parte baja del logo para poner la línea SIEMPRE por debajo
+  let logoBottomY = textY;
+
   if (logo && logo.dataUrl) {
     const ratio =
       logo.width && logo.height ? logo.width / logo.height : 2.5;
     const logoW = 25; // mm
     const logoH = logoW / ratio;
     const logoX = w - marginX - logoW;
-    const logoY = topY - 8; // claramente por encima de la línea
+    const logoY = textY - 6; // ligeramente por encima del texto
+    logoBottomY = logoY + logoH;
+
     try {
       pdf.addImage(logo.dataUrl, "PNG", logoX, logoY, logoW, logoH);
     } catch (e) {
@@ -1568,17 +1574,21 @@ function drawTechHeader(pdf, opts) {
     }
   }
 
+  // Texto de cabecera
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(9);
   pdf.setTextColor(55, 65, 81);
-  pdf.text(nombreProyecto, marginX, topY);
+  pdf.text(nombreProyecto, marginX, textY);
+
+  // Línea por debajo del logo y del texto
+  const lineY = Math.max(textY + 2, logoBottomY + 2);
 
   pdf.setDrawColor(226, 232, 240);
   pdf.setLineWidth(0.3);
-  pdf.line(marginX, topY + 2, w - marginX, topY + 2);
+  pdf.line(marginX, lineY, w - marginX, lineY);
 
-  // Devolvemos un margen generoso para que NINGÚN texto caiga en el encabezado
-  return topY + 12; // y de inicio de contenido base
+  // Y de inicio de contenido
+  return lineY + 8;
 }
 
 function drawTechFooter(pdf, opts) {
@@ -1604,8 +1614,7 @@ function drawTechFooter(pdf, opts) {
 function setupTechContentPage(pdf, opts) {
   const startY = drawTechHeader(pdf, opts);
   drawTechFooter(pdf, opts);
-  // Dejamos todavía un pequeño colchón adicional
-  return startY + 5;
+  return startY;
 }
 
 // ===========================
@@ -1734,95 +1743,6 @@ async function insertImagesForSection(doc, sectionKey, y, onNewPage) {
   return y;
 }
 
-// ===== Índice (Contenido) =====
-
-function addTableOfContentsPage(doc, tocEntries, opts) {
-  if (!tocEntries || !tocEntries.length) return;
-
-  const dims = getDocPageDimensions(doc);
-  const pageWidth = dims.width;
-  const pageHeight = dims.height;
-  const idioma = opts.idioma || "es";
-
-  const supportsInsert = typeof doc.insertPage === "function";
-  const totalPagesBefore = doc.internal.getNumberOfPages();
-
-  if (supportsInsert) {
-    // Insertamos la página 2 (después de la portada)
-    doc.insertPage(2);
-    doc.setPage(2);
-  } else {
-    // Fallback: índice al final (sin desplazar páginas)
-    doc.addPage();
-    doc.setPage(totalPagesBefore + 1);
-  }
-
-  // Footer corporativo en el índice
-  drawTechFooter(doc, { idioma: idioma });
-
-  // Título del índice (como pediste: "Contenido")
-  const tituloIndice = "Contenido";
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(16);
-  doc.setTextColor(40, 40, 40);
-  doc.text(tituloIndice, 20, 25);
-
-  doc.setDrawColor(230, 230, 230);
-  doc.setLineWidth(0.4);
-  doc.line(20, 28, pageWidth - 20, 28);
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(11);
-  doc.setTextColor(55, 65, 81);
-
-  let y = 40;
-  const maxY = pageHeight - 20;
-
-  // Si hemos insertado página 2, todas las páginas de contenido
-  // (que estaban en 2,3,4,...) pasan a 3,4,5,... ⇒ +1
-  const shift = supportsInsert ? 1 : 0;
-
-  tocEntries.forEach(function (entry, idx) {
-    if (y > maxY) {
-      doc.addPage();
-      y = 25;
-      drawTechFooter(doc, { idioma: idioma });
-    }
-
-    const num = idx + 1;
-    const label = num + ". " + entry.title;
-    const displayPage = entry.page + shift;
-    const pageStr = String(displayPage);
-
-    const xText = 20;
-    const xPage = pageWidth - 20 - doc.getTextWidth(pageStr);
-
-    // Título
-    doc.text(label, xText, y);
-
-    // Línea de puntos entre título y número
-    const textWidth = doc.getTextWidth(label);
-    const dotStart = xText + textWidth + 2;
-    const dotEnd = xPage - 2;
-    if (dotEnd > dotStart) {
-      const dotWidth = doc.getTextWidth(".");
-      const dotCount = Math.floor((dotEnd - dotStart) / dotWidth);
-      const dots = new Array(dotCount + 1).join(".");
-      doc.text(dots, dotStart, y);
-    }
-
-    // Número de página
-    doc.text(pageStr, xPage, y);
-
-    y += 8;
-  });
-
-  // Volvemos a la última página (por si acaso)
-  const finalPages = doc.internal.getNumberOfPages();
-  doc.setPage(finalPages);
-}
-
 // ===== Versión técnica (memoria de calidades bonita) =====
 
 async function exportarPDFTecnico() {
@@ -1856,41 +1776,16 @@ async function exportarPDFTecnico() {
   const pageWidth = dims.width;
   const pageHeight = dims.height;
 
-  // Array para construir el índice
-  const tocEntries = [];
-
   // ===== Portada con imagen de fondo =====
   let tituloDoc = "Memoria de calidades";
   if (idioma === "en") tituloDoc = "Technical specification";
   if (idioma === "pt") tituloDoc = "Memória descritiva";
 
-  // Fondo: imagen PortadaTecnica.jpg adaptada a la hoja SIN deformar
+  // Fondo: imagen PortadaTecnica adaptada a la hoja
   try {
     const coverImg = await loadImageAsDataUrl(DOC_TECH_COVER_URL);
     if (coverImg && coverImg.dataUrl) {
-      const imgRatio =
-        coverImg.width && coverImg.height
-          ? coverImg.width / coverImg.height
-          : pageWidth / pageHeight;
-      const pageRatio = pageWidth / pageHeight;
-
-      let drawW, drawH, offsetX, offsetY;
-
-      // "Contain": encajar sin deformar, centrando
-      if (imgRatio > pageRatio) {
-        // Imagen más apaisada: ajustamos ancho de página
-        drawW = pageWidth;
-        drawH = drawW / imgRatio;
-      } else {
-        // Imagen más alta: ajustamos alto de página
-        drawH = pageHeight;
-        drawW = drawH * imgRatio;
-      }
-
-      offsetX = (pageWidth - drawW) / 2;
-      offsetY = (pageHeight - drawH) / 2;
-
-      doc.addImage(coverImg.dataUrl, "PNG", offsetX, offsetY, drawW, drawH);
+      doc.addImage(coverImg.dataUrl, "PNG", 0, 0, pageWidth, pageHeight);
     }
   } catch (e) {
     console.warn("No se pudo cargar la imagen de portada técnica:", e);
@@ -1911,24 +1806,27 @@ async function exportarPDFTecnico() {
     }
   }
 
-  // Título grande centrado en blanco
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(28);
-  doc.setTextColor(255, 255, 255);
-  doc.text(tituloDoc, pageWidth / 2, 80, { align: "center" });
+  // Banda blanca inferior para dar contraste (simula degradado suave)
+  const panelHeight = 65;
+  const panelY = pageHeight - panelHeight;
+  doc.setFillColor(255, 255, 255);
+  doc.rect(0, panelY, pageWidth, panelHeight, "F");
 
-  // Subtítulo centrado
+  // Títulos y datos en negro, en la parte baja
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(22);
+  doc.setTextColor(0, 0, 0);
+  doc.text(tituloDoc, 20, panelY + 18);
+
   const subTitulo = "Videoportero y control de accesos 2N";
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(14);
-  doc.text(subTitulo, pageWidth / 2, 95, { align: "center" });
+  doc.setFontSize(12);
+  doc.text(subTitulo, 20, panelY + 30);
 
-  // Bloque de datos de proyecto MÁS ABAJO para no solapar con el logo
   doc.setFont("helvetica", "normal");
   doc.setFontSize(11);
-  doc.setTextColor(255, 255, 255);
 
-  let y = 125; // bajamos el bloque
+  let y = panelY + 42;
 
   // Proyecto
   doc.setFont("helvetica", "bold");
@@ -1948,7 +1846,7 @@ async function exportarPDFTecnico() {
     y += promLines.length * 6 + 4;
   }
 
-  // Pie de portada (en claro)
+  // Pie de portada
   drawTechFooter(doc, { idioma: idioma });
 
   // ===== Cuerpo de memoria =====
@@ -1989,7 +1887,7 @@ async function exportarPDFTecnico() {
     const hasImages = getSectionImages(key).length > 0;
     if (!contenido && !hasImages) continue;
 
-    // NUEVO: cada sección arranca en una página diferente
+    // Cada sección arranca en una página diferente
     if (!firstSection) {
       newPage();
     } else {
@@ -1997,15 +1895,6 @@ async function exportarPDFTecnico() {
     }
 
     const tituloSeccion = labelForSection(key);
-
-    // Guardamos página INICIAL de la sección para el índice
-    const currentPageInfo = doc.internal.getCurrentPageInfo
-      ? doc.internal.getCurrentPageInfo()
-      : { pageNumber: doc.internal.getNumberOfPages() };
-    tocEntries.push({
-      title: tituloSeccion,
-      page: currentPageInfo.pageNumber,
-    });
 
     // Título sección
     doc.setFont("helvetica", "bold");
@@ -2027,9 +1916,9 @@ async function exportarPDFTecnico() {
       doc.setTextColor(55, 65, 81);
       const textLines = doc.splitTextToSize(contenido, pageWidth - 40);
 
-      // Gestión de saltos de página DENTRO de la sección
+      // Gestión de saltos de página dentro de la sección
       let block = [];
-      const maxLinesPerChunk = 35; // troceamos para controlar mejor
+      const maxLinesPerChunk = 35;
       for (let i = 0; i < textLines.length; i++) {
         block.push(textLines[i]);
         if (
@@ -2064,15 +1953,6 @@ async function exportarPDFTecnico() {
     if (idioma === "en") tituloDocs = "Appendix – Technical documentation";
     if (idioma === "pt") tituloDocs = "Anexo – Documentação técnica";
 
-    // Página del anexo para el índice
-    const anexoPageInfo = doc.internal.getCurrentPageInfo
-      ? doc.internal.getCurrentPageInfo()
-      : { pageNumber: doc.internal.getNumberOfPages() };
-    tocEntries.push({
-      title: tituloDocs,
-      page: anexoPageInfo.pageNumber,
-    });
-
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
     doc.setTextColor(30, 64, 175);
@@ -2098,9 +1978,6 @@ async function exportarPDFTecnico() {
       y += splitted.length * 4.8 + 2;
     });
   }
-
-  // ===== Insertar índice "Contenido" como página 2 =====
-  addTableOfContentsPage(doc, tocEntries, { idioma: idioma });
 
   // ===== Nombre de fichero =====
   let filenameBase = "memoria_calidades";
