@@ -16,7 +16,6 @@ appState.documentacion = appState.documentacion || {
   mediaSearchTerm: "", // término de búsqueda para documentación gráfica
   fichasSearchTerm: "", // término de búsqueda para fichas técnicas
   includedSections: {}, // mapa: sectionKey -> true/false (incluir en PDF técnico)
-  plantilla: "C", // "A" | "B" | "C"  -> A/B técnica, C comercial
 };
 
 // ===========================
@@ -58,7 +57,6 @@ function saveDocStateToLocalStorage() {
       mediaSearchTerm: appState.documentacion.mediaSearchTerm || "",
       fichasSearchTerm: appState.documentacion.fichasSearchTerm || "",
       includedSections: appState.documentacion.includedSections || {},
-      plantilla: appState.documentacion.plantilla || "C",
     };
     localStorage.setItem(DOC_STORAGE_KEY, JSON.stringify(toSave));
   } catch (e) {
@@ -318,18 +316,15 @@ async function renderDocumentacionView() {
 
   const idiomaActual = appState.documentacion.idioma || "es";
   const modoActual = appState.documentacion.modo || "comercial";
-  const plantillaActual =
-    appState.documentacion.plantilla ||
-    (modoActual === "tecnica" ? "A" : "C");
 
   container.innerHTML =
     '<div class="doc-layout">' +
     '  <div class="doc-header card">' +
     '    <div class="card-header">' +
-    "      <div>" +
+    '      <div>' +
     '        <div class="card-title">Documentación</div>' +
     '        <div class="card-subtitle">' +
-    "          Genera la memoria de calidades de forma automática a partir del proyecto y la lista de materiales. Añade textos personalizados y documentación gráfica cuando lo necesites." +
+    '          Genera la memoria de calidades de forma automática a partir del proyecto y la lista de materiales. Añade textos personalizados y documentación gráfica cuando lo necesites.' +
     "        </div>" +
     "      </div>" +
     "    </div>" +
@@ -354,22 +349,10 @@ async function renderDocumentacionView() {
     '        <div class="doc-mode-switch">' +
     '          <button class="btn btn-sm ' +
     (modoActual === "comercial" ? "btn-primary" : "btn-outline") +
-    '" id="docModoComercialBtn">🧑‍💼 Comercial</button>' +
+    '" id="docModoComercialBtn">🧑‍💼 Comercial (C)</button>' +
     '          <button class="btn btn-sm ' +
     (modoActual === "tecnica" ? "btn-primary" : "btn-outline") +
-    '" id="docModoTecnicoBtn">🧑‍🔬 Técnica</button>' +
-    "        </div>" +
-    '        <div class="doc-template-switch" style="display:flex;align-items:center;gap:0.25rem;margin-left:0.5rem;">' +
-    '          <span style="font-size:0.7rem;opacity:0.8;">Formato:</span>' +
-    '          <button class="btn btn-xs ' +
-    (plantillaActual === "A" ? "btn-primary" : "btn-outline") +
-    '" data-doc-template="A" title="A – Memoria técnica con planos">A</button>' +
-    '          <button class="btn btn-xs ' +
-    (plantillaActual === "B" ? "btn-primary" : "btn-outline") +
-    '" data-doc-template="B" title="B – Memoria técnica sin planos">B</button>' +
-    '          <button class="btn btn-xs ' +
-    (plantillaActual === "C" ? "btn-primary" : "btn-outline") +
-    '" data-doc-template="C" title="C – Memoria comercial">C</button>' +
+    '" id="docModoTecnicoBtn">🧑‍🔬 Técnica (A/B)</button>' +
     "        </div>" +
     '        <button class="btn btn-sm" id="docRegenerarBtn">🔁 Regenerar contenido automático</button>' +
     '        <button class="btn btn-sm" id="docNuevoBloqueBtn">✏️ Añadir texto personalizado</button>' +
@@ -396,7 +379,7 @@ async function renderDocumentacionView() {
     renderDocFichasHTML() +
     '          <hr style="margin:0.75rem 0;" />' +
     '          <div class="card-subtitle" style="margin-bottom:0.35rem;">' +
-    "            Documentación gráfica (imágenes)" +
+    "            Documentación gráfica (imágenes / planos AutoCAD exportados)" +
     "          </div>" +
     '          <div class="form-group mb-2">' +
     '            <input type="text" id="docMediaSearchInput" class="form-control" placeholder="Buscar por nombre o carpeta..." value="' +
@@ -829,7 +812,7 @@ function renderDocMediaLibraryHTML() {
                   type="button"
                   class="btn btn-xs"
                   data-media-view-id="${m.id}"
-                  title="Ver imagen"
+                  title="Ver imagen / plano"
                 >
                   👁 Ver
                 </button>
@@ -960,7 +943,6 @@ function attachDocumentacionHandlers() {
   if (modoComBtn) {
     modoComBtn.addEventListener("click", function () {
       appState.documentacion.modo = "comercial";
-      appState.documentacion.plantilla = "C"; // Comercial -> C
       saveDocStateToLocalStorage();
       renderDocumentacionView();
     });
@@ -968,36 +950,10 @@ function attachDocumentacionHandlers() {
   if (modoTecBtn) {
     modoTecBtn.addEventListener("click", function () {
       appState.documentacion.modo = "tecnica";
-      if (
-        appState.documentacion.plantilla === "C" ||
-        !appState.documentacion.plantilla
-      ) {
-        appState.documentacion.plantilla = "A"; // Técnica por defecto -> A
-      }
       saveDocStateToLocalStorage();
       renderDocumentacionView();
     });
   }
-
-  // Plantillas A/B/C
-  container
-    .querySelectorAll("[data-doc-template]")
-    .forEach(function (btnTpl) {
-      btnTpl.addEventListener("click", function () {
-        const tpl = btnTpl.getAttribute("data-doc-template") || "C";
-        appState.documentacion.plantilla = tpl;
-
-        // A y B -> modo técnico; C -> modo comercial
-        if (tpl === "C") {
-          appState.documentacion.modo = "comercial";
-        } else {
-          appState.documentacion.modo = "tecnica";
-        }
-
-        saveDocStateToLocalStorage();
-        renderDocumentacionView();
-      });
-    });
 
   // Regenerar automático
   const regenBtn = container.querySelector("#docRegenerarBtn");
@@ -1548,6 +1504,82 @@ function loadImageAsDataUrl(url) {
   });
 }
 
+// Lista de imágenes marcadas como planos / autocad
+function getPlanosImages() {
+  const mediaLib = appState.documentacion.mediaLibrary || [];
+  return mediaLib
+    .filter(function (m) {
+      if (!m || !m.url) return false;
+      const mime = (m.mimeType || "").toLowerCase();
+      const type = (m.type || "").toLowerCase();
+      const name = (m.nombre || "").toLowerCase();
+      const folder = (m.folderName || "").toLowerCase();
+      const cat = (m.docCategory || "").toLowerCase();
+
+      const isImage = type === "image" || mime.indexOf("image/") === 0;
+
+      const isPlano =
+        cat === "plano" ||
+        cat === "planos" ||
+        folder.indexOf("plano") !== -1 ||
+        folder.indexOf("planos") !== -1 ||
+        folder.indexOf("autocad") !== -1 ||
+        folder.indexOf("diagramas") !== -1 ||
+        name.indexOf("plano") !== -1 ||
+        name.indexOf("planta") !== -1 ||
+        name.indexOf("diagram") !== -1;
+
+      return isImage && isPlano;
+    })
+    .slice(0, 8); // límite por seguridad
+}
+
+// Inserta UNA imagen en el PDF y devuelve nueva Y
+async function insertSingleImageInPdf(doc, m, y) {
+  try {
+    const obj = await loadImageAsDataUrl(m.url);
+    const dataUrl = obj.dataUrl;
+    const width = obj.width;
+    const height = obj.height;
+    const ratio = width && height ? width / height : 4 / 3;
+
+    const maxWidthMm = 75;
+    const maxHeightMm = 55;
+
+    let imgW = maxWidthMm;
+    let imgH = imgW / ratio;
+    if (imgH > maxHeightMm) {
+      imgH = maxHeightMm;
+      imgW = imgH * ratio;
+    }
+
+    // Salto de página si no cabe
+    const neededHeight = imgH + 12;
+    if (y + neededHeight > 275) {
+      doc.addPage();
+      y = 25;
+    }
+
+    const imgX = 20;
+    const imgY = y;
+    doc.addImage(dataUrl, "JPEG", imgX, imgY, imgW, imgH);
+    y += imgH + 4;
+
+    if (m.nombre) {
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(8);
+      const capLines = doc.splitTextToSize(m.nombre, 170);
+      doc.text(capLines, 20, y);
+      y += capLines.length * 4 + 3;
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+    }
+  } catch (e) {
+    console.warn("No se pudo insertar imagen en PDF:", e);
+  }
+  return y;
+}
+
 // ===========================
 // MEDIA ASIGNADA A SECCIONES
 // ===========================
@@ -1578,7 +1610,7 @@ function detachMediaFromSection(sectionKey, mediaId) {
 }
 
 // ===========================
-// EXPORTAR PDF (modo dual)
+// EXPORTAR PDF (modo dual A/B/C)
 // ===========================
 
 async function exportarDocumentacionPDF() {
@@ -1589,28 +1621,30 @@ async function exportarDocumentacionPDF() {
     return;
   }
 
-  // La lógica la manda la PLANTILLA:
-  // A / B -> técnica, C -> comercial
-  const plantilla = appState.documentacion.plantilla || "C";
+  const modo = appState.documentacion.modo || "comercial";
 
-  console.log(
-    "[DOC] exportarDocumentacionPDF -> plantilla:",
-    plantilla,
-    "modo:",
-    appState.documentacion.modo
-  );
+  if (modo === "tecnica") {
+    // A / B con opción de planos (AutoCAD)
+    let tipo = window.prompt(
+      "Selecciona el tipo de memoria técnica:\n\nA) Completa\nB) Resumen ejecutivo\n\nEscribe A o B:",
+      "A"
+    );
+    if (!tipo) tipo = "A";
+    tipo = String(tipo).trim().toUpperCase();
+    if (tipo !== "A" && tipo !== "B") tipo = "A";
 
-  if (plantilla === "C") {
-    // Memoria comercial (C)
-    await exportarPDFComercial();
+    const incluirPlanos = window.confirm(
+      "¿Quieres incluir planos / diagramas (p.ej. exportados desde AutoCAD) en un anexo?"
+    );
+
+    await exportarPDFTecnico(tipo, incluirPlanos);
   } else {
-    // Memoria técnica (A/B). A = con planos, B = sin planos
-    const includePlanos = plantilla === "A";
-    await exportarPDFTecnico(includePlanos);
+    // Comercial = opción C
+    await exportarPDFComercial("C");
   }
 }
 
-// ===== Helpers imágenes por sección (modo técnico) =====
+// ===== Helpers imágenes por sección (modo técnico / comercial) =====
 
 function getSectionImages(sectionKey) {
   const sectionMediaMap = appState.documentacion.sectionMedia || {};
@@ -1640,47 +1674,7 @@ async function insertImagesForSection(doc, sectionKey, y) {
   if (!images.length) return y;
 
   for (const m of images) {
-    try {
-      const obj = await loadImageAsDataUrl(m.url);
-      const dataUrl = obj.dataUrl;
-      const width = obj.width;
-      const height = obj.height;
-      const ratio = width && height ? width / height : 4 / 3;
-
-      const maxWidthMm = 75;
-      const maxHeightMm = 55;
-
-      let imgW = maxWidthMm;
-      let imgH = imgW / ratio;
-      if (imgH > maxHeightMm) {
-        imgH = maxHeightMm;
-        imgW = imgH * ratio;
-      }
-
-      // Salto de página si no cabe
-      const neededHeight = imgH + 12;
-      if (y + neededHeight > 275) {
-        doc.addPage();
-        y = 25;
-      }
-
-      const imgX = 20;
-      const imgY = y;
-      doc.addImage(dataUrl, "JPEG", imgX, imgY, imgW, imgH);
-      y += imgH + 4;
-
-      if (m.nombre) {
-        doc.setFont("helvetica", "italic");
-        doc.setFontSize(8);
-        const capLines = doc.splitTextToSize(m.nombre, 170);
-        doc.text(capLines, 20, y);
-        y += capLines.length * 4 + 3;
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(10);
-      }
-    } catch (e) {
-      console.warn("No se pudo insertar imagen de sección en PDF:", e);
-    }
+    y = await insertSingleImageInPdf(doc, m, y);
   }
 
   return y;
@@ -1688,9 +1682,13 @@ async function insertImagesForSection(doc, sectionKey, y) {
 
 // ===== Versión técnica (memoria de calidades bonita) =====
 
-async function exportarPDFTecnico(includePlanos) {
+async function exportarPDFTecnico(tipo, incluirPlanos) {
   const jsPDF = window.jspdf.jsPDF;
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+
+  tipo = tipo || "A";
+  const isCompleta = tipo === "A";
+  const isResumida = tipo === "B";
 
   const idioma = appState.documentacion.idioma || "es";
   const secciones = appState.documentacion.secciones || {};
@@ -1719,7 +1717,6 @@ async function exportarPDFTecnico(includePlanos) {
   if (idioma === "en") tituloDoc = "Technical specification";
   if (idioma === "pt") tituloDoc = "Memória descritiva";
 
-  // Fondo blanco, márgenes claros
   doc.setFont("helvetica", "bold");
   doc.setFontSize(22);
   doc.setTextColor(40, 40, 40);
@@ -1746,7 +1743,6 @@ async function exportarPDFTecnico(includePlanos) {
 
   y += 10;
 
-  // Pequeño pie de página
   doc.setFontSize(9);
   doc.setTextColor(120, 120, 120);
   const footerText =
@@ -1757,7 +1753,6 @@ async function exportarPDFTecnico(includePlanos) {
       : "Solución IP de videoportero y control de accesos – 2N®";
   doc.text(footerText, 20, 285);
 
-  // Salto a cuerpo
   doc.addPage();
 
   // ===== Cuerpo de memoria =====
@@ -1777,6 +1772,17 @@ async function exportarPDFTecnico(includePlanos) {
   for (const key of DOC_SECTION_ORDER) {
     // Respetar el check "Incluir en PDF"
     if (includedSections.hasOwnProperty(key) && !includedSections[key]) {
+      continue;
+    }
+
+    // En tipo B (resumen ejecutivo) quitamos normativa pesada
+    if (
+      isResumida &&
+      (key === "normativa_red" ||
+        key === "normativa_lpd" ||
+        key === "normativa_ciber" ||
+        key === "otros")
+    ) {
       continue;
     }
 
@@ -1814,6 +1820,39 @@ async function exportarPDFTecnico(includePlanos) {
     // Imágenes asociadas
     y = await insertImagesForSection(doc, key, y);
     y += 4;
+  }
+
+  // ===== Anexo de planos / diagramas (AutoCAD) =====
+  if (incluirPlanos) {
+    const planos = getPlanosImages();
+    if (planos.length) {
+      doc.addPage();
+      y = 25;
+
+      let tituloPlanos = "Anexo – Planos y diagramas";
+      if (idioma === "en") tituloPlanos = "Appendix – Drawings & diagrams";
+      if (idioma === "pt") tituloPlanos = "Anexo – Plantas e diagramas";
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(12);
+      doc.setTextColor(30, 64, 175);
+      doc.text(tituloPlanos, 20, y);
+      y += 6;
+
+      doc.setDrawColor(226, 232, 240);
+      doc.setLineWidth(0.3);
+      doc.line(20, y, 190, y);
+      y += 6;
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.setTextColor(55, 65, 81);
+
+      for (const plano of planos) {
+        y = await insertSingleImageInPdf(doc, plano, y);
+        y += 4;
+      }
+    }
   }
 
   // ===== Anexo de fichas técnicas (solo listado) =====
@@ -1857,53 +1896,6 @@ async function exportarPDFTecnico(includePlanos) {
     });
   }
 
-  // ===== Anexo de planos (AutoCAD) – solo plantilla A =====
-  if (includePlanos) {
-    const planosMedia = mediaLib.filter(function (m) {
-      const cat = (m.docCategory || "").toLowerCase();
-      const folder = (m.folderName || "").toLowerCase();
-      return (
-        cat === "plano" ||
-        folder.indexOf("plano") !== -1 ||
-        folder.indexOf("plans") !== -1
-      );
-    });
-
-    if (planosMedia.length > 0) {
-      doc.addPage();
-      y = 25;
-
-      let tituloPlanos = "Anexo – Planos de instalación";
-      if (idioma === "en") tituloPlanos = "Appendix – Layout drawings";
-      if (idioma === "pt") tituloPlanos = "Anexo – Plantas de instalação";
-
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(12);
-      doc.setTextColor(30, 64, 175);
-      doc.text(tituloPlanos, 20, y);
-      y += 6;
-
-      doc.setDrawColor(226, 232, 240);
-      doc.setLineWidth(0.3);
-      doc.line(20, y, 190, y);
-      y += 6;
-
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(9);
-      doc.setTextColor(55, 65, 81);
-
-      planosMedia.forEach(function (m) {
-        const extra = m.folderName ? " – " + m.folderName : "";
-        const urlText = m.url ? " (" + m.url + ")" : "";
-        const line = m.nombre + extra + urlText;
-        const splitted = doc.splitTextToSize("• " + line, 170);
-        ensureSpace(splitted.length);
-        doc.text(splitted, 20, y);
-        y += splitted.length * 4.8 + 2;
-      });
-    }
-  }
-
   // ===== Nombre de fichero =====
   let filenameBase = "memoria_calidades";
   if (idioma === "en") filenameBase = "technical_specification";
@@ -1914,15 +1906,18 @@ async function exportarPDFTecnico(includePlanos) {
     .replace(/[^a-z0-9]+/gi, "_")
     .replace(/^_+|_+$/g, "");
 
-  const filename = filenameBase + "_" + (safeName || "2n") + ".pdf";
+  const suffix = isCompleta ? "_A" : "_B";
+  const filename = filenameBase + suffix + "_" + (safeName || "2n") + ".pdf";
   doc.save(filename);
 }
 
-// ===== Versión comercial (simple, resumen + portada) =====
+// ===== Versión comercial (C) – una página muy limpia =====
 
-async function exportarPDFComercial() {
+async function exportarPDFComercial(tipoComercial) {
   const jsPDF = window.jspdf.jsPDF;
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+
+  tipoComercial = tipoComercial || "C";
 
   const idioma = appState.documentacion.idioma || "es";
   const secciones = appState.documentacion.secciones || {};
@@ -1950,13 +1945,20 @@ async function exportarPDFComercial() {
   if (idioma === "pt") tituloDoc = "Solução IP de acessos e videoporteiro";
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(20);
+  doc.setFontSize(22);
+  doc.setTextColor(30, 64, 175);
   doc.text(tituloDoc, 20, 30);
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(12);
-  let y = 45;
+  doc.setDrawColor(226, 232, 240);
+  doc.setLineWidth(0.4);
+  doc.line(20, 32, 190, 32);
 
+  // Subtítulo con proyecto / promotora
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(11);
+  doc.setTextColor(55, 65, 81);
+
+  let y = 45;
   const headerLines = [];
   headerLines.push(nombreProyecto);
   if (promotora) headerLines.push(promotora);
@@ -1967,24 +1969,82 @@ async function exportarPDFComercial() {
     y += lines.length * 6;
   });
 
-  y += 8;
+  y += 6;
 
-  // Solo el resumen en modo comercial
+  // Imagen hero (resumen / sistema / planos)
+  const heroImage =
+    getSectionImages("resumen")[0] ||
+    getSectionImages("sistema")[0] ||
+    getPlanosImages()[0];
+
+  if (heroImage) {
+    y = await insertSingleImageInPdf(doc, heroImage, y);
+    y += 4;
+  }
+
+  // Resumen comercial
   const resumen = (secciones.resumen || "").trim();
   if (resumen) {
-    doc.setFontSize(11);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(55, 65, 81);
     const lines = doc.splitTextToSize(resumen, 170);
     doc.text(lines, 20, y);
+    y += lines.length * 5 + 4;
   }
+
+  // Pequeño bloque “Puntos clave”
+  const equiposTxt = (secciones.equipos || "").trim();
+  if (equiposTxt) {
+    const bulletLines = equiposTxt.split("\n").filter(function (ln) {
+      return ln.trim().startsWith("•") || ln.trim().startsWith("-");
+    });
+    if (bulletLines.length) {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.setTextColor(30, 64, 175);
+      const tituloBlock =
+        idioma === "en"
+          ? "Key elements of the solution"
+          : idioma === "pt"
+          ? "Elementos principais da solução"
+          : "Elementos clave de la solución";
+      doc.text(tituloBlock, 20, y);
+      y += 5;
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.setTextColor(55, 65, 81);
+      const bullets = bulletLines.slice(0, 6).join("\n");
+      const lines2 = doc.splitTextToSize(bullets, 170);
+      doc.text(lines2, 20, y);
+      y += lines2.length * 4.8 + 2;
+    }
+  }
+
+  // Pie de página comercial
+  doc.setFont("helvetica", "italic");
+  doc.setFontSize(9);
+  doc.setTextColor(120, 120, 120);
+  const footerText =
+    idioma === "en"
+      ? "This proposal is based on 2N® IP video intercom & access control technology."
+      : idioma === "pt"
+      ? "Esta proposta baseia-se na tecnologia de videoporteiro IP e controlo de acessos 2N®."
+      : "Esta propuesta se basa en tecnología 2N® de videoportero IP y control de accesos.";
+  doc.text(footerText, 20, 285);
 
   // Guardar PDF
   let filenameBase = "presentacion_accesos";
   if (idioma === "en") filenameBase = "access_solution_presentation";
   if (idioma === "pt") filenameBase = "apresentacao_acessos";
 
-  const safe = nombreProyecto.toLowerCase().replace(/[^a-z0-9]+/g, "_");
+  const safe = String(nombreProyecto || "proyecto")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
 
-  doc.save(filenameBase + "_" + safe + ".pdf");
+  doc.save(filenameBase + "_C_" + (safe || "2n") + ".pdf");
 }
 
 // ===========================
