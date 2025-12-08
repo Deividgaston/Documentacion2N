@@ -1589,16 +1589,24 @@ async function exportarDocumentacionPDF() {
     return;
   }
 
-  const modo = appState.documentacion.modo || "comercial";
-  const plantilla =
-    appState.documentacion.plantilla || (modo === "tecnica" ? "A" : "C");
+  // La lógica la manda la PLANTILLA:
+  // A / B -> técnica, C -> comercial
+  const plantilla = appState.documentacion.plantilla || "C";
 
-  if (modo === "tecnica") {
-    const includePlanos = plantilla === "A"; // A con planos, B sin planos
-    await exportarPDFTecnico(includePlanos);
-  } else {
-    // Comercial -> siempre C
+  console.log(
+    "[DOC] exportarDocumentacionPDF -> plantilla:",
+    plantilla,
+    "modo:",
+    appState.documentacion.modo
+  );
+
+  if (plantilla === "C") {
+    // Memoria comercial (C)
     await exportarPDFComercial();
+  } else {
+    // Memoria técnica (A/B). A = con planos, B = sin planos
+    const includePlanos = plantilla === "A";
+    await exportarPDFTecnico(includePlanos);
   }
 }
 
