@@ -1767,6 +1767,10 @@ async function exportarPDFTecnico() {
   if (idioma === "en") tituloDoc = "Technical specification";
   if (idioma === "pt") tituloDoc = "Memória descritiva";
 
+  // Barra superior corporativa
+  doc.setFillColor(30, 64, 175); // azul 2N suave
+  doc.rect(0, 0, pageWidth, 12, "F");
+
   // Logo portada (derecha, grande)
   if (logo && logo.dataUrl) {
     const ratio =
@@ -1782,31 +1786,43 @@ async function exportarPDFTecnico() {
     }
   }
 
+  // Título grande centrado
   doc.setFont("helvetica", "bold");
   doc.setFontSize(22);
   doc.setTextColor(40, 40, 40);
-  doc.text(tituloDoc, 20, 40);
+  const titleWidth = doc.getTextWidth(tituloDoc);
+  const titleX = (pageWidth - titleWidth) / 2;
+  doc.text(tituloDoc, titleX, 50);
 
+  // Línea fina bajo título
   doc.setDrawColor(230, 230, 230);
   doc.setLineWidth(0.4);
-  doc.line(20, 43, pageWidth - 20, 43);
+  doc.line(20, 53, pageWidth - 20, 53);
 
+  // Datos de proyecto tipo Word
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(12);
+  doc.setFontSize(11);
   doc.setTextColor(70, 70, 70);
 
-  let y = 60;
-  const headerLines = [];
-  headerLines.push(nombreProyecto);
-  if (promotora) headerLines.push(promotora);
+  let y = 70;
 
-  headerLines.forEach(function (line) {
-    const splitted = doc.splitTextToSize(line, pageWidth - 40);
-    doc.text(splitted, 20, y);
-    y += splitted.length * 7;
-  });
+  // Proyecto
+  doc.setFont("helvetica", "bold");
+  doc.text("Proyecto:", 20, y);
+  doc.setFont("helvetica", "normal");
+  const proyectoLines = doc.splitTextToSize(nombreProyecto, pageWidth - 60);
+  doc.text(proyectoLines, 45, y);
+  y += proyectoLines.length * 6 + 4;
 
-  y += 10;
+  // Promotora / Propiedad (si existe)
+  if (promotora) {
+    doc.setFont("helvetica", "bold");
+    doc.text("Promotor:", 20, y);
+    doc.setFont("helvetica", "normal");
+    const promLines = doc.splitTextToSize(promotora, pageWidth - 60);
+    doc.text(promLines, 45, y);
+    y += promLines.length * 6 + 4;
+  }
 
   // Pie de portada
   drawTechFooter(doc, { idioma: idioma });
