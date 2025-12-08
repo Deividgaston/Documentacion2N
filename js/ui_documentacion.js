@@ -17,6 +17,7 @@ appState.documentacion = appState.documentacion || {
   fichasSearchTerm: "", // término de búsqueda para fichas técnicas
   includedSections: {}, // mapa: sectionKey -> true/false (incluir en PDF técnico)
   logoData: null, // cache logo para PDF
+  sectionTitles: {}, // NUEVO: títulos personalizados por sección
 };
 
 // ===========================
@@ -58,6 +59,7 @@ function saveDocStateToLocalStorage() {
       mediaSearchTerm: appState.documentacion.mediaSearchTerm || "",
       fichasSearchTerm: appState.documentacion.fichasSearchTerm || "",
       includedSections: appState.documentacion.includedSections || {},
+      sectionTitles: appState.documentacion.sectionTitles || {}, // NUEVO
     };
     localStorage.setItem(DOC_STORAGE_KEY, JSON.stringify(toSave));
   } catch (e) {
@@ -412,7 +414,7 @@ async function renderDocumentacionView() {
     '          <select id="docCustomSectionSelect" class="form-control">' +
     DOC_SECTION_ORDER.map(function (key) {
       return (
-        '<option value="' + key + '">' + labelForSection(key) + "</option>"
+        '<option value="' + key + '">' + getSectionTitle(key) + "</option>"
       );
     }).join("") +
     "          </select>" +
@@ -461,6 +463,16 @@ function labelForSection(key) {
     default:
       return key;
   }
+}
+
+// NUEVO: obtener título editable de sección
+function getSectionTitle(key) {
+  const map = appState.documentacion.sectionTitles || {};
+  const custom = map[key];
+  if (custom && String(custom).trim().length > 0) {
+    return String(custom).trim();
+  }
+  return labelForSection(key);
 }
 
 function getSectionIncluded(key) {
@@ -536,14 +548,24 @@ function renderDocSectionsHTML() {
   return DOC_SECTION_ORDER.map(function (key) {
     const contenido = secciones[key] || "";
     const included = getSectionIncluded(key);
+    const title = getSectionTitle(key);
     return (
       '<div class="card doc-section-card" data-doc-section="' +
       key +
       '">' +
       '  <div class="card-header">' +
-      '    <div class="card-title">' +
-      labelForSection(key) +
-      "</div>" +
+      '    <div class="doc-section-title-wrap" style="flex:1;max-width:60%;">' +
+      '      <input type="text" class="form-control doc-section-title-input" ' +
+      '             data-doc-section-title="' +
+      key +
+      '" ' +
+      '             value="' +
+      docEscapeHtml(title) +
+      '" ' +
+      '             placeholder="' +
+      docEscapeHtml(labelForSection(key)) +
+      '" />' +
+      "    </div>" +
       '    <div class="doc-section-header-actions">' +
       '      <label class="doc-section-include-toggle" style="font-size:0.75rem;display:flex;align-items:center;gap:0.25rem;margin-right:0.5rem;">' +
       '        <input type="checkbox" data-doc-section-enable="' +
@@ -935,6 +957,20 @@ function attachDocumentacionHandlers() {
     });
   }
 
+  // Títulos editables de sección
+  container
+    .querySelectorAll(".doc-section-title-input")
+    .forEach(function (inp) {
+      inp.addEventListener("input", function () {
+        const key = inp.getAttribute("data-doc-section-title");
+        if (!key) return;
+        appState.documentacion.sectionTitles =
+          appState.documentacion.sectionTitles || {};
+        appState.documentacion.sectionTitles[key] = inp.value || "";
+        saveDocStateToLocalStorage();
+      });
+    });
+
   // Idiomas
   container.querySelectorAll("[data-doc-lang]").forEach(function (btn) {
     btn.addEventListener("click", function () {
@@ -1228,6 +1264,7 @@ async function askAIForSection(sectionKey) {
   const idioma = appState.documentacion.idioma || "es";
   const secciones = appState.documentacion.secciones || {};
   const textoActual = secciones[sectionKey] || "";
+  const tituloSeccion = getSectionTitle(sectionKey);
   const proyecto = appState.proyecto || {};
   const presupuesto =
     typeof window.getPresupuestoActual === "function"
@@ -1236,13 +1273,17 @@ async function askAIForSection(sectionKey) {
 
   if (typeof window.handleDocSectionAI === "function") {
     try {
+      // IMPORTANTE: le pasamos a tu backend el texto actual y el título editable
       const nuevoTexto = await window.handleDocSectionAI({
         sectionKey: sectionKey,
         idioma: idioma,
+        titulo: tituloSeccion,
         texto: textoActual,
         proyecto: proyecto,
         presupuesto: presupuesto,
       });
+
+      // Actualizamos la sección solo si la IA devuelve algo útil
       if (typeof nuevoTexto === "string" && nuevoTexto.trim()) {
         appState.documentacion.secciones[sectionKey] = nuevoTexto;
         saveDocStateToLocalStorage();
@@ -1260,9 +1301,10 @@ async function askAIForSection(sectionKey) {
 
   alert(
     "Función de IA no configurada.\n\n" +
-      "Para activar 'Preguntar a IA', implementa en tu código:\n\n" +
-      "window.handleDocSectionAI = async ({ sectionKey, idioma, texto, proyecto, presupuesto }) => {\n" +
-      "  // Llama a tu backend / Cloud Function con OpenAI, etc.\n" +
+      "Para activar 'Preguntar a IA', implementa en tu código (por ejemplo, llamando a una Cloud Function con OpenAI):\n\n" +
+      "window.handleDocSectionAI = async ({ sectionKey, idioma, titulo, texto, proyecto, presupuesto }) => {\n" +
+      "  // Usa 'titulo' y 'texto' como prompt base.\n" +
+      "  // Devuelve el texto final que quieras que se muestre en la sección.\n" +
       "  return textoMejorado;\n" +
       "};"
   );
@@ -1776,7 +1818,7 @@ async function exportarPDFTecnico() {
   const pageWidth = dims.width;
   const pageHeight = dims.height;
 
-    // ===== Portada con imagen de fondo (sin deformar) =====
+  // ===== Portada con imagen de fondo (sin deformar) =====
   let tituloDoc = "Memoria de calidades";
   if (idioma === "en") tituloDoc = "Technical specification";
   if (idioma === "pt") tituloDoc = "Memória descritiva";
@@ -1847,18 +1889,18 @@ async function exportarPDFTecnico() {
   doc.setFontSize(22);
   doc.setTextColor(0, 0, 0);
   // SUBIMOS ligeramente el título para separarlo del pie
-  doc.text(tituloDoc, 20, panelY - 5); 
+  doc.text(tituloDoc, 20, panelY - 5);
 
   const subTitulo = "Videoportero y control de accesos 2N";
   doc.setFont("helvetica", "normal");
   doc.setFontSize(12);
-  doc.text(subTitulo, 20, panelY + 7); 
+  doc.text(subTitulo, 20, panelY + 7);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(11);
 
   // Bloque de proyecto también un poco más arriba
-  let y = panelY + 18;  
+  let y = panelY + 18;
 
   // Proyecto
   doc.setFont("helvetica", "bold");
@@ -1939,7 +1981,7 @@ async function exportarPDFTecnico() {
       firstSection = false;
     }
 
-    const tituloSeccion = labelForSection(key);
+    const tituloSeccion = getSectionTitle(key);
 
     // Añadimos entrada al índice
     tocEntries.push({ title: tituloSeccion, page: currentPage });
