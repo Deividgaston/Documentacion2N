@@ -1544,6 +1544,8 @@ function getDocPageDimensions(pdf) {
   return { width: width, height: height };
 }
 
+// ====== CABECERA / PIE TÉCNICO (AJUSTE LOGO) ======
+
 function drawTechHeader(pdf, opts) {
   const dims = getDocPageDimensions(pdf);
   const w = dims.width;
@@ -1551,34 +1553,39 @@ function drawTechHeader(pdf, opts) {
   const logo = opts.logo || null;
 
   const marginX = 20;
-  const topY = 18; // un poco más abajo por seguridad
+  const textY = 20; // posición base del texto
+  let lineY = textY + 4; // posición base mínima de la línea
 
-  // Logo en cabecera (tamaño normal, derecha) SIEMPRE por encima de la línea
+  // Logo en cabecera (derecha), siempre por encima de la línea
   if (logo && logo.dataUrl) {
     const ratio =
       logo.width && logo.height ? logo.width / logo.height : 2.5;
     const logoW = 25; // mm
     const logoH = logoW / ratio;
     const logoX = w - marginX - logoW;
-    const logoY = topY - 8; // claramente por encima de la línea
+    const logoY = 12; // algo más abajo del borde superior
+
     try {
       pdf.addImage(logo.dataUrl, "PNG", logoX, logoY, logoW, logoH);
     } catch (e) {
       console.warn("No se pudo dibujar logo en cabecera:", e);
     }
+
+    // Aseguramos que la línea quede por debajo del logo
+    lineY = Math.max(lineY, logoY + logoH + 2);
   }
 
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(9);
   pdf.setTextColor(55, 65, 81);
-  pdf.text(nombreProyecto, marginX, topY);
+  pdf.text(nombreProyecto, marginX, textY);
 
   pdf.setDrawColor(226, 232, 240);
   pdf.setLineWidth(0.3);
-  pdf.line(marginX, topY + 2, w - marginX, topY + 2);
+  pdf.line(marginX, lineY, w - marginX, lineY);
 
-  // Devolvemos un margen generoso para que NINGÚN texto caiga en el encabezado
-  return topY + 12; // y de inicio de contenido base
+  // Devolvemos un margen cómodo para el contenido
+  return lineY + 8;
 }
 
 function drawTechFooter(pdf, opts) {
@@ -1767,16 +1774,37 @@ async function exportarPDFTecnico() {
   const pageWidth = dims.width;
   const pageHeight = dims.height;
 
-  // ===== Portada con imagen de fondo =====
+  // ===== Portada con imagen de fondo en modo "cover" (sin deformar) =====
   let tituloDoc = "Memoria de calidades";
   if (idioma === "en") tituloDoc = "Technical specification";
   if (idioma === "pt") tituloDoc = "Memória descritiva";
 
-  // Fondo: imagen PortadaTecnica.jpg adaptada a la hoja
   try {
     const coverImg = await loadImageAsDataUrl(DOC_TECH_COVER_URL);
     if (coverImg && coverImg.dataUrl) {
-      doc.addImage(coverImg.dataUrl, "PNG", 0, 0, pageWidth, pageHeight);
+      const coverRatio =
+        coverImg.width && coverImg.height
+          ? coverImg.width / coverImg.height
+          : pageWidth / pageHeight;
+      const pageRatio = pageWidth / pageHeight;
+
+      let imgW, imgH, imgX, imgY;
+
+      if (coverRatio > pageRatio) {
+        // Imagen más panorámica -> ajustamos alto y recortamos laterales
+        imgH = pageHeight;
+        imgW = imgH * coverRatio;
+        imgX = (pageWidth - imgW) / 2;
+        imgY = 0;
+      } else {
+        // Imagen más "alta" -> ajustamos ancho y recortamos arriba/abajo
+        imgW = pageWidth;
+        imgH = imgW / coverRatio;
+        imgX = 0;
+        imgY = (pageHeight - imgH) / 2;
+      }
+
+      doc.addImage(coverImg.dataUrl, "PNG", imgX, imgY, imgW, imgH);
     }
   } catch (e) {
     console.warn("No se pudo cargar la imagen de portada técnica:", e);
@@ -1797,50 +1825,50 @@ async function exportarPDFTecnico() {
     }
   }
 
-  // Título grande centrado en blanco
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(28);
-  doc.setTextColor(255, 255, 255);
-  doc.text(tituloDoc, pageWidth / 2, 80, { align: "center" });
+  // Título y subtítulo grandes en blanco, en la parte baja
+  const centerX = pageWidth / 2;
+  const titleY = pageHeight - 70;
+  const subtitleY = pageHeight - 52;
 
-  // Subtítulo centrado
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(32);
+  doc.setTextColor(255, 255, 255);
+  doc.text(tituloDoc, centerX, titleY, { align: "center" });
+
   const subTitulo = "Videoportero y control de accesos 2N";
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(14);
-  doc.text(subTitulo, pageWidth / 2, 95, { align: "center" });
+  doc.setFontSize(16);
+  doc.text(subTitulo, centerX, subtitleY, { align: "center" });
 
-  // Bloque de datos de proyecto MÁS ABAJO para no solapar con el logo
+  // Bloque de datos de proyecto muy cerca del borde inferior
   doc.setFont("helvetica", "normal");
   doc.setFontSize(11);
   doc.setTextColor(255, 255, 255);
 
-  let y = 125; // bajamos el bloque
-
   // Proyecto
+  let yProyecto = pageHeight - 35;
   doc.setFont("helvetica", "bold");
-  doc.text("Proyecto:", 20, y);
+  doc.text("Proyecto:", 20, yProyecto);
   doc.setFont("helvetica", "normal");
-  let proyectoLines = doc.splitTextToSize(nombreProyecto, pageWidth - 60);
-  doc.text(proyectoLines, 45, y);
-  y += proyectoLines.length * 6 + 4;
+  const proyectoLines = doc.splitTextToSize(nombreProyecto, pageWidth - 60);
+  doc.text(proyectoLines, 45, yProyecto);
 
-  // Promotora / Propiedad (si existe)
+  // Promotor (un poco más abajo)
   if (promotora) {
+    let yPromotor = pageHeight - 23;
     doc.setFont("helvetica", "bold");
-    doc.text("Promotor:", 20, y);
+    doc.text("Promotor:", 20, yPromotor);
     doc.setFont("helvetica", "normal");
     const promLines = doc.splitTextToSize(promotora, pageWidth - 60);
-    doc.text(promLines, 45, y);
-    y += promLines.length * 6 + 4;
+    doc.text(promLines, 45, yPromotor);
   }
 
-  // Pie de portada (en claro)
-  drawTechFooter(doc, { idioma: idioma });
+  // En la portada NO dibujamos footer para dejar la parte baja limpia
 
   // ===== Cuerpo de memoria =====
   // Cada sección empieza en una página nueva
   doc.addPage();
-  y = setupTechContentPage(doc, {
+  let y = setupTechContentPage(doc, {
     idioma: idioma,
     nombreProyecto: nombreProyecto,
     logo: logo,
@@ -1875,7 +1903,7 @@ async function exportarPDFTecnico() {
     const hasImages = getSectionImages(key).length > 0;
     if (!contenido && !hasImages) continue;
 
-    // NUEVO: cada sección arranca en una página diferente
+    // Cada sección arranca en una página diferente
     if (!firstSection) {
       newPage();
     } else {
@@ -1904,9 +1932,9 @@ async function exportarPDFTecnico() {
       doc.setTextColor(55, 65, 81);
       const textLines = doc.splitTextToSize(contenido, pageWidth - 40);
 
-      // Gestión de saltos de página DENTRO de la sección
+      // Gestión de saltos de página dentro de la sección
       let block = [];
-      const maxLinesPerChunk = 35; // troceamos para controlar mejor
+      const maxLinesPerChunk = 35;
       for (let i = 0; i < textLines.length; i++) {
         block.push(textLines[i]);
         if (
