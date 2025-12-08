@@ -1799,7 +1799,7 @@ async function exportarPDFTecnico() {
     }
   }
 
-  // Título grande centrado (más grande)
+  // Título grande centrado
   doc.setFont("helvetica", "bold");
   doc.setFontSize(28);
   doc.setTextColor(40, 40, 40);
@@ -1820,7 +1820,7 @@ async function exportarPDFTecnico() {
   doc.setLineWidth(0.4);
   doc.line(20, 66, pageWidth - 20, 66);
 
-  // Datos de proyecto tipo Word
+  // Datos de proyecto
   doc.setFont("helvetica", "normal");
   doc.setFontSize(11);
   doc.setTextColor(70, 70, 70);
@@ -1873,6 +1873,9 @@ async function exportarPDFTecnico() {
     }
   }
 
+  // ⚠️ CLAVE: cada sección empieza en página nueva
+  let isFirstSectionPage = true;
+
   for (const key of DOC_SECTION_ORDER) {
     // Respetar el check "Incluir en PDF"
     if (includedSections.hasOwnProperty(key) && !includedSections[key]) {
@@ -1882,6 +1885,14 @@ async function exportarPDFTecnico() {
     const contenido = (secciones[key] || "").trim();
     const hasImages = getSectionImages(key).length > 0;
     if (!contenido && !hasImages) continue;
+
+    // Cada sección en página nueva:
+    if (!isFirstSectionPage) {
+      newPage();
+    } else {
+      // la primera sección usa la página que ya hemos creado
+      isFirstSectionPage = false;
+    }
 
     const tituloSeccion = labelForSection(key);
 
