@@ -1257,10 +1257,9 @@ function saveDocCustomBlock() {
 }
 
 // ===========================
-// IA POR SECCIÓN (HOOK)
+// IA: Conexión con Cloud Function docSectionAI
 // ===========================
 
-// NUEVO: implementación mínima de la llamada a tu Cloud Function
 window.handleDocSectionAI = async function ({
   sectionKey,
   idioma,
@@ -1294,17 +1293,23 @@ window.handleDocSectionAI = async function ({
     }
 
     const data = await resp.json();
-    if (!data.text) {
+    if (!data || typeof data.text !== "string") {
       throw new Error("La IA no devolvió texto.");
     }
 
-    return data.text;
+    return data.text; // texto generado por la función de Firebase
   } catch (err) {
-    console.error("Error llamando a la IA:", err);
-    alert("Error al generar contenido con IA. Revisa la consola.");
-    return texto;
+    console.error("Error llamando a docSectionAI:", err);
+    alert(
+      "Error al generar contenido con IA. Revisa la consola del navegador para más detalles."
+    );
+    return texto; // fallback: mantenemos el texto original
   }
 };
+
+// ===========================
+// IA POR SECCIÓN (HOOK)
+// ===========================
 
 async function askAIForSection(sectionKey) {
   const idioma = appState.documentacion.idioma || "es";
@@ -2277,4 +2282,16 @@ async function exportarPDFComercial() {
   if (idioma === "en") filenameBase = "access_solution_presentation";
   if (idioma === "pt") filenameBase = "apresentacao_acessos";
 
-  const
+  const safe = String(nombreProyecto || "proyecto")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+
+  doc.save(filenameBase + "_" + safe + ".pdf");
+}
+
+// ===========================
+// Exponer render
+// ===========================
+
+window.renderDocumentacionView = renderDocumentacionView;
