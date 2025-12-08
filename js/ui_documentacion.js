@@ -86,7 +86,7 @@ const DOC_LANGS = {
   pt: { code: "pt", label: "Português (PT)" },
 };
 
-// Secciones de texto técnico (normativa, etc.)
+// Añadimos secciones específicas de normativa
 const DOC_SECTION_ORDER = [
   "resumen",
   "sistema",
@@ -154,7 +154,7 @@ const DOC_BASE_TEMPLATES = {
       "A solução baseia-se num sistema de videoporteiro IP totalmente distribuído, com dispositivos 2N ligados através de rede Ethernet. O sistema permite a gestão de chamadas de acesso, controlo de portas, integração com aplicação móvel e, opcionalmente, com sistemas de domótica e PMS, garantindo elevada disponibilidade e flexibilidade.",
     equipos:
       "A solução inclui os seguintes equipamentos principais:\n\n{{LISTADO_EQUIPOS}}\n\nCada equipamento fue selecionado para cumprir os requisitos de desenho, funcionalidade e durabilidade do projeto.",
-    infraestrutura:
+    infraestructura:
       "Toda a infraestrutura de comunicações assenta numa rede IP com cablagem estruturada, bastidores de comunicações e electrónica de rede gerida. O desenho contempla caminhos redundantes, alimentação adequada (PoE quando aplicável) e capacidade de reserva para futuras ampliações.",
     servicios:
       "A solução pode ser complementada com serviços cloud para gestão remota, abertura de portas através de aplicação móvel, atualizações de firmware e monitorização do sistema. Estes serviços melhoram a experiência do utilizador final e facilitam a manutenção preventiva.",
@@ -167,90 +167,6 @@ const DOC_BASE_TEMPLATES = {
     otros:
       "Se necessário, podem ser incorporadas soluções adicionais como controlo de acessos por zonas, integração com CCTV, gestão de visitantes ou sistemas de reserva de zonas comuns.",
   },
-};
-
-// ===========================
-// NUEVA MEMORIA DE CALIDADES (IA + plantillas)
-// ===========================
-
-const DOC_MEMORIA_SECTIONS = [
-  { key: "intro",          title: "1. Introducción" },
-  { key: "empresa",        title: "2. Presentación de la empresa" },
-  { key: "alcance",        title: "3. Alcance del proyecto 2N" },
-  { key: "soluciones",     title: "4. Descripción de la solución propuesta" },
-  { key: "productos_main", title: "5. Descripción de los productos principales" },
-  { key: "diagramas",      title: "6. Diagramas" },
-  { key: "estimacion",     title: "7. Estimación y consideraciones económicas" },
-];
-
-// Catálogo de plantillas fijas para memoria (empresa + productos)
-const DOC_TEXT_TEMPLATES = {
-  empresa: {
-    empresa_default_es: {
-      id: "empresa_default_es",
-      idioma: "es",
-      title: "Presentación de la empresa",
-      bodyHtml: `
-<p>2N lidera el camino en tecnología de control de accesos IP, ofreciendo prestaciones de última generación sin comprometer la fiabilidad ni la facilidad de uso.</p>
-
-<p>Con más de 30 años de experiencia, 2N ha desarrollado soluciones innovadoras y de alta calidad. Fuimos pioneros al lanzar el primer videoportero IP del mundo en 2008 y el primer intercomunicador LTE/4G diez años después. Desde entonces, seguimos ampliando nuestra gama de productos y anticipándonos a las necesidades del mercado.</p>
-
-<p>Nuestra cartera incluye videoporteros IP, unidades interiores, lectores de control de accesos y soluciones para ascensores. Todos ellos permiten ofrecer a los clientes una tecnología robusta y preparada para el futuro, incluyendo credenciales móviles (Bluetooth), códigos QR, PIN y tarjetas RFID.</p>
-
-<p>La flexibilidad y la integración son factores clave en nuestros desarrollos. Por ello, los dispositivos 2N se basan en protocolos abiertos (SIP, RTSP, ONVIF, HTTPS, API abierta) y cuentan con más de 200 socios de integración oficiales, lo que facilita su conexión con plataformas de terceros (PMS, BMS, VMS, domótica, etc.).</p>
-
-<p>En 2N cuidamos tanto la funcionalidad como el diseño industrial. Nuestros productos han sido reconocidos con premios internacionales como los Red Dot e iF Design Awards. Además, invertimos de forma constante en I+D y en pruebas de resistencia, para garantizar un funcionamiento fiable incluso en condiciones exigentes y con un uso intensivo.</p>
-      `,
-    },
-  },
-  productos: {
-    ip_style_main_es: {
-      id: "ip_style_main_es",
-      idioma: "es",
-      title: "2N® IP Style",
-      bodyHtml: `
-<p>El 2N® IP Style es un videoportero IP de gama alta que combina diseño arquitectónico y tecnología avanzada en una sola unidad. Incorpora una pantalla táctil de 10&quot; con cristal templado, preparada para integrarse en proyectos residenciales y corporativos de alto nivel.</p>
-
-<p>El dispositivo integra múltiples tecnologías de control de accesos en un único equipo: código PIN, códigos QR, tarjetas RFID y credenciales móviles mediante Bluetooth. Su cámara de 5 Mpx con amplio ángulo de visión y visión nocturna por infrarrojos ofrece una excelente calidad de imagen, tanto de día como de noche.</p>
-
-<p>El 2N® IP Style incluye dos micrófonos y dos altavoces, optimizados para conseguir una gran inteligibilidad y una experiencia de audio envolvente. Cumple los grados de protección IK08 e IP65, lo que garantiza resistencia a impactos y a condiciones ambientales adversas.</p>
-
-<p>El equipo es totalmente programable a través de interfaz web y se integra fácilmente con sistemas SIP, plataformas de vídeo y soluciones de conserjería o control centralizado.</p>
-      `,
-    },
-    indoor_clip_main_es: {
-      id: "indoor_clip_main_es",
-      idioma: "es",
-      title: "2N® Indoor Clip / Indoor Compact",
-      bodyHtml: `
-<p>Los monitores 2N® Indoor Clip y 2N® Indoor Compact están diseñados para ofrecer una experiencia de usuario sencilla e intuitiva en las viviendas. Su interfaz táctil facilita la gestión de llamadas desde el videoportero, la apertura de puerta y las funciones de intercomunicación interna.</p>
-
-<p>Ambos dispositivos se alimentan y conectan a través de un único cable UTP (PoE), simplificando la instalación y reduciendo el cableado necesario. El sistema operativo ha sido optimizado para garantizar un funcionamiento fiable y una configuración rápida por parte del integrador.</p>
-
-<p>Según la configuración del proyecto, estos monitores permiten recibir llamadas desde la placa de calle, comunicarse con una conserjería o central de control, y en determinados escenarios integrarse con otros sistemas IP del edificio.</p>
-      `,
-    },
-    d7a_main_es: {
-      id: "d7a_main_es",
-      idioma: "es",
-      title: "2N® IP Phone D7A – Central de conserjería",
-      bodyHtml: `
-<p>El 2N® IP Phone D7A es una unidad interior SIP pensada para funciones de conserjería o control centralizado. Incorpora una pantalla táctil de 7&quot; con resolución HD y sistema operativo Android, lo que permite una operación fluida y la ejecución de aplicaciones específicas.</p>
-
-<p>El dispositivo permite gestionar y visualizar las llamadas procedentes de los videoporteros del edificio, mostrando el nombre o el código del usuario que llama. Ofrece historial de llamadas no respondidas, funciones de marcación rápida y modos de trabajo Día/Noche adaptados a las necesidades de la instalación.</p>
-
-<p>El 2N® IP Phone D7A es ideal para centralizar la comunicación con todos los dispositivos de la red (viviendas, accesos principales, zonas comunes) y puede integrarse con soluciones de conserjería virtual o sistemas de gestión del edificio.</p>
-      `,
-    },
-  },
-};
-
-// Mapa de códigos de producto (tu proyecto) → plantillas
-const DOC_PRODUCT_TEMPLATE_MAP = {
-  IP_STYLE: "ip_style_main_es",
-  INDOOR_CLIP: "indoor_clip_main_es",
-  INDOOR_COMPACT: "indoor_clip_main_es",
-  D7A: "d7a_main_es",
 };
 
 // ===========================
@@ -369,329 +285,7 @@ function docEscapeHtml(str) {
 }
 
 // ===========================
-// HELPERS MEMORIA (payload + IA + productos)
-// ===========================
-
-function buildProjectDocPayloadBase() {
-  const modo = appState.documentacion.modo || "comercial";
-  const idioma = appState.documentacion.idioma || "es";
-  const proyecto = appState.proyecto || {};
-  const presupuesto =
-    typeof window.getPresupuestoActual === "function"
-      ? window.getPresupuestoActual()
-      : null;
-
-  const nombreProyecto =
-    proyecto.nombre ||
-    proyecto.nombreProyecto ||
-    (presupuesto && presupuesto.nombreProyecto) ||
-    "";
-
-  const promotora =
-    proyecto.promotora ||
-    proyecto.cliente ||
-    (presupuesto && presupuesto.cliente) ||
-    "";
-
-  const ubicacion =
-    proyecto.ubicacion ||
-    (presupuesto && presupuesto.ubicacion) ||
-    "";
-
-  const tipoProyecto =
-    proyecto.tipoProyecto ||
-    (presupuesto && presupuesto.tipoProyecto) ||
-    "";
-
-  const segmento =
-    proyecto.segmento || (presupuesto && presupuesto.segmento) || "";
-
-  const numeroViviendas =
-    proyecto.numViviendas ||
-    proyecto.viviendas ||
-    (presupuesto && (presupuesto.numViviendas || presupuesto.viviendas)) ||
-    null;
-
-  const zonasComunes =
-    proyecto.zonasComunes || (presupuesto && presupuesto.zonasComunes) || [];
-
-  const productosPrincipales = proyecto.productosPrincipales || [];
-
-  return {
-    meta: {
-      idioma: idioma,
-      tono: modo, // "comercial" | "tecnica"
-      fechaDocumento: new Date().toISOString().slice(0, 10),
-    },
-    proyecto: {
-      id: proyecto.id || null,
-      nombre: nombreProyecto,
-      promotora: promotora,
-      ubicacion: ubicacion,
-      tipoProyecto: tipoProyecto,
-      segmento: segmento,
-      numeroViviendas: numeroViviendas,
-      observaciones: proyecto.observaciones || "",
-    },
-    edificio: {
-      numeroBloques: proyecto.numeroBloques || null,
-      numeroPortales: proyecto.numeroPortales || null,
-      tieneGaraje: !!proyecto.tieneGaraje,
-      tieneTrasteros: !!proyecto.tieneTrasteros,
-      zonasComunes: zonasComunes || [],
-    },
-    solucionesAcceso: {
-      entradas: proyecto.entradas || [],
-    },
-    integraciones: {
-      pms: proyecto.integracionPMS || null,
-      conserjeriaVirtual: !!proyecto.conserjeriaVirtual,
-      bms: proyecto.bms || null,
-      otrosSistemas: proyecto.otrosSistemas || [],
-    },
-    seguridadYNormativa: {
-      prioridadSeguridad: proyecto.prioridadSeguridad || null,
-      requisitosNormativos: proyecto.requisitosNormativos || [],
-      notasCiber: proyecto.notasCiber || "",
-    },
-    productosPrincipales: productosPrincipales,
-    extra: {},
-  };
-}
-
-function getTonoLabel(meta) {
-  if (!meta) return "comercial";
-  return meta.tono === "tecnica" ? "técnico" : "comercial";
-}
-
-// PROMPTS IA (ES)
-
-function buildIntroPromptEs(projectDocPayload) {
-  const { meta, proyecto, edificio } = projectDocPayload;
-  const tono = getTonoLabel(meta);
-
-  return `
-Actúa como un consultor senior de soluciones de videoportero IP y control de accesos 2N.
-
-Escribe la sección "Introducción" de una memoria de calidades para un proyecto inmobiliario en España.
-Tono: ${tono}, profesional y claro. Idioma: español.
-
-Datos del proyecto:
-- Nombre del proyecto: ${proyecto?.nombre || "-"}
-- Promotora: ${proyecto?.promotora || "-"}
-- Ubicación: ${proyecto?.ubicacion || "-"}
-- Tipo de proyecto: ${proyecto?.tipoProyecto || "-"}
-- Segmento: ${proyecto?.segmento || "-"}
-- Nº de viviendas: ${proyecto?.numeroViviendas || "-"}
-- Nº de bloques/portales: ${edificio?.numeroBloques || "-"} / ${edificio?.numeroPortales || "-"}
-
-Objetivo de la introducción:
-- Explicar brevemente el contexto del proyecto.
-- Destacar que el documento presenta la solución de videoportero IP y control de accesos de 2N.
-- No describas todavía productos concretos ni precios.
-
-Formato de salida:
-- Devuelve SOLO HTML válido para incrustar en un <div>, sin etiquetas <html>, <head> o <body>.
-- Usa párrafos <p> y, como máximo, una lista <ul> si lo consideras útil.
-`.trim();
-}
-
-function buildAlcancePromptEs(projectDocPayload) {
-  const { meta, proyecto, edificio, solucionesAcceso, integraciones } =
-    projectDocPayload;
-  const tono = getTonoLabel(meta);
-
-  const entradasResumen = (solucionesAcceso?.entradas || [])
-    .map(
-      (e) =>
-        `- Tipo: ${e.tipo || "-"}, nombre: ${e.nombre || "-"}, productos: ${
-          e.productos?.join(", ") || "-"
-        }, credenciales: ${e.credenciales?.join(", ") || "-"}`
-    )
-    .join("\n");
-
-  return `
-Actúa como un consultor senior de soluciones 2N.
-
-Escribe la sección "Alcance del proyecto 2N" para una memoria de calidades.
-Tono: ${tono}, claro y profesional. Idioma: español.
-
-Datos relevantes:
-- Proyecto: ${proyecto?.nombre || "-"} (${proyecto?.tipoProyecto || "-"})
-- Ubicación: ${proyecto?.ubicacion || "-"}
-- Nº de viviendas: ${proyecto?.numeroViviendas || "-"}
-- Zonas comunes: ${(edificio?.zonasComunes || []).join(", ") || "no especificadas"}
-- Integraciones previstas (PMS, conserjería virtual, etc.): ${
-    integraciones?.pms || "ninguna"
-  }; conserjería virtual: ${
-    integraciones?.conserjeriaVirtual ? "sí" : "no"
-  }; otros: ${(integraciones?.otrosSistemas || []).join(", ") ||
-    "no especificados"}
-
-Resumen de puntos de acceso:
-${entradasResumen || "- sin detalle de entradas -"}
-
-Objetivo de esta sección:
-- Explicar de forma global qué incluye la solución 2N en este proyecto (placas de calle, monitores, control de accesos, software).
-- Comentar que se ha tenido en cuenta la escalabilidad futura (integraciones, ampliaciones, etc.).
-- NO detallar todavía cada producto: eso irá en la sección de "Descripción de los productos".
-
-Formato de salida:
-- Devuelve SOLO HTML, con títulos en <h3> o <h4> si lo consideras útil, y párrafos <p>.
-`.trim();
-}
-
-function buildSolucionesPromptEs(projectDocPayload) {
-  const { meta, proyecto, solucionesAcceso, seguridadYNormativa } =
-    projectDocPayload;
-  const tono = getTonoLabel(meta);
-
-  const credencialesGlobal = new Set();
-  (solucionesAcceso?.entradas || []).forEach((e) => {
-    (e.credenciales || []).forEach((c) => credencialesGlobal.add(c));
-  });
-
-  const credencialesLista = Array.from(credencialesGlobal);
-
-  return `
-Actúa como un consultor de 2N especializado en diseño de soluciones de acceso.
-
-Escribe la sección "Descripción de la solución propuesta" para una memoria de calidades.
-Tono: ${tono}, orientado a aportar valor al promotor y al arquitecto. Idioma: español.
-
-Datos relevantes:
-- Proyecto: ${proyecto?.nombre || "-"} (${proyecto?.tipoProyecto || "-"})
-- Nivel de prioridad de seguridad: ${
-    seguridadYNormativa?.prioridadSeguridad || "no especificado"
-  }
-- Requisitos normativos / ciberseguridad: ${
-    (seguridadYNormativa?.requisitosNormativos || []).join(", ") ||
-    "no especificados"
-  }
-- Tipos de credenciales de acceso utilizados en el proyecto: ${
-    credencialesLista.join(", ") || "no especificadas"
-  }
-
-Objetivo de esta sección:
-- Explicar cómo encaja la solución de videoportero IP y control de accesos en el edificio.
-- Destacar el uso de credenciales móviles (BLE, QR), códigos PIN, RFID si aplican.
-- Comentar brevemente la robustez, fiabilidad y preparación para integraciones futuras.
-- Evita repetir texto de la sección de productos; céntrate en el DISEÑO GLOBAL de la solución.
-
-Formato de salida:
-- SOLO HTML, con subtítulos en <h3> o <h4> y párrafos <p>.
-`.trim();
-}
-
-function buildDiagramasPromptEs(projectDocPayload) {
-  const { meta, proyecto } = projectDocPayload;
-  const tono = getTonoLabel(meta);
-
-  return `
-Actúa como consultor técnico de 2N.
-
-Escribe un breve texto para la sección "Diagramas" de una memoria de calidades.
-Tono: ${tono}, pero más bien técnico y conciso. Idioma: español.
-
-Datos del proyecto:
-- Nombre del proyecto: ${proyecto?.nombre || "-"}
-- Tipo de proyecto: ${proyecto?.tipoProyecto || "-"}
-
-Objetivo de esta sección:
-- Explicar que se adjuntan diagramas esquemáticos de la solución propuesta (topología IP, conexiones principales, elementos de red relevantes).
-- Indicar que sirven como referencia conceptual y que el integrador desarrollará los planos de detalle en fases posteriores.
-
-Formato de salida:
-- SOLO HTML con 1–2 párrafos <p>.
-`.trim();
-}
-
-function buildEstimacionPromptEs(projectDocPayload) {
-  const { meta, proyecto } = projectDocPayload;
-  const tono = getTonoLabel(meta);
-
-  return `
-Actúa como consultor de 2N y redacta la sección "Estimación y consideraciones económicas" de una memoria de calidades.
-Tono: ${tono}, profesional, evitando mencionar importes concretos (los precios irán en un documento separado). Idioma: español.
-
-Datos:
-- Proyecto: ${proyecto?.nombre || "-"} (${proyecto?.tipoProyecto || "-"})
-- Promotora: ${proyecto?.promotora || "-"}
-
-Objetivo de esta sección:
-- Indicar que se ha realizado una estimación económica en documento adjunto (presupuesto detallado).
-- Explicar que la solución propuesta optimiza el coste total de propiedad (TCO) gracias a:
-  - menor cableado al ser un sistema IP,
-  - facilidad de gestión y mantenimiento,
-  - escalabilidad y vida útil ampliada.
-- Si procede, mencionar que el sistema permite futuras ampliaciones sin necesidad de sustituciones completas.
-
-Formato de salida:
-- SOLO HTML con 2–3 párrafos <p>.
-`.trim();
-}
-
-function buildAllDocPromptsEs(projectDocPayload) {
-  return {
-    intro: buildIntroPromptEs(projectDocPayload),
-    alcance: buildAlcancePromptEs(projectDocPayload),
-    soluciones: buildSolucionesPromptEs(projectDocPayload),
-    diagramas: buildDiagramasPromptEs(projectDocPayload),
-    estimacion: buildEstimacionPromptEs(projectDocPayload),
-  };
-}
-
-// Productos principales → sección productos_main
-
-function buildProductosMainSectionFromProject(projectDocPayload, idioma) {
-  const lang = idioma || "es";
-  const templatesPorProducto =
-    (DOC_TEXT_TEMPLATES && DOC_TEXT_TEMPLATES.productos) || {};
-  if (
-    !projectDocPayload ||
-    !Array.isArray(projectDocPayload.productosPrincipales)
-  ) {
-    return "";
-  }
-
-  const seccionesHtml = [];
-  const usados = new Set();
-
-  for (const productCode of projectDocPayload.productosPrincipales) {
-    const templateId = DOC_PRODUCT_TEMPLATE_MAP[productCode];
-    if (!templateId) continue;
-    if (usados.has(templateId)) continue;
-
-    const tpl = templatesPorProducto[templateId];
-    if (!tpl || tpl.idioma !== lang) continue;
-
-    usados.add(templateId);
-
-    seccionesHtml.push(
-      `
-      <h3>${tpl.title}</h3>
-      ${tpl.bodyHtml}
-    `.trim()
-    );
-  }
-
-  return seccionesHtml.join("\n\n");
-}
-
-function autoFillProductosMainSection(projectDocPayload) {
-  const idioma = appState.documentacion.idioma || "es";
-  const html = buildProductosMainSectionFromProject(
-    projectDocPayload,
-    idioma
-  );
-
-  appState.documentacion.secciones =
-    appState.documentacion.secciones || {};
-  appState.documentacion.secciones.productos_main = html || "";
-}
-
-// ===========================
-// AUTO-GENERACIÓN DE SECCIONES (normativa)
+// AUTO-GENERACIÓN DE SECCIONES
 // ===========================
 
 function autoGenerateDocumentacion(idioma) {
@@ -707,143 +301,9 @@ function autoGenerateDocumentacion(idioma) {
     secciones[secKey] = applyTokensToTemplate(tpl, tokens);
   });
 
-  // Solo pisamos las secciones normativas, preservando la memoria IA
-  appState.documentacion.secciones =
-    appState.documentacion.secciones || {};
-  Object.assign(appState.documentacion.secciones, secciones);
-
+  appState.documentacion.secciones = secciones;
   appState.documentacion.ultimaAutoGen = new Date().toISOString();
   saveDocStateToLocalStorage();
-}
-
-// ===========================
-// MOCK IA & AUTOGENERACIÓN MEMORIA COMPLETA
-// ===========================
-
-async function fakeCallAIForSection(sectionKey, prompt) {
-  console.log("[DOC AI MOCK] Sección:", sectionKey);
-  console.log(
-    "[DOC AI MOCK] Prompt:",
-    (prompt || "").slice(0, 400) + "..."
-  );
-  await new Promise((resolve) => setTimeout(resolve, 300));
-  return `
-<p><strong>[Texto auto-generado (${sectionKey})]</strong></p>
-<p>Este es un contenido de ejemplo para la sección <em>${sectionKey}</em>.
-En producción, aquí iría el HTML devuelto por tu servicio de IA
-en función del proyecto, dispositivos y configuración seleccionada.</p>
-`.trim();
-}
-
-/**
- * Genera TODA la memoria de calidades (secciones IA + plantillas fijas)
- * y la vuelca en appState.documentacion.secciones.*, sin tocar fichas,
- * documentación gráfica, modos ni export PDF.
- */
-async function autoGenerateMemoriaCalidadesFromAI() {
-  try {
-    appState.documentacion = appState.documentacion || {};
-    appState.documentacion.secciones =
-      appState.documentacion.secciones || {};
-
-    // 1) Payload estándar
-    const projectDocPayload = buildProjectDocPayloadBase();
-
-    // 2) Sección de productos principales desde plantillas
-    autoFillProductosMainSection(projectDocPayload);
-
-    // 3) Prompts IA
-    const prompts = buildAllDocPromptsEs(projectDocPayload);
-
-    // 4) Llamada IA (mock) por sección
-    for (const [sectionKey, prompt] of Object.entries(prompts)) {
-      if (!prompt) continue;
-      const html = await fakeCallAIForSection(sectionKey, prompt);
-      appState.documentacion.secciones[sectionKey] = html || "";
-    }
-
-    // 5) Presentación de la empresa (plantilla fija)
-    const tplEmpresa =
-      DOC_TEXT_TEMPLATES?.empresa?.empresa_default_es || null;
-    if (tplEmpresa) {
-      appState.documentacion.secciones.empresa = tplEmpresa.bodyHtml;
-    }
-
-    // 6) Timestamp común
-    appState.documentacion.ultimaAutoGen = new Date().toISOString();
-    saveDocStateToLocalStorage();
-  } catch (err) {
-    console.error("[DOC AI] Error al autogenerar memoria:", err);
-    throw err;
-  }
-}
-
-// ===========================
-// RENDER MEMORIA COMERCIAL (card)
-// ===========================
-
-function getMemoriaCalidadesHtml() {
-  const secciones = appState.documentacion.secciones || {};
-  if (!DOC_MEMORIA_SECTIONS || !DOC_MEMORIA_SECTIONS.length) return "";
-
-  const indiceItems = DOC_MEMORIA_SECTIONS
-    .map((sec) => `<li>${sec.title}</li>`)
-    .join("");
-
-  const indiceHtml = `
-    <div class="doc-memoria-indice">
-      <h3>Contenido (memoria de calidades)</h3>
-      <ol>
-        ${indiceItems}
-      </ol>
-    </div>
-  `;
-
-  const bloquesHtml = DOC_MEMORIA_SECTIONS
-    .map((sec) => {
-      const content = secciones[sec.key] || "";
-      if (!content) return "";
-      return `
-        <section class="doc-memoria-section doc-memoria-section-${sec.key}">
-          <h4>${sec.title}</h4>
-          <div class="doc-memoria-section-body">
-            ${content}
-          </div>
-        </section>
-      `;
-    })
-    .join("");
-
-  if (!bloquesHtml.trim()) return "";
-
-  return `
-    <div class="doc-memoria-wrapper">
-      ${indiceHtml}
-      ${bloquesHtml}
-    </div>
-  `;
-}
-
-function renderDocMemoriaHTML() {
-  return (
-    '<div class="card doc-memoria-card">' +
-    '  <div class="card-header">' +
-    '    <div class="card-title">Memoria de calidades (auto)</div>' +
-    '    <div class="card-subtitle">' +
-    "      Generación automática con IA y plantillas 2N. Puedes revisar y complementar el contenido después de generarlo." +
-    "    </div>" +
-    "  </div>" +
-    '  <div class="card-body">' +
-    '    <div class="doc-memoria-toolbar">' +
-    '      <button id="btnDocAutoMemoria" class="btn btn-sm btn-primary">Autogenerar memoria de calidades (IA)</button>' +
-    '      <span id="docAutoMemoriaInfo" class="doc-memoria-info"></span>' +
-    "    </div>" +
-    '    <div id="docMemoriaContainer">' +
-    getMemoriaCalidadesHtml() +
-    "    </div>" +
-    "  </div>" +
-    "</div>"
-  );
 }
 
 // ===========================
@@ -909,7 +369,6 @@ async function renderDocumentacionView() {
     "  </div>" +
     '  <div class="doc-main">' +
     '    <div class="doc-sections">' +
-    renderDocMemoriaHTML() +
     renderDocSectionsHTML() +
     "    </div>" +
     '    <aside class="doc-side">' +
@@ -1456,41 +915,6 @@ function attachDocumentacionHandlers() {
 
   const backdrop = document.getElementById("docModalBackdrop");
 
-  // Botón memoria auto (IA)
-  const btnAutoMemoria = container.querySelector("#btnDocAutoMemoria");
-  const infoAutoMemoria = container.querySelector("#docAutoMemoriaInfo");
-  const memoriaContainer = container.querySelector("#docMemoriaContainer");
-
-  if (btnAutoMemoria) {
-    btnAutoMemoria.addEventListener("click", async () => {
-      if (infoAutoMemoria) {
-        infoAutoMemoria.textContent = "Generando memoria automáticamente...";
-      }
-      btnAutoMemoria.disabled = true;
-      try {
-        await autoGenerateMemoriaCalidadesFromAI();
-        if (memoriaContainer) {
-          memoriaContainer.innerHTML = getMemoriaCalidadesHtml();
-        }
-        if (infoAutoMemoria) {
-          const fecha = appState.documentacion?.ultimaAutoGen || "";
-          infoAutoMemoria.textContent = fecha
-            ? `Última generación automática: ${new Date(
-                fecha
-              ).toLocaleString()}`
-            : "Memoria generada.";
-        }
-      } catch (e) {
-        console.error("[DOC AI] Error al autogenerar memoria:", e);
-        alert(
-          "Se ha producido un error al autogenerar la memoria de calidades."
-        );
-        if (infoAutoMemoria) infoAutoMemoria.textContent = "";
-      }
-      btnAutoMemoria.disabled = false;
-    });
-  }
-
   // Buscador de imágenes
   const searchInput = container.querySelector("#docMediaSearchInput");
   if (searchInput) {
@@ -1538,7 +962,7 @@ function attachDocumentacionHandlers() {
     });
   }
 
-  // Regenerar automático (texto técnico base)
+  // Regenerar automático
   const regenBtn = container.querySelector("#docRegenerarBtn");
   if (regenBtn) {
     regenBtn.addEventListener("click", function () {
@@ -1547,7 +971,7 @@ function attachDocumentacionHandlers() {
     });
   }
 
-  // Textareas de secciones (normativa)
+  // Textareas de secciones
   container.querySelectorAll(".doc-section-textarea").forEach(function (ta) {
     ta.addEventListener("input", function () {
       const secKey = ta.getAttribute("data-doc-section-text");
@@ -1573,7 +997,7 @@ function attachDocumentacionHandlers() {
       });
     });
 
-  // Botón IA por sección (texto técnico)
+  // Botón IA por sección
   container.querySelectorAll("[data-doc-ai-section]").forEach(function (btn) {
     btn.addEventListener("click", function () {
       const sectionKey = btn.getAttribute("data-doc-ai-section");
@@ -1645,7 +1069,7 @@ function attachDocumentacionHandlers() {
     nuevoBloqueBtn.addEventListener("click", openDocCustomModal);
   }
 
-  // Exportar PDF (modo comercial / técnico)
+  // Exportar PDF
   const exportBtn = container.querySelector("#docExportarBtn");
   if (exportBtn) {
     exportBtn.addEventListener("click", function () {
@@ -1797,7 +1221,7 @@ function saveDocCustomBlock() {
 }
 
 // ===========================
-// IA POR SECCIÓN (HOOK EXISTENTE)
+// IA POR SECCIÓN (HOOK)
 // ===========================
 
 async function askAIForSection(sectionKey) {
@@ -2284,7 +1708,7 @@ async function insertImagesForSection(doc, sectionKey, y, onNewPage) {
       const height = obj.height;
       const ratio = width && height ? width / height : 4 / 3;
 
-      // Tamaño más pequeño y centrado
+      // Tamaño más pequeño (mitad de lo anterior) y centrado
       const maxWidthMm = 60;
       const maxHeightMm = 37.5;
 
@@ -2319,7 +1743,7 @@ async function insertImagesForSection(doc, sectionKey, y, onNewPage) {
   return y;
 }
 
-// ===== Versión técnica (memoria de calidades) =====
+// ===== Versión técnica (memoria de calidades bonita) =====
 
 async function exportarPDFTecnico() {
   const jsPDF = window.jspdf.jsPDF;
@@ -2352,7 +1776,7 @@ async function exportarPDFTecnico() {
   const pageWidth = dims.width;
   const pageHeight = dims.height;
 
-  // ===== Portada con imagen de fondo (sin deformar) =====
+    // ===== Portada con imagen de fondo (sin deformar) =====
   let tituloDoc = "Memoria de calidades";
   if (idioma === "en") tituloDoc = "Technical specification";
   if (idioma === "pt") tituloDoc = "Memória descritiva";
@@ -2403,14 +1827,14 @@ async function exportarPDFTecnico() {
   doc.setFillColor(255, 255, 255);
   doc.rect(0, panelY, pageWidth, panelHeight, "F");
 
-  // Logo portada ahora en la banda blanca, a la derecha
+  // Logo portada AHORA en la banda blanca, a la derecha
   if (logo && logo.dataUrl) {
     const ratio =
       logo.width && logo.height ? logo.width / logo.height : 2.5;
     const logoW = 40;
     const logoH = logoW / ratio;
     const logoX = pageWidth - 20 - logoW;
-    const logoY = panelY + (panelHeight - logoH) / 2;
+    const logoY = panelY + (panelHeight - logoH) / 2; // centrado vertical en la banda blanca
     try {
       doc.addImage(logo.dataUrl, "PNG", logoX, logoY, logoW, logoH);
     } catch (e) {
@@ -2422,17 +1846,19 @@ async function exportarPDFTecnico() {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(22);
   doc.setTextColor(0, 0, 0);
-  doc.text(tituloDoc, 20, panelY - 5);
+  // SUBIMOS ligeramente el título para separarlo del pie
+  doc.text(tituloDoc, 20, panelY - 5); 
 
   const subTitulo = "Videoportero y control de accesos 2N";
   doc.setFont("helvetica", "normal");
   doc.setFontSize(12);
-  doc.text(subTitulo, 20, panelY + 7);
+  doc.text(subTitulo, 20, panelY + 7); 
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(11);
 
-  let y = panelY + 18;
+  // Bloque de proyecto también un poco más arriba
+  let y = panelY + 18;  
 
   // Proyecto
   doc.setFont("helvetica", "bold");
@@ -2673,7 +2099,7 @@ async function exportarPDFTecnico() {
   doc.save(filename);
 }
 
-// ===== Versión comercial =====
+// ===== Versión comercial (simple, pero más profesional) =====
 
 async function exportarPDFComercial() {
   const jsPDF = window.jspdf.jsPDF;
