@@ -1493,7 +1493,8 @@ function loadImageAsDataUrl(url) {
         const ctx = canvas.getContext("2d");
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-        const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+        // Usamos PNG para preservar transparencias (logo sin fondo negro)
+        const dataUrl = canvas.toDataURL("image/png");
         resolve({
           dataUrl: dataUrl,
           width: canvas.width,
@@ -1559,7 +1560,7 @@ function drawTechHeader(pdf, opts) {
     const logoX = w - marginX - logoW;
     const logoY = topY - 4;
     try {
-      pdf.addImage(logo.dataUrl, "JPEG", logoX, logoY, logoW, logoH);
+      pdf.addImage(logo.dataUrl, "PNG", logoX, logoY, logoW, logoH);
     } catch (e) {
       console.warn("No se pudo dibujar logo en cabecera:", e);
     }
@@ -1694,9 +1695,9 @@ async function insertImagesForSection(doc, sectionKey, y, onNewPage) {
       const height = obj.height;
       const ratio = width && height ? width / height : 4 / 3;
 
-      // Tamaño más grande y centrado
-      const maxWidthMm = 120;
-      const maxHeightMm = 75;
+      // Tamaño más pequeño (mitad de lo anterior) y centrado
+      const maxWidthMm = 60;
+      const maxHeightMm = 37.5;
 
       let imgW = maxWidthMm;
       let imgH = imgW / ratio;
@@ -1717,7 +1718,7 @@ async function insertImagesForSection(doc, sectionKey, y, onNewPage) {
 
       const imgX = (pageWidth - imgW) / 2; // CENTRADO
       const imgY = y;
-      doc.addImage(dataUrl, "JPEG", imgX, imgY, imgW, imgH);
+      doc.addImage(dataUrl, "PNG", imgX, imgY, imgW, imgH);
 
       // Sin pie de imagen, sólo margen inferior
       y += imgH + 8;
@@ -1767,8 +1768,8 @@ async function exportarPDFTecnico() {
   if (idioma === "en") tituloDoc = "Technical specification";
   if (idioma === "pt") tituloDoc = "Memória descritiva";
 
-  // Barra superior corporativa
-  doc.setFillColor(30, 64, 175); // azul 2N suave
+  // Barra superior corporativa (NEGRA)
+  doc.setFillColor(0, 0, 0);
   doc.rect(0, 0, pageWidth, 12, "F");
 
   // Logo portada (derecha, grande)
@@ -1780,31 +1781,39 @@ async function exportarPDFTecnico() {
     const logoX = pageWidth - 20 - logoW;
     const logoY = 18;
     try {
-      doc.addImage(logo.dataUrl, "JPEG", logoX, logoY, logoW, logoH);
+      doc.addImage(logo.dataUrl, "PNG", logoX, logoY, logoW, logoH);
     } catch (e) {
       console.warn("No se pudo dibujar logo en portada:", e);
     }
   }
 
-  // Título grande centrado
+  // Título grande centrado (más grande)
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(22);
+  doc.setFontSize(28);
   doc.setTextColor(40, 40, 40);
   const titleWidth = doc.getTextWidth(tituloDoc);
   const titleX = (pageWidth - titleWidth) / 2;
   doc.text(tituloDoc, titleX, 50);
 
-  // Línea fina bajo título
+  // Subtítulo centrado
+  const subTitulo = "Videoportero y control de accesos 2N";
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(14);
+  const subWidth = doc.getTextWidth(subTitulo);
+  const subX = (pageWidth - subWidth) / 2;
+  doc.text(subTitulo, subX, 62);
+
+  // Línea fina bajo título + subtítulo
   doc.setDrawColor(230, 230, 230);
   doc.setLineWidth(0.4);
-  doc.line(20, 53, pageWidth - 20, 53);
+  doc.line(20, 66, pageWidth - 20, 66);
 
   // Datos de proyecto tipo Word
   doc.setFont("helvetica", "normal");
   doc.setFontSize(11);
   doc.setTextColor(70, 70, 70);
 
-  let y = 70;
+  let y = 80;
 
   // Proyecto
   doc.setFont("helvetica", "bold");
@@ -1993,7 +2002,7 @@ async function exportarPDFComercial() {
     const logoX = pageWidth - 20 - logoW;
     const logoY = 18;
     try {
-      doc.addImage(logo.dataUrl, "JPEG", logoX, logoY, logoW, logoH);
+      doc.addImage(logo.dataUrl, "PNG", logoX, logoY, logoW, logoH);
     } catch (e) {
       console.warn("No se pudo dibujar logo en portada comercial:", e);
     }
