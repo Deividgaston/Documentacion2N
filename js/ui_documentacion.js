@@ -1260,6 +1260,52 @@ function saveDocCustomBlock() {
 // IA POR SECCIÓN (HOOK)
 // ===========================
 
+// NUEVO: implementación mínima de la llamada a tu Cloud Function
+window.handleDocSectionAI = async function ({
+  sectionKey,
+  idioma,
+  titulo,
+  texto,
+  proyecto,
+  presupuesto,
+}) {
+  const functionUrl =
+    "https://us-central1-n-presupuestos.cloudfunctions.net/docSectionAI";
+
+  try {
+    const resp = await fetch(functionUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        sectionKey,
+        idioma,
+        titulo,
+        texto,
+        proyecto,
+        presupuesto,
+      }),
+    });
+
+    if (!resp.ok) {
+      console.error("Error IA HTTP:", resp.status, await resp.text());
+      throw new Error("La IA no ha respondido correctamente.");
+    }
+
+    const data = await resp.json();
+    if (!data.text) {
+      throw new Error("La IA no devolvió texto.");
+    }
+
+    return data.text;
+  } catch (err) {
+    console.error("Error llamando a la IA:", err);
+    alert("Error al generar contenido con IA. Revisa la consola.");
+    return texto;
+  }
+};
+
 async function askAIForSection(sectionKey) {
   const idioma = appState.documentacion.idioma || "es";
   const secciones = appState.documentacion.secciones || {};
@@ -2231,16 +2277,4 @@ async function exportarPDFComercial() {
   if (idioma === "en") filenameBase = "access_solution_presentation";
   if (idioma === "pt") filenameBase = "apresentacao_acessos";
 
-  const safe = String(nombreProyecto || "proyecto")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-
-  doc.save(filenameBase + "_" + safe + ".pdf");
-}
-
-// ===========================
-// Exponer render
-// ===========================
-
-window.renderDocumentacionView = renderDocumentacionView;
+  const
