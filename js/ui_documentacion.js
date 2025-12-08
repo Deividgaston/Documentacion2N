@@ -1541,24 +1541,31 @@ function getDocPageDimensions(pdf) {
   return { width: width, height: height };
 }
 
+// ===== CABECERA / PIE TÉCNICOS (AJUSTADOS) =====
+
 function drawTechHeader(pdf, opts) {
   const dims = getDocPageDimensions(pdf);
   const w = dims.width;
-  const idioma = opts.idioma || "es";
   const nombreProyecto = opts.nombreProyecto || "Proyecto";
   const logo = opts.logo || null;
 
   const marginX = 20;
-  const topY = 15;
 
-  // Logo en cabecera (tamaño normal, derecha)
+  // Definimos claramente la zona de cabecera
+  const headerLineY = 26;         // posición de la línea de cabecera
+  const projectTextY = headerLineY - 6; // texto justo encima de la línea
+
+  // Logo 2N SIEMPRE por encima de la línea de cabecera
   if (logo && logo.dataUrl) {
     const ratio =
       logo.width && logo.height ? logo.width / logo.height : 2.5;
     const logoW = 25; // mm
     const logoH = logoW / ratio;
+
+    // Colocamos la base del logo unos milímetros por encima de la línea
     const logoX = w - marginX - logoW;
-    const logoY = topY - 4;
+    const logoY = headerLineY - logoH - 3;
+
     try {
       pdf.addImage(logo.dataUrl, "PNG", logoX, logoY, logoW, logoH);
     } catch (e) {
@@ -1566,16 +1573,19 @@ function drawTechHeader(pdf, opts) {
     }
   }
 
+  // Texto de proyecto dentro de la zona de cabecera, nunca en el cuerpo
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(9);
   pdf.setTextColor(55, 65, 81);
-  pdf.text(nombreProyecto, marginX, topY);
+  pdf.text(nombreProyecto, marginX, projectTextY);
 
+  // Línea de cabecera
   pdf.setDrawColor(226, 232, 240);
   pdf.setLineWidth(0.3);
-  pdf.line(marginX, topY + 2, w - marginX, topY + 2);
+  pdf.line(marginX, headerLineY, w - marginX, headerLineY);
 
-  return topY + 10; // y de inicio de contenido
+  // Devolvemos la Y a partir de la cual puede empezar el contenido
+  return headerLineY + 8; // ~34 mm
 }
 
 function drawTechFooter(pdf, opts) {
@@ -1601,6 +1611,8 @@ function drawTechFooter(pdf, opts) {
 function setupTechContentPage(pdf, opts) {
   const startY = drawTechHeader(pdf, opts);
   drawTechFooter(pdf, opts);
+
+  // Un poco de separación extra: el contenido empieza ~39 mm
   return startY + 5;
 }
 
