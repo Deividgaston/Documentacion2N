@@ -1776,7 +1776,7 @@ async function exportarPDFTecnico() {
   const pageWidth = dims.width;
   const pageHeight = dims.height;
 
-  // ===== Portada con imagen de fondo (sin deformar) =====
+    // ===== Portada con imagen de fondo (sin deformar) =====
   let tituloDoc = "Memoria de calidades";
   if (idioma === "en") tituloDoc = "Technical specification";
   if (idioma === "pt") tituloDoc = "Memória descritiva";
@@ -1810,21 +1810,6 @@ async function exportarPDFTecnico() {
     console.warn("No se pudo cargar la imagen de portada técnica:", e);
   }
 
-  // Logo portada (derecha, sobre la imagen)
-  if (logo && logo.dataUrl) {
-    const ratio =
-      logo.width && logo.height ? logo.width / logo.height : 2.5;
-    const logoW = 40;
-    const logoH = logoW / ratio;
-    const logoX = pageWidth - 20 - logoW;
-    const logoY = 15;
-    try {
-      doc.addImage(logo.dataUrl, "PNG", logoX, logoY, logoW, logoH);
-    } catch (e) {
-      console.warn("No se pudo dibujar logo en portada:", e);
-    }
-  }
-
   // Gradiente inferior para mejorar legibilidad
   const gradHeight = 70;
   const gradStartY = pageHeight - gradHeight;
@@ -1842,21 +1827,38 @@ async function exportarPDFTecnico() {
   doc.setFillColor(255, 255, 255);
   doc.rect(0, panelY, pageWidth, panelHeight, "F");
 
-  // Títulos y datos en negro, en la parte baja
+  // Logo portada AHORA en la banda blanca, a la derecha
+  if (logo && logo.dataUrl) {
+    const ratio =
+      logo.width && logo.height ? logo.width / logo.height : 2.5;
+    const logoW = 40;
+    const logoH = logoW / ratio;
+    const logoX = pageWidth - 20 - logoW;
+    const logoY = panelY + (panelHeight - logoH) / 2; // centrado vertical en la banda blanca
+    try {
+      doc.addImage(logo.dataUrl, "PNG", logoX, logoY, logoW, logoH);
+    } catch (e) {
+      console.warn("No se pudo dibujar logo en portada:", e);
+    }
+  }
+
+  // Títulos y datos en negro, en la parte baja (subidos un poco)
   doc.setFont("helvetica", "bold");
   doc.setFontSize(22);
   doc.setTextColor(0, 0, 0);
-  doc.text(tituloDoc, 20, panelY + 18);
+  // SUBIMOS ligeramente el título para separarlo del pie
+  doc.text(tituloDoc, 20, panelY + 14);
 
   const subTitulo = "Videoportero y control de accesos 2N";
   doc.setFont("helvetica", "normal");
   doc.setFontSize(12);
-  doc.text(subTitulo, 20, panelY + 30);
+  doc.text(subTitulo, 20, panelY + 26);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(11);
 
-  let y = panelY + 42;
+  // Bloque de proyecto también un poco más arriba
+  let y = panelY + 38;
 
   // Proyecto
   doc.setFont("helvetica", "bold");
