@@ -28,10 +28,9 @@ appState.documentacion = appState.documentacion || {
 // HELPERS BÁSICOS DE CONTENEDOR
 // ======================================================
 
+// Helpers básicos de contenedor
 function getDocAppContent() {
-  if (typeof window.getDocAppContent === "function") {
-    return window.getDocAppContent();
-  }
+  // Usamos el mismo contenedor que el resto de vistas
   if (typeof window.getAppContent === "function") {
     return window.getAppContent();
   }
