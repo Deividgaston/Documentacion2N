@@ -2146,7 +2146,7 @@ async function exportarPDFTecnico() {
   doc.save(filename);
 }
 
-// ===== Versión comercial (HIGHIGHTS usando misma portada que el PDF técnico) =====
+// ===== Versión comercial MULTIPÁGINA con tarjetas tipo Salesforce + GALERÍA CON PIE DE FOTO (opción 3) =====
 async function exportarPDFComercial() {
   const jsPDF = window.jspdf.jsPDF;
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
@@ -2175,44 +2175,159 @@ async function exportarPDFComercial() {
   const dims = getDocPageDimensions(doc);
   const pageWidth = dims.width;
   const pageHeight = dims.height;
+  const marginX = 20;
+  const marginTop = 20;
+  const marginBottom = 20;
 
-  // Título según idioma
-  let tituloDoc = "Highlights – Solución de accesos y videoportero IP";
-  if (idioma === "en") tituloDoc = "Highlights – IP access & video intercom";
-  if (idioma === "pt")
-    tituloDoc = "Highlights – Solução IP de acessos e videoporteiro";
-
-  // Helper para sacar una frase corta bonita
+  // Helper: primera frase / texto recortado
   function primeraFrase(texto, maxLen) {
     if (!texto) return "";
     let t = String(texto).replace(/\s+/g, " ").trim();
-    const partes = t.split(/[.\n]/).map((p) => p.trim()).filter(Boolean);
+    const partes = t
+      .split(/[.\n]/)
+      .map((p) => p.trim())
+      .filter(Boolean);
     let frase = partes[0] || t;
-    const limite = maxLen || 180;
+    const limite = maxLen || 240;
     if (frase.length > limite) {
       frase = frase.slice(0, limite - 3) + "...";
     }
     return frase;
   }
 
-  // Contenido para bullets
-  const resumen = primeraFrase(secciones.resumen || "", 220);
-  const sistema = primeraFrase(secciones.sistema || "", 220);
-  const servicios = primeraFrase(secciones.servicios || "", 220);
+  // Helper: card tipo Salesforce (borde redondeado + sombra suave)
+  function drawSalesforceCard(opts) {
+    const {
+      x,
+      y,
+      width,
+      title,
+      body,
+      doc,
+      maxBodyWidth,
+      minHeight,
+    } = opts;
+    const bodyW = maxBodyWidth || width - 16;
+    const baseY = y;
 
-  const bullets = [];
-  if (resumen) bullets.push(resumen);
-  if (sistema) bullets.push(sistema);
-  if (servicios) bullets.push(servicios);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    const bodyLines = body
+      ? doc.splitTextToSize(String(body), bodyW)
+      : [];
+    const lineHeight = 4.4;
+    const bodyHeight = bodyLines.length ? bodyLines.length * lineHeight : 0;
 
-  if (bullets.length < 3 && secciones.infraestructura) {
-    bullets.push(primeraFrase(secciones.infraestructura, 220));
+    const headerHeight = 8;
+    const paddingTop = 8;
+    const paddingBottom = 8;
+    const paddingX = 8;
+
+    let cardHeight =
+      paddingTop + headerHeight + 4 + bodyHeight + paddingBottom;
+    if (minHeight && cardHeight < minHeight) cardHeight = minHeight;
+
+    // Sombra suave
+    doc.setFillColor(229, 231, 235); // gris claro
+    doc.roundedRect(
+      x + 1.2,
+      y + 1.8,
+      width,
+      cardHeight,
+      3,
+      3,
+      "F"
+    );
+
+    // Card blanca
+    doc.setFillColor(255, 255, 255);
+    doc.setDrawColor(209, 213, 219); // borde gris
+    doc.setLineWidth(0.2);
+    doc.roundedRect(x, y, width, cardHeight, 3, 3, "FD");
+
+    // Título
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(31, 41, 55);
+    const titleY = baseY + paddingTop + 5;
+    const titleLines = doc.splitTextToSize(
+      String(title || ""),
+      width - paddingX * 2
+    );
+    doc.text(titleLines, x + paddingX, titleY);
+
+    // Body
+    let bodyStartY = titleY + titleLines.length * 4.2 + 3;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(75, 85, 99);
+    if (bodyLines.length) {
+      doc.text(bodyLines, x + paddingX, bodyStartY);
+    }
+
+    return {
+      height: cardHeight,
+      bottomY: y + cardHeight,
+    };
   }
-  if (bullets.length < 3 && secciones.equipos) {
-    bullets.push(primeraFrase(secciones.equipos, 220));
+
+  // Helper: recoger imágenes de secciones con pie de foto = título de sección (OPCIÓN 3)
+  function collectSectionImagesWithCaptions() {
+    const sectionMediaMap = appState.documentacion.sectionMedia || {};
+    const mediaLib = appState.documentacion.mediaLibrary || [];
+    const byId = {};
+    mediaLib.forEach(function (m) {
+      if (m && m.id) byId[m.id] = m;
+    });
+
+    const usedIds = new Set();
+    const result = [];
+
+    Object.keys(sectionMediaMap).forEach(function (secKey) {
+      const ids = sectionMediaMap[secKey] || [];
+      const captionBase =
+        typeof getSectionTitle === "function"
+          ? getSectionTitle(secKey)
+          : secKey;
+
+      ids.forEach(function (id) {
+        if (usedIds.has(id)) return;
+        const m = byId[id];
+        if (!m || !m.url) return;
+
+        const mime = (m.mimeType || "").toLowerCase();
+        const type = (m.type || "").toLowerCase();
+        const url = (m.url || "").toLowerCase();
+
+        const isImgMime = mime.indexOf("image/") === 0;
+        const isImgType = type === "image";
+        const hasExt =
+          url.endsWith(".png") ||
+          url.endsWith(".jpg") ||
+          url.endsWith(".jpeg") ||
+          url.endsWith(".webp") ||
+          url.endsWith(".gif");
+
+        if (!(isImgMime || isImgType || hasExt)) return;
+
+        usedIds.add(id);
+
+        // Caption: título de sección recortado
+        let caption = captionBase || "";
+        caption = caption.trim();
+        if (caption.length > 70) {
+          caption = caption.slice(0, 67) + "...";
+        }
+
+        result.push({ media: m, caption: caption });
+      });
+    });
+
+    // límite para no hacer el PDF enorme
+    return result.slice(0, 8);
   }
 
-  // 1) PORTADA: MISMA IMAGEN QUE EL PDF TÉCNICO, MISMO TRATAMIENTO
+  // 1) PORTADA: MISMA IMAGEN QUE PDF TÉCNICO + BANDA INFERIOR BLANCA
   try {
     const coverImg = await loadImageAsDataUrl(DOC_TECH_COVER_URL);
     if (coverImg && coverImg.dataUrl) {
@@ -2223,13 +2338,11 @@ async function exportarPDFComercial() {
 
       let drawW, drawH, drawX, drawY;
       if (imgRatio > pageRatio) {
-        // imagen panorámica → ajustamos alto
         drawH = pageHeight;
         drawW = drawH * imgRatio;
         drawX = (pageWidth - drawW) / 2;
         drawY = 0;
       } else {
-        // imagen vertical → ajustamos ancho
         drawW = pageWidth;
         drawH = drawW / imgRatio;
         drawX = 0;
@@ -2239,10 +2352,10 @@ async function exportarPDFComercial() {
       doc.addImage(coverImg.dataUrl, "PNG", drawX, drawY, drawW, drawH);
     }
   } catch (e) {
-    console.warn("No se pudo cargar la imagen de portada para highlights:", e);
+    console.warn("No se pudo cargar la portada comercial:", e);
   }
 
-  // 2) DEGRADADO GRIS EN LA PARTE INFERIOR (igual filosofía que el técnico)
+  // Degradado gris inferior
   const gradHeight = 70;
   const gradStartY = pageHeight - gradHeight;
   for (let i = 0; i < 6; i++) {
@@ -2253,101 +2366,381 @@ async function exportarPDFComercial() {
     doc.rect(0, stepY, pageWidth, stepH, "F");
   }
 
-  // 3) PANEL BLANCO INFERIOR PARA TEXTO COMERCIAL (similar al técnico)
+  // Panel blanco inferior
   const panelHeight = 55;
   const panelY = pageHeight - panelHeight;
   doc.setFillColor(255, 255, 255);
   doc.rect(0, panelY, pageWidth, panelHeight, "F");
 
-  const marginX = 20;
-  let y = panelY + 10;
+  // Título portada
+  let tituloDoc = "Highlights – solución de accesos y videoportero IP";
+  if (idioma === "en")
+    tituloDoc = "Highlights – IP access & video intercom solution";
+  if (idioma === "pt")
+    tituloDoc = "Highlights – solução IP de acessos e videoporteiro";
 
-  // TÍTULO EN NEGRITA
   doc.setFont("helvetica", "bold");
   doc.setFontSize(14);
-  doc.setTextColor(15, 23, 42); // casi negro
-  const tituloLines = doc.splitTextToSize(tituloDoc, pageWidth - marginX * 2 - 40);
+  doc.setTextColor(15, 23, 42);
+  const tituloLines = doc.splitTextToSize(
+    tituloDoc,
+    pageWidth - marginX * 2 - 40
+  );
+  let y = panelY + 11;
   doc.text(tituloLines, marginX, y);
-  y += tituloLines.length * 5 + 2;
+  y += tituloLines.length * 5 + 1;
 
-  // SUBTÍTULO: proyecto + promotora
+  // Proyecto + promotora
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   let subtitulo = nombreProyecto;
   if (promotora) {
     subtitulo += " · " + promotora;
   }
-  const subtituloLines = doc.splitTextToSize(subtitulo, pageWidth - marginX * 2 - 40);
+  const subtituloLines = doc.splitTextToSize(
+    subtitulo,
+    pageWidth - marginX * 2 - 40
+  );
   doc.text(subtituloLines, marginX, y);
   y += subtituloLines.length * 4.8 + 2;
 
-  // LABEL "HIGHLIGHTS"
-  let labelHighlights = "Highlights del proyecto";
-  if (idioma === "en") labelHighlights = "Project highlights";
-  if (idioma === "pt") labelHighlights = "Principais destaques";
-
-  doc.setFont("helvetica", "bold");
+  // Claim corto
+  doc.setFont("helvetica", "italic");
   doc.setFontSize(9);
-  doc.setTextColor(59, 130, 246); // azul 2N / Salesforce style
-  doc.text(labelHighlights.toUpperCase(), marginX, y);
-  y += 4;
-
-  // BULLETS (máx. 3 para que quepan bien en el panel)
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  doc.setTextColor(55, 65, 81);
-  const maxBullets = 3;
-
-  bullets.slice(0, maxBullets).forEach((b) => {
-    const lines = doc.splitTextToSize("• " + b, pageWidth - marginX * 2 - 40);
-    doc.text(lines, marginX, y);
-    y += lines.length * 4.5 + 1.5;
-  });
-
-  // CLAIM BREVE AL LADO DEL LOGO (opcional)
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(8.5);
   doc.setTextColor(107, 114, 128);
-
   let claim =
-    "Arquitectura, diseño y tecnología IP para una experiencia de acceso premium.";
+    "Arquitectura, diseño y tecnología IP para una experiencia de acceso verdaderamente premium.";
   if (idioma === "en") {
     claim =
       "Architecture, design and IP technology for a truly premium access experience.";
   } else if (idioma === "pt") {
     claim =
-      "Arquitetura, design e tecnologia IP para uma experiência de acesso premium.";
+      "Arquitetura, design e tecnologia IP para uma experiência de acesso verdadeiramente premium.";
   }
-
-  const claimMaxWidth = pageWidth * 0.45;
-  const claimLines = doc.splitTextToSize(claim, claimMaxWidth);
-
-  const claimBaseY = panelY + panelHeight - 8; // un poco por encima del borde inferior
-  const claimY = claimBaseY - (claimLines.length - 1) * 4.2;
-
-  doc.text(
-    claimLines,
-    marginX,
-    claimY
+  const claimLines = doc.splitTextToSize(
+    claim,
+    pageWidth - marginX * 2 - 40
   );
+  doc.text(claimLines, marginX, y);
 
-  // 4) LOGO 2N EN LA PARTE INFERIOR DERECHA DEL PANEL
+  // Logo 2N abajo derecha en portada
   if (logo && logo.dataUrl) {
     const ratio =
       logo.width && logo.height ? logo.width / logo.height : 2.5;
     const logoW = 32;
     const logoH = logoW / ratio;
     const logoX = pageWidth - marginX - logoW;
-    const logoY = panelY + panelHeight - logoH - 6; // bien pegado abajo
-
+    const logoY = panelY + panelHeight - logoH - 6;
     try {
       doc.addImage(logo.dataUrl, "PNG", logoX, logoY, logoW, logoH);
     } catch (e) {
-      console.warn("No se pudo dibujar logo en highlights comercial:", e);
+      console.warn("No se pudo dibujar logo en portada comercial:", e);
     }
   }
 
-  // Nombre del archivo
+  // =============== PÁGINA 2: RESUMEN + SISTEMA (tarjetas Salesforce) ===============
+  doc.addPage();
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(12);
+  doc.setTextColor(31, 41, 55);
+  let tituloSeccion1 = "Visión general del proyecto";
+  if (idioma === "en") tituloSeccion1 = "Project overview";
+  if (idioma === "pt") tituloSeccion1 = "Visão geral do projeto";
+  doc.text(tituloSeccion1, marginX, marginTop);
+
+  doc.setDrawColor(209, 213, 219);
+  doc.setLineWidth(0.4);
+  doc.line(marginX, marginTop + 2.5, pageWidth - marginX, marginTop + 2.5);
+
+  let yCards = marginTop + 10;
+
+  const resumenTexto = secciones.resumen || "";
+  const sistemaTexto = secciones.sistema || "";
+
+  const cardWidthFull = pageWidth - marginX * 2;
+  const cardWidthHalf = (pageWidth - marginX * 2 - 8) / 2;
+
+  if (resumenTexto && sistemaTexto) {
+    drawSalesforceCard({
+      x: marginX,
+      y: yCards,
+      width: cardWidthHalf,
+      title:
+        idioma === "en"
+          ? "Project summary"
+          : idioma === "pt"
+          ? "Resumo do projeto"
+          : "Resumen del proyecto",
+      body: resumenTexto,
+      doc: doc,
+      maxBodyWidth: cardWidthHalf - 16,
+      minHeight: 40,
+    });
+
+    const card2 = drawSalesforceCard({
+      x: marginX + cardWidthHalf + 8,
+      y: yCards,
+      width: cardWidthHalf,
+      title:
+        idioma === "en"
+          ? "System architecture"
+          : idioma === "pt"
+          ? "Arquitetura do sistema"
+          : "Sistema de videoportero y accesos",
+      body: sistemaTexto,
+      doc: doc,
+      maxBodyWidth: cardWidthHalf - 16,
+      minHeight: 40,
+    });
+
+    yCards = card2.bottomY + 8;
+  } else if (resumenTexto || sistemaTexto) {
+    const onlyTitle = resumenTexto
+      ? idioma === "en"
+        ? "Project summary"
+        : idioma === "pt"
+        ? "Resumo do projeto"
+        : "Resumen del proyecto"
+      : idioma === "en"
+      ? "System architecture"
+      : idioma === "pt"
+      ? "Arquitetura do sistema"
+      : "Sistema de videoportero y accesos";
+
+    const onlyBody = resumenTexto || sistemaTexto;
+    const c = drawSalesforceCard({
+      x: marginX,
+      y: yCards,
+      width: cardWidthFull,
+      title: onlyTitle,
+      body: onlyBody,
+      doc: doc,
+      maxBodyWidth: cardWidthFull - 16,
+      minHeight: 50,
+    });
+    yCards = c.bottomY + 8;
+  }
+
+  // =============== PÁGINA 3: SERVICIOS / INFRAESTRUCTURA / OTROS ===============
+  const tieneServicios = (secciones.servicios || "").trim().length > 0;
+  const tieneInfra = (secciones.infraestructura || "").trim().length > 0;
+  const tieneOtros = (secciones.otros || "").trim().length > 0;
+
+  if (tieneServicios || tieneInfra || tieneOtros) {
+    doc.addPage();
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.setTextColor(31, 41, 55);
+    let tituloSeccion2 = "Servicios, operación e infraestructura";
+    if (idioma === "en")
+      tituloSeccion2 = "Services, operation & infrastructure";
+    if (idioma === "pt")
+      tituloSeccion2 = "Serviços, operação e infraestrutura";
+    doc.text(tituloSeccion2, marginX, marginTop);
+
+    doc.setDrawColor(209, 213, 219);
+    doc.setLineWidth(0.4);
+    doc.line(
+      marginX,
+      marginTop + 2.5,
+      pageWidth - marginX,
+      marginTop + 2.5
+    );
+
+    let yCards2 = marginTop + 10;
+
+    const bloques = [];
+    if (tieneServicios) {
+      bloques.push({
+        title:
+          idioma === "en"
+            ? "Cloud services & operation"
+            : idioma === "pt"
+            ? "Serviços cloud e operação"
+            : "Servicios cloud y operación",
+        body: secciones.servicios,
+      });
+    }
+    if (tieneInfra) {
+      bloques.push({
+        title:
+          idioma === "en"
+            ? "Infrastructure & IP network"
+            : idioma === "pt"
+            ? "Infraestrutura e rede IP"
+            : "Infraestructura y red IP",
+        body: secciones.infraestructura,
+      });
+    }
+    if (tieneOtros) {
+      bloques.push({
+        title:
+          idioma === "en"
+            ? "Additional notes & options"
+            : idioma === "pt"
+            ? "Notas adicionais e opções"
+            : "Otros aspectos y opciones",
+        body: secciones.otros,
+      });
+    }
+
+    bloques.forEach(function (b) {
+      if (yCards2 + 50 > pageHeight - marginBottom) {
+        doc.addPage();
+        yCards2 = marginTop;
+      }
+
+      const c = drawSalesforceCard({
+        x: marginX,
+        y: yCards2,
+        width: cardWidthFull,
+        title: b.title,
+        body: b.body,
+        doc: doc,
+        maxBodyWidth: cardWidthFull - 16,
+        minHeight: 40,
+      });
+      yCards2 = c.bottomY + 8;
+    });
+  }
+
+  // =============== PÁGINA 4: GALERÍA VISUAL CON PIE DE FOTO (OPCIÓN 3) ===============
+  const galeria = collectSectionImagesWithCaptions();
+  if (galeria.length) {
+    doc.addPage();
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.setTextColor(31, 41, 55);
+
+    let tituloGaleria = "Galería visual de la solución";
+    if (idioma === "en") tituloGaleria = "Visual gallery of the solution";
+    if (idioma === "pt") tituloGaleria = "Galeria visual da solução";
+
+    doc.text(tituloGaleria, marginX, marginTop);
+    doc.setDrawColor(209, 213, 219);
+    doc.setLineWidth(0.4);
+    doc.line(
+      marginX,
+      marginTop + 2.5,
+      pageWidth - marginX,
+      marginTop + 2.5
+    );
+
+    // Layout: 2 imágenes por fila con caption debajo
+    let yRowStart = marginTop + 10;
+    let rowInPage = 0;
+    const maxImgWidth = (pageWidth - marginX * 2 - 10) / 2; // 2 columnas
+    const maxImgHeight = 38;
+    const maxContentBottom = pageHeight - marginBottom - 10;
+    const approxRowHeight = maxImgHeight + 20;
+
+    for (let i = 0; i < galeria.length; i++) {
+      const item = galeria[i];
+      const m = item.media;
+      const caption = item.caption || "";
+
+      // Nueva fila
+      if (i % 2 === 0) {
+        if (rowInPage > 0) {
+          yRowStart += approxRowHeight;
+        }
+
+        // Salto de página entre filas
+        if (yRowStart + approxRowHeight > maxContentBottom) {
+          doc.addPage();
+          yRowStart = marginTop;
+          rowInPage = 0;
+        }
+        rowInPage++;
+      }
+
+      const col = i % 2;
+
+      try {
+        const imgObj = await loadImageAsDataUrl(m.url);
+        const dataUrl = imgObj.dataUrl;
+        const wpx = imgObj.width;
+        const hpx = imgObj.height;
+        const ratio = wpx && hpx ? wpx / hpx : 4 / 3;
+
+        let drawW = maxImgWidth;
+        let drawH = drawW / ratio;
+        if (drawH > maxImgHeight) {
+          drawH = maxImgHeight;
+          drawW = drawH * ratio;
+        }
+
+        const xBase =
+          marginX + col * (maxImgWidth + 10) + (maxImgWidth - drawW) / 2;
+        const yImg = yRowStart;
+
+        // Card de fondo (imagen + caption)
+        const cardPadding = 2;
+        let captionLines = [];
+        let captionHeight = 0;
+        if (caption) {
+          captionLines = doc.splitTextToSize(
+            caption,
+            maxImgWidth - cardPadding * 2
+          );
+          captionHeight = captionLines.length * 4;
+        }
+        const cardHeight = drawH + (caption ? captionHeight + 6 : 4);
+
+        doc.setFillColor(255, 255, 255);
+        doc.setDrawColor(229, 231, 235);
+        doc.setLineWidth(0.2);
+        doc.roundedRect(
+          xBase - cardPadding,
+          yImg - cardPadding,
+          drawW + cardPadding * 2,
+          cardHeight + cardPadding * 2,
+          2,
+          2,
+          "FD"
+        );
+
+        // Imagen
+        doc.addImage(dataUrl, "PNG", xBase, yImg, drawW, drawH);
+
+        // Caption debajo
+        if (caption && captionLines.length) {
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(8.5);
+          doc.setTextColor(75, 85, 99);
+          const yCaption = yImg + drawH + 4;
+          doc.text(
+            captionLines,
+            xBase + drawW / 2,
+            yCaption,
+            { align: "center" }
+          );
+        }
+      } catch (e) {
+        console.warn("No se pudo cargar imagen para galería comercial:", e);
+      }
+    }
+
+    // Logo pequeño en el pie de la página de galería
+    if (logo && logo.dataUrl) {
+      const ratio =
+        logo.width && logo.height ? logo.width / logo.height : 2.5;
+      const logoW = 24;
+      const logoH = logoW / ratio;
+      const logoX = pageWidth - marginX - logoW;
+      const logoY = pageHeight - marginBottom - logoH + 4;
+      try {
+        doc.addImage(logo.dataUrl, "PNG", logoX, logoY, logoW, logoH);
+      } catch (e) {
+        console.warn("No se pudo dibujar logo en galería comercial:", e);
+      }
+    }
+  }
+
+  // ===== Guardar con nombre amigable =====
   let filenameBase = "highlights_accesos";
   if (idioma === "en") filenameBase = "highlights_access_solution";
   if (idioma === "pt") filenameBase = "highlights_acessos";
