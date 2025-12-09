@@ -2146,7 +2146,7 @@ async function exportarPDFTecnico() {
   doc.save(filename);
 }
 
-// ===== Versión comercial MULTIPÁGINA con tarjetas tipo Salesforce + GALERÍA CON PIE DE FOTO (opción 3) =====
+// ===== Versión comercial MULTIPÁGINA (4+ páginas) con tarjetas Salesforce + galería con pies de foto =====
 async function exportarPDFComercial() {
   const jsPDF = window.jspdf.jsPDF;
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
@@ -2179,7 +2179,10 @@ async function exportarPDFComercial() {
   const marginTop = 20;
   const marginBottom = 20;
 
-  // Helper: primera frase / texto recortado
+  // ===========================
+  // Helpers
+  // ===========================
+
   function primeraFrase(texto, maxLen) {
     if (!texto) return "";
     let t = String(texto).replace(/\s+/g, " ").trim();
@@ -2195,7 +2198,6 @@ async function exportarPDFComercial() {
     return frase;
   }
 
-  // Helper: card tipo Salesforce (borde redondeado + sombra suave)
   function drawSalesforceCard(opts) {
     const {
       x,
@@ -2228,7 +2230,7 @@ async function exportarPDFComercial() {
     if (minHeight && cardHeight < minHeight) cardHeight = minHeight;
 
     // Sombra suave
-    doc.setFillColor(229, 231, 235); // gris claro
+    doc.setFillColor(229, 231, 235);
     doc.roundedRect(
       x + 1.2,
       y + 1.8,
@@ -2241,7 +2243,7 @@ async function exportarPDFComercial() {
 
     // Card blanca
     doc.setFillColor(255, 255, 255);
-    doc.setDrawColor(209, 213, 219); // borde gris
+    doc.setDrawColor(209, 213, 219);
     doc.setLineWidth(0.2);
     doc.roundedRect(x, y, width, cardHeight, 3, 3, "FD");
 
@@ -2271,7 +2273,7 @@ async function exportarPDFComercial() {
     };
   }
 
-  // Helper: recoger imágenes de secciones con pie de foto = título de sección (OPCIÓN 3)
+  // Imágenes para la galería con pie de foto = título de sección (opción 3)
   function collectSectionImagesWithCaptions() {
     const sectionMediaMap = appState.documentacion.sectionMedia || {};
     const mediaLib = appState.documentacion.mediaLibrary || [];
@@ -2312,7 +2314,6 @@ async function exportarPDFComercial() {
 
         usedIds.add(id);
 
-        // Caption: título de sección recortado
         let caption = captionBase || "";
         caption = caption.trim();
         if (caption.length > 70) {
@@ -2323,11 +2324,13 @@ async function exportarPDFComercial() {
       });
     });
 
-    // límite para no hacer el PDF enorme
     return result.slice(0, 8);
   }
 
-  // 1) PORTADA: MISMA IMAGEN QUE PDF TÉCNICO + BANDA INFERIOR BLANCA
+  // ===========================
+  // PÁGINA 1 – PORTADA (misma imagen que PDF técnico)
+  // ===========================
+
   try {
     const coverImg = await loadImageAsDataUrl(DOC_TECH_COVER_URL);
     if (coverImg && coverImg.dataUrl) {
@@ -2438,7 +2441,10 @@ async function exportarPDFComercial() {
     }
   }
 
-  // =============== PÁGINA 2: RESUMEN + SISTEMA (tarjetas Salesforce) ===============
+  // ===========================
+  // PÁGINA 2 – Resumen + Sistema (tarjetas Salesforce)
+  // ===========================
+
   doc.addPage();
 
   doc.setFont("helvetica", "bold");
@@ -2522,7 +2528,10 @@ async function exportarPDFComercial() {
     yCards = c.bottomY + 8;
   }
 
-  // =============== PÁGINA 3: SERVICIOS / INFRAESTRUCTURA / OTROS ===============
+  // ===========================
+  // PÁGINA 3 – Servicios / Infraestructura / Otros
+  // ===========================
+
   const tieneServicios = (secciones.servicios || "").trim().length > 0;
   const tieneInfra = (secciones.infraestructura || "").trim().length > 0;
   const tieneOtros = (secciones.otros || "").trim().length > 0;
@@ -2606,7 +2615,10 @@ async function exportarPDFComercial() {
     });
   }
 
-  // =============== PÁGINA 4: GALERÍA VISUAL CON PIE DE FOTO (OPCIÓN 3) ===============
+  // ===========================
+  // PÁGINA 4 – Galería visual con pies de foto (puede ocupar más de 1 página)
+  // ===========================
+
   const galeria = collectSectionImagesWithCaptions();
   if (galeria.length) {
     doc.addPage();
@@ -2629,26 +2641,24 @@ async function exportarPDFComercial() {
       marginTop + 2.5
     );
 
-    // Layout: 2 imágenes por fila con caption debajo
     let yRowStart = marginTop + 10;
     let rowInPage = 0;
-    const maxImgWidth = (pageWidth - marginX * 2 - 10) / 2; // 2 columnas
+    const maxImgWidth = (pageWidth - marginX * 2 - 10) / 2;
     const maxImgHeight = 38;
     const maxContentBottom = pageHeight - marginBottom - 10;
-    const approxRowHeight = maxImgHeight + 20;
+    const approxRowHeight = maxImgHeight + 24;
 
     for (let i = 0; i < galeria.length; i++) {
       const item = galeria[i];
       const m = item.media;
       const caption = item.caption || "";
 
-      // Nueva fila
+      // Nueva fila cada 2 imágenes
       if (i % 2 === 0) {
         if (rowInPage > 0) {
           yRowStart += approxRowHeight;
         }
 
-        // Salto de página entre filas
         if (yRowStart + approxRowHeight > maxContentBottom) {
           doc.addPage();
           yRowStart = marginTop;
@@ -2677,7 +2687,6 @@ async function exportarPDFComercial() {
           marginX + col * (maxImgWidth + 10) + (maxImgWidth - drawW) / 2;
         const yImg = yRowStart;
 
-        // Card de fondo (imagen + caption)
         const cardPadding = 2;
         let captionLines = [];
         let captionHeight = 0;
@@ -2703,10 +2712,8 @@ async function exportarPDFComercial() {
           "FD"
         );
 
-        // Imagen
         doc.addImage(dataUrl, "PNG", xBase, yImg, drawW, drawH);
 
-        // Caption debajo
         if (caption && captionLines.length) {
           doc.setFont("helvetica", "normal");
           doc.setFontSize(8.5);
@@ -2724,7 +2731,7 @@ async function exportarPDFComercial() {
       }
     }
 
-    // Logo pequeño en el pie de la página de galería
+    // Logo pequeño en pie de la última página de galería
     if (logo && logo.dataUrl) {
       const ratio =
         logo.width && logo.height ? logo.width / logo.height : 2.5;
@@ -2740,7 +2747,10 @@ async function exportarPDFComercial() {
     }
   }
 
-  // ===== Guardar con nombre amigable =====
+  // ===========================
+  // Guardar PDF
+  // ===========================
+
   let filenameBase = "highlights_accesos";
   if (idioma === "en") filenameBase = "highlights_access_solution";
   if (idioma === "pt") filenameBase = "highlights_acessos";
