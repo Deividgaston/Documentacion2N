@@ -2146,7 +2146,7 @@ async function exportarPDFTecnico() {
   doc.save(filename);
 }
 
-// ===== Versión comercial (HIGHIGHTS VISUAL) =====
+// ===== Versión comercial (HIGHIGHTS usando misma portada que el PDF técnico) =====
 async function exportarPDFComercial() {
   const jsPDF = window.jspdf.jsPDF;
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
@@ -2182,44 +2182,54 @@ async function exportarPDFComercial() {
   if (idioma === "pt")
     tituloDoc = "Highlights – Solução IP de acessos e videoporteiro";
 
-  // Helper interno para sacar la primera frase bonita
+  // Helper para sacar una frase corta bonita
   function primeraFrase(texto, maxLen) {
     if (!texto) return "";
     let t = String(texto).replace(/\s+/g, " ").trim();
-    // Cortamos por punto o salto de línea
     const partes = t.split(/[.\n]/).map((p) => p.trim()).filter(Boolean);
     let frase = partes[0] || t;
-    if (frase.length > (maxLen || 180)) {
-      frase = frase.slice(0, (maxLen || 180) - 3) + "...";
+    const limite = maxLen || 180;
+    if (frase.length > limite) {
+      frase = frase.slice(0, limite - 3) + "...";
     }
     return frase;
   }
 
-  // Contenidos base para bullets
+  // Contenido para bullets
   const resumen = primeraFrase(secciones.resumen || "", 220);
   const sistema = primeraFrase(secciones.sistema || "", 220);
   const servicios = primeraFrase(secciones.servicios || "", 220);
 
-  // Intentamos usar la misma imagen que en la memoria técnica como fondo
+  const bullets = [];
+  if (resumen) bullets.push(resumen);
+  if (sistema) bullets.push(sistema);
+  if (servicios) bullets.push(servicios);
+
+  if (bullets.length < 3 && secciones.infraestructura) {
+    bullets.push(primeraFrase(secciones.infraestructura, 220));
+  }
+  if (bullets.length < 3 && secciones.equipos) {
+    bullets.push(primeraFrase(secciones.equipos, 220));
+  }
+
+  // 1) PORTADA: MISMA IMAGEN QUE EL PDF TÉCNICO, MISMO TRATAMIENTO
   try {
     const coverImg = await loadImageAsDataUrl(DOC_TECH_COVER_URL);
-
     if (coverImg && coverImg.dataUrl) {
       const imgWpx = coverImg.width || 1200;
       const imgHpx = coverImg.height || 800;
       const imgRatio = imgWpx / imgHpx;
       const pageRatio = pageWidth / pageHeight;
 
-      // Imagen a sangre como fondo
       let drawW, drawH, drawX, drawY;
       if (imgRatio > pageRatio) {
-        // Imagen más panorámica → ajustamos alto
+        // imagen panorámica → ajustamos alto
         drawH = pageHeight;
         drawW = drawH * imgRatio;
         drawX = (pageWidth - drawW) / 2;
         drawY = 0;
       } else {
-        // Imagen más vertical → ajustamos ancho
+        // imagen vertical → ajustamos ancho
         drawW = pageWidth;
         drawH = drawW / imgRatio;
         drawX = 0;
@@ -2229,156 +2239,115 @@ async function exportarPDFComercial() {
       doc.addImage(coverImg.dataUrl, "PNG", drawX, drawY, drawW, drawH);
     }
   } catch (e) {
-    console.warn("No se pudo cargar la portada para highlights:", e);
+    console.warn("No se pudo cargar la imagen de portada para highlights:", e);
   }
 
-  // COLUMNA IZQUIERDA CON DEGRADADO (tipo Salesforce)
-  const gradX = 0;
-  const gradWidth = pageWidth * 0.62; // parte izquierda de la página
-  const gradY = 0;
-  const gradHeight = pageHeight;
-  const steps = 26;
-  const stepH = gradHeight / steps;
-
-  // De azul oscuro a azul más vivo
-  const startColor = { r: 15, g: 23, b: 42 };   // #0F172A
-  const endColor = { r: 59, g: 130, b: 246 };  // #3B82F6
-
-  for (let i = 0; i < steps; i++) {
-    const t = i / (steps - 1);
-    const r = Math.round(startColor.r + (endColor.r - startColor.r) * t);
-    const g = Math.round(startColor.g + (endColor.g - startColor.g) * t);
-    const b = Math.round(startColor.b + (endColor.b - startColor.b) * t);
-    doc.setFillColor(r, g, b);
-    doc.rect(gradX, gradY + i * stepH, gradWidth, stepH + 0.5, "F");
+  // 2) DEGRADADO GRIS EN LA PARTE INFERIOR (igual filosofía que el técnico)
+  const gradHeight = 70;
+  const gradStartY = pageHeight - gradHeight;
+  for (let i = 0; i < 6; i++) {
+    const stepY = gradStartY + (i * gradHeight) / 6;
+    const stepH = gradHeight / 6 + 0.5;
+    const shade = 255 - i * 8;
+    doc.setFillColor(shade, shade, shade);
+    doc.rect(0, stepY, pageWidth, stepH, "F");
   }
 
-  // PANEL PRINCIPAL PARA TEXTO (ligero card sobre el degradado)
-  const cardX = 15;
-  const cardY = 22;
-  const cardW = gradWidth - 20;
-  const cardH = pageHeight - 40;
+  // 3) PANEL BLANCO INFERIOR PARA TEXTO COMERCIAL (similar al técnico)
+  const panelHeight = 55;
+  const panelY = pageHeight - panelHeight;
+  doc.setFillColor(255, 255, 255);
+  doc.rect(0, panelY, pageWidth, panelHeight, "F");
 
-  doc.setFillColor(15, 23, 42); // muy oscuro para contraste
-  doc.roundedRect(cardX, cardY, cardW, cardH, 4, 4, "F");
+  const marginX = 20;
+  let y = panelY + 10;
 
-  // TÍTULO PRINCIPAL
-  doc.setTextColor(248, 250, 252); // casi blanco
+  // TÍTULO EN NEGRITA
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(18);
-  doc.text(tituloDoc, cardX + 10, cardY + 14);
+  doc.setFontSize(14);
+  doc.setTextColor(15, 23, 42); // casi negro
+  const tituloLines = doc.splitTextToSize(tituloDoc, pageWidth - marginX * 2 - 40);
+  doc.text(tituloLines, marginX, y);
+  y += tituloLines.length * 5 + 2;
 
-  // Línea decorativa bajo el título
-  doc.setDrawColor(96, 165, 250);
-  doc.setLineWidth(0.8);
-  doc.line(cardX + 10, cardY + 17, cardX + cardW - 10, cardY + 17);
-
-  let y = cardY + 28;
-
-  // SUBTÍTULO / PROYECTO
+  // SUBTÍTULO: proyecto + promotora
+  doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
-  doc.setFont("helvetica", "bold");
   let subtitulo = nombreProyecto;
   if (promotora) {
-    subtitulo += "  ·  " + promotora;
+    subtitulo += " · " + promotora;
   }
-  const subtituloLines = doc.splitTextToSize(subtitulo, cardW - 20);
-  doc.text(subtituloLines, cardX + 10, y);
-  y += subtituloLines.length * 5 + 4;
+  const subtituloLines = doc.splitTextToSize(subtitulo, pageWidth - marginX * 2 - 40);
+  doc.text(subtituloLines, marginX, y);
+  y += subtituloLines.length * 4.8 + 2;
 
-  // PEQUEÑO LABEL "Project highlights"
+  // LABEL "HIGHLIGHTS"
   let labelHighlights = "Highlights del proyecto";
   if (idioma === "en") labelHighlights = "Project highlights";
   if (idioma === "pt") labelHighlights = "Principais destaques";
 
-  doc.setFontSize(9);
   doc.setFont("helvetica", "bold");
-  doc.setTextColor(191, 219, 254);
-  doc.text(labelHighlights.toUpperCase(), cardX + 10, y);
-  y += 6;
+  doc.setFontSize(9);
+  doc.setTextColor(59, 130, 246); // azul 2N / Salesforce style
+  doc.text(labelHighlights.toUpperCase(), marginX, y);
+  y += 4;
 
-  // CONTENIDO EN BULLETS CON TIPOGRAFÍA LIMPIA
+  // BULLETS (máx. 3 para que quepan bien en el panel)
   doc.setFont("helvetica", "normal");
-  doc.setTextColor(226, 232, 240);
-  doc.setFontSize(9.3);
+  doc.setFontSize(9);
+  doc.setTextColor(55, 65, 81);
+  const maxBullets = 3;
 
-  const bullets = [];
-
-  if (resumen) bullets.push(resumen);
-  if (sistema) bullets.push(sistema);
-  if (servicios) bullets.push(servicios);
-
-  // Si hay pocos textos, usamos también infraestructura o equipos
-  if (bullets.length < 3 && secciones.infraestructura) {
-    bullets.push(primeraFrase(secciones.infraestructura, 220));
-  }
-  if (bullets.length < 3 && secciones.equipos) {
-    bullets.push(primeraFrase(secciones.equipos, 220));
-  }
-
-  const maxBullets = 4;
   bullets.slice(0, maxBullets).forEach((b) => {
-    const lines = doc.splitTextToSize("• " + b, cardW - 20);
-    doc.text(lines, cardX + 10, y);
-    y += lines.length * 5 + 4;
+    const lines = doc.splitTextToSize("• " + b, pageWidth - marginX * 2 - 40);
+    doc.text(lines, marginX, y);
+    y += lines.length * 4.5 + 1.5;
   });
 
-  // BLOQUE INFERIOR: CALL TO ACTION / CLAIM 2N
-  const ctaY = cardY + cardH - 25;
+  // CLAIM BREVE AL LADO DEL LOGO (opcional)
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(9.5);
-  doc.setTextColor(248, 250, 252);
+  doc.setFontSize(8.5);
+  doc.setTextColor(107, 114, 128);
 
   let claim =
-    "Arquitectura, diseño y tecnología IP para una experiencia de acceso realmente premium.";
+    "Arquitectura, diseño y tecnología IP para una experiencia de acceso premium.";
   if (idioma === "en") {
     claim =
       "Architecture, design and IP technology for a truly premium access experience.";
   } else if (idioma === "pt") {
     claim =
-      "Arquitetura, design e tecnologia IP para uma experiência de acesso verdadeiramente premium.";
+      "Arquitetura, design e tecnologia IP para uma experiência de acesso premium.";
   }
 
-  const claimLines = doc.splitTextToSize(claim, cardW - 20);
-  doc.text(claimLines, cardX + 10, ctaY);
+  const claimMaxWidth = pageWidth * 0.45;
+  const claimLines = doc.splitTextToSize(claim, claimMaxWidth);
 
-  // Logo 2N en la esquina inferior derecha (dentro del card)
+  const claimBaseY = panelY + panelHeight - 8; // un poco por encima del borde inferior
+  const claimY = claimBaseY - (claimLines.length - 1) * 4.2;
+
+  doc.text(
+    claimLines,
+    marginX,
+    claimY
+  );
+
+  // 4) LOGO 2N EN LA PARTE INFERIOR DERECHA DEL PANEL
   if (logo && logo.dataUrl) {
     const ratio =
       logo.width && logo.height ? logo.width / logo.height : 2.5;
-    const logoW = 26;
+    const logoW = 32;
     const logoH = logoW / ratio;
-    const logoX = cardX + cardW - logoW - 6;
-    const logoY = cardY + cardH - logoH - 6;
+    const logoX = pageWidth - marginX - logoW;
+    const logoY = panelY + panelHeight - logoH - 6; // bien pegado abajo
+
     try {
       doc.addImage(logo.dataUrl, "PNG", logoX, logoY, logoW, logoH);
     } catch (e) {
-      console.warn("No se pudo dibujar logo en highlights:", e);
+      console.warn("No se pudo dibujar logo en highlights comercial:", e);
     }
   }
 
-  // Un pequeño texto de pie centrado, sobre el fondo general (fuera del card)
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
-  doc.setTextColor(229, 231, 235);
-  let footerTxt =
-    "Solución IP de videoportero y control de accesos 2N® · Documento de highlights comerciales";
-  if (idioma === "en") {
-    footerTxt =
-      "2N® IP video intercom & access control solution · Commercial highlights document";
-  } else if (idioma === "pt") {
-    footerTxt =
-      "Solução IP 2N® de videoporteiro e controlo de acessos · Documento de destaques comerciais";
-  }
-  const footerLines = doc.splitTextToSize(footerTxt, pageWidth - 40);
-  doc.text(
-    footerLines,
-    pageWidth / 2,
-    pageHeight - 10,
-    { align: "center" }
-  );
-
-  // Nombre de archivo
+  // Nombre del archivo
   let filenameBase = "highlights_accesos";
   if (idioma === "en") filenameBase = "highlights_access_solution";
   if (idioma === "pt") filenameBase = "highlights_acessos";
