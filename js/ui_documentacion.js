@@ -2146,7 +2146,7 @@ async function exportarPDFTecnico() {
   doc.save(filename);
 }
 
-// ===== Versión comercial =====
+// ===== Versión comercial (más visual) =====
 
 async function exportarPDFComercial() {
   const jsPDF = window.jspdf.jsPDF;
@@ -2175,18 +2175,48 @@ async function exportarPDFComercial() {
   const logo = await getDocLogoImage();
   const dims = getDocPageDimensions(doc);
   const pageWidth = dims.width;
+  const pageHeight = dims.height;
 
+  // Textos según idioma
+  let kicker = "Memoria comercial";
   let tituloDoc = "Solución de accesos y videoportero IP";
-  if (idioma === "en") tituloDoc = "IP access & video intercom solution";
-  if (idioma === "pt") tituloDoc = "Solução IP de acessos e videoporteiro";
+  let subTitulo =
+    "Propuesta de experiencia de acceso, comunicación y confort para el edificio.";
+  let badge = "Acceso residencial premium";
 
+  if (idioma === "en") {
+    kicker = "Commercial specification";
+    tituloDoc = "IP access & video intercom solution";
+    subTitulo =
+      "Proposed experience for access, communication and resident comfort.";
+    badge = "Premium residential access";
+  } else if (idioma === "pt") {
+    kicker = "Memória comercial";
+    tituloDoc = "Solução IP de acessos e videoporteiro";
+    subTitulo =
+      "Proposta de experiência de acesso, comunicação e conforto para o edifício.";
+    badge = "Acesso residencial premium";
+  }
+
+  // ===== PORTADA VISUAL =====
+
+  // Bloque superior oscuro (hero)
+  const heroHeight = pageHeight * 0.58;
+  doc.setFillColor(15, 23, 42); // #0f172a
+  doc.rect(0, 0, pageWidth, heroHeight, "F");
+
+  // Banda ligeramente más clara en la parte inferior del hero
+  doc.setFillColor(30, 64, 175); // #1d4ed8
+  doc.rect(0, heroHeight - 15, pageWidth, 15, "F");
+
+  // Logo en la esquina superior derecha
   if (logo && logo.dataUrl) {
     const ratio =
       logo.width && logo.height ? logo.width / logo.height : 2.5;
-    const logoW = 40;
+    const logoW = 35;
     const logoH = logoW / ratio;
     const logoX = pageWidth - 20 - logoW;
-    const logoY = 18;
+    const logoY = 14;
     try {
       doc.addImage(logo.dataUrl, "PNG", logoX, logoY, logoW, logoH);
     } catch (e) {
@@ -2194,39 +2224,227 @@ async function exportarPDFComercial() {
     }
   }
 
+  // Texto principal de portada (en blanco)
+  doc.setTextColor(255, 255, 255);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(20);
-  doc.text(tituloDoc, 20, 40);
+  doc.setFontSize(9);
+  doc.text(kicker.toUpperCase(), 20, 30);
 
-  doc.setDrawColor(230, 230, 230);
-  doc.setLineWidth(0.4);
-  doc.line(20, 43, pageWidth - 20, 43);
+  doc.setFontSize(20);
+  const titleLines = doc.splitTextToSize(tituloDoc, pageWidth - 40);
+  doc.text(titleLines, 20, 42);
+
+  let yAfterTitle = 42 + titleLines.length * 7 + 4;
 
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(12);
-  let y = 60;
+  doc.setFontSize(11);
+  const subLines = doc.splitTextToSize(subTitulo, pageWidth - 50);
+  doc.text(subLines, 20, yAfterTitle);
+  yAfterTitle += subLines.length * 5 + 6;
 
-  const headerLines = [];
-  headerLines.push(nombreProyecto);
-  if (promotora) headerLines.push(promotora);
+  // Badge
+  doc.setDrawColor(148, 163, 184); // borde suave
+  doc.setFillColor(31, 41, 55); // fondo badge
+  const badgePaddingX = 4;
+  const badgePaddingY = 3;
+  doc.setFontSize(9);
+  const badgeWidth = doc.getTextWidth(badge) + badgePaddingX * 2;
+  const badgeX = 20;
+  const badgeY = yAfterTitle;
+  doc.roundedRect(
+    badgeX,
+    badgeY - 5,
+    badgeWidth,
+    10,
+    2,
+    2,
+    "FD"
+  );
+  doc.text(badge, badgeX + badgePaddingX, badgeY + 0.5);
 
-  headerLines.forEach((line) => {
-    const lines = doc.splitTextToSize(line, pageWidth - 40);
-    doc.text(lines, 20, y);
-    y += lines.length * 6;
-  });
+  // Panel inferior blanco con datos de proyecto
+  const panelHeight = pageHeight - heroHeight;
+  doc.setFillColor(255, 255, 255);
+  doc.rect(0, heroHeight, pageWidth, panelHeight, "F");
 
-  y += 8;
+  doc.setTextColor(31, 41, 55);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
 
-  const resumen = (secciones.resumen || "").trim();
-  if (resumen) {
-    doc.setFontSize(11);
-    const lines = doc.splitTextToSize(resumen, pageWidth - 40);
-    doc.text(lines, 20, y);
+  let y = heroHeight + 14;
+
+  // Proyecto
+  let labelProyecto = "Proyecto";
+  let labelPromotora = "Promotora";
+  let labelFecha = "Fecha";
+
+  if (idioma === "en") {
+    labelProyecto = "Project";
+    labelPromotora = "Developer";
+    labelFecha = "Date";
+  } else if (idioma === "pt") {
+    labelProyecto = "Projeto";
+    labelPromotora = "Promotora";
+    labelFecha = "Data";
   }
 
+  const fechaHoy = new Date().toLocaleDateString(
+    idioma === "en" ? "en-GB" : "es-ES"
+  );
+
+  doc.text(labelProyecto + ":", 20, y);
+  doc.setFont("helvetica", "normal");
+  const projLines = doc.splitTextToSize(nombreProyecto, pageWidth - 60);
+  doc.text(projLines, 45, y);
+  y += projLines.length * 5 + 4;
+
+  if (promotora) {
+    doc.setFont("helvetica", "bold");
+    doc.text(labelPromotora + ":", 20, y);
+    doc.setFont("helvetica", "normal");
+    const promLines = doc.splitTextToSize(promotora, pageWidth - 60);
+    doc.text(promLines, 45, y);
+    y += promLines.length * 5 + 4;
+  }
+
+  doc.setFont("helvetica", "bold");
+  doc.text(labelFecha + ":", 20, y);
+  doc.setFont("helvetica", "normal");
+  doc.text(fechaHoy, 45, y);
+
+  // Pie
   drawTechFooter(doc, { idioma: idioma });
 
+  // ===== PÁGINA 2: RESUMEN + TARJETAS DE SOLUCIÓN =====
+
+  doc.addPage();
+  const startY = setupTechContentPage(doc, {
+    idioma: idioma,
+    nombreProyecto: nombreProyecto,
+    logo: logo,
+  });
+
+  y = startY;
+
+  // Título página 2
+  let tituloResumen = "Resumen de la solución propuesta";
+  let subtituloResumen =
+    "Visión general de la experiencia de acceso, comunicación y operación del edificio.";
+  if (idioma === "en") {
+    tituloResumen = "Overview of the proposed solution";
+    subtituloResumen =
+      "High-level view of the building’s access, communication and operation experience.";
+  } else if (idioma === "pt") {
+    tituloResumen = "Resumo da solução proposta";
+    subtituloResumen =
+      "Visão geral da experiência de acesso, comunicação e operação do edifício.";
+  }
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(13);
+  doc.setTextColor(15, 23, 42);
+  doc.text(tituloResumen, 20, y);
+  y += 7;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.setTextColor(75, 85, 99);
+  const resumenIntroLines = doc.splitTextToSize(
+    subtituloResumen,
+    pageWidth - 40
+  );
+  doc.text(resumenIntroLines, 20, y);
+  y += resumenIntroLines.length * 5 + 6;
+
+  // Tarjetas: tomamos texto de secciones clave
+  const cardKeys = ["sistema", "equipos", "servicios", "infraestructura"];
+
+  cardKeys.forEach(function (key) {
+    const rawText = (secciones[key] || "").trim();
+    if (!rawText) return;
+
+    const tituloSeccion = getSectionTitle(key);
+
+    const cardMarginX = 20;
+    const cardWidth = pageWidth - cardMarginX * 2;
+    const paddingX = 4;
+    const paddingTop = 6;
+    const paddingBottom = 6;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(31, 41, 55);
+
+    // Texto del cuerpo (limitado)
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(55, 65, 81);
+
+    const maxLines = 8;
+    const bodyLines = doc
+      .splitTextToSize(rawText, cardWidth - paddingX * 2)
+      .slice(0, maxLines);
+
+    const cardHeight =
+      paddingTop + // espacio arriba
+      5 + // título
+      4 + // separación título / contenido
+      bodyLines.length * 4.2 +
+      paddingBottom;
+
+    // Salto de página si no cabe
+    const dims2 = getDocPageDimensions(doc);
+    const pageBottom = dims2.height - 22;
+    if (y + cardHeight > pageBottom) {
+      doc.addPage();
+      y = setupTechContentPage(doc, {
+        idioma: idioma,
+        nombreProyecto: nombreProyecto,
+        logo: logo,
+      });
+    }
+
+    // Fondo de tarjeta
+    doc.setDrawColor(229, 231, 235);
+    doc.setFillColor(249, 250, 251);
+    doc.roundedRect(
+      cardMarginX,
+      y,
+      cardWidth,
+      cardHeight,
+      2.5,
+      2.5,
+      "FD"
+    );
+
+    // Línea superior de acento
+    doc.setDrawColor(59, 130, 246);
+    doc.setLineWidth(0.7);
+    doc.line(
+      cardMarginX,
+      y + 3,
+      cardMarginX + 18,
+      y + 3
+    );
+
+    // Título dentro de la tarjeta
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(17, 24, 39);
+    const titleY = y + paddingTop + 2;
+    doc.text(tituloSeccion, cardMarginX + paddingX, titleY);
+
+    // Cuerpo
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(55, 65, 81);
+    const bodyY = titleY + 5;
+    doc.text(bodyLines, cardMarginX + paddingX, bodyY);
+
+    y += cardHeight + 5;
+  });
+
+  // Nombre de fichero
   let filenameBase = "presentacion_accesos";
   if (idioma === "en") filenameBase = "access_solution_presentation";
   if (idioma === "pt") filenameBase = "apresentacao_acessos";
