@@ -2146,7 +2146,7 @@ async function exportarPDFTecnico() {
   doc.save(filename);
 }
 
-// ===== Versión comercial MULTIPÁGINA (4+ páginas) con tarjetas Salesforce + galería con pies de foto =====
+// ===== Versión comercial MULTIPÁGINA (portada + horizontal) con tarjetas Salesforce + galería con nombres en pie de página =====
 async function exportarPDFComercial() {
   const jsPDF = window.jspdf.jsPDF;
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
@@ -2172,9 +2172,6 @@ async function exportarPDFComercial() {
     "";
 
   const logo = await getDocLogoImage();
-  const dims = getDocPageDimensions(doc);
-  const pageWidth = dims.width;
-  const pageHeight = dims.height;
   const marginX = 20;
   const marginTop = 20;
   const marginBottom = 20;
@@ -2182,21 +2179,6 @@ async function exportarPDFComercial() {
   // ===========================
   // Helpers
   // ===========================
-
-  function primeraFrase(texto, maxLen) {
-    if (!texto) return "";
-    let t = String(texto).replace(/\s+/g, " ").trim();
-    const partes = t
-      .split(/[.\n]/)
-      .map((p) => p.trim())
-      .filter(Boolean);
-    let frase = partes[0] || t;
-    const limite = maxLen || 240;
-    if (frase.length > limite) {
-      frase = frase.slice(0, limite - 3) + "...";
-    }
-    return frase;
-  }
 
   function drawSalesforceCard(opts) {
     const {
@@ -2273,7 +2255,7 @@ async function exportarPDFComercial() {
     };
   }
 
-  // Imágenes para la galería con pie de foto = título de sección (opción 3)
+  // Imágenes para la galería con pie de página = título de sección (opción 3)
   function collectSectionImagesWithCaptions() {
     const sectionMediaMap = appState.documentacion.sectionMedia || {};
     const mediaLib = appState.documentacion.mediaLibrary || [];
@@ -2327,217 +2309,266 @@ async function exportarPDFComercial() {
     return result.slice(0, 8);
   }
 
+  function drawGalleryFooter(captions) {
+    if (!captions || !captions.length) return;
+    const dims = getDocPageDimensions(doc);
+    const pageWidth = dims.width;
+    const pageHeight = dims.height;
+
+    let label = "Imágenes en esta página: ";
+    if (idioma === "en") label = "Images on this page: ";
+    else if (idioma === "pt") label = "Imagens nesta página: ";
+
+    const text = label + captions.join(" · ");
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(107, 114, 128);
+
+    const lines = doc.splitTextToSize(text, pageWidth - marginX * 2);
+    const baseY = pageHeight - 8;
+    const firstLineY = baseY - (lines.length - 1) * 3;
+    doc.text(lines, marginX, firstLineY);
+  }
+
   // ===========================
   // PÁGINA 1 – PORTADA (misma imagen que PDF técnico)
   // ===========================
 
-  try {
-    const coverImg = await loadImageAsDataUrl(DOC_TECH_COVER_URL);
-    if (coverImg && coverImg.dataUrl) {
-      const imgWpx = coverImg.width || 1200;
-      const imgHpx = coverImg.height || 800;
-      const imgRatio = imgWpx / imgHpx;
-      const pageRatio = pageWidth / pageHeight;
+  (function renderCover() {
+    const dims = getDocPageDimensions(doc);
+    const pageWidth = dims.width;
+    const pageHeight = dims.height;
 
-      let drawW, drawH, drawX, drawY;
-      if (imgRatio > pageRatio) {
-        drawH = pageHeight;
-        drawW = drawH * imgRatio;
-        drawX = (pageWidth - drawW) / 2;
-        drawY = 0;
-      } else {
-        drawW = pageWidth;
-        drawH = drawW / imgRatio;
-        drawX = 0;
-        drawY = (pageHeight - drawH) / 2;
-      }
-
-      doc.addImage(coverImg.dataUrl, "PNG", drawX, drawY, drawW, drawH);
-    }
-  } catch (e) {
-    console.warn("No se pudo cargar la portada comercial:", e);
-  }
-
-  // Degradado gris inferior
-  const gradHeight = 70;
-  const gradStartY = pageHeight - gradHeight;
-  for (let i = 0; i < 6; i++) {
-    const stepY = gradStartY + (i * gradHeight) / 6;
-    const stepH = gradHeight / 6 + 0.5;
-    const shade = 255 - i * 8;
-    doc.setFillColor(shade, shade, shade);
-    doc.rect(0, stepY, pageWidth, stepH, "F");
-  }
-
-  // Panel blanco inferior
-  const panelHeight = 55;
-  const panelY = pageHeight - panelHeight;
-  doc.setFillColor(255, 255, 255);
-  doc.rect(0, panelY, pageWidth, panelHeight, "F");
-
-  // Título portada
-  let tituloDoc = "Highlights – solución de accesos y videoportero IP";
-  if (idioma === "en")
-    tituloDoc = "Highlights – IP access & video intercom solution";
-  if (idioma === "pt")
-    tituloDoc = "Highlights – solução IP de acessos e videoporteiro";
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(14);
-  doc.setTextColor(15, 23, 42);
-  const tituloLines = doc.splitTextToSize(
-    tituloDoc,
-    pageWidth - marginX * 2 - 40
-  );
-  let y = panelY + 11;
-  doc.text(tituloLines, marginX, y);
-  y += tituloLines.length * 5 + 1;
-
-  // Proyecto + promotora
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  let subtitulo = nombreProyecto;
-  if (promotora) {
-    subtitulo += " · " + promotora;
-  }
-  const subtituloLines = doc.splitTextToSize(
-    subtitulo,
-    pageWidth - marginX * 2 - 40
-  );
-  doc.text(subtituloLines, marginX, y);
-  y += subtituloLines.length * 4.8 + 2;
-
-  // Claim corto
-  doc.setFont("helvetica", "italic");
-  doc.setFontSize(9);
-  doc.setTextColor(107, 114, 128);
-  let claim =
-    "Arquitectura, diseño y tecnología IP para una experiencia de acceso verdaderamente premium.";
-  if (idioma === "en") {
-    claim =
-      "Architecture, design and IP technology for a truly premium access experience.";
-  } else if (idioma === "pt") {
-    claim =
-      "Arquitetura, design e tecnologia IP para uma experiência de acesso verdadeiramente premium.";
-  }
-  const claimLines = doc.splitTextToSize(
-    claim,
-    pageWidth - marginX * 2 - 40
-  );
-  doc.text(claimLines, marginX, y);
-
-  // Logo 2N abajo derecha en portada
-  if (logo && logo.dataUrl) {
-    const ratio =
-      logo.width && logo.height ? logo.width / logo.height : 2.5;
-    const logoW = 32;
-    const logoH = logoW / ratio;
-    const logoX = pageWidth - marginX - logoW;
-    const logoY = panelY + panelHeight - logoH - 6;
     try {
-      doc.addImage(logo.dataUrl, "PNG", logoX, logoY, logoW, logoH);
+      // misma imagen que la portada técnica
+      loadImageAsDataUrl(DOC_TECH_COVER_URL).then(function (coverImg) {
+        if (coverImg && coverImg.dataUrl) {
+          const imgWpx = coverImg.width || 1200;
+          const imgHpx = coverImg.height || 800;
+          const imgRatio = imgWpx / imgHpx;
+          const pageRatio = pageWidth / pageHeight;
+
+          let drawW, drawH, drawX, drawY;
+          if (imgRatio > pageRatio) {
+            drawH = pageHeight;
+            drawW = drawH * imgRatio;
+            drawX = (pageWidth - drawW) / 2;
+            drawY = 0;
+          } else {
+            drawW = pageWidth;
+            drawH = drawW / imgRatio;
+            drawX = 0;
+            drawY = (pageHeight - drawH) / 2;
+          }
+
+          doc.addImage(coverImg.dataUrl, "PNG", drawX, drawY, drawW, drawH);
+        }
+
+        // Degradado gris inferior
+        const gradHeight = 70;
+        const gradStartY = pageHeight - gradHeight;
+        for (let i = 0; i < 6; i++) {
+          const stepY = gradStartY + (i * gradHeight) / 6;
+          const stepH = gradHeight / 6 + 0.5;
+          const shade = 255 - i * 8;
+          doc.setFillColor(shade, shade, shade);
+          doc.rect(0, stepY, pageWidth, stepH, "F");
+        }
+
+        // Panel blanco inferior
+        const panelHeight = 55;
+        const panelY = pageHeight - panelHeight;
+        doc.setFillColor(255, 255, 255);
+        doc.rect(0, panelY, pageWidth, panelHeight, "F");
+
+        // Título portada
+        let tituloDoc =
+          "Highlights – solución de accesos y videoportero IP";
+        if (idioma === "en")
+          tituloDoc = "Highlights – IP access & video intercom solution";
+        if (idioma === "pt")
+          tituloDoc = "Highlights – solução IP de acessos e videoporteiro";
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(14);
+        doc.setTextColor(15, 23, 42);
+        const tituloLines = doc.splitTextToSize(
+          tituloDoc,
+          pageWidth - marginX * 2 - 40
+        );
+        let y = panelY + 11;
+        doc.text(tituloLines, marginX, y);
+        y += tituloLines.length * 5 + 1;
+
+        // Proyecto + promotora
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(10);
+        let subtitulo = nombreProyecto;
+        if (promotora) {
+          subtitulo += " · " + promotora;
+        }
+        const subtituloLines = doc.splitTextToSize(
+          subtitulo,
+          pageWidth - marginX * 2 - 40
+        );
+        doc.text(subtituloLines, marginX, y);
+        y += subtituloLines.length * 4.8 + 2;
+
+        // Claim corto
+        doc.setFont("helvetica", "italic");
+        doc.setFontSize(9);
+        doc.setTextColor(107, 114, 128);
+        let claim =
+          "Arquitectura, diseño y tecnología IP para una experiencia de acceso verdaderamente premium.";
+        if (idioma === "en") {
+          claim =
+            "Architecture, design and IP technology for a truly premium access experience.";
+        } else if (idioma === "pt") {
+          claim =
+            "Arquitetura, design e tecnologia IP para uma experiência de acesso verdadeiramente premium.";
+        }
+        const claimLines = doc.splitTextToSize(
+          claim,
+          pageWidth - marginX * 2 - 40
+        );
+        doc.text(claimLines, marginX, y);
+
+        // Logo 2N abajo derecha en portada
+        if (logo && logo.dataUrl) {
+          const ratio =
+            logo.width && logo.height ? logo.width / logo.height : 2.5;
+          const logoW = 32;
+          const logoH = logoW / ratio;
+          const logoX = pageWidth - marginX - logoW;
+          const logoY = panelY + panelHeight - logoH - 6;
+          try {
+            doc.addImage(logo.dataUrl, "PNG", logoX, logoY, logoW, logoH);
+          } catch (e) {
+            console.warn(
+              "No se pudo dibujar logo en portada comercial:",
+              e
+            );
+          }
+        }
+      });
     } catch (e) {
-      console.warn("No se pudo dibujar logo en portada comercial:", e);
+      console.warn("Error renderizando portada comercial:", e);
     }
-  }
+  })();
 
   // ===========================
-  // PÁGINA 2 – Resumen + Sistema (tarjetas Salesforce)
+  // PÁGINA 2 – HORIZONTAL: Resumen + Sistema (tarjetas)
   // ===========================
 
-  doc.addPage();
+  doc.addPage("l"); // horizontal
+  (function renderPage2() {
+    const dims = getDocPageDimensions(doc);
+    const pageWidth = dims.width;
+    const pageHeight = dims.height;
 
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(12);
-  doc.setTextColor(31, 41, 55);
-  let tituloSeccion1 = "Visión general del proyecto";
-  if (idioma === "en") tituloSeccion1 = "Project overview";
-  if (idioma === "pt") tituloSeccion1 = "Visão geral do projeto";
-  doc.text(tituloSeccion1, marginX, marginTop);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.setTextColor(31, 41, 55);
+    let tituloSeccion1 = "Visión general del proyecto";
+    if (idioma === "en") tituloSeccion1 = "Project overview";
+    if (idioma === "pt") tituloSeccion1 = "Visão geral do projeto";
+    doc.text(tituloSeccion1, marginX, marginTop);
 
-  doc.setDrawColor(209, 213, 219);
-  doc.setLineWidth(0.4);
-  doc.line(marginX, marginTop + 2.5, pageWidth - marginX, marginTop + 2.5);
+    doc.setDrawColor(209, 213, 219);
+    doc.setLineWidth(0.4);
+    doc.line(
+      marginX,
+      marginTop + 2.5,
+      pageWidth - marginX,
+      marginTop + 2.5
+    );
 
-  let yCards = marginTop + 10;
+    let yCards = marginTop + 10;
 
-  const resumenTexto = secciones.resumen || "";
-  const sistemaTexto = secciones.sistema || "";
+    const resumenTexto = secciones.resumen || "";
+    const sistemaTexto = secciones.sistema || "";
 
-  const cardWidthFull = pageWidth - marginX * 2;
-  const cardWidthHalf = (pageWidth - marginX * 2 - 8) / 2;
+    const cardWidthFull = pageWidth - marginX * 2;
+    const cardWidthHalf = (pageWidth - marginX * 2 - 8) / 2;
 
-  if (resumenTexto && sistemaTexto) {
-    drawSalesforceCard({
-      x: marginX,
-      y: yCards,
-      width: cardWidthHalf,
-      title:
-        idioma === "en"
+    if (resumenTexto && sistemaTexto) {
+      drawSalesforceCard({
+        x: marginX,
+        y: yCards,
+        width: cardWidthHalf,
+        title:
+          idioma === "en"
+            ? "Project summary"
+            : idioma === "pt"
+            ? "Resumo do projeto"
+            : "Resumen del proyecto",
+        body: resumenTexto,
+        doc: doc,
+        maxBodyWidth: cardWidthHalf - 16,
+        minHeight: 40,
+      });
+
+      const card2 = drawSalesforceCard({
+        x: marginX + cardWidthHalf + 8,
+        y: yCards,
+        width: cardWidthHalf,
+        title:
+          idioma === "en"
+            ? "System architecture"
+            : idioma === "pt"
+            ? "Arquitetura do sistema"
+            : "Sistema de videoportero y accesos",
+        body: sistemaTexto,
+        doc: doc,
+        maxBodyWidth: cardWidthHalf - 16,
+        minHeight: 40,
+      });
+
+      yCards = card2.bottomY + 8;
+    } else if (resumenTexto || sistemaTexto) {
+      const onlyTitle = resumenTexto
+        ? idioma === "en"
           ? "Project summary"
           : idioma === "pt"
           ? "Resumo do projeto"
-          : "Resumen del proyecto",
-      body: resumenTexto,
-      doc: doc,
-      maxBodyWidth: cardWidthHalf - 16,
-      minHeight: 40,
-    });
-
-    const card2 = drawSalesforceCard({
-      x: marginX + cardWidthHalf + 8,
-      y: yCards,
-      width: cardWidthHalf,
-      title:
-        idioma === "en"
-          ? "System architecture"
-          : idioma === "pt"
-          ? "Arquitetura do sistema"
-          : "Sistema de videoportero y accesos",
-      body: sistemaTexto,
-      doc: doc,
-      maxBodyWidth: cardWidthHalf - 16,
-      minHeight: 40,
-    });
-
-    yCards = card2.bottomY + 8;
-  } else if (resumenTexto || sistemaTexto) {
-    const onlyTitle = resumenTexto
-      ? idioma === "en"
-        ? "Project summary"
+          : "Resumen del proyecto"
+        : idioma === "en"
+        ? "System architecture"
         : idioma === "pt"
-        ? "Resumo do projeto"
-        : "Resumen del proyecto"
-      : idioma === "en"
-      ? "System architecture"
-      : idioma === "pt"
-      ? "Arquitetura do sistema"
-      : "Sistema de videoportero y accesos";
+        ? "Arquitetura do sistema"
+        : "Sistema de videoportero y accesos";
 
-    const onlyBody = resumenTexto || sistemaTexto;
-    const c = drawSalesforceCard({
-      x: marginX,
-      y: yCards,
-      width: cardWidthFull,
-      title: onlyTitle,
-      body: onlyBody,
-      doc: doc,
-      maxBodyWidth: cardWidthFull - 16,
-      minHeight: 50,
-    });
-    yCards = c.bottomY + 8;
-  }
+      const onlyBody = resumenTexto || sistemaTexto;
+      const c = drawSalesforceCard({
+        x: marginX,
+        y: yCards,
+        width: cardWidthFull,
+        title: onlyTitle,
+        body: onlyBody,
+        doc: doc,
+        maxBodyWidth: cardWidthFull - 16,
+        minHeight: 50,
+      });
+      yCards = c.bottomY + 8;
+    }
+  })();
 
   // ===========================
-  // PÁGINA 3 – Servicios / Infraestructura / Otros
+  // PÁGINA 3 – HORIZONTAL: Servicios / Infraestructura / Otros
   // ===========================
 
-  const tieneServicios = (secciones.servicios || "").trim().length > 0;
-  const tieneInfra = (secciones.infraestructura || "").trim().length > 0;
-  const tieneOtros = (secciones.otros || "").trim().length > 0;
+  (function renderPage3() {
+    const tieneServicios = (secciones.servicios || "").trim().length > 0;
+    const tieneInfra =
+      (secciones.infraestructura || "").trim().length > 0;
+    const tieneOtros = (secciones.otros || "").trim().length > 0;
 
-  if (tieneServicios || tieneInfra || tieneOtros) {
-    doc.addPage();
+    if (!tieneServicios && !tieneInfra && !tieneOtros) return;
+
+    doc.addPage("l"); // sigue en horizontal
+    const dims = getDocPageDimensions(doc);
+    const pageWidth = dims.width;
+    const pageHeight = dims.height;
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
@@ -2559,6 +2590,7 @@ async function exportarPDFComercial() {
     );
 
     let yCards2 = marginTop + 10;
+    const cardWidthFull = pageWidth - marginX * 2;
 
     const bloques = [];
     if (tieneServicios) {
@@ -2597,7 +2629,7 @@ async function exportarPDFComercial() {
 
     bloques.forEach(function (b) {
       if (yCards2 + 50 > pageHeight - marginBottom) {
-        doc.addPage();
+        doc.addPage("l");
         yCards2 = marginTop;
       }
 
@@ -2613,15 +2645,24 @@ async function exportarPDFComercial() {
       });
       yCards2 = c.bottomY + 8;
     });
-  }
+  })();
 
   // ===========================
-  // PÁGINA 4 – Galería visual con pies de foto (puede ocupar más de 1 página)
+  // PÁGINAS 4+ – Galería visual horizontal con nombres en pie de página
   // ===========================
 
-  const galeria = collectSectionImagesWithCaptions();
-  if (galeria.length) {
-    doc.addPage();
+  (async function renderGallery() {
+    const galeria = collectSectionImagesWithCaptions();
+    if (!galeria.length) {
+      // Guardar y salir si no hay galería
+      guardar();
+      return;
+    }
+
+    doc.addPage("l");
+    let dims = getDocPageDimensions(doc);
+    let pageWidth = dims.width;
+    let pageHeight = dims.height;
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
@@ -2643,10 +2684,12 @@ async function exportarPDFComercial() {
 
     let yRowStart = marginTop + 10;
     let rowInPage = 0;
-    const maxImgWidth = (pageWidth - marginX * 2 - 10) / 2;
-    const maxImgHeight = 38;
-    const maxContentBottom = pageHeight - marginBottom - 10;
-    const approxRowHeight = maxImgHeight + 24;
+    const maxImgWidth = (pageWidth - marginX * 2 - 10) / 2; // 2 columnas
+    const maxImgHeight = 55;
+    const maxContentBottom = pageHeight - marginBottom - 14;
+    const approxRowHeight = maxImgHeight + 10;
+
+    let captionsPage = [];
 
     for (let i = 0; i < galeria.length; i++) {
       const item = galeria[i];
@@ -2659,9 +2702,31 @@ async function exportarPDFComercial() {
           yRowStart += approxRowHeight;
         }
 
+        // Antes de saltar de página, escribir pie de página con nombres
         if (yRowStart + approxRowHeight > maxContentBottom) {
-          doc.addPage();
-          yRowStart = marginTop;
+          drawGalleryFooter(captionsPage);
+          captionsPage = [];
+
+          doc.addPage("l");
+          dims = getDocPageDimensions(doc);
+          pageWidth = dims.width;
+          pageHeight = dims.height;
+
+          // Encabezado de galería en nueva página
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(12);
+          doc.setTextColor(31, 41, 55);
+          doc.text(tituloGaleria, marginX, marginTop);
+          doc.setDrawColor(209, 213, 219);
+          doc.setLineWidth(0.4);
+          doc.line(
+            marginX,
+            marginTop + 2.5,
+            pageWidth - marginX,
+            marginTop + 2.5
+          );
+
+          yRowStart = marginTop + 10;
           rowInPage = 0;
         }
         rowInPage++;
@@ -2687,17 +2752,9 @@ async function exportarPDFComercial() {
           marginX + col * (maxImgWidth + 10) + (maxImgWidth - drawW) / 2;
         const yImg = yRowStart;
 
+        // Card limpia sin texto
         const cardPadding = 2;
-        let captionLines = [];
-        let captionHeight = 0;
-        if (caption) {
-          captionLines = doc.splitTextToSize(
-            caption,
-            maxImgWidth - cardPadding * 2
-          );
-          captionHeight = captionLines.length * 4;
-        }
-        const cardHeight = drawH + (caption ? captionHeight + 6 : 4);
+        const cardHeight = drawH + 4;
 
         doc.setFillColor(255, 255, 255);
         doc.setDrawColor(229, 231, 235);
@@ -2712,55 +2769,58 @@ async function exportarPDFComercial() {
           "FD"
         );
 
+        // Imagen
         doc.addImage(dataUrl, "PNG", xBase, yImg, drawW, drawH);
 
-        if (caption && captionLines.length) {
-          doc.setFont("helvetica", "normal");
-          doc.setFontSize(8.5);
-          doc.setTextColor(75, 85, 99);
-          const yCaption = yImg + drawH + 4;
-          doc.text(
-            captionLines,
-            xBase + drawW / 2,
-            yCaption,
-            { align: "center" }
-          );
+        // Guardamos caption solo para el pie de página (no debajo de la imagen)
+        if (caption && !captionsPage.includes(caption)) {
+          captionsPage.push(caption);
         }
       } catch (e) {
         console.warn("No se pudo cargar imagen para galería comercial:", e);
       }
     }
 
-    // Logo pequeño en pie de la última página de galería
+    // Pie de página de la última página de galería
+    drawGalleryFooter(captionsPage);
+
+    // Logo 2N pequeño en el pie de la última página de galería
     if (logo && logo.dataUrl) {
+      const dimsLast = getDocPageDimensions(doc);
+      const pageWidthLast = dimsLast.width;
+      const pageHeightLast = dimsLast.height;
       const ratio =
         logo.width && logo.height ? logo.width / logo.height : 2.5;
       const logoW = 24;
       const logoH = logoW / ratio;
-      const logoX = pageWidth - marginX - logoW;
-      const logoY = pageHeight - marginBottom - logoH + 4;
+      const logoX = pageWidthLast - marginX - logoW;
+      const logoY = pageHeightLast - marginBottom - logoH + 4;
       try {
         doc.addImage(logo.dataUrl, "PNG", logoX, logoY, logoW, logoH);
       } catch (e) {
         console.warn("No se pudo dibujar logo en galería comercial:", e);
       }
     }
-  }
+
+    guardar();
+  })();
 
   // ===========================
   // Guardar PDF
   // ===========================
 
-  let filenameBase = "highlights_accesos";
-  if (idioma === "en") filenameBase = "highlights_access_solution";
-  if (idioma === "pt") filenameBase = "highlights_acessos";
+  function guardar() {
+    let filenameBase = "highlights_accesos";
+    if (idioma === "en") filenameBase = "highlights_access_solution";
+    if (idioma === "pt") filenameBase = "highlights_acessos";
 
-  const safe = String(nombreProyecto || "proyecto")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
+    const safe = String(nombreProyecto || "proyecto")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "");
 
-  doc.save(filenameBase + "_" + safe + ".pdf");
+    doc.save(filenameBase + "_" + safe + ".pdf");
+  }
 }
 
 // ===========================
