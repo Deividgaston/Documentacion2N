@@ -1311,44 +1311,69 @@ window.handleDocSectionAI = async function ({
 // IA POR SECCIÓN (HOOK)
 // ===========================
 
-async function askAIForSection(sectionKey) {
-  const idioma = appState.documentacion.idioma || "es";
-  const secciones = appState.documentacion.secciones || {};
-  const textoActual = secciones[sectionKey] || "";
-  const tituloSeccion = getSectionTitle(sectionKey);
-  const proyecto = appState.proyecto || {};
-  const presupuesto =
-    typeof window.getPresupuestoActual === "function"
-      ? window.getPresupuestoActual()
-      : null;
+// ===========================
+// LLAMADA REAL A LA FUNCIÓN DE IA (Firebase)
+// ===========================
 
-  if (typeof window.handleDocSectionAI === "function") {
-    try {
-      // IMPORTANTE: le pasamos a tu backend el texto actual y el título editable
-      const nuevoTexto = await window.handleDocSectionAI({
-        sectionKey: sectionKey,
-        idioma: idioma,
-        titulo: tituloSeccion,
-        texto: textoActual,
-        proyecto: proyecto,
-        presupuesto: presupuesto,
-      });
+// ⚠️ IMPORTANTE: pon aquí la URL EXACTA que te da Firebase
+// en la sección Functions, en la función "docSectionAI".
+const DOC_SECTION_AI_URL = "PON_AQUI_LA_URL_DE_TU_FUNCION";
 
-      // Actualizamos la sección solo si la IA devuelve algo útil
-      if (typeof nuevoTexto === "string" && nuevoTexto.trim()) {
-        appState.documentacion.secciones[sectionKey] = nuevoTexto;
-        saveDocStateToLocalStorage();
-        renderDocumentacionView();
-      }
-      return;
-    } catch (e) {
-      console.error("Error en handleDocSectionAI:", e);
-      alert(
-        "Se ha producido un error al llamar a la IA. Revisa la consola para más detalles."
-      );
-      return;
+window.handleDocSectionAI = async function ({
+  sectionKey,
+  idioma,
+  titulo,
+  texto,
+  proyecto,
+  presupuesto,
+}) {
+  try {
+    if (!DOC_SECTION_AI_URL || DOC_SECTION_AI_URL.indexOf("http") !== 0) {
+      throw new Error("DOC_SECTION_AI_URL no está configurada correctamente");
     }
+
+    const resp = await fetch(DOC_SECTION_AI_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        sectionKey,
+        idioma,
+        titulo,
+        texto,
+        proyecto,
+        presupuesto,
+      }),
+    });
+
+    if (!resp.ok) {
+      const raw = await resp.text().catch(() => "");
+      console.error("docSectionAI HTTP error", resp.status, raw);
+      throw new Error("Respuesta no válida de la función IA");
+    }
+
+    const data = await resp.json().catch((e) => {
+      console.error("Error parseando JSON de docSectionAI:", e);
+      return null;
+    });
+
+    if (!data || typeof data.text !== "string") {
+      console.error("docSectionAI payload inesperado", data);
+      throw new Error("Formato de respuesta IA no esperado");
+    }
+
+    // Devolvemos SOLO el texto final
+    return data.text;
+  } catch (err) {
+    console.error("Error llamando a docSectionAI:", err);
+    alert(
+      "Se ha producido un error al llamar a la IA.\n\n" +
+        "Revisa la consola del navegador (F12 → Console) para más detalles."
+    );
+    throw err;
   }
+};
 
   alert(
     "Función de IA no configurada.\n\n" +
