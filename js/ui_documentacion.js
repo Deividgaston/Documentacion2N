@@ -2146,7 +2146,7 @@ async function exportarPDFTecnico() {
   doc.save(filename);
 }
 
-// ===== Versión comercial MULTIPÁGINA (portada + resumen horizontal + servicios + galería con pie de foto) =====
+// ===== Versión comercial MULTIPÁGINA (portada + resumen/sistema + servicios + galería con pie de foto) =====
 async function exportarPDFComercial() {
   const jsPDF = window.jspdf.jsPDF;
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
@@ -2258,7 +2258,7 @@ async function exportarPDFComercial() {
     };
   }
 
-  // Imágenes de secciones con caption = título de sección (opción 3)
+  // Imágenes de secciones con caption = NOMBRE DEL ARCHIVO
   function collectSectionImagesWithCaptions() {
     const sectionMediaMap = appState.documentacion.sectionMedia || {};
     const mediaLib = appState.documentacion.mediaLibrary || [];
@@ -2272,10 +2272,6 @@ async function exportarPDFComercial() {
 
     Object.keys(sectionMediaMap).forEach(function (secKey) {
       const ids = sectionMediaMap[secKey] || [];
-      const captionBase =
-        typeof getSectionTitle === "function"
-          ? getSectionTitle(secKey)
-          : secKey;
 
       ids.forEach(function (id) {
         if (usedIds.has(id)) return;
@@ -2299,7 +2295,8 @@ async function exportarPDFComercial() {
 
         usedIds.add(id);
 
-        let caption = captionBase || "";
+        // 👉 caption = nombre del archivo
+        let caption = m.nombre || "";
         caption = caption.trim();
         if (caption.length > 70) {
           caption = caption.slice(0, 67) + "...";
@@ -2309,7 +2306,6 @@ async function exportarPDFComercial() {
       });
     });
 
-    // límite para no hacer el PDF enorme
     return result.slice(0, 8);
   }
 
@@ -2428,11 +2424,11 @@ async function exportarPDFComercial() {
   }
 
   // ===========================
-  // PÁGINA 2 – HORIZONTAL: Resumen + Sistema
+  // PÁGINA 2 – VERTICAL: Resumen + Sistema en TARJETAS HORIZONTALES FULL-WIDTH
   // ===========================
 
-  doc.addPage("l"); // SOLO esta página en horizontal
-  (function renderPage2Horizontal() {
+  doc.addPage(); // seguimos en vertical
+  (function renderPage2FullWidth() {
     const dims = getDocPageDimensions(doc);
     const pageWidth = dims.width;
     const pageHeight = dims.height;
@@ -2455,18 +2451,14 @@ async function exportarPDFComercial() {
     );
 
     let yCards = marginTop + 10;
-
-    const resumenTexto = secciones.resumen || "";
-    const sistemaTexto = secciones.sistema || "";
-
     const cardWidthFull = pageWidth - marginX * 2;
-    const cardWidthHalf = (pageWidth - marginX * 2 - 8) / 2;
 
-    if (resumenTexto && sistemaTexto) {
-      drawSalesforceCard({
-        x: marginX,
-        y: yCards,
-        width: cardWidthHalf,
+    const resumenTexto = (secciones.resumen || "").trim();
+    const sistemaTexto = (secciones.sistema || "").trim();
+
+    const bloques = [];
+    if (resumenTexto) {
+      bloques.push({
         title:
           idioma === "en"
             ? "Project summary"
@@ -2474,15 +2466,10 @@ async function exportarPDFComercial() {
             ? "Resumo do projeto"
             : "Resumen del proyecto",
         body: resumenTexto,
-        doc: doc,
-        maxBodyWidth: cardWidthHalf - 16,
-        minHeight: 40,
       });
-
-      const card2 = drawSalesforceCard({
-        x: marginX + cardWidthHalf + 8,
-        y: yCards,
-        width: cardWidthHalf,
+    }
+    if (sistemaTexto) {
+      bloques.push({
         title:
           idioma === "en"
             ? "System architecture"
@@ -2490,38 +2477,27 @@ async function exportarPDFComercial() {
             ? "Arquitetura do sistema"
             : "Sistema de videoportero y accesos",
         body: sistemaTexto,
-        doc: doc,
-        maxBodyWidth: cardWidthHalf - 16,
-        minHeight: 40,
       });
+    }
 
-      yCards = card2.bottomY + 8;
-    } else if (resumenTexto || sistemaTexto) {
-      const onlyTitle = resumenTexto
-        ? idioma === "en"
-          ? "Project summary"
-          : idioma === "pt"
-          ? "Resumo do projeto"
-          : "Resumen del proyecto"
-        : idioma === "en"
-        ? "System architecture"
-        : idioma === "pt"
-        ? "Arquitetura do sistema"
-        : "Sistema de videoportero y accesos";
+    bloques.forEach(function (b) {
+      if (yCards + 50 > pageHeight - marginBottom) {
+        doc.addPage();
+        yCards = marginTop;
+      }
 
-      const onlyBody = resumenTexto || sistemaTexto;
       const c = drawSalesforceCard({
         x: marginX,
         y: yCards,
         width: cardWidthFull,
-        title: onlyTitle,
-        body: onlyBody,
+        title: b.title,
+        body: b.body,
         doc: doc,
         maxBodyWidth: cardWidthFull - 16,
-        minHeight: 50,
+        minHeight: 40,
       });
       yCards = c.bottomY + 8;
-    }
+    });
   })();
 
   // ===========================
@@ -2534,7 +2510,7 @@ async function exportarPDFComercial() {
   const tieneOtros = (secciones.otros || "").trim().length > 0;
 
   if (tieneServicios || tieneInfra || tieneOtros) {
-    doc.addPage(); // vuelve a vertical (orientación por defecto del doc)
+    doc.addPage();
 
     const dims = getDocPageDimensions(doc);
     const pageWidth = dims.width;
@@ -2560,8 +2536,8 @@ async function exportarPDFComercial() {
     );
 
     let yCards2 = marginTop + 10;
-
     const cardWidthFull = pageWidth - marginX * 2;
+
     const bloques = [];
     if (tieneServicios) {
       bloques.push({
@@ -2618,7 +2594,7 @@ async function exportarPDFComercial() {
   }
 
   // ===========================
-  // PÁGINA 4 – VERTICAL: Galería visual con pie de foto
+  // PÁGINA 4 – Galería visual con pie de foto (nombre de archivo)
   // ===========================
 
   const galeria = collectSectionImagesWithCaptions();
@@ -2738,7 +2714,7 @@ async function exportarPDFComercial() {
         // Imagen
         doc.addImage(dataUrl, "PNG", xBase, yImg, drawW, drawH);
 
-        // Caption debajo
+        // Pie de foto = nombre del archivo
         if (caption && captionLines.length) {
           doc.setFont("helvetica", "normal");
           doc.setFontSize(8.5);
