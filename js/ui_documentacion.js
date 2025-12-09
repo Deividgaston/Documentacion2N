@@ -2668,68 +2668,43 @@ async function exportarPDFComercial() {
 
       const col = i % 2;
 
-      try {
-        const imgObj = await loadImageAsDataUrl(m.url);
-        const dataUrl = imgObj.dataUrl;
-        const wpx = imgObj.width;
-        const hpx = imgObj.height;
-        const ratio = wpx && hpx ? wpx / hpx : 4 / 3;
+      // -------- DIBUJAR IMAGEN + PIE DE FOTO SIN EXTENSIÓN NI MARCO --------
+try {
+  const imgObj = await loadImageAsDataUrl(m.url);
+  const dataUrl = imgObj.dataUrl;
+  const wpx = imgObj.width;
+  const hpx = imgObj.height;
+  const ratio = wpx && hpx ? wpx / hpx : 4 / 3;
 
-        let drawW = maxImgWidth;
-        let drawH = drawW / ratio;
-        if (drawH > maxImgHeight) {
-          drawH = maxImgHeight;
-          drawW = drawH * ratio;
-        }
+  let drawW = maxImgWidth;
+  let drawH = drawW / ratio;
+  if (drawH > maxImgHeight) {
+    drawH = maxImgHeight;
+    drawW = drawH * ratio;
+  }
 
-        const xBase =
-          marginX + col * (maxImgWidth + 10) + (maxImgWidth - drawW) / 2;
-        const yImg = yRowStart;
+  const xBase =
+    marginX + col * (maxImgWidth + 10) + (maxImgWidth - drawW) / 2;
+  const yImg = yRowStart;
 
-        const cardPadding = 2;
-        let captionLines = [];
-        let captionHeight = 0;
-        if (caption) {
-          captionLines = doc.splitTextToSize(
-            caption,
-            maxImgWidth - cardPadding * 2
-          );
-          captionHeight = captionLines.length * 4;
-        }
-        const cardHeight = drawH + (caption ? captionHeight + 6 : 4);
+  // 👉 Pie de foto SIN extensión
+  let caption = (m.nombre || "").replace(/\.[^/.]+$/, "");
+  const captionLines = doc.splitTextToSize(caption, maxImgWidth);
+  
+  // IMAGEN sin marco externo
+  doc.addImage(dataUrl, "PNG", xBase, yImg, drawW, drawH);
 
-        doc.setFillColor(255, 255, 255);
-        doc.setDrawColor(229, 231, 235);
-        doc.setLineWidth(0.2);
-        doc.roundedRect(
-          xBase - cardPadding,
-          yImg - cardPadding,
-          drawW + cardPadding * 2,
-          cardHeight + cardPadding * 2,
-          2,
-          2,
-          "FD"
-        );
+  // Caption limpio debajo
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8.5);
+  doc.setTextColor(75, 85, 99);
+  const yCaption = yImg + drawH + 5;
+  doc.text(captionLines, xBase + drawW / 2, yCaption, { align: "center" });
 
-        // Imagen
-        doc.addImage(dataUrl, "PNG", xBase, yImg, drawW, drawH);
+} catch (e) {
+  console.warn("No se pudo cargar imagen para galería comercial:", e);
+}
 
-        // Pie de foto = nombre del archivo
-        if (caption && captionLines.length) {
-          doc.setFont("helvetica", "normal");
-          doc.setFontSize(8.5);
-          doc.setTextColor(75, 85, 99);
-          const yCaption = yImg + drawH + 4;
-          doc.text(
-            captionLines,
-            xBase + drawW / 2,
-            yCaption,
-            { align: "center" }
-          );
-        }
-      } catch (e) {
-        console.warn("No se pudo cargar imagen para galería comercial:", e);
-      }
     }
 
     // Logo pequeño en el pie de la última página de galería
