@@ -17,7 +17,7 @@ appState.documentacion = appState.documentacion || {
   fichasSearchTerm: "", // término de búsqueda para fichas técnicas
   includedSections: {}, // mapa: sectionKey -> true/false (incluir en PDF técnico)
   logoData: null, // cache logo para PDF
-  sectionTitles: {}, // NUEVO: títulos personalizados por sección
+  sectionTitles: {}, // títulos personalizados por sección
 };
 
 // ===========================
@@ -59,7 +59,7 @@ function saveDocStateToLocalStorage() {
       mediaSearchTerm: appState.documentacion.mediaSearchTerm || "",
       fichasSearchTerm: appState.documentacion.fichasSearchTerm || "",
       includedSections: appState.documentacion.includedSections || {},
-      sectionTitles: appState.documentacion.sectionTitles || {}, // NUEVO
+      sectionTitles: appState.documentacion.sectionTitles || {},
     };
     localStorage.setItem(DOC_STORAGE_KEY, JSON.stringify(toSave));
   } catch (e) {
@@ -285,7 +285,6 @@ function docEscapeHtml(str) {
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 }
-
 // ===========================
 // AUTO-GENERACIÓN DE SECCIONES
 // ===========================
@@ -713,7 +712,6 @@ function renderDocFichasHTML() {
     "</div>"
   );
 }
-
 // ===========================
 // LIMPIEZA Y DOCUMENTACIÓN GRÁFICA (solo imágenes)
 // ===========================
@@ -1257,127 +1255,49 @@ function saveDocCustomBlock() {
 }
 
 // ===========================
-// IA: Conexión con Cloud Function docSectionAI
+// IA POR SECCIÓN (HOOK + implementación)
 // ===========================
 
-window.handleDocSectionAI = async function ({
-  sectionKey,
-  idioma,
-  titulo,
-  texto,
-  proyecto,
-  presupuesto,
-}) {
-  const functionUrl =
-    "https://us-central1-n-presupuestos.cloudfunctions.net/docSectionAI";
+async function askAIForSection(sectionKey) {
+  const idioma = appState.documentacion.idioma || "es";
+  const secciones = appState.documentacion.secciones || {};
+  const textoActual = secciones[sectionKey] || "";
+  const tituloSeccion = getSectionTitle(sectionKey);
+  const proyecto = appState.proyecto || {};
+  const presupuesto =
+    typeof window.getPresupuestoActual === "function"
+      ? window.getPresupuestoActual()
+      : null;
 
-  try {
-    const resp = await fetch(functionUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        sectionKey,
-        idioma,
-        titulo,
-        texto,
-        proyecto,
-        presupuesto,
-      }),
-    });
+  if (typeof window.handleDocSectionAI === "function") {
+    try {
+      const nuevoTexto = await window.handleDocSectionAI({
+        sectionKey: sectionKey,
+        idioma: idioma,
+        titulo: tituloSeccion,
+        texto: textoActual,
+        proyecto: proyecto,
+        presupuesto: presupuesto,
+      });
 
-    if (!resp.ok) {
-      console.error("Error IA HTTP:", resp.status, await resp.text());
-      throw new Error("La IA no ha respondido correctamente.");
+      if (typeof nuevoTexto === "string" && nuevoTexto.trim()) {
+        appState.documentacion.secciones[sectionKey] = nuevoTexto;
+        saveDocStateToLocalStorage();
+        renderDocumentacionView();
+      }
+      return;
+    } catch (e) {
+      console.error("Error en handleDocSectionAI:", e);
+      alert(
+        "Se ha producido un error al llamar a la IA. Revisa la consola para más detalles."
+      );
+      return;
     }
-
-    const data = await resp.json();
-    if (!data || typeof data.text !== "string") {
-      throw new Error("La IA no devolvió texto.");
-    }
-
-    return data.text; // texto generado por la función de Firebase
-  } catch (err) {
-    console.error("Error llamando a docSectionAI:", err);
-    alert(
-      "Error al generar contenido con IA. Revisa la consola del navegador para más detalles."
-    );
-    return texto; // fallback: mantenemos el texto original
   }
-};
-
-// ===========================
-// IA POR SECCIÓN (HOOK)
-// ===========================
-
-// ===========================
-// LLAMADA REAL A LA FUNCIÓN DE IA (Firebase)
-// ===========================
-
-// ⚠️ IMPORTANTE: pon aquí la URL EXACTA que te da Firebase
-// en la sección Functions, en la función "docSectionAI".
-const DOC_SECTION_AI_URL = "PON_AQUI_LA_URL_DE_TU_FUNCION";
-
-window.handleDocSectionAI = async function ({
-  sectionKey,
-  idioma,
-  titulo,
-  texto,
-  proyecto,
-  presupuesto,
-}) {
-  try {
-    if (!DOC_SECTION_AI_URL || DOC_SECTION_AI_URL.indexOf("http") !== 0) {
-      throw new Error("DOC_SECTION_AI_URL no está configurada correctamente");
-    }
-
-    const resp = await fetch(DOC_SECTION_AI_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        sectionKey,
-        idioma,
-        titulo,
-        texto,
-        proyecto,
-        presupuesto,
-      }),
-    });
-
-    if (!resp.ok) {
-      const raw = await resp.text().catch(() => "");
-      console.error("docSectionAI HTTP error", resp.status, raw);
-      throw new Error("Respuesta no válida de la función IA");
-    }
-
-    const data = await resp.json().catch((e) => {
-      console.error("Error parseando JSON de docSectionAI:", e);
-      return null;
-    });
-
-    if (!data || typeof data.text !== "string") {
-      console.error("docSectionAI payload inesperado", data);
-      throw new Error("Formato de respuesta IA no esperado");
-    }
-
-    // Devolvemos SOLO el texto final
-    return data.text;
-  } catch (err) {
-    console.error("Error llamando a docSectionAI:", err);
-    alert(
-      "Se ha producido un error al llamar a la IA.\n\n" +
-        "Revisa la consola del navegador (F12 → Console) para más detalles."
-    );
-    throw err;
-  }
-};
 
   alert(
     "Función de IA no configurada.\n\n" +
-      "Para activar 'Preguntar a IA', implementa en tu código (por ejemplo, llamando a una Cloud Function con OpenAI):\n\n" +
+      "Para activar 'Preguntar a IA', implementa en tu código (por ejemplo, llamando a una Cloud Function con OpenAI o Gemini):\n\n" +
       "window.handleDocSectionAI = async ({ sectionKey, idioma, titulo, texto, proyecto, presupuesto }) => {\n" +
       "  // Usa 'titulo' y 'texto' como prompt base.\n" +
       "  // Devuelve el texto final que quieras que se muestre en la sección.\n" +
@@ -1386,6 +1306,51 @@ window.handleDocSectionAI = async function ({
   );
 }
 
+// IMPLEMENTACIÓN POR DEFECTO usando tu Cloud Function de Firebase (Gemini)
+if (typeof window.handleDocSectionAI !== "function") {
+  window.handleDocSectionAI = async function ({
+    sectionKey,
+    idioma,
+    titulo,
+    texto,
+    proyecto,
+    presupuesto,
+  }) {
+    const payload = {
+      sectionKey,
+      idioma,
+      texto,
+      proyecto,
+      presupuesto,
+    };
+
+    const url = "https://docsectionai-is2pkrfj5a-uc.a.run.app";
+
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!resp.ok) {
+      let extra = "";
+      try {
+        extra = await resp.text();
+      } catch (e) {}
+      throw new Error(
+        "Error IA (" + resp.status + "): " + (extra || "respuesta no válida")
+      );
+    }
+
+    const data = await resp.json().catch(() => null);
+    if (!data || typeof data.text !== "string") {
+      throw new Error("Respuesta IA inválida (no viene 'text')");
+    }
+    return data.text;
+  };
+}
 // ===========================
 // MEDIA: FIRESTORE + STORAGE
 // ===========================
@@ -1418,7 +1383,6 @@ async function ensureDocMediaLoaded() {
 
     const media = [];
     snap.forEach((doc) => {
-      // IMPORTANTE: primero data, luego id para NO machacar el id correcto
       media.push({ ...doc.data(), id: doc.id });
     });
 
@@ -1495,7 +1459,6 @@ async function saveMediaFileToStorageAndFirestore(file, options) {
     url = URL.createObjectURL(file);
   }
 
-  // OJO: no incluimos id aquí; solo en cliente
   const mediaData = {
     nombre: name,
     type: type,
@@ -1512,7 +1475,7 @@ async function saveMediaFileToStorageAndFirestore(file, options) {
       ...mediaData,
       uid: uid || null,
     });
-    mediaData.id = docRef.id; // id solo en el objeto local
+    mediaData.id = docRef.id;
   } else {
     mediaData.id =
       Date.now() +
@@ -1614,7 +1577,6 @@ function loadImageAsDataUrl(url) {
         const ctx = canvas.getContext("2d");
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-        // Usamos PNG para preservar transparencias (logo sin fondo negro)
         const dataUrl = canvas.toDataURL("image/png");
         resolve({
           dataUrl: dataUrl,
@@ -1671,18 +1633,17 @@ function drawTechHeader(pdf, opts) {
   const logo = opts.logo || null;
 
   const marginX = 20;
-  const textY = 18; // altura del texto
+  const textY = 18;
 
-  // Calculamos la parte baja del logo para poner la línea SIEMPRE por debajo
   let logoBottomY = textY;
 
   if (logo && logo.dataUrl) {
     const ratio =
       logo.width && logo.height ? logo.width / logo.height : 2.5;
-    const logoW = 25; // mm
+    const logoW = 25;
     const logoH = logoW / ratio;
     const logoX = w - marginX - logoW;
-    const logoY = textY - 6; // ligeramente por encima del texto
+    const logoY = textY - 6;
     logoBottomY = logoY + logoH;
 
     try {
@@ -1692,20 +1653,17 @@ function drawTechHeader(pdf, opts) {
     }
   }
 
-  // Texto de cabecera
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(9);
   pdf.setTextColor(55, 65, 81);
   pdf.text(nombreProyecto, marginX, textY);
 
-  // Línea por debajo del logo y del texto
   const lineY = Math.max(textY + 2, logoBottomY + 2);
 
   pdf.setDrawColor(226, 232, 240);
   pdf.setLineWidth(0.3);
   pdf.line(marginX, lineY, w - marginX, lineY);
 
-  // Y de inicio de contenido
   return lineY + 8;
 }
 
@@ -1806,7 +1764,6 @@ function getSectionImages(sectionKey) {
       return type === "image" || mime.indexOf("image/") === 0;
     });
 
-  // Máximo 4 imágenes por sección
   return list.slice(0, 4);
 }
 
@@ -1816,7 +1773,7 @@ async function insertImagesForSection(doc, sectionKey, y, onNewPage) {
 
   const dims = getDocPageDimensions(doc);
   const pageWidth = dims.width;
-  const maxContentY = dims.height - 25; // margen inferior
+  const maxContentY = dims.height - 25;
 
   for (const m of images) {
     try {
@@ -1826,7 +1783,6 @@ async function insertImagesForSection(doc, sectionKey, y, onNewPage) {
       const height = obj.height;
       const ratio = width && height ? width / height : 4 / 3;
 
-      // Tamaño más pequeño (mitad de lo anterior) y centrado
       const maxWidthMm = 60;
       const maxHeightMm = 37.5;
 
@@ -1847,11 +1803,10 @@ async function insertImagesForSection(doc, sectionKey, y, onNewPage) {
         }
       }
 
-      const imgX = (pageWidth - imgW) / 2; // CENTRADO
+      const imgX = (pageWidth - imgW) / 2;
       const imgY = y;
       doc.addImage(dataUrl, "PNG", imgX, imgY, imgW, imgH);
 
-      // Sin pie de imagen, sólo margen inferior
       y += imgH + 8;
     } catch (e) {
       console.warn("No se pudo insertar imagen de sección en PDF:", e);
@@ -1861,7 +1816,7 @@ async function insertImagesForSection(doc, sectionKey, y, onNewPage) {
   return y;
 }
 
-// ===== Versión técnica (memoria de calidades bonita) =====
+// ===== Versión técnica =====
 
 async function exportarPDFTecnico() {
   const jsPDF = window.jspdf.jsPDF;
@@ -1894,7 +1849,6 @@ async function exportarPDFTecnico() {
   const pageWidth = dims.width;
   const pageHeight = dims.height;
 
-  // ===== Portada con imagen de fondo (sin deformar) =====
   let tituloDoc = "Memoria de calidades";
   if (idioma === "en") tituloDoc = "Technical specification";
   if (idioma === "pt") tituloDoc = "Memória descritiva";
@@ -1909,13 +1863,11 @@ async function exportarPDFTecnico() {
 
       let drawW, drawH, drawX, drawY;
       if (imgRatio > pageRatio) {
-        // imagen más horizontal -> se ajusta a alto, se recorta por los lados
         drawH = pageHeight;
         drawW = drawH * imgRatio;
         drawX = (pageWidth - drawW) / 2;
         drawY = 0;
       } else {
-        // imagen más vertical -> se ajusta a ancho, se recorta arriba/abajo
         drawW = pageWidth;
         drawH = drawW / imgRatio;
         drawX = 0;
@@ -1928,31 +1880,28 @@ async function exportarPDFTecnico() {
     console.warn("No se pudo cargar la imagen de portada técnica:", e);
   }
 
-  // Gradiente inferior para mejorar legibilidad
   const gradHeight = 70;
   const gradStartY = pageHeight - gradHeight;
   for (let i = 0; i < 6; i++) {
     const stepY = gradStartY + (i * gradHeight) / 6;
     const stepH = gradHeight / 6 + 0.5;
-    const shade = 255 - i * 8; // 255, 247, 239...
+    const shade = 255 - i * 8;
     doc.setFillColor(shade, shade, shade);
     doc.rect(0, stepY, pageWidth, stepH, "F");
   }
 
-  // Banda blanca sólida inferior
   const panelHeight = 55;
   const panelY = pageHeight - panelHeight;
   doc.setFillColor(255, 255, 255);
   doc.rect(0, panelY, pageWidth, panelHeight, "F");
 
-  // Logo portada AHORA en la banda blanca, a la derecha
   if (logo && logo.dataUrl) {
     const ratio =
       logo.width && logo.height ? logo.width / logo.height : 2.5;
     const logoW = 40;
     const logoH = logoW / ratio;
     const logoX = pageWidth - 20 - logoW;
-    const logoY = panelY + (panelHeight - logoH) / 2; // centrado vertical en la banda blanca
+    const logoY = panelY + (panelHeight - logoH) / 2;
     try {
       doc.addImage(logo.dataUrl, "PNG", logoX, logoY, logoW, logoH);
     } catch (e) {
@@ -1960,11 +1909,9 @@ async function exportarPDFTecnico() {
     }
   }
 
-  // Títulos y datos en negro, en la parte baja (subidos un poco)
   doc.setFont("helvetica", "bold");
   doc.setFontSize(22);
   doc.setTextColor(0, 0, 0);
-  // SUBIMOS ligeramente el título para separarlo del pie
   doc.text(tituloDoc, 20, panelY - 5);
 
   const subTitulo = "Videoportero y control de accesos 2N";
@@ -1975,10 +1922,8 @@ async function exportarPDFTecnico() {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(11);
 
-  // Bloque de proyecto también un poco más arriba
   let y = panelY + 18;
 
-  // Proyecto
   doc.setFont("helvetica", "bold");
   doc.text("Proyecto:", 20, y);
   doc.setFont("helvetica", "normal");
@@ -1986,7 +1931,6 @@ async function exportarPDFTecnico() {
   doc.text(proyectoLines, 45, y);
   y += proyectoLines.length * 6 + 4;
 
-  // Promotora / Propiedad (si existe)
   if (promotora) {
     doc.setFont("helvetica", "bold");
     doc.text("Promotor:", 20, y);
@@ -1996,10 +1940,8 @@ async function exportarPDFTecnico() {
     y += promLines.length * 6 + 4;
   }
 
-  // Pie de portada
   drawTechFooter(doc, { idioma: idioma });
 
-  // ===== Índice (página 2) =====
   doc.addPage();
   const tocPageNumber = doc.getNumberOfPages();
   doc.setPage(tocPageNumber);
@@ -2011,7 +1953,6 @@ async function exportarPDFTecnico() {
 
   const tocEntries = [];
 
-  // ===== Cuerpo de memoria =====
   doc.addPage();
   let currentPage = doc.getNumberOfPages();
   y = setupTechContentPage(doc, {
@@ -2041,7 +1982,6 @@ async function exportarPDFTecnico() {
   let firstSection = true;
 
   for (const key of DOC_SECTION_ORDER) {
-    // Respetar el check "Incluir en PDF"
     if (includedSections.hasOwnProperty(key) && !includedSections[key]) {
       continue;
     }
@@ -2050,7 +1990,6 @@ async function exportarPDFTecnico() {
     const hasImages = getSectionImages(key).length > 0;
     if (!contenido && !hasImages) continue;
 
-    // Cada sección arranca en una página diferente
     if (!firstSection) {
       newPage();
     } else {
@@ -2059,30 +1998,25 @@ async function exportarPDFTecnico() {
 
     const tituloSeccion = getSectionTitle(key);
 
-    // Añadimos entrada al índice
     tocEntries.push({ title: tituloSeccion, page: currentPage });
 
-    // Título sección
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
-    doc.setTextColor(30, 64, 175); // azul suave
+    doc.setTextColor(30, 64, 175);
     doc.text(tituloSeccion, 20, y);
     y += 4;
 
-    // Línea fina bajo título
     doc.setDrawColor(226, 232, 240);
     doc.setLineWidth(0.3);
     doc.line(20, y, pageWidth - 20, y);
     y += 5;
 
-    // Texto
     if (contenido) {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(10);
       doc.setTextColor(55, 65, 81);
       const textLines = doc.splitTextToSize(contenido, pageWidth - 40);
 
-      // Gestión de saltos de página dentro de la sección
       let block = [];
       const maxLinesPerChunk = 35;
       for (let i = 0; i < textLines.length; i++) {
@@ -2099,12 +2033,10 @@ async function exportarPDFTecnico() {
       }
     }
 
-    // Imágenes asociadas (centradas, sin pie)
     y = await insertImagesForSection(doc, key, y, newPage);
     y += 4;
   }
 
-  // ===== Anexo de fichas técnicas (solo listado) =====
   const mediaLib = appState.documentacion.mediaLibrary || [];
   const selIds = appState.documentacion.selectedFichasMediaIds || [];
   const fichasMediaSeleccionadas = mediaLib.filter(function (m) {
@@ -2118,7 +2050,6 @@ async function exportarPDFTecnico() {
     if (idioma === "en") tituloDocs = "Appendix – Technical documentation";
     if (idioma === "pt") tituloDocs = "Anexo – Documentação técnica";
 
-    // Entrada en el índice
     tocEntries.push({ title: tituloDocs, page: currentPage });
 
     y = y || 25;
@@ -2149,7 +2080,6 @@ async function exportarPDFTecnico() {
     });
   }
 
-  // ===== Dibujar el índice en la página 2 =====
   doc.setPage(tocPageNumber);
 
   let yToc = tocStartY;
@@ -2164,9 +2094,8 @@ async function exportarPDFTecnico() {
   doc.setFontSize(11);
   doc.setTextColor(55, 65, 81);
 
-  tocEntries.forEach(function (entry, index) {
+  tocEntries.forEach(function (entry) {
     if (yToc > pageHeight - 25) {
-      // Si se llenara la página de índice, creamos otra
       doc.addPage();
       const newTocPage = doc.getNumberOfPages();
       doc.setPage(newTocPage);
@@ -2188,14 +2117,11 @@ async function exportarPDFTecnico() {
     const pageStr = String(entry.page);
     const lineY = yToc;
 
-    // Texto de sección
     doc.text(label, 25, lineY);
 
-    // Número de página a la derecha
     const tw = doc.getTextWidth(pageStr);
     doc.text(pageStr, pageWidth - 25 - tw, lineY);
 
-    // Línea suave
     doc.setDrawColor(230, 230, 230);
     doc.setLineWidth(0.2);
     doc.line(25, lineY + 1.5, pageWidth - 25, lineY + 1.5);
@@ -2203,7 +2129,6 @@ async function exportarPDFTecnico() {
     yToc += 7;
   });
 
-  // ===== Nombre de fichero =====
   let filenameBase = "memoria_calidades";
   if (idioma === "en") filenameBase = "technical_specification";
   if (idioma === "pt") filenameBase = "memoria_descritiva";
@@ -2217,7 +2142,7 @@ async function exportarPDFTecnico() {
   doc.save(filename);
 }
 
-// ===== Versión comercial (simple, pero más profesional) =====
+// ===== Versión comercial =====
 
 async function exportarPDFComercial() {
   const jsPDF = window.jspdf.jsPDF;
@@ -2247,12 +2172,10 @@ async function exportarPDFComercial() {
   const dims = getDocPageDimensions(doc);
   const pageWidth = dims.width;
 
-  // Título portada
   let tituloDoc = "Solución de accesos y videoportero IP";
   if (idioma === "en") tituloDoc = "IP access & video intercom solution";
   if (idioma === "pt") tituloDoc = "Solução IP de acessos e videoporteiro";
 
-  // Logo portada (derecha)
   if (logo && logo.dataUrl) {
     const ratio =
       logo.width && logo.height ? logo.width / logo.height : 2.5;
@@ -2291,7 +2214,6 @@ async function exportarPDFComercial() {
 
   y += 8;
 
-  // Solo el resumen en modo comercial
   const resumen = (secciones.resumen || "").trim();
   if (resumen) {
     doc.setFontSize(11);
@@ -2299,10 +2221,8 @@ async function exportarPDFComercial() {
     doc.text(lines, 20, y);
   }
 
-  // Pie de página corporativo
   drawTechFooter(doc, { idioma: idioma });
 
-  // Guardar PDF
   let filenameBase = "presentacion_accesos";
   if (idioma === "en") filenameBase = "access_solution_presentation";
   if (idioma === "pt") filenameBase = "apresentacao_acessos";
