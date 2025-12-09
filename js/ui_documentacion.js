@@ -2146,7 +2146,7 @@ async function exportarPDFTecnico() {
   doc.save(filename);
 }
 
-// ===== Versión comercial MULTIPÁGINA (portada + horizontal) con tarjetas Salesforce + galería con nombres en pie de página =====
+// ===== Versión comercial MULTIPÁGINA (portada + resumen horizontal + servicios + galería con pie de foto) =====
 async function exportarPDFComercial() {
   const jsPDF = window.jspdf.jsPDF;
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
@@ -2172,6 +2172,9 @@ async function exportarPDFComercial() {
     "";
 
   const logo = await getDocLogoImage();
+  const dimsCover = getDocPageDimensions(doc);
+  const pageWidthCover = dimsCover.width;
+  const pageHeightCover = dimsCover.height;
   const marginX = 20;
   const marginTop = 20;
   const marginBottom = 20;
@@ -2255,7 +2258,7 @@ async function exportarPDFComercial() {
     };
   }
 
-  // Imágenes para la galería con pie de página = título de sección (opción 3)
+  // Imágenes de secciones con caption = título de sección (opción 3)
   function collectSectionImagesWithCaptions() {
     const sectionMediaMap = appState.documentacion.sectionMedia || {};
     const mediaLib = appState.documentacion.mediaLibrary || [];
@@ -2306,162 +2309,130 @@ async function exportarPDFComercial() {
       });
     });
 
+    // límite para no hacer el PDF enorme
     return result.slice(0, 8);
   }
 
-  function drawGalleryFooter(captions) {
-    if (!captions || !captions.length) return;
-    const dims = getDocPageDimensions(doc);
-    const pageWidth = dims.width;
-    const pageHeight = dims.height;
+  // ===========================
+  // PÁGINA 1 – PORTADA (misma imagen que PDF técnico, vertical)
+  // ===========================
 
-    let label = "Imágenes en esta página: ";
-    if (idioma === "en") label = "Images on this page: ";
-    else if (idioma === "pt") label = "Imagens nesta página: ";
+  try {
+    const coverImg = await loadImageAsDataUrl(DOC_TECH_COVER_URL);
+    if (coverImg && coverImg.dataUrl) {
+      const imgWpx = coverImg.width || 1200;
+      const imgHpx = coverImg.height || 800;
+      const imgRatio = imgWpx / imgHpx;
+      const pageRatio = pageWidthCover / pageHeightCover;
 
-    const text = label + captions.join(" · ");
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(7.5);
-    doc.setTextColor(107, 114, 128);
+      let drawW, drawH, drawX, drawY;
+      if (imgRatio > pageRatio) {
+        drawH = pageHeightCover;
+        drawW = drawH * imgRatio;
+        drawX = (pageWidthCover - drawW) / 2;
+        drawY = 0;
+      } else {
+        drawW = pageWidthCover;
+        drawH = drawW / imgRatio;
+        drawX = 0;
+        drawY = (pageHeightCover - drawH) / 2;
+      }
 
-    const lines = doc.splitTextToSize(text, pageWidth - marginX * 2);
-    const baseY = pageHeight - 8;
-    const firstLineY = baseY - (lines.length - 1) * 3;
-    doc.text(lines, marginX, firstLineY);
+      doc.addImage(coverImg.dataUrl, "PNG", drawX, drawY, drawW, drawH);
+    }
+  } catch (e) {
+    console.warn("No se pudo cargar la portada comercial:", e);
+  }
+
+  // Degradado gris inferior
+  const gradHeight = 70;
+  const gradStartY = pageHeightCover - gradHeight;
+  for (let i = 0; i < 6; i++) {
+    const stepY = gradStartY + (i * gradHeight) / 6;
+    const stepH = gradHeight / 6 + 0.5;
+    const shade = 255 - i * 8;
+    doc.setFillColor(shade, shade, shade);
+    doc.rect(0, stepY, pageWidthCover, stepH, "F");
+  }
+
+  // Panel blanco inferior
+  const panelHeight = 55;
+  const panelY = pageHeightCover - panelHeight;
+  doc.setFillColor(255, 255, 255);
+  doc.rect(0, panelY, pageWidthCover, panelHeight, "F");
+
+  // Título portada
+  let tituloDoc = "Highlights – solución de accesos y videoportero IP";
+  if (idioma === "en")
+    tituloDoc = "Highlights – IP access & video intercom solution";
+  if (idioma === "pt")
+    tituloDoc = "Highlights – solução IP de acessos e videoporteiro";
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.setTextColor(15, 23, 42);
+  const tituloLines = doc.splitTextToSize(
+    tituloDoc,
+    pageWidthCover - marginX * 2 - 40
+  );
+  let y = panelY + 11;
+  doc.text(tituloLines, marginX, y);
+  y += tituloLines.length * 5 + 1;
+
+  // Proyecto + promotora
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  let subtitulo = nombreProyecto;
+  if (promotora) {
+    subtitulo += " · " + promotora;
+  }
+  const subtituloLines = doc.splitTextToSize(
+    subtitulo,
+    pageWidthCover - marginX * 2 - 40
+  );
+  doc.text(subtituloLines, marginX, y);
+  y += subtituloLines.length * 4.8 + 2;
+
+  // Claim corto
+  doc.setFont("helvetica", "italic");
+  doc.setFontSize(9);
+  doc.setTextColor(107, 114, 128);
+  let claim =
+    "Arquitectura, diseño y tecnología IP para una experiencia de acceso verdaderamente premium.";
+  if (idioma === "en") {
+    claim =
+      "Architecture, design and IP technology for a truly premium access experience.";
+  } else if (idioma === "pt") {
+    claim =
+      "Arquitetura, design e tecnologia IP para uma experiência de acesso verdadeiramente premium.";
+  }
+  const claimLines = doc.splitTextToSize(
+    claim,
+    pageWidthCover - marginX * 2 - 40
+  );
+  doc.text(claimLines, marginX, y);
+
+  // Logo 2N abajo derecha en portada
+  if (logo && logo.dataUrl) {
+    const ratioLogo =
+      logo.width && logo.height ? logo.width / logo.height : 2.5;
+    const logoW = 32;
+    const logoH = logoW / ratioLogo;
+    const logoX = pageWidthCover - marginX - logoW;
+    const logoY = panelY + panelHeight - logoH - 6;
+    try {
+      doc.addImage(logo.dataUrl, "PNG", logoX, logoY, logoW, logoH);
+    } catch (e) {
+      console.warn("No se pudo dibujar logo en portada comercial:", e);
+    }
   }
 
   // ===========================
-  // PÁGINA 1 – PORTADA (misma imagen que PDF técnico)
+  // PÁGINA 2 – HORIZONTAL: Resumen + Sistema
   // ===========================
 
-  (function renderCover() {
-    const dims = getDocPageDimensions(doc);
-    const pageWidth = dims.width;
-    const pageHeight = dims.height;
-
-    try {
-      // misma imagen que la portada técnica
-      loadImageAsDataUrl(DOC_TECH_COVER_URL).then(function (coverImg) {
-        if (coverImg && coverImg.dataUrl) {
-          const imgWpx = coverImg.width || 1200;
-          const imgHpx = coverImg.height || 800;
-          const imgRatio = imgWpx / imgHpx;
-          const pageRatio = pageWidth / pageHeight;
-
-          let drawW, drawH, drawX, drawY;
-          if (imgRatio > pageRatio) {
-            drawH = pageHeight;
-            drawW = drawH * imgRatio;
-            drawX = (pageWidth - drawW) / 2;
-            drawY = 0;
-          } else {
-            drawW = pageWidth;
-            drawH = drawW / imgRatio;
-            drawX = 0;
-            drawY = (pageHeight - drawH) / 2;
-          }
-
-          doc.addImage(coverImg.dataUrl, "PNG", drawX, drawY, drawW, drawH);
-        }
-
-        // Degradado gris inferior
-        const gradHeight = 70;
-        const gradStartY = pageHeight - gradHeight;
-        for (let i = 0; i < 6; i++) {
-          const stepY = gradStartY + (i * gradHeight) / 6;
-          const stepH = gradHeight / 6 + 0.5;
-          const shade = 255 - i * 8;
-          doc.setFillColor(shade, shade, shade);
-          doc.rect(0, stepY, pageWidth, stepH, "F");
-        }
-
-        // Panel blanco inferior
-        const panelHeight = 55;
-        const panelY = pageHeight - panelHeight;
-        doc.setFillColor(255, 255, 255);
-        doc.rect(0, panelY, pageWidth, panelHeight, "F");
-
-        // Título portada
-        let tituloDoc =
-          "Highlights – solución de accesos y videoportero IP";
-        if (idioma === "en")
-          tituloDoc = "Highlights – IP access & video intercom solution";
-        if (idioma === "pt")
-          tituloDoc = "Highlights – solução IP de acessos e videoporteiro";
-
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(14);
-        doc.setTextColor(15, 23, 42);
-        const tituloLines = doc.splitTextToSize(
-          tituloDoc,
-          pageWidth - marginX * 2 - 40
-        );
-        let y = panelY + 11;
-        doc.text(tituloLines, marginX, y);
-        y += tituloLines.length * 5 + 1;
-
-        // Proyecto + promotora
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(10);
-        let subtitulo = nombreProyecto;
-        if (promotora) {
-          subtitulo += " · " + promotora;
-        }
-        const subtituloLines = doc.splitTextToSize(
-          subtitulo,
-          pageWidth - marginX * 2 - 40
-        );
-        doc.text(subtituloLines, marginX, y);
-        y += subtituloLines.length * 4.8 + 2;
-
-        // Claim corto
-        doc.setFont("helvetica", "italic");
-        doc.setFontSize(9);
-        doc.setTextColor(107, 114, 128);
-        let claim =
-          "Arquitectura, diseño y tecnología IP para una experiencia de acceso verdaderamente premium.";
-        if (idioma === "en") {
-          claim =
-            "Architecture, design and IP technology for a truly premium access experience.";
-        } else if (idioma === "pt") {
-          claim =
-            "Arquitetura, design e tecnologia IP para uma experiência de acesso verdadeiramente premium.";
-        }
-        const claimLines = doc.splitTextToSize(
-          claim,
-          pageWidth - marginX * 2 - 40
-        );
-        doc.text(claimLines, marginX, y);
-
-        // Logo 2N abajo derecha en portada
-        if (logo && logo.dataUrl) {
-          const ratio =
-            logo.width && logo.height ? logo.width / logo.height : 2.5;
-          const logoW = 32;
-          const logoH = logoW / ratio;
-          const logoX = pageWidth - marginX - logoW;
-          const logoY = panelY + panelHeight - logoH - 6;
-          try {
-            doc.addImage(logo.dataUrl, "PNG", logoX, logoY, logoW, logoH);
-          } catch (e) {
-            console.warn(
-              "No se pudo dibujar logo en portada comercial:",
-              e
-            );
-          }
-        }
-      });
-    } catch (e) {
-      console.warn("Error renderizando portada comercial:", e);
-    }
-  })();
-
-  // ===========================
-  // PÁGINA 2 – HORIZONTAL: Resumen + Sistema (tarjetas)
-  // ===========================
-
-  doc.addPage("l"); // horizontal
-  (function renderPage2() {
+  doc.addPage("l"); // SOLO esta página en horizontal
+  (function renderPage2Horizontal() {
     const dims = getDocPageDimensions(doc);
     const pageWidth = dims.width;
     const pageHeight = dims.height;
@@ -2554,18 +2525,17 @@ async function exportarPDFComercial() {
   })();
 
   // ===========================
-  // PÁGINA 3 – HORIZONTAL: Servicios / Infraestructura / Otros
+  // PÁGINA 3 – VERTICAL: Servicios / Infraestructura / Otros
   // ===========================
 
-  (function renderPage3() {
-    const tieneServicios = (secciones.servicios || "").trim().length > 0;
-    const tieneInfra =
-      (secciones.infraestructura || "").trim().length > 0;
-    const tieneOtros = (secciones.otros || "").trim().length > 0;
+  const tieneServicios = (secciones.servicios || "").trim().length > 0;
+  const tieneInfra =
+    (secciones.infraestructura || "").trim().length > 0;
+  const tieneOtros = (secciones.otros || "").trim().length > 0;
 
-    if (!tieneServicios && !tieneInfra && !tieneOtros) return;
+  if (tieneServicios || tieneInfra || tieneOtros) {
+    doc.addPage(); // vuelve a vertical (orientación por defecto del doc)
 
-    doc.addPage("l"); // sigue en horizontal
     const dims = getDocPageDimensions(doc);
     const pageWidth = dims.width;
     const pageHeight = dims.height;
@@ -2590,8 +2560,8 @@ async function exportarPDFComercial() {
     );
 
     let yCards2 = marginTop + 10;
-    const cardWidthFull = pageWidth - marginX * 2;
 
+    const cardWidthFull = pageWidth - marginX * 2;
     const bloques = [];
     if (tieneServicios) {
       bloques.push({
@@ -2629,7 +2599,7 @@ async function exportarPDFComercial() {
 
     bloques.forEach(function (b) {
       if (yCards2 + 50 > pageHeight - marginBottom) {
-        doc.addPage("l");
+        doc.addPage();
         yCards2 = marginTop;
       }
 
@@ -2645,21 +2615,16 @@ async function exportarPDFComercial() {
       });
       yCards2 = c.bottomY + 8;
     });
-  })();
+  }
 
   // ===========================
-  // PÁGINAS 4+ – Galería visual horizontal con nombres en pie de página
+  // PÁGINA 4 – VERTICAL: Galería visual con pie de foto
   // ===========================
 
-  (async function renderGallery() {
-    const galeria = collectSectionImagesWithCaptions();
-    if (!galeria.length) {
-      // Guardar y salir si no hay galería
-      guardar();
-      return;
-    }
+  const galeria = collectSectionImagesWithCaptions();
+  if (galeria.length) {
+    doc.addPage();
 
-    doc.addPage("l");
     let dims = getDocPageDimensions(doc);
     let pageWidth = dims.width;
     let pageHeight = dims.height;
@@ -2685,11 +2650,9 @@ async function exportarPDFComercial() {
     let yRowStart = marginTop + 10;
     let rowInPage = 0;
     const maxImgWidth = (pageWidth - marginX * 2 - 10) / 2; // 2 columnas
-    const maxImgHeight = 55;
-    const maxContentBottom = pageHeight - marginBottom - 14;
-    const approxRowHeight = maxImgHeight + 10;
-
-    let captionsPage = [];
+    const maxImgHeight = 38;
+    const maxContentBottom = pageHeight - marginBottom - 10;
+    const approxRowHeight = maxImgHeight + 24;
 
     for (let i = 0; i < galeria.length; i++) {
       const item = galeria[i];
@@ -2702,17 +2665,12 @@ async function exportarPDFComercial() {
           yRowStart += approxRowHeight;
         }
 
-        // Antes de saltar de página, escribir pie de página con nombres
         if (yRowStart + approxRowHeight > maxContentBottom) {
-          drawGalleryFooter(captionsPage);
-          captionsPage = [];
-
-          doc.addPage("l");
+          doc.addPage();
           dims = getDocPageDimensions(doc);
           pageWidth = dims.width;
           pageHeight = dims.height;
 
-          // Encabezado de galería en nueva página
           doc.setFont("helvetica", "bold");
           doc.setFontSize(12);
           doc.setTextColor(31, 41, 55);
@@ -2752,9 +2710,17 @@ async function exportarPDFComercial() {
           marginX + col * (maxImgWidth + 10) + (maxImgWidth - drawW) / 2;
         const yImg = yRowStart;
 
-        // Card limpia sin texto
         const cardPadding = 2;
-        const cardHeight = drawH + 4;
+        let captionLines = [];
+        let captionHeight = 0;
+        if (caption) {
+          captionLines = doc.splitTextToSize(
+            caption,
+            maxImgWidth - cardPadding * 2
+          );
+          captionHeight = captionLines.length * 4;
+        }
+        const cardHeight = drawH + (caption ? captionHeight + 6 : 4);
 
         doc.setFillColor(255, 255, 255);
         doc.setDrawColor(229, 231, 235);
@@ -2772,55 +2738,57 @@ async function exportarPDFComercial() {
         // Imagen
         doc.addImage(dataUrl, "PNG", xBase, yImg, drawW, drawH);
 
-        // Guardamos caption solo para el pie de página (no debajo de la imagen)
-        if (caption && !captionsPage.includes(caption)) {
-          captionsPage.push(caption);
+        // Caption debajo
+        if (caption && captionLines.length) {
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(8.5);
+          doc.setTextColor(75, 85, 99);
+          const yCaption = yImg + drawH + 4;
+          doc.text(
+            captionLines,
+            xBase + drawW / 2,
+            yCaption,
+            { align: "center" }
+          );
         }
       } catch (e) {
         console.warn("No se pudo cargar imagen para galería comercial:", e);
       }
     }
 
-    // Pie de página de la última página de galería
-    drawGalleryFooter(captionsPage);
-
-    // Logo 2N pequeño en el pie de la última página de galería
+    // Logo pequeño en el pie de la última página de galería
     if (logo && logo.dataUrl) {
       const dimsLast = getDocPageDimensions(doc);
       const pageWidthLast = dimsLast.width;
       const pageHeightLast = dimsLast.height;
-      const ratio =
+      const ratioLogo2 =
         logo.width && logo.height ? logo.width / logo.height : 2.5;
-      const logoW = 24;
-      const logoH = logoW / ratio;
-      const logoX = pageWidthLast - marginX - logoW;
-      const logoY = pageHeightLast - marginBottom - logoH + 4;
+      const logoW2 = 24;
+      const logoH2 = logoW2 / ratioLogo2;
+      const logoX2 = pageWidthLast - marginX - logoW2;
+      const logoY2 = pageHeightLast - marginBottom - logoH2 + 4;
       try {
-        doc.addImage(logo.dataUrl, "PNG", logoX, logoY, logoW, logoH);
+        doc.addImage(logo.dataUrl, "PNG", logoX2, logoY2, logoW2, logoH2);
       } catch (e) {
         console.warn("No se pudo dibujar logo en galería comercial:", e);
       }
     }
-
-    guardar();
-  })();
+  }
 
   // ===========================
   // Guardar PDF
   // ===========================
 
-  function guardar() {
-    let filenameBase = "highlights_accesos";
-    if (idioma === "en") filenameBase = "highlights_access_solution";
-    if (idioma === "pt") filenameBase = "highlights_acessos";
+  let filenameBase = "highlights_accesos";
+  if (idioma === "en") filenameBase = "highlights_access_solution";
+  if (idioma === "pt") filenameBase = "highlights_acessos";
 
-    const safe = String(nombreProyecto || "proyecto")
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "_")
-      .replace(/^_+|_+$/g, "");
+  const safe = String(nombreProyecto || "proyecto")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
 
-    doc.save(filenameBase + "_" + safe + ".pdf");
-  }
+  doc.save(filenameBase + "_" + safe + ".pdf");
 }
 
 // ===========================
