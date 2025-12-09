@@ -1255,7 +1255,7 @@ function saveDocCustomBlock() {
 }
 
 // ===========================
-// IA POR SECCIÓN (HOOK + implementación)
+// IA POR SECCIÓN (HOOK)
 // ===========================
 
 async function askAIForSection(sectionKey) {
@@ -1269,6 +1269,9 @@ async function askAIForSection(sectionKey) {
       ? window.getPresupuestoActual()
       : null;
 
+  // 👇 NUEVO: modo (comercial | tecnica)
+  const modo = appState.documentacion.modo || "comercial";
+
   if (typeof window.handleDocSectionAI === "function") {
     try {
       const nuevoTexto = await window.handleDocSectionAI({
@@ -1278,6 +1281,7 @@ async function askAIForSection(sectionKey) {
         texto: textoActual,
         proyecto: proyecto,
         presupuesto: presupuesto,
+        modo: modo, // 👈 IMPORTANTE: se envía al backend
       });
 
       if (typeof nuevoTexto === "string" && nuevoTexto.trim()) {
@@ -1297,9 +1301,9 @@ async function askAIForSection(sectionKey) {
 
   alert(
     "Función de IA no configurada.\n\n" +
-      "Para activar 'Preguntar a IA', implementa en tu código (por ejemplo, llamando a una Cloud Function con OpenAI o Gemini):\n\n" +
-      "window.handleDocSectionAI = async ({ sectionKey, idioma, titulo, texto, proyecto, presupuesto }) => {\n" +
-      "  // Usa 'titulo' y 'texto' como prompt base.\n" +
+      "Para activar 'Preguntar a IA', implementa en tu código (por ejemplo, llamando a una Cloud Function con OpenAI/Gemini):\n\n" +
+      "window.handleDocSectionAI = async ({ sectionKey, idioma, titulo, texto, proyecto, presupuesto, modo }) => {\n" +
+      "  // Usa 'titulo', 'texto' y 'modo' como base del prompt.\n" +
       "  // Devuelve el texto final que quieras que se muestre en la sección.\n" +
       "  return textoMejorado;\n" +
       "};"
