@@ -440,9 +440,12 @@ async function renderDocGestionView() {
   `;
 
   container.innerHTML = `
-    <div class="proyecto-layout">
+    <div
+      class="proyecto-layout"
+      style="display:flex; flex-wrap:wrap; gap:1rem; align-items:flex-start;"
+    >
       <!-- Card de gestión / subida -->
-      <div class="card">
+      <div class="card" style="flex:1 1 0; min-width:300px; max-width:100%;">
         <div class="card-header">
           <div>
             <div class="card-title">Gestión de documentación</div>
@@ -510,7 +513,7 @@ async function renderDocGestionView() {
       </div>
 
       <!-- Card de listado -->
-      <div class="card">
+      <div class="card" style="flex:1 1 0; min-width:300px; max-width:100%;">
         <div class="card-header">
           <div>
             <div class="card-title">Documentos subidos</div>
