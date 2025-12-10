@@ -1,8 +1,9 @@
 // js/ui_doc_prescripcion.js
 // Página de PRESCRIPCIÓN / MEDICIONES
-// - Vista matriz 2 columnas: capítulos a la izquierda, detalle a la derecha
-// - Gestión de plantillas de prescripción en Firestore (prescripcion_templates)
-// - Sin lecturas repetidas: carga de plantillas solo una vez por sesión
+// - 3 columnas: capítulos (izq), detalle (centro), plantillas de texto (dcha)
+// - Plantillas de prescripción completas (estructura de capítulos) en Firestore: prescripcion_templates
+// - Plantillas de texto de medición (videportero, accesos, monitores, etc.) en Firestore: prescripcion_bloques
+// - Carga perezosa: solo una lectura por colección y sesión
 
 window.appState = window.appState || {};
 appState.documentacion = appState.documentacion || {
@@ -13,8 +14,10 @@ appState.documentacion = appState.documentacion || {
 appState.prescripcion = appState.prescripcion || {
   capitulos: [],            // [{id, codigo, titulo, textoMedicion, partidas: [...] }]
   selectedCapId: null,
-  templates: [],            // plantillas cargadas desde Firestore
+  templates: [],            // plantillas de estructura de capítulos
   templatesLoaded: false,
+  textBlocks: [],           // plantillas de texto de medición (bloques)
+  textBlocksLoaded: false,
 };
 
 // ==============================
@@ -51,11 +54,12 @@ function getAuthInstancePres() {
 
 function ensurePrescripcionState() {
   appState.prescripcion = appState.prescripcion || {};
-  appState.prescripcion.capitulos = appState.prescripcion.capitulos || [];
-  appState.prescripcion.templates = appState.prescripcion.templates || [];
-  if (!appState.prescripcion.selectedCapId) {
-    const first = appState.prescripcion.capitulos[0];
-    appState.prescripcion.selectedCapId = first ? first.id : null;
+  const st = appState.prescripcion;
+  st.capitulos = st.capitulos || [];
+  st.templates = st.templates || [];
+  st.textBlocks = st.textBlocks || [];
+  if (!st.selectedCapId && st.capitulos.length > 0) {
+    st.selectedCapId = st.capitulos[0].id;
   }
 }
 
@@ -82,7 +86,7 @@ function createEmptyPartida() {
 }
 
 // ==============================
-// Plantillas en Firestore
+// Plantillas de estructura (prescripcion_templates)
 // ==============================
 
 async function loadPresTemplatesIfNeeded() {
@@ -117,7 +121,7 @@ async function loadPresTemplatesIfNeeded() {
 
     appState.prescripcion.templates = templates;
     appState.prescripcion.templatesLoaded = true;
-    console.log("[PRESCRIPCION] Plantillas cargadas:", templates.length);
+    console.log("[PRESCRIPCION] Plantillas de estructura cargadas:", templates.length);
   } catch (e) {
     console.error("[PRESCRIPCION] Error cargando plantillas:", e);
   }
@@ -133,7 +137,7 @@ async function saveCurrentPrescripcionAsTemplate() {
     return;
   }
 
-  const name = window.prompt("Nombre de la plantilla de prescripción:");
+  const name = window.prompt("Nombre de la plantilla de prescripción (estructura de capítulos):");
   if (!name) return;
 
   const description =
@@ -153,7 +157,7 @@ async function saveCurrentPrescripcionAsTemplate() {
     const template = { id: docRef.id, ...payload };
     appState.prescripcion.templates.push(template);
     appState.prescripcion.templatesLoaded = true;
-    alert("✅ Plantilla guardada correctamente.");
+    alert("✅ Plantilla de estructura guardada correctamente.");
     renderDocPrescripcionView();
   } catch (e) {
     console.error("[PRESCRIPCION] Error guardando plantilla:", e);
@@ -171,7 +175,6 @@ function applyPresTemplateById(templateId) {
     return;
   }
 
-  // Clonamos capítulos para no mutar el original
   const clonedCaps = (tpl.capitulos || []).map((c, idx) => ({
     id:
       c.id ||
@@ -204,8 +207,103 @@ function applyPresTemplateById(templateId) {
   appState.prescripcion.selectedCapId =
     clonedCaps.length > 0 ? clonedCaps[0].id : null;
 
-  alert("✅ Plantilla aplicada a la prescripción actual.");
+  alert("✅ Plantilla de estructura aplicada a la prescripción actual.");
   renderDocPrescripcionView();
+}
+
+// ==============================
+// Plantillas de texto (prescripcion_bloques)
+// ==============================
+
+async function loadPresTextBlocksIfNeeded() {
+  ensurePrescripcionState();
+  if (appState.prescripcion.textBlocksLoaded) return;
+
+  const db = getFirestoreInstancePres();
+  const auth = getAuthInstancePres();
+  if (!db) {
+    console.warn("[PRESCRIPCION] Firestore no disponible para bloques de texto.");
+    return;
+  }
+
+  try {
+    let query = db.collection("prescripcion_bloques");
+    if (auth && auth.currentUser) {
+      query = query.where("uid", "==", auth.currentUser.uid);
+    }
+
+    const snap = await query.get();
+    const blocks = [];
+    snap.forEach((doc) => {
+      const data = doc.data() || {};
+      blocks.push({
+        id: doc.id,
+        name: data.name || "(sin nombre)",
+        category: data.category || "general", // ej: videoportero, accesos, monitores...
+        texto: data.texto || "",
+        updatedAt: data.updatedAt || data.createdAt || null,
+      });
+    });
+
+    appState.prescripcion.textBlocks = blocks;
+    appState.prescripcion.textBlocksLoaded = true;
+    console.log("[PRESCRIPCION] Bloques de texto cargados:", blocks.length);
+  } catch (e) {
+    console.error("[PRESCRIPCION] Error cargando bloques de texto:", e);
+  }
+}
+
+async function savePresTextTemplate(name, category, texto) {
+  ensurePrescripcionState();
+  const db = getFirestoreInstancePres();
+  const auth = getAuthInstancePres();
+
+  if (!db) {
+    alert("No se puede guardar la plantilla de texto: Firestore no está disponible.");
+    return;
+  }
+
+  const payload = {
+    name: name.trim(),
+    category: (category || "general").trim() || "general",
+    texto: texto || "",
+    uid: auth && auth.currentUser ? auth.currentUser.uid : null,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+
+  try {
+    const docRef = await db.collection("prescripcion_bloques").add(payload);
+    const block = { id: docRef.id, ...payload };
+    appState.prescripcion.textBlocks.push(block);
+    appState.prescripcion.textBlocksLoaded = true;
+    alert("✅ Plantilla de texto guardada correctamente.");
+    renderDocPrescripcionView();
+  } catch (e) {
+    console.error("[PRESCRIPCION] Error guardando plantilla de texto:", e);
+    alert("Error al guardar la plantilla de texto. Revisa la consola para más detalles.");
+  }
+}
+
+async function deletePresTextTemplate(blockId) {
+  ensurePrescripcionState();
+  const db = getFirestoreInstancePres();
+  if (!db) {
+    alert("No se puede borrar la plantilla de texto: Firestore no está disponible.");
+    return;
+  }
+
+  try {
+    await db.collection("prescripcion_bloques").doc(blockId).delete();
+    appState.prescripcion.textBlocks = (appState.prescripcion.textBlocks || []).filter(
+      (b) => b.id !== blockId
+    );
+    alert("✅ Plantilla de texto eliminada.");
+    renderDocPrescripcionView();
+  } catch (e) {
+    console.error("[PRESCRIPCION] Error borrando plantilla de texto:", e);
+    alert("Error al borrar la plantilla de texto. Revisa la consola para más detalles.");
+  }
 }
 
 // ==============================
@@ -213,13 +311,11 @@ function applyPresTemplateById(templateId) {
 // ==============================
 
 function exportPrescripcionPDF() {
-  // TODO: siguiente hito → generar PDF de mediciones por capítulos y partidas
   console.log("[PRESCRIPCION] Export PDF – pendiente de implementar");
   alert("Exportación PDF de mediciones se implementará en el siguiente hito.");
 }
 
 function exportPrescripcionBC3() {
-  // TODO: siguiente hito → generar fichero BC3 desde appState.prescripcion
   console.log("[PRESCRIPCION] Export BC3 – pendiente de implementar");
   alert("Exportación BC3 se implementará en el siguiente hito.");
 }
@@ -234,13 +330,15 @@ async function renderDocPrescripcionView() {
 
   ensurePrescripcionState();
   await loadPresTemplatesIfNeeded();
+  await loadPresTextBlocksIfNeeded();
 
   const state = appState.prescripcion;
   const capitulos = state.capitulos || [];
   const selectedId = state.selectedCapId;
   const selectedCap = capitulos.find((c) => c.id === selectedId) || null;
 
-  // Selector de plantillas
+  // ===== Barra de plantillas de estructura (arriba) =====
+
   const templates = state.templates || [];
   const templatesOptions =
     templates.length > 0
@@ -258,9 +356,9 @@ async function renderDocPrescripcionView() {
     <div class="card" style="margin-bottom:0.75rem;">
       <div class="card-header">
         <div>
-          <div class="card-title">Plantillas de prescripción</div>
+          <div class="card-title">Plantillas de prescripción (estructura)</div>
           <div class="card-subtitle">
-            Guarda y reutiliza estructuras de capítulos y textos de mediciones para futuros proyectos.
+            Guarda y reutiliza estructuras de capítulos de mediciones para futuros proyectos.
           </div>
         </div>
         <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
@@ -282,9 +380,9 @@ async function renderDocPrescripcionView() {
           </div>
 
           <div style="display:flex; flex-direction:column; min-width:200px;">
-            <label style="font-size:0.8rem; color:#6b7280; margin-bottom:0.15rem;">Guardar la prescripción actual</label>
+            <label style="font-size:0.8rem; color:#6b7280; margin-bottom:0.15rem;">Guardar prescripción actual</label>
             <button id="presBtnSaveTemplate" class="btn btn-primary btn-sm">
-              💾 Guardar como plantilla
+              💾 Guardar como plantilla de estructura
             </button>
           </div>
         </div>
@@ -292,7 +390,8 @@ async function renderDocPrescripcionView() {
     </div>
   `;
 
-  // Lista de capítulos (columna izquierda)
+  // ===== Columna izquierda: Capítulos =====
+
   const capitulosListHTML =
     capitulos.length > 0
       ? capitulos
@@ -331,7 +430,8 @@ async function renderDocPrescripcionView() {
         </p>
       `;
 
-  // Detalle del capítulo seleccionado (columna derecha)
+  // ===== Columna central: Detalle de capítulo =====
+
   let detalleHTML = "";
   if (!selectedCap) {
     detalleHTML = `
@@ -346,8 +446,8 @@ async function renderDocPrescripcionView() {
         </div>
         <div class="card-body">
           <p class="text-muted" style="font-size:0.9rem;">
-            Aquí podrás editar el código, el título, el texto de medición y las referencias con PVP
-            asociadas a cada capítulo.
+            Cada capítulo debería corresponder a una sección del presupuesto (videportero, control de accesos,
+            monitores, etc.). Aquí podrás definir el texto de medición y las referencias con PVP asociadas.
           </p>
         </div>
       </div>
@@ -466,11 +566,11 @@ async function renderDocPrescripcionView() {
             <textarea
               id="presCapTexto"
               class="form-control"
-              rows="6"
+              rows="8"
               placeholder="Describe aquí el sistema según lenguaje de mediciones para ingenierías..."
             >${selectedCap.textoMedicion || ""}</textarea>
             <p style="font-size:0.78rem; color:#6b7280; margin-top:0.25rem;">
-              Podrás reutilizar textos base desde plantillas o copiar/pegar de otras obras.
+              Puedes arrastrar y soltar bloques de texto desde la columna derecha o pulsar en “Insertar en texto”.
             </p>
           </div>
 
@@ -511,14 +611,207 @@ async function renderDocPrescripcionView() {
     `;
   }
 
+  // ===== Columna derecha: Plantillas de texto (bloques) =====
+
+  const textBlocks = state.textBlocks || [];
+  const categoriesSet = new Set(
+    textBlocks.map((b) => (b.category || "general").toLowerCase())
+  );
+  const categories = ["todas", ...Array.from(categoriesSet)];
+  const categoryOptions = categories
+    .map(
+      (c) =>
+        `<option value="${c}">${c === "todas" ? "Todas las categorías" : c}</option>`
+    )
+    .join("");
+
+  const blocksListHTML =
+    textBlocks.length > 0
+      ? textBlocks
+          .map((b) => {
+            const cat = (b.category || "general").toLowerCase();
+            const shortText =
+              (b.texto || "").length > 140
+                ? (b.texto || "").slice(0, 140) + "..."
+                : b.texto || "";
+            return `
+              <div
+                class="pres-block-item"
+                data-pres-block-id="${b.id}"
+                data-pres-block-cat="${cat}"
+                draggable="true"
+                style="
+                  border:1px solid #e5e7eb;
+                  border-radius:0.4rem;
+                  padding:0.45rem 0.55rem;
+                  margin-bottom:0.45rem;
+                  background:#ffffff;
+                  cursor:grab;
+                "
+              >
+                <div style="display:flex; justify-content:space-between; gap:0.5rem; align-items:flex-start;">
+                  <div>
+                    <div style="font-size:0.78rem; font-weight:600; color:#0f172a;">
+                      ${b.name || "(sin nombre)"}
+                    </div>
+                    <div style="font-size:0.7rem; color:#6b7280; margin-top:0.15rem;">
+                      <span class="doc-gestion-pill">${cat}</span>
+                    </div>
+                  </div>
+                  <div style="display:flex; flex-direction:column; gap:0.25rem; align-items:flex-end;">
+                    <button
+                      type="button"
+                      class="btn btn-xs btn-outline pres-block-insert-btn"
+                      title="Insertar en el texto de medición"
+                    >
+                      ⤵ Insertar
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn-xs btn-ghost pres-block-delete-btn"
+                      title="Eliminar plantilla de texto"
+                    >
+                      ✖
+                    </button>
+                  </div>
+                </div>
+                <div style="font-size:0.74rem; color:#374151; margin-top:0.35rem; white-space:pre-wrap;">
+                  ${shortText}
+                </div>
+              </div>
+            `;
+          })
+          .join("")
+      : `
+        <p class="text-muted" style="font-size:0.85rem;">
+          Todavía no has creado plantillas de texto. Usa el botón
+          <strong>“Nueva plantilla de texto”</strong> para guardar textos tipo
+          de videportero, control de accesos, monitores, etc.
+        </p>
+      `;
+
+  const rightColumnHTML = `
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Plantillas de texto de prescripción</div>
+          <div class="card-subtitle">
+            Textos tipo para videportero, control de accesos, monitores, etc. Arrastra o inserta sobre el capítulo.
+          </div>
+        </div>
+        <div>
+          <button id="presBtnNewTextTpl" class="btn btn-xs btn-primary">
+            ➕ Nueva plantilla de texto
+          </button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div style="margin-bottom:0.5rem;">
+          <label style="font-size:0.78rem; color:#6b7280; margin-bottom:0.15rem; display:block;">
+            Filtrar por categoría
+          </label>
+          <select id="presBlocksFilter" class="form-control" style="max-width:100%;">
+            ${categoryOptions}
+          </select>
+        </div>
+
+        <div id="presBlocksList">
+          ${blocksListHTML}
+        </div>
+      </div>
+    </div>
+  `;
+
+  // ===== Modal flotante para nueva plantilla de texto =====
+
+  const modalHTML = `
+    <div
+      id="presTextTplModal"
+      style="
+        position:fixed;
+        inset:0;
+        background:rgba(15,23,42,0.45);
+        display:none;
+        align-items:center;
+        justify-content:center;
+        z-index:9999;
+      "
+    >
+      <div
+        style="
+          background:#ffffff;
+          border-radius:0.75rem;
+          max-width:640px;
+          width:100%;
+          margin:1rem;
+          box-shadow:0 20px 40px rgba(15,23,42,0.35);
+        "
+      >
+        <div style="padding:0.9rem 1rem 0.6rem; border-bottom:1px solid #e5e7eb; display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <div style="font-weight:600; font-size:0.95rem; color:#111827;">Nueva plantilla de texto</div>
+            <div style="font-size:0.8rem; color:#6b7280;">
+              Guarda un texto tipo para reutilizarlo en las mediciones (videportero, control de accesos, monitores, etc.).
+            </div>
+          </div>
+          <button id="presTplCloseX" class="btn btn-xs btn-ghost" style="font-size:1rem;">✖</button>
+        </div>
+
+        <div style="padding:0.9rem 1rem 0.75rem;">
+          <div class="form-group">
+            <label>Nombre de la plantilla</label>
+            <input
+              id="presTplName"
+              type="text"
+              class="form-control"
+              placeholder="Ej. Videportero IP Style – Pliego base"
+            />
+          </div>
+
+          <div class="form-group">
+            <label>Categoría</label>
+            <input
+              id="presTplCategory"
+              type="text"
+              class="form-control"
+              placeholder="Ej. videoportero, accesos, monitores..."
+            />
+            <p style="font-size:0.75rem; color:#6b7280; margin-top:0.15rem;">
+              La categoría te ayudará a filtrar (ej. “videoportero”, “control accesos”, “monitores vivienda”).
+            </p>
+          </div>
+
+          <div class="form-group">
+            <label>Texto de medición</label>
+            <textarea
+              id="presTplTexto"
+              class="form-control"
+              rows="8"
+              placeholder="Introduce aquí el texto técnico/comercial de la medición..."
+            ></textarea>
+          </div>
+        </div>
+
+        <div style="padding:0.75rem 1rem 0.9rem; border-top:1px solid #e5e7eb; display:flex; justify-content:flex-end; gap:0.5rem;">
+          <button id="presTplCancelBtn" class="btn btn-secondary btn-sm">Cancelar</button>
+          <button id="presTplSaveBtn" class="btn btn-primary btn-sm">Guardar plantilla de texto</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // ===== Montar todo =====
+
   container.innerHTML = `
+    ${modalHTML}
+
     <div class="proyecto-layout" style="display:flex; flex-direction:column; gap:0.75rem;">
       ${templatesBarHTML}
 
       <div
         style="
           display:grid;
-          grid-template-columns: minmax(260px, 0.9fr) minmax(360px, 1.6fr);
+          grid-template-columns: minmax(240px, 0.8fr) minmax(360px, 1.4fr) minmax(260px, 1.1fr);
           gap:1rem;
           align-items:flex-start;
         "
@@ -530,7 +823,7 @@ async function renderDocPrescripcionView() {
               <div>
                 <div class="card-title">Capítulos de prescripción</div>
                 <div class="card-subtitle">
-                  Estructura las mediciones por capítulos para ingeniería (videportero, accesos, vivienda, etc.).
+                  Cada capítulo puede corresponder a una sección del presupuesto (videportero, accesos, monitores...).
                 </div>
               </div>
               <div style="display:flex; gap:0.5rem;">
@@ -543,9 +836,14 @@ async function renderDocPrescripcionView() {
           </div>
         </div>
 
-        <!-- Columna derecha: Detalle -->
+        <!-- Columna central: Detalle del capítulo -->
         <div>
           ${detalleHTML}
+        </div>
+
+        <!-- Columna derecha: Plantillas de texto -->
+        <div>
+          ${rightColumnHTML}
         </div>
       </div>
     </div>
@@ -569,7 +867,8 @@ function attachDocPrescripcionHandlers() {
   const selectedCap =
     selectedCapIndex >= 0 ? capitulos[selectedCapIndex] : null;
 
-  // Plantillas
+  // ---- Botones barra superior (estructura) ----
+
   const btnSaveTpl = container.querySelector("#presBtnSaveTemplate");
   if (btnSaveTpl) {
     btnSaveTpl.addEventListener("click", () => {
@@ -606,7 +905,8 @@ function attachDocPrescripcionHandlers() {
     });
   }
 
-  // Añadir capítulo
+  // ---- Añadir / seleccionar capítulo ----
+
   const btnAddCap = container.querySelector("#presBtnAddCap");
   if (btnAddCap) {
     btnAddCap.addEventListener("click", () => {
@@ -618,7 +918,6 @@ function attachDocPrescripcionHandlers() {
     });
   }
 
-  // Seleccionar capítulo
   container
     .querySelectorAll("[data-pres-cap-id]")
     .forEach((item) => {
@@ -630,10 +929,15 @@ function attachDocPrescripcionHandlers() {
       });
     });
 
-  // Si no hay capítulo seleccionado, no seguimos
-  if (!selectedCap) return;
+  if (!selectedCap) {
+    // No hay capítulo seleccionado → nada más que hacer
+    setupTextBlocksHandlers(container, null);
+    setupTextTemplateModalHandlers(container);
+    return;
+  }
 
-  // Eliminar capítulo
+  // ---- Eliminar capítulo ----
+
   const btnDeleteCap = container.querySelector("#presBtnDeleteCap");
   if (btnDeleteCap) {
     btnDeleteCap.addEventListener("click", () => {
@@ -649,7 +953,8 @@ function attachDocPrescripcionHandlers() {
     });
   }
 
-  // Código de capítulo
+  // ---- Código / título / texto del capítulo ----
+
   const inputCodigo = container.querySelector("#presCapCodigo");
   if (inputCodigo) {
     inputCodigo.addEventListener("input", () => {
@@ -657,7 +962,6 @@ function attachDocPrescripcionHandlers() {
     });
   }
 
-  // Título de capítulo
   const inputTitulo = container.querySelector("#presCapTitulo");
   if (inputTitulo) {
     inputTitulo.addEventListener("input", () => {
@@ -665,7 +969,6 @@ function attachDocPrescripcionHandlers() {
     });
   }
 
-  // Texto de medición
   const inputTexto = container.querySelector("#presCapTexto");
   if (inputTexto) {
     inputTexto.addEventListener("input", () => {
@@ -673,7 +976,8 @@ function attachDocPrescripcionHandlers() {
     });
   }
 
-  // Añadir partida
+  // ---- Partidas del capítulo ----
+
   const btnAddPartida = container.querySelector("#presBtnAddPartida");
   if (btnAddPartida) {
     btnAddPartida.addEventListener("click", () => {
@@ -684,7 +988,6 @@ function attachDocPrescripcionHandlers() {
     });
   }
 
-  // Editar / borrar partidas (delegación por fila)
   const tbody = container.querySelector("#presPartidasBody");
   if (tbody) {
     tbody.querySelectorAll("tr[data-pres-partida-id]").forEach((row) => {
@@ -740,6 +1043,164 @@ function attachDocPrescripcionHandlers() {
       }
     });
   }
+
+  // ---- Bloques de texto (columna derecha) ----
+
+  setupTextBlocksHandlers(container, inputTexto);
+  setupTextTemplateModalHandlers(container);
+}
+
+// ==============================
+// Handlers: bloques de texto + modal
+// ==============================
+
+function setupTextBlocksHandlers(container, capTextoTextarea) {
+  const filterSelect = container.querySelector("#presBlocksFilter");
+  const blocksContainer = container.querySelector("#presBlocksList");
+  const blocks = appState.prescripcion.textBlocks || [];
+
+  // Filtrado por categoría
+  if (filterSelect && blocksContainer) {
+    filterSelect.addEventListener("change", () => {
+      const catFilter = filterSelect.value || "todas";
+      blocksContainer
+        .querySelectorAll(".pres-block-item")
+        .forEach((item) => {
+          const cat = item.getAttribute("data-pres-block-cat") || "general";
+          if (
+            catFilter === "todas" ||
+            catFilter === "" ||
+            cat === catFilter
+          ) {
+            item.style.display = "";
+          } else {
+            item.style.display = "none";
+          }
+        });
+    });
+  }
+
+  // Insertar / eliminar / drag & drop
+  if (!blocksContainer) return;
+
+  blocksContainer
+    .querySelectorAll(".pres-block-item")
+    .forEach((item) => {
+      const blockId = item.getAttribute("data-pres-block-id");
+      const block = blocks.find((b) => b.id === blockId);
+      if (!block) return;
+
+      const insertBtn = item.querySelector(".pres-block-insert-btn");
+      const deleteBtn = item.querySelector(".pres-block-delete-btn");
+
+      if (insertBtn && capTextoTextarea) {
+        insertBtn.addEventListener("click", () => {
+          const current = capTextoTextarea.value || "";
+          const separator =
+            current && !current.endsWith("\n") ? "\n\n" : "";
+          capTextoTextarea.value = current + separator + (block.texto || "");
+          capTextoTextarea.dispatchEvent(new Event("input"));
+        });
+      }
+
+      if (deleteBtn) {
+        deleteBtn.addEventListener("click", () => {
+          const ok = window.confirm(
+            "¿Eliminar esta plantilla de texto de forma permanente?"
+          );
+          if (!ok) return;
+          deletePresTextTemplate(blockId).catch((e) =>
+            console.error("Error borrando plantilla de texto:", e)
+          );
+        });
+      }
+
+      // Drag & drop de texto
+      item.addEventListener("dragstart", (ev) => {
+        ev.dataTransfer.setData("text/plain", block.texto || "");
+        ev.dataTransfer.effectAllowed = "copy";
+      });
+    });
+
+  // Zona de drop en el textarea
+  if (capTextoTextarea) {
+    capTextoTextarea.addEventListener("dragover", (ev) => {
+      ev.preventDefault();
+      ev.dataTransfer.dropEffect = "copy";
+    });
+    capTextoTextarea.addEventListener("drop", (ev) => {
+      ev.preventDefault();
+      const text = ev.dataTransfer.getData("text/plain") || "";
+      if (!text) return;
+      const current = capTextoTextarea.value || "";
+      const separator = current && !current.endsWith("\n") ? "\n\n" : "";
+      capTextoTextarea.value = current + separator + text;
+      capTextoTextarea.dispatchEvent(new Event("input"));
+    });
+  }
+
+  // Botón Nueva plantilla de texto
+  const btnNewTextTpl = container.querySelector("#presBtnNewTextTpl");
+  if (btnNewTextTpl) {
+    btnNewTextTpl.addEventListener("click", () => {
+      const modal = container.querySelector("#presTextTplModal");
+      if (modal) {
+        modal.style.display = "flex";
+        const nameInput = modal.querySelector("#presTplName");
+        if (nameInput) nameInput.focus();
+      }
+    });
+  }
+}
+
+function setupTextTemplateModalHandlers(container) {
+  const modal = container.querySelector("#presTextTplModal");
+  if (!modal) return;
+
+  const close = () => {
+    modal.style.display = "none";
+  };
+
+  const inputName = modal.querySelector("#presTplName");
+  const inputCat = modal.querySelector("#presTplCategory");
+  const inputTexto = modal.querySelector("#presTplTexto");
+
+  const btnCloseX = modal.querySelector("#presTplCloseX");
+  const btnCancel = modal.querySelector("#presTplCancelBtn");
+  const btnSave = modal.querySelector("#presTplSaveBtn");
+
+  if (btnCloseX) btnCloseX.addEventListener("click", close);
+  if (btnCancel) btnCancel.addEventListener("click", close);
+
+  if (btnSave) {
+    btnSave.addEventListener("click", () => {
+      const name = (inputName && inputName.value) || "";
+      const cat = (inputCat && inputCat.value) || "";
+      const txt = (inputTexto && inputTexto.value) || "";
+
+      if (!name.trim()) {
+        alert("Introduce un nombre para la plantilla de texto.");
+        return;
+      }
+      if (!txt.trim()) {
+        alert("Introduce un texto para la plantilla.");
+        return;
+      }
+
+      savePresTextTemplate(name, cat, txt).catch((e) =>
+        console.error("Error guardando plantilla de texto:", e)
+      );
+      // El propio render posterior cerrará el modal, pero lo cerramos por UX inmediata
+      close();
+    });
+  }
+
+  // Cerrar modal si se hace click fuera
+  modal.addEventListener("click", (ev) => {
+    if (ev.target === modal) {
+      close();
+    }
+  });
 }
 
 console.log(
