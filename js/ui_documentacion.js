@@ -1361,8 +1361,15 @@ function drawTechFooter(pdf, opts = {}) {
 function setupTechContentPage(pdf, opts = {}) {
   const startY = drawTechHeader(pdf, opts);
   drawTechFooter(pdf, opts);
+
+  // 🔧 RESETEAMOS tipografía NORMAL para el contenido
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(11);
+  pdf.setTextColor(55, 65, 81);  // #374151
+
   return startY;
 }
+
 
 // ---------------- PDF técnico completo ----------------
 
