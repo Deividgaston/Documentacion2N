@@ -1,21 +1,25 @@
 // js/ui_documentacion.js
 // Página de DOCUMENTACIÓN: memoria de calidades auto-generada + editor flotante
 
+// ======================================================
+// ESTADO GLOBAL
+// ======================================================
+
 window.appState = window.appState || {};
 appState.documentacion = appState.documentacion || {
   idioma: "es", // "es" | "en" | "pt"
-  secciones: {}, // mapa: clave -> texto
+  secciones: {}, // clave -> texto
   customBlocks: [], // bloques añadidos manualmente
-  fichasIncluidas: {}, // mapa: idLinea -> true/false
+  fichasIncluidas: {}, // (legacy) idLinea -> true/false
   ultimaAutoGen: null,
   modo: "comercial", // "comercial" | "tecnica"
   mediaLibrary: [], // [{id, nombre, type, mimeType, url, storagePath, folderName, docCategory,...}]
   mediaLoaded: false,
-  sectionMedia: {}, // mapa: sectionKey -> [mediaId]
+  sectionMedia: {}, // clave sección -> [mediaId]
   selectedFichasMediaIds: [], // fichas técnicas seleccionadas desde la biblioteca
-  mediaSearchTerm: "", // término de búsqueda para documentación gráfica
-  fichasSearchTerm: "", // término de búsqueda para fichas técnicas
-  includedSections: {}, // mapa: sectionKey -> true/false (incluir en PDF técnico)
+  mediaSearchTerm: "",
+  fichasSearchTerm: "",
+  includedSections: {}, // clave sección -> true/false (incluir en PDF técnico)
   logoData: null, // cache logo para PDF
   sectionTitles: {}, // títulos personalizados por sección
 };
@@ -28,38 +32,59 @@ const DOC_STORAGE_KEY = "docState_v1";
 
 (function loadDocStateFromLocalStorage() {
   try {
-    const raw = window.localStorage && localStorage.getItem(DOC_STORAGE_KEY);
+    const raw =
+      typeof window !== "undefined" &&
+      window.localStorage &&
+      localStorage.getItem(DOC_STORAGE_KEY);
+
     if (!raw) return;
+
     const saved = JSON.parse(raw);
     appState.documentacion = {
       ...appState.documentacion,
       ...saved,
     };
   } catch (e) {
-    console.error("Error cargando estado de documentación:", e);
+    console.error("[DOC] Error cargando estado de documentación:", e);
   }
 })();
 
 function saveDocStateToLocalStorage() {
   try {
     if (!window.localStorage) return;
+
+    const d = appState.documentacion;
     const toSave = {
-      idioma: appState.documentacion.idioma,
-      secciones: appState.documentacion.secciones,
-      customBlocks: appState.documentacion.customBlocks,
-      fichasIncluidas: appState.documentacion.fichasIncluidas,
-      modo: appState.documentacion.modo,
-      sectionMedia: appState.documentacion.sectionMedia,
-      selectedFichasMediaIds: appState.documentacion.selectedFichasMediaIds,
-      mediaSearchTerm: appState.documentacion.mediaSearchTerm || "",
-      fichasSearchTerm: appState.documentacion.fichasSearchTerm || "",
-      includedSections: appState.documentacion.includedSections || {},
-      sectionTitles: appState.documentacion.sectionTitles || {},
+      idioma: d.idioma,
+      secciones: d.secciones,
+      customBlocks: d.customBlocks,
+      fichasIncluidas: d.fichasIncluidas,
+      modo: d.modo,
+      sectionMedia: d.sectionMedia,
+      selectedFichasMediaIds: d.selectedFichasMediaIds,
+      mediaSearchTerm: d.mediaSearchTerm || "",
+      fichasSearchTerm: d.fichasSearchTerm || "",
+      includedSections: d.includedSections || {},
+      sectionTitles: d.sectionTitles || {},
     };
+
     localStorage.setItem(DOC_STORAGE_KEY, JSON.stringify(toSave));
   } catch (e) {
-    console.error("Error guardando estado documentación:", e);
+    console.error("[DOC] Error guardando estado documentación:", e);
   }
+}
+
+// ======================================================
+// HELPERS BÁSICOS DE CONTENEDOR
+// ======================================================
+
+// OJO: aquí NO podemos llamarnos recursivamente.
+// Esta función la usa también ui_doc_gestion.js.
+function getDocAppContent() {
+  if (typeof window.getAppContent === "function") {
+    return window.getAppContent();
+  }
+  return document.getElementById("appContent");
 }
 
 // ======================================================
@@ -94,10 +119,6 @@ const DOC_TECH_COVER_URL = "img/PortadaTecnica.jpg";
 
 const DOC_BASE_TEMPLATES = {
   es: {
-    presentacion_empresa:
-      "2N es líder en tecnología de videoportero IP y control de accesos, combinando diseño arquitectónico, seguridad y experiencia de usuario.\n\n" +
-      "Con más de 30 años de experiencia en el desarrollo de soluciones IP, 2N forma parte del grupo Axis y dispone de un porfolio completo de intercomunicadores, unidades interiores, lectores de acceso y soluciones para ascensores.\n\n" +
-      "Las soluciones propuestas para {{NOMBRE_PROYECTO}} se han diseñado para ofrecer una experiencia premium a residentes, visitantes y operadores del edificio.",
     resumen:
       "El presente documento describe la solución de videoportero IP y control de accesos propuesta para el proyecto {{NOMBRE_PROYECTO}}, promovido por {{PROMOTORA}}.",
     sistema:
@@ -116,46 +137,42 @@ const DOC_BASE_TEMPLATES = {
       "En caso de requerirlo, se podrán añadir servicios adicionales o integraciones.",
   },
   en: {
-    presentacion_empresa:
-      "2N is a leading provider of IP video intercom and access control technology, combining architectural design, security and user experience.\n\n" +
-      "With more than 30 years of experience and as part of Axis group, 2N delivers a complete portfolio of IP intercoms, indoor stations, access readers and lift solutions.\n\n" +
-      "The solution proposed for {{NOMBRE_PROYECTO}} has been designed to provide a premium experience for residents, visitors and building operators.",
     resumen:
-      "This document describes the proposed IP video intercom and access control solution for the project {{NOMBRE_PROYECTO}}, developed by {{PROMOTORA}}.",
-    sistema: "The solution is based on a fully distributed IP video door system...",
+      "This document describes the proposed IP video intercom and access control solution for the project {{NOMBRE_PROYECTO}}, promoted by {{PROMOTORA}}.",
+    sistema:
+      "The solution is based on a fully distributed IP video door entry system...",
     equipos:
       "The solution includes the following main devices:\n\n{{LISTADO_EQUIPOS}}",
-    infraestructura: "All communication infrastructure is based on an IP network...",
-    servicios: "Cloud services can be added to enhance...",
+    infraestructura:
+      "All communication infrastructure is based on a structured cabling IP network...",
+    servicios:
+      "Cloud services can be added to enhance remote management and maintenance...",
     normativa_red: "RED Directive compliance...",
     normativa_lpd: "GDPR compliance information...",
     normativa_ciber: "Cybersecurity and Axis Group practices...",
     otros: "Additional notes and optional integrations.",
   },
   pt: {
-    presentacion_empresa:
-      "A 2N é líder em tecnologia de videoporteiro IP e controlo de acessos, aliando design arquitectónico, segurança e experiência de utilizador.\n\n" +
-      "Com mais de 30 anos de experiência e integrada no grupo Axis, a 2N oferece um portefólio completo de intercomunicadores, unidades interiores, leitores de acesso e soluções para elevadores.\n\n" +
-      "A solução proposta para {{NOMBRE_PROYECTO}} foi desenhada para proporcionar uma experiência premium a residentes, visitantes e operadores do edifício.",
     resumen:
-      "O presente documento descreve a solução proposta de videoporteiro IP e controlo de acessos para o projeto {{NOMBRE_PROYECTO}}, promovido por {{PROMOTORA}}.",
+      "O presente documento descreve a solução de videoporteiro IP e controlo de acessos proposta para o projeto {{NOMBRE_PROYECTO}}, promovido por {{PROMOTORA}}.",
     sistema:
       "A solução baseia-se num sistema de videoporteiro IP totalmente distribuído...",
     equipos:
       "A solução inclui os seguintes equipamentos principais:\n\n{{LISTADO_EQUIPOS}}",
     infraestructura:
-      "A infraestrutura de comunicações assenta numa rede IP com cablagem estruturada...",
+      "Toda a infraestrutura de comunicações assenta numa rede IP com cablagem estruturada...",
     servicios:
       "A solução pode ser complementada com serviços cloud para gestão remota...",
-    normativa_red: "Norma RED e requisitos de cibersegurança...",
+    normativa_red:
+      "Norma RED (Radio Equipment Directive) – 1 de agosto de 2025...",
     normativa_lpd: "Informações sobre RGPD...",
     normativa_ciber: "Práticas de cibersegurança e Axis...",
-    otros: "Notas adicionais.",
+    otros: "Notas adicionais e integrações opcionais.",
   },
 };
 
 // ======================================================
-// HELPERS TOKENS / TEXTO
+// TOKENS Y AUTO-GENERACIÓN
 // ======================================================
 
 function buildDocTokens() {
@@ -184,7 +201,7 @@ function buildDocTokens() {
         const ref = l.ref || l.referencia || "";
         const desc = l.descripcion || "";
         const qty = l.cantidad || 1;
-        return "• " + ref + " – " + desc + " (x" + qty + ")";
+        return `• ${ref} – ${desc} (x${qty})`;
       })
       .join("\n");
   }
@@ -199,45 +216,54 @@ function buildDocTokens() {
 function applyTokensToTemplate(txt, tokens) {
   if (!txt) return "";
   let out = txt;
-  Object.keys(tokens).forEach(function (k) {
+  Object.keys(tokens).forEach((k) => {
     out = out.replace(new RegExp(k, "g"), tokens[k]);
   });
   return out;
 }
 
-function docEscapeHtml(str) {
-  if (!str) return "";
-  return String(str)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-}
-
-// ======================================================
-// AUTO-GENERACIÓN
-// ======================================================
-
 function autoGenerateDocumentacion(idioma) {
   const lang = DOC_BASE_TEMPLATES[idioma] ? idioma : "es";
   const base = DOC_BASE_TEMPLATES[lang];
   const tokens = buildDocTokens();
-  const nuevas = {};
 
-  DOC_SECTION_ORDER.forEach(function (key) {
-    const tpl = base[key] || "";
-    nuevas[key] = applyTokensToTemplate(tpl, tokens);
+  const nuevas = {};
+  const d = appState.documentacion;
+
+  DOC_SECTION_ORDER.forEach((key) => {
+    if (key === "presentacion_empresa") {
+      // Texto base de presentación (editable + IA)
+      nuevas[key] =
+        d.secciones[key] ||
+        "2N lidera el camino en tecnología de control de acceso: ofrecemos las mejores características modernas sin comprometer la confiabilidad y la facilidad de uso.\n\n" +
+          "2N tiene más de 30 años de experiencia en el desarrollo de productos innovadores y de alta calidad: después de inventar el primer intercomunicador IP del mundo en 2008 y el primer intercomunicador LTE / 4G diez años después, continuamos empujando los límites y reaccionando a las cambiantes demandas del mercado.\n\n" +
+          "Nuestra cartera incluye intercomunicadores, unidades contestadoras, lectores de control de acceso y sistemas de elevación. Juntos, estos productos crean una solución IP avanzada para cualquier proyecto residencial.\n\n" +
+          "En 2N nos tomamos el diseño tan en serio como la innovación, y los Red Dot e iF Design Awards lo demuestran.\n\n" +
+          "2N fue fundada en 1991 en Praga. En 2016 se unió al Grupo Axis, aumentando estabilidad e innovación.";
+    } else {
+      const tpl = base[key] || "";
+      nuevas[key] = applyTokensToTemplate(tpl, tokens);
+    }
   });
 
-  appState.documentacion.secciones = nuevas;
-  appState.documentacion.ultimaAutoGen = new Date().toISOString();
-  appState.documentacion.idioma = lang;
+  d.secciones = nuevas;
+  d.ultimaAutoGen = new Date().toISOString();
+  d.idioma = lang;
 
   saveDocStateToLocalStorage();
 }
 
 // ======================================================
-// HELPERS DE SECCIONES
+// HELPERS GENERALES
 // ======================================================
+
+function docEscapeHtml(str) {
+  if (str === null || str === undefined) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
 
 function labelForSection(key) {
   switch (key) {
@@ -278,149 +304,138 @@ function getSectionTitle(key) {
 function getSectionIncluded(key) {
   const m = appState.documentacion.includedSections || {};
   if (typeof m[key] === "boolean") return m[key];
-  return true;
+  return true; // por defecto incluidas
 }
 
 // ======================================================
-// HELPERS BÁSICOS DE CONTENEDOR
-// ======================================================
-
-function getDocAppContent() {
-  if (typeof window.getAppContent === "function") {
-    return window.getAppContent();
-  }
-  return document.getElementById("appContent");
-}
-
-// ======================================================
-// RENDER SECCIONES HTML (cuerpo central)
+// MEDIA POR SECCIÓN (chips dentro de cada bloque)
 // ======================================================
 
 function renderSectionMediaHTML(sectionKey) {
   const mediaLib = appState.documentacion.mediaLibrary || [];
   const map = {};
-  mediaLib.forEach(function (m) {
-    map[m.id] = m;
+  mediaLib.forEach((m) => {
+    if (m && m.id) map[m.id] = m;
   });
 
-  const ids =
-    appState.documentacion.sectionMedia &&
-    appState.documentacion.sectionMedia[sectionKey]
-      ? appState.documentacion.sectionMedia[sectionKey]
-      : [];
-
+  const ids = appState.documentacion.sectionMedia?.[sectionKey] || [];
   if (!ids.length) return "";
 
   return ids
-    .map(function (id) {
+    .map((id) => {
       const m = map[id];
       if (!m) return "";
 
       const mime = (m.mimeType || "").toLowerCase();
+      const url = (m.url || "").toLowerCase();
       const isImg =
         mime.startsWith("image/") ||
-        (m.url || "").match(/\.(png|jpg|jpeg|webp|gif)$/i);
+        url.endsWith(".png") ||
+        url.endsWith(".jpg") ||
+        url.endsWith(".jpeg") ||
+        url.endsWith(".webp") ||
+        url.endsWith(".gif");
 
       const caption = m.nombre || "";
 
-      return (
-        '<div class="doc-section-media-chip">' +
-        '<div class="doc-section-media-thumb">' +
-        (isImg
-          ? '<img src="' +
-            m.url +
-            '" alt="' +
-            docEscapeHtml(caption) +
-            '">' 
-          : '<div class="doc-section-media-icon">📄</div>') +
-        "</div>" +
-        '<div class="doc-section-media-foot">' +
-        '<div class="doc-section-media-caption-wrap">' +
-        '<span class="doc-section-media-caption">' +
-        docEscapeHtml(caption) +
-        "</span>" +
-        "</div>" +
-        '<button type="button" class="doc-section-media-remove" data-remove-media-id="' +
-        id +
-        '">✕</button>' +
-        "</div>" +
-        "</div>"
-      );
+      return `
+        <div class="doc-section-media-chip">
+          <div class="doc-section-media-thumb">
+            ${
+              isImg
+                ? `<img src="${m.url}" alt="${docEscapeHtml(
+                    caption
+                  )}">`
+                : `<div class="doc-section-media-icon">📄</div>`
+            }
+          </div>
+          <div class="doc-section-media-foot">
+            <span class="doc-section-media-caption">${docEscapeHtml(
+              caption
+            )}</span>
+            <button
+              type="button"
+              class="doc-section-media-remove"
+              data-remove-media-id="${id}"
+            >✕</button>
+          </div>
+        </div>
+      `;
     })
     .join("");
 }
+// ======================================================
+// RENDER DE SECCIONES (columna central)
+// ======================================================
 
 function renderDocSectionsHTML() {
   const secciones = appState.documentacion.secciones || {};
-  const included = appState.documentacion.includedSections || {};
 
-  return DOC_SECTION_ORDER.map(function (key) {
+  return DOC_SECTION_ORDER.map((key) => {
     const contenido = secciones[key] || "";
+    const included = getSectionIncluded(key);
     const title = getSectionTitle(key);
-    const checked = included[key] !== false ? "checked" : "";
-    const isReadonly = false; // ahora todas las secciones, incluida presentación, pueden usar IA
+    const isReadonly = false; // ahora TODAS pueden usar IA, incluso presentación
 
-    return (
-      '<div class="card doc-section-card" data-doc-section="' +
-      key +
-      '">' +
-      '<div class="card-header">' +
-      '<div class="doc-section-title-wrap" style="flex:1;max-width:60%;">' +
-      '<input type="text" class="form-control doc-section-title-input" ' +
-      'data-doc-section-title="' +
-      key +
-      '" value="' +
-      docEscapeHtml(title) +
-      '" placeholder="' +
-      docEscapeHtml(labelForSection(key)) +
-      '">' +
-      "</div>" +
-      '<div class="doc-section-header-actions">' +
-      '<label class="doc-section-include-toggle">' +
-      '<input type="checkbox" data-doc-section-enable="' +
-      key +
-      '" ' +
-      checked +
-      "> Incluir en PDF</label>" +
-      '<button class="btn btn-xs btn-outline" data-doc-ai-section="' +
-      key +
-      '">✨ Preguntar a IA</button>' +
-      "</div>" +
-      "</div>" +
-      '<div class="card-body">' +
-      '<textarea class="form-control doc-section-textarea" data-doc-section-text="' +
-      key +
-      '" rows="8"' +
-      (isReadonly ? " readonly" : "") +
-      ">" +
-      contenido +
-      "</textarea>" +
-      (isReadonly
-        ? ""
-        : '<div class="doc-section-media-drop" data-doc-section-drop="' +
-          key +
-          '">' +
-          '<div class="doc-section-media-items">' +
-          renderSectionMediaHTML(key) +
-          "</div>" +
-          '<div class="doc-section-media-hint">' +
-          "Arrastra aquí imágenes para adjuntar a esta sección." +
-          "</div>" +
-          "</div>") +
-      "</div>" +
-      "</div>"
-    );
+    return `
+      <div class="card doc-section-card" data-doc-section="${key}">
+        <div class="card-header">
+          <div class="doc-section-title-wrap" style="flex:1;max-width:60%;">
+            <input
+              type="text"
+              class="form-control doc-section-title-input"
+              data-doc-section-title="${key}"
+              value="${docEscapeHtml(title)}"
+              placeholder="${docEscapeHtml(labelForSection(key))}"
+            >
+          </div>
+
+          <div class="doc-section-header-actions">
+            <label class="doc-section-include-toggle" style="font-size:0.75rem;display:flex;align-items:center;gap:0.25rem;margin-right:0.5rem;">
+              <input type="checkbox"
+                data-doc-section-enable="${key}"
+                ${included ? "checked" : ""}>
+              Incluir en PDF
+            </label>
+
+            <button class="btn btn-xs btn-outline"
+              data-doc-ai-section="${key}">
+              ✨ Preguntar a IA
+            </button>
+          </div>
+        </div>
+
+        <div class="card-body">
+          <textarea
+            class="form-control doc-section-textarea"
+            data-doc-section-text="${key}"
+            rows="10"
+            ${isReadonly ? "readonly" : ""}
+          >${docEscapeHtml(contenido)}</textarea>
+
+          <div class="doc-section-media-drop"
+            data-doc-section-drop="${key}">
+            <div class="doc-section-media-items">
+              ${renderSectionMediaHTML(key)}
+            </div>
+            <div class="doc-section-media-hint">
+              Arrastra aquí imágenes para adjuntar a esta sección (máx. 10).
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
   }).join("");
 }
 
 // ======================================================
-// FICHAS TÉCNICAS (sidebar)
+// RENDER FICHAS TÉCNICAS (columna derecha)
 // ======================================================
 
 function renderDocFichasHTML() {
   const media = appState.documentacion.mediaLibrary || [];
 
-  const fichas = media.filter(function (m) {
+  const fichas = media.filter((m) => {
     const cat = (m.docCategory || "").toLowerCase();
     const mime = (m.mimeType || "").toLowerCase();
 
@@ -432,6 +447,7 @@ function renderDocFichasHTML() {
       mime === "application/msword"
     )
       return true;
+
     return false;
   });
 
@@ -444,7 +460,7 @@ function renderDocFichasHTML() {
     .toLowerCase();
 
   const filtered = term
-    ? fichas.filter(function (m) {
+    ? fichas.filter((m) => {
         const t =
           (m.nombre || "") +
           " " +
@@ -455,76 +471,81 @@ function renderDocFichasHTML() {
       })
     : fichas;
 
+  const searchInputHtml = `
+    <div class="form-group mb-2">
+      <input
+        type="text"
+        id="docFichasSearchInput"
+        class="form-control"
+        placeholder="Buscar por nombre..."
+        value="${docEscapeHtml(
+          appState.documentacion.fichasSearchTerm || ""
+        )}"
+      >
+    </div>
+  `;
+
   if (!filtered.length) {
-    return (
-      '<p class="text-muted" style="font-size:0.85rem;">' +
-      "No se han encontrado fichas técnicas. Puedes subirlas desde " +
-      "<strong>Gestión de documentación</strong>." +
-      "</p>" +
-      '<div class="form-group mb-2">' +
-      '<input type="text" id="docFichasSearchInput" class="form-control" ' +
-      'placeholder="Buscar por nombre..." value="' +
-      docEscapeHtml(
-        appState.documentacion.fichasSearchTerm || ""
-      ) +
-      '">' +
-      "</div>"
-    );
+    return `
+      <div class="doc-fichas-section">
+        <div class="doc-fichas-block">
+          <div class="doc-fichas-title">Fichas técnicas</div>
+          <p class="doc-fichas-help">
+            No se han encontrado fichas técnicas. Puedes subirlas desde
+            <strong>Gestión de documentación</strong>.
+          </p>
+          ${searchInputHtml}
+        </div>
+      </div>
+    `;
   }
 
   const list = filtered
-    .map(function (m) {
+    .map((m) => {
       const checked = selected.has(m.id) ? "checked" : "";
       const main = m.folderName
-        ? "<strong>" + m.folderName + "</strong> – " + m.nombre
-        : "<strong>" + m.nombre + "</strong>";
-      return (
-        '<label class="doc-ficha-item">' +
-        '<input type="checkbox" data-doc-ficha-media-id="' +
-        m.id +
-        '" ' +
-        checked +
-        ">" +
-        '<span class="doc-ficha-main">' +
-        main +
-        "</span>" +
-        "</label>"
-      );
+        ? `<strong>${docEscapeHtml(
+            m.folderName
+          )}</strong> – ${docEscapeHtml(m.nombre || "")}`
+        : `<strong>${docEscapeHtml(m.nombre || "")}</strong>`;
+
+      return `
+        <label class="doc-ficha-item">
+          <input type="checkbox"
+            data-doc-ficha-media-id="${m.id}"
+            ${checked}
+          >
+          <span class="doc-ficha-main">${main}</span>
+        </label>
+      `;
     })
     .join("");
 
-  return (
-    '<div class="doc-fichas-section">' +
-    '<div class="doc-fichas-block">' +
-    '<div class="doc-fichas-title">Fichas técnicas de biblioteca</div>' +
-    '<p class="doc-fichas-help">' +
-    "Selecciona las fichas que quieras incluir en el PDF técnico." +
-    "</p>" +
-    '<div class="form-group mb-2">' +
-    '<input type="text" id="docFichasSearchInput" class="form-control" ' +
-    'placeholder="Buscar por nombre..." value="' +
-    docEscapeHtml(
-      appState.documentacion.fichasSearchTerm || ""
-    ) +
-    '">' +
-    "</div>" +
-    '<div class="doc-fichas-list doc-fichas-media-list">' +
-    list +
-    "</div>" +
-    "</div>" +
-    "</div>"
-  );
+  return `
+    <div class="doc-fichas-section">
+      <div class="doc-fichas-block">
+        <div class="doc-fichas-title">Fichas técnicas</div>
+        <p class="doc-fichas-help">
+          Selecciona las fichas que quieras incluir en el PDF técnico.
+        </p>
+        ${searchInputHtml}
+        <div class="doc-fichas-list doc-fichas-media-list">
+          ${list}
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 // ======================================================
-// DOCUMENTACIÓN GRÁFICA (solo IMÁGENES)
+// DOCUMENTACIÓN GRÁFICA – SOLO IMÁGENES
 // ======================================================
 
 function cleanInvalidMediaItems() {
   const list = appState.documentacion.mediaLibrary || [];
-  appState.documentacion.mediaLibrary = list.filter(function (m) {
-    return m && m.id && typeof m.id === "string" && m.id.trim();
-  });
+  appState.documentacion.mediaLibrary = list.filter(
+    (m) => m && m.id && typeof m.id === "string" && m.id.trim()
+  );
 }
 
 function renderDocMediaLibraryHTML() {
@@ -532,7 +553,7 @@ function renderDocMediaLibraryHTML() {
 
   const all = appState.documentacion.mediaLibrary || [];
 
-  const images = all.filter(function (m) {
+  const images = all.filter((m) => {
     const mime = (m.mimeType || "").toLowerCase();
     const type = (m.type || "").toLowerCase();
     const url = (m.url || "").toLowerCase();
@@ -549,11 +570,11 @@ function renderDocMediaLibraryHTML() {
   });
 
   if (!images.length) {
-    return (
-      '<p class="text-muted" style="font-size:0.85rem;">' +
-      "Todavía no has subido documentación gráfica." +
-      "</p>"
-    );
+    return `
+      <p class="text-muted" style="font-size:0.85rem;">
+        Todavía no has subido documentación gráfica.
+      </p>
+    `;
   }
 
   const term = (appState.documentacion.mediaSearchTerm || "")
@@ -561,7 +582,7 @@ function renderDocMediaLibraryHTML() {
     .toLowerCase();
 
   const filtered = term
-    ? images.filter(function (m) {
+    ? images.filter((m) => {
         const t =
           (m.nombre || "") +
           " " +
@@ -573,42 +594,43 @@ function renderDocMediaLibraryHTML() {
     : images;
 
   if (!filtered.length) {
-    return (
-      '<p class="text-muted" style="font-size:0.85rem;">' +
-      "No se han encontrado imágenes que coincidan con la búsqueda." +
-      "</p>"
-    );
+    return `
+      <p class="text-muted" style="font-size:0.85rem;">
+        No se han encontrado imágenes que coincidan con la búsqueda.
+      </p>
+    `;
   }
 
-  return (
-    '<div class="doc-media-list doc-fichas-list">' +
-    filtered
-      .map(function (m) {
-        const caption =
-          m.folderName && m.nombre
-            ? m.folderName + " – " + m.nombre
-            : m.nombre;
-        return (
-          '<div class="doc-media-item doc-media-row" draggable="true" data-media-id="' +
-          m.id +
-          '">' +
-          '<div class="doc-media-row-main">' +
-          '<span class="doc-media-row-icon">🖼️</span>' +
-          '<span class="doc-media-caption">' +
-          docEscapeHtml(caption) +
-          "</span>" +
-          "</div>" +
-          '<div class="doc-media-row-actions">' +
-          '<button class="btn btn-xs" data-media-view-id="' +
-          m.id +
-          '">👁 Ver</button>' +
-          "</div>" +
-          "</div>"
-        );
-      })
-      .join("") +
-    "</div>"
-  );
+  return `
+    <div class="doc-media-list doc-fichas-list">
+      ${filtered
+        .map((m) => {
+          const caption =
+            m.folderName && m.nombre
+              ? `${m.folderName} – ${m.nombre}`
+              : m.nombre;
+          return `
+            <div class="doc-media-item doc-media-row"
+              draggable="true"
+              data-media-id="${m.id}">
+              <div class="doc-media-row-main">
+                <span class="doc-media-row-icon">🖼️</span>
+                <span class="doc-media-caption">${docEscapeHtml(
+                  caption || ""
+                )}</span>
+              </div>
+              <div class="doc-media-row-actions">
+                <button class="btn btn-xs"
+                  data-media-view-id="${m.id}">
+                  👁 Ver
+                </button>
+              </div>
+            </div>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
 }
 
 function refreshDocMediaGridOnly() {
@@ -621,169 +643,375 @@ function refreshDocMediaGridOnly() {
   body.innerHTML = renderDocMediaLibraryHTML();
   attachDocMediaGridHandlers(container);
 }
-  const images = (appState.documentacion.mediaLibrary || []).filter(function (
-    m
-  ) {
-    const mime = (m.mimeType || "").toLowerCase();
-    const type = (m.type || "").toLowerCase();
-    const url = (m.url || "").toLowerCase();
-    return (
-      mime.startsWith("image/") ||
-      type === "image" ||
-      url.endsWith(".png") ||
-      url.endsWith(".jpg") ||
-      url.endsWith(".jpeg") ||
-      url.endsWith(".webp") ||
-      url.endsWith(".gif")
-    );
-  });
-
-  if (!images.length) {
-    return;
-  }
-
-  for (var i = 0; i < images.length; i++) {
-    var m = images[i];
-    try {
-      URL.revokeObjectURL(m.url);
-    } catch (e) {}
-  }
-}
 
 // ======================================================
-// PREVISUALIZADOR FLOTANTE
+// OVERLAY FLOTANTE PARA VER UNA IMAGEN
 // ======================================================
 
 function openDocImageFloatingPreview(item) {
-  if (!item || !item.url) return;
+  if (!item?.url) return;
 
-  var prev = document.getElementById("docMediaFloatingPreview");
+  const prev = document.getElementById("docMediaFloatingPreview");
   if (prev) prev.remove();
 
-  var title =
+  const title =
     item.folderName && item.nombre
       ? item.folderName + " – " + item.nombre
       : item.nombre || "Imagen";
 
-  var overlay = document.createElement("div");
+  const overlay = document.createElement("div");
   overlay.id = "docMediaFloatingPreview";
   overlay.style =
     "position:fixed;inset:0;background:rgba(0,0,0,0.65);display:flex;" +
     "align-items:center;justify-content:center;z-index:999999;";
 
-  overlay.innerHTML =
-    '<div style="position:relative;max-width:90vw;max-height:90vh;' +
-    "background:#111827;padding:12px;border-radius:12px;" +
-    'box-shadow:0 15px 40px rgba(0,0,0,0.6);display:flex;flex-direction:column;">' +
-    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">' +
-    '<div style="color:#e5e7eb;font-size:0.9rem;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:70vw;">' +
-    docEscapeHtml(title) +
-    "</div>" +
-    '<button id="docMediaFloatingCloseBtn" style="border:none;background:#374151;color:#f9fafb;border-radius:999px;padding:4px 10px;font-size:0.8rem;cursor:pointer;">✕ Cerrar</button>' +
-    "</div>" +
-    '<div style="flex:1;display:flex;align-items:center;justify-content:center;">' +
-    '<img src="' +
-    item.url +
-    '" style="max-width:86vw;max-height:80vh;object-fit:contain;border-radius:6px;background:#000;">' +
-    "</div>" +
-    "</div>";
+  overlay.innerHTML = `
+    <div style="
+      position:relative;
+      max-width:90vw;
+      max-height:90vh;
+      background:#111827;
+      padding:12px;
+      border-radius:12px;
+      box-shadow:0 15px 40px rgba(0,0,0,0.6);
+      display:flex;
+      flex-direction:column;
+    ">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <div style="
+          color:#e5e7eb;
+          font-size:0.9rem;
+          font-weight:500;
+          overflow:hidden;
+          text-overflow:ellipsis;
+          white-space:nowrap;
+          max-width:70vw;
+        ">
+          ${docEscapeHtml(title)}
+        </div>
+        <button id="docMediaFloatingCloseBtn"
+          style="border:none;background:#374151;color:#f9fafb;border-radius:999px;
+          padding:4px 10px;font-size:0.8rem;cursor:pointer;">
+          ✕ Cerrar
+        </button>
+      </div>
+      <div style="flex:1;display:flex;align-items:center;justify-content:center;">
+        <img src="${item.url}"
+          style="max-width:86vw;max-height:80vh;object-fit:contain;border-radius:6px;background:#000;">
+      </div>
+    </div>
+  `;
 
   document.body.appendChild(overlay);
 
-  overlay.addEventListener("click", function (ev) {
+  overlay.addEventListener("click", (ev) => {
     if (ev.target === overlay) overlay.remove();
   });
 
-  var closeBtn = document.getElementById("docMediaFloatingCloseBtn");
-  if (closeBtn) {
-    closeBtn.addEventListener("click", function () {
-      overlay.remove();
-    });
-  }
+  document
+    .getElementById("docMediaFloatingCloseBtn")
+    ?.addEventListener("click", () => overlay.remove());
 }
 
 // ======================================================
-// MEDIA: ESTADO Y FIREBASE
+// MEDIA GRID HANDLERS (drag, ver, quitar)
+// ======================================================
+
+function attachDocMediaGridHandlers(root) {
+  const container = root || getDocAppContent();
+  if (!container) return;
+
+  // Drag
+  container.querySelectorAll(".doc-media-item").forEach((item) => {
+    item.addEventListener("dragstart", (ev) => {
+      const id = item.getAttribute("data-media-id");
+      if (!id || !ev.dataTransfer) return;
+      ev.dataTransfer.setData("text/plain", id);
+      ev.dataTransfer.effectAllowed = "copy";
+    });
+  });
+
+  // Ver imagen
+  container.querySelectorAll("[data-media-view-id]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = btn.getAttribute("data-media-view-id");
+      if (!id) return;
+
+      const item =
+        (appState.documentacion.mediaLibrary || []).find(
+          (m) => m.id === id
+        ) || null;
+
+      if (!item?.url) {
+        alert("No se ha encontrado la imagen. Revisa la consola.");
+        return;
+      }
+
+      const mime = (item.mimeType || "").toLowerCase();
+      const url = (item.url || "").toLowerCase();
+      const isImg =
+        mime.startsWith("image/") ||
+        url.endsWith(".png") ||
+        url.endsWith(".jpg") ||
+        url.endsWith(".jpeg") ||
+        url.endsWith(".webp") ||
+        url.endsWith(".gif");
+
+      if (isImg) openDocImageFloatingPreview(item);
+      else window.open(item.url, "_blank");
+    });
+  });
+
+  // Botón quitar imagen de sección (se delega en attachDocSectionHandlers también,
+  // por si se re-renderiza)
+  container
+    .querySelectorAll(".doc-section-media-remove")
+    .forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.getAttribute("data-remove-media-id");
+        const zone = btn.closest("[data-doc-section-drop]");
+        const sec = zone
+          ? zone.getAttribute("data-doc-section-drop")
+          : null;
+        if (!id || !sec) return;
+        detachMediaFromSection(sec, id);
+      });
+    });
+}
+
+// ======================================================
+// AÑADIR / QUITAR MEDIA A SECCIÓN (límite 10 imágenes)
+// ======================================================
+
+function attachMediaToSection(sectionKey, mediaId) {
+  const map = appState.documentacion.sectionMedia || {};
+  const arr = map[sectionKey] || [];
+
+  if (!arr.includes(mediaId) && arr.length >= 10) {
+    alert("Solo puedes adjuntar hasta 10 imágenes por sección.");
+    return;
+  }
+
+  if (!arr.includes(mediaId)) arr.push(mediaId);
+  map[sectionKey] = arr;
+  appState.documentacion.sectionMedia = map;
+
+  saveDocStateToLocalStorage();
+  renderDocumentacionView();
+}
+
+function detachMediaFromSection(sectionKey, mediaId) {
+  const map = appState.documentacion.sectionMedia || {};
+  const arr = map[sectionKey] || [];
+  map[sectionKey] = arr.filter((id) => id !== mediaId);
+  appState.documentacion.sectionMedia = map;
+
+  saveDocStateToLocalStorage();
+  renderDocumentacionView();
+}
+// ======================================================
+// MODAL PARA BLOQUES CUSTOM
+// ======================================================
+
+function openDocCustomModal() {
+  const modal = document.getElementById("docCustomModal");
+  const back = document.getElementById("docModalBackdrop");
+
+  if (modal) modal.classList.remove("hidden");
+  if (back) back.classList.remove("hidden");
+
+  const txt = document.getElementById("docCustomText");
+  if (txt) txt.value = "";
+}
+
+function closeDocCustomModal() {
+  document.getElementById("docCustomModal")?.classList.add("hidden");
+  document.getElementById("docModalBackdrop")?.classList.add("hidden");
+}
+
+function saveDocCustomBlock() {
+  const select = document.getElementById("docCustomSectionSelect");
+  const textarea = document.getElementById("docCustomText");
+
+  if (!select || !textarea) return;
+
+  const sec = select.value;
+  const text = textarea.value.trim();
+
+  if (!text) {
+    closeDocCustomModal();
+    return;
+  }
+
+  const secs = (appState.documentacion.secciones ||= {});
+  const actual = secs[sec] || "";
+  const nuevo =
+    actual.trim().length > 0 ? actual.trim() + "\n\n" + text : text;
+
+  secs[sec] = nuevo;
+
+  (appState.documentacion.customBlocks ||= []).push({
+    section: sec,
+    text,
+    ts: new Date().toISOString(),
+  });
+
+  saveDocStateToLocalStorage();
+  closeDocCustomModal();
+  renderDocumentacionView();
+}
+
+// ======================================================
+// IA POR SECCIÓN (incluye presentación_empresa)
+// ======================================================
+
+async function askAIForSection(sectionKey) {
+  const idioma = appState.documentacion.idioma || "es";
+  const secciones = appState.documentacion.secciones || {};
+  const textoActual = secciones[sectionKey] || "";
+  const titulo = getSectionTitle(sectionKey);
+  const proyecto = appState.proyecto || {};
+  const presupuesto =
+    typeof window.getPresupuestoActual === "function"
+      ? window.getPresupuestoActual()
+      : null;
+
+  const modo = appState.documentacion.modo || "comercial";
+
+  if (typeof window.handleDocSectionAI === "function") {
+    try {
+      const nuevo = await window.handleDocSectionAI({
+        sectionKey,
+        idioma,
+        titulo,
+        texto: textoActual,
+        proyecto,
+        presupuesto,
+        modo,
+      });
+
+      if (typeof nuevo === "string" && nuevo.trim()) {
+        return nuevo;
+      }
+      return textoActual;
+    } catch (e) {
+      console.error("[DOC] Error IA:", e);
+      alert("Ha ocurrido un error al consultar la IA.");
+      return textoActual;
+    }
+  }
+
+  alert(
+    "Función IA no implementada. Debes añadir window.handleDocSectionAI."
+  );
+  return textoActual;
+}
+
+// Implementación por defecto si no existe
+if (typeof window.handleDocSectionAI !== "function") {
+  window.handleDocSectionAI = async ({
+    sectionKey,
+    idioma,
+    titulo,
+    texto,
+    proyecto,
+    presupuesto,
+    modo,
+  }) => {
+    const payload = {
+      sectionKey,
+      idioma,
+      titulo,
+      texto,
+      proyecto,
+      presupuesto,
+      modo,
+    };
+
+    const url = "https://docsectionai-is2pkrfj5a-uc.a.run.app";
+
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!resp.ok) {
+      const extra = await resp.text().catch(() => "");
+      throw new Error("IA error " + resp.status + ": " + extra);
+    }
+
+    const data = await resp.json().catch(() => null);
+    if (!data || typeof data.text !== "string") {
+      throw new Error("Respuesta IA inválida: falta ‘text’");
+    }
+
+    return data.text;
+  };
+}
+
+// ======================================================
+// CARGA MEDIA (Firestore + Storage)
 // ======================================================
 
 async function ensureDocMediaLoaded() {
-  if (appState.documentacion.mediaLoaded) return;
-
-  var db =
+  const db =
     window.db ||
-    (window.firebase && window.firebase.firestore
-      ? window.firebase.firestore()
-      : null);
+    (window.firebase?.firestore ? window.firebase.firestore() : null);
 
   if (!db) return;
 
   try {
-    var auth =
+    const auth =
       window.auth ||
-      (window.firebase && window.firebase.auth
-        ? window.firebase.auth()
-        : null);
+      (window.firebase?.auth ? window.firebase.auth() : null);
 
-    var user = auth && auth.currentUser ? auth.currentUser : null;
-    var uid = user ? user.uid : null;
+    const user = auth?.currentUser || null;
+    const uid = user ? user.uid : null;
 
-    var query = db.collection("documentacion_media");
+    let query = db.collection("documentacion_media");
     if (uid) query = query.where("uid", "==", uid);
 
-    var snap = await query.limit(200).get();
-    var media = [];
+    const snap = await query.limit(200).get();
+    const media = [];
 
-    snap.forEach(function (d) {
-      media.push(
-        Object.assign(
-          {
-            id: d.id,
-          },
-          d.data()
-        )
-      );
-    });
+    snap.forEach((d) => media.push({ ...d.data(), id: d.id }));
 
     appState.documentacion.mediaLibrary = media;
     appState.documentacion.mediaLoaded = true;
+
     console.log("[DOC] Media cargada:", media.length);
   } catch (e) {
-    console.error("Error cargando documentación media:", e);
+    console.error("[DOC] Error cargando documentación media:", e);
     appState.documentacion.mediaLoaded = false;
   }
 }
 
-async function saveMediaFileToStorageAndFirestore(file, options) {
-  options = options || {};
-  var name = file.name || "archivo";
-  var now = new Date().toISOString();
-  var isImg = file.type && file.type.startsWith("image/");
-  var type = isImg ? "image" : "file";
+async function saveMediaFileToStorageAndFirestore(file, options = {}) {
+  const name = file.name || "archivo";
+  const now = new Date().toISOString();
+  const isImg = file.type?.startsWith("image/");
+  const type = isImg ? "image" : "file";
 
-  var folderName = options.folderName || "";
-  var docCategory = options.docCategory || "imagen";
+  const folderName = options.folderName || "";
+  const docCategory = options.docCategory || "imagen";
 
-  var folderSlug = slugifyFolderName(folderName);
+  const folderSlug = slugifyFolderName(folderName);
 
-  var storage =
+  const storage =
     window.storage ||
-    (window.firebase && window.firebase.storage
-      ? window.firebase.storage()
-      : null);
-  var db =
+    (window.firebase?.storage ? window.firebase.storage() : null);
+  const db =
     window.db ||
-    (window.firebase && window.firebase.firestore
-      ? window.firebase.firestore()
-      : null);
-  var auth =
+    (window.firebase?.firestore ? window.firebase.firestore() : null);
+  const auth =
     window.auth ||
-    (window.firebase && window.firebase.auth
-      ? window.firebase.auth()
-      : null);
+    (window.firebase?.auth ? window.firebase.auth() : null);
 
-  var url = null;
-  var storagePath = null;
-  var uid = auth && auth.currentUser ? auth.currentUser.uid : null;
+  let url = null;
+  let storagePath = null;
+
+  let uid = auth?.currentUser?.uid || null;
 
   if (storage) {
     storagePath =
@@ -796,31 +1024,31 @@ async function saveMediaFileToStorageAndFirestore(file, options) {
       "_" +
       name;
 
-    var ref = storage.ref().child(storagePath);
+    const ref = storage.ref().child(storagePath);
     await ref.put(file);
     url = await ref.getDownloadURL();
   } else {
     url = URL.createObjectURL(file);
   }
 
-  var mediaData = {
+  const mediaData = {
     nombre: name,
-    type: type,
+    type,
     mimeType: file.type,
-    url: url,
-    storagePath: storagePath,
+    url,
+    storagePath,
     uploadedAt: now,
     folderName: folderName || null,
-    docCategory: docCategory,
+    docCategory,
   };
 
   if (db) {
-    var refDoc = await db.collection("documentacion_media").add(
-      Object.assign({}, mediaData, {
-        uid: uid,
-      })
-    );
-    mediaData.id = refDoc.id;
+    const ref = await db.collection("documentacion_media").add({
+      ...mediaData,
+      uid,
+    });
+
+    mediaData.id = ref.id;
   } else {
     mediaData.id =
       "local_" +
@@ -833,28 +1061,22 @@ async function saveMediaFileToStorageAndFirestore(file, options) {
 }
 
 async function deleteMediaById(mediaId) {
-  var media = appState.documentacion.mediaLibrary || [];
-  var item = media.find(function (m) {
-    return m.id === mediaId;
-  });
+  const media = appState.documentacion.mediaLibrary || [];
+  const item = media.find((m) => m.id === mediaId);
   if (!item) return;
 
-  var storage =
+  const storage =
     window.storage ||
-    (window.firebase && window.firebase.storage
-      ? window.firebase.storage()
-      : null);
-  var db =
+    (window.firebase?.storage ? window.firebase.storage() : null);
+  const db =
     window.db ||
-    (window.firebase && window.firebase.firestore
-      ? window.firebase.firestore()
-      : null);
+    (window.firebase?.firestore ? window.firebase.firestore() : null);
 
   if (storage && item.storagePath) {
     try {
       await storage.ref().child(item.storagePath).delete();
     } catch (e) {
-      console.warn("No se pudo borrar en Storage:", e);
+      console.warn("[DOC] No se pudo borrar en Storage:", e);
     }
   }
 
@@ -862,34 +1084,30 @@ async function deleteMediaById(mediaId) {
     try {
       await db.collection("documentacion_media").doc(mediaId).delete();
     } catch (e) {
-      console.warn("No se pudo borrar en Firestore:", e);
+      console.warn("[DOC] No se pudo borrar en Firestore:", e);
     }
   }
 
-  appState.documentacion.mediaLibrary = media.filter(function (m) {
-    return m.id !== mediaId;
-  });
+  appState.documentacion.mediaLibrary = media.filter(
+    (m) => m.id !== mediaId
+  );
 
-  var map = appState.documentacion.sectionMedia || {};
-  Object.keys(map).forEach(function (sec) {
-    map[sec] = map[sec].filter(function (id) {
-      return id !== mediaId;
-    });
+  const map = appState.documentacion.sectionMedia || {};
+  Object.keys(map).forEach((sec) => {
+    map[sec] = map[sec].filter((id) => id !== mediaId);
   });
 
   appState.documentacion.selectedFichasMediaIds =
-    (appState.documentacion.selectedFichasMediaIds || []).filter(function (
-      id
-    ) {
-      return id !== mediaId;
-    });
+    (appState.documentacion.selectedFichasMediaIds || []).filter(
+      (id) => id !== mediaId
+    );
 
   saveDocStateToLocalStorage();
   renderDocumentacionView();
 }
 
 // ======================================================
-// SLUGIFY
+// UTILS PDF (imágenes, logo, dimensiones)
 // ======================================================
 
 function slugifyFolderName(name) {
@@ -904,102 +1122,24 @@ function slugifyFolderName(name) {
   );
 }
 
-// ======================================================
-// IA POR SECCIÓN
-// ======================================================
-
-async function askAIForSection(sectionKey) {
-  var idioma = appState.documentacion.idioma || "es";
-  var secciones = appState.documentacion.secciones || {};
-  var textoActual = secciones[sectionKey] || "";
-  var titulo = getSectionTitle(sectionKey);
-  var proyecto = appState.proyecto || {};
-  var presupuesto =
-    typeof window.getPresupuestoActual === "function"
-      ? window.getPresupuestoActual()
-      : null;
-
-  var modo = appState.documentacion.modo || "comercial";
-
-  if (typeof window.handleDocSectionAI === "function") {
-    try {
-      var nuevo = await window.handleDocSectionAI({
-        sectionKey: sectionKey,
-        idioma: idioma,
-        titulo: titulo,
-        texto: textoActual,
-        proyecto: proyecto,
-        presupuesto: presupuesto,
-        modo: modo,
-      });
-
-      if (typeof nuevo === "string" && nuevo.trim()) {
-        return nuevo;
-      }
-      return textoActual;
-    } catch (e) {
-      console.error("Error IA:", e);
-      alert("Ha ocurrido un error al consultar la IA.");
-      return textoActual;
-    }
-  }
-
-  alert(
-    "Función IA no implementada. Debes añadir window.handleDocSectionAI."
-  );
-  return textoActual;
-}
-
-// Implementación por defecto usando tu endpoint Cloud Run
-if (typeof window.handleDocSectionAI !== "function") {
-  window.handleDocSectionAI = async function (payload) {
-    var url = "https://docsectionai-is2pkrfj5a-uc.a.run.app";
-    var resp = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    if (!resp.ok) {
-      var extra = "";
-      try {
-        extra = await resp.text();
-      } catch (e) {}
-      throw new Error("IA error " + resp.status + ": " + extra);
-    }
-
-    var data = null;
-    try {
-      data = await resp.json();
-    } catch (e) {}
-    if (!data || typeof data.text !== "string") {
-      throw new Error("Respuesta IA inválida: falta 'text'");
-    }
-    return data.text;
-  };
-}
-
-// ======================================================
-// UTILIDADES PDF (IMÁGENES)
-// ======================================================
-
 function loadImageAsDataUrl(url) {
-  return new Promise(function (resolve, reject) {
-    var img = new Image();
+  return new Promise((resolve, reject) => {
+    const img = new Image();
     img.crossOrigin = "Anonymous";
 
-    img.onload = function () {
+    img.onload = () => {
       try {
-        var maxDim = 1200;
-        var w = img.naturalWidth || img.width;
-        var h = img.naturalHeight || img.height;
-        var max = Math.max(w, h);
-        var scale = max > maxDim ? maxDim / max : 1;
+        const maxDim = 1200;
+        let w = img.naturalWidth || img.width;
+        let h = img.naturalHeight || img.height;
+        const max = Math.max(w, h);
+        const scale = max > maxDim ? maxDim / max : 1;
 
-        var canvas = document.createElement("canvas");
+        const canvas = document.createElement("canvas");
         canvas.width = Math.round(w * scale);
         canvas.height = Math.round(h * scale);
-        var ctx = canvas.getContext("2d");
+        const ctx = canvas.getContext("2d");
+
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
         resolve({
@@ -1022,21 +1162,23 @@ async function getDocLogoImage() {
     return appState.documentacion.logoData;
   }
 
-  var url =
-    window.DOC_LOGO_URL || DOC_LOGO_DEFAULT_URL || "img/logo_2n.svg";
+  const url =
+    window.DOC_LOGO_URL ||
+    DOC_LOGO_DEFAULT_URL ||
+    "img/logo_2n.svg";
 
   try {
-    var obj = await loadImageAsDataUrl(url);
+    const obj = await loadImageAsDataUrl(url);
     appState.documentacion.logoData = obj;
     return obj;
   } catch (e) {
-    console.warn("No se pudo cargar el logo:", e);
+    console.warn("[DOC] No se pudo cargar el logo:", e);
     return null;
   }
 }
 
 function getDocPageDimensions(pdf) {
-  var size = pdf.internal.pageSize;
+  const size = pdf.internal.pageSize;
   return {
     width: size.getWidth ? size.getWidth() : size.width,
     height: size.getHeight ? size.getHeight() : size.height,
@@ -1044,33 +1186,89 @@ function getDocPageDimensions(pdf) {
 }
 
 // ======================================================
-// CABECERA / PIE PDF TÉCNICO
+// PDF TÉCNICO (usamos la versión buena que ya tenías)
 // ======================================================
 
-function drawTechHeader(pdf, opts) {
-  opts = opts || {};
-  var dims = getDocPageDimensions(pdf);
-  var w = dims.width;
+async function insertImagesForSection(doc, sectionKey, y, onNewPage) {
+  const ids = appState.documentacion.sectionMedia?.[sectionKey] || [];
+  const media = appState.documentacion.mediaLibrary || [];
 
-  var nombreProyecto = opts.nombreProyecto || "Proyecto";
-  var logo = opts.logo || null;
+  const images = ids
+    .map((id) => media.find((m) => m.id === id))
+    .filter((m) => {
+      if (!m?.url) return false;
+      const mime = (m.mimeType || "").toLowerCase();
+      const url = (m.url || "").toLowerCase();
+      return (
+        mime.startsWith("image/") ||
+        url.endsWith(".png") ||
+        url.endsWith(".jpg") ||
+        url.endsWith(".jpeg") ||
+        url.endsWith(".webp") ||
+        url.endsWith(".gif")
+      );
+    });
 
-  var marginX = 20;
-  var textY = 18;
-  var logoBottomY = textY;
+  if (!images.length) return y;
 
-  if (logo && logo.dataUrl) {
-    var ratio = logo.width / logo.height || 2.5;
-    var logoW = 25;
-    var logoH = logoW / ratio;
-    var logoX = w - marginX - logoW;
-    var logoY = textY - 6;
+  const dims = getDocPageDimensions(doc);
+  const maxY = dims.height - 25;
+  const pageWidth = dims.width;
+
+  for (const m of images) {
+    try {
+      const obj = await loadImageAsDataUrl(m.url);
+      const ratio = obj.width / obj.height;
+
+      let imgW = 60;
+      let imgH = imgW / ratio;
+
+      if (imgH > 38) {
+        imgH = 38;
+        imgW = imgH * ratio;
+      }
+
+      const needed = imgH + 10;
+
+      if (y + needed > maxY) {
+        y = typeof onNewPage === "function" ? onNewPage() : 25;
+      }
+
+      const x = (pageWidth - imgW) / 2;
+      doc.addImage(obj.dataUrl, "PNG", x, y, imgW, imgH);
+      y += imgH + 6;
+    } catch (e) {
+      console.warn("[DOC] Error insertando imagen sección:", e);
+    }
+  }
+
+  return y;
+}
+
+function drawTechHeader(pdf, opts = {}) {
+  const dims = getDocPageDimensions(pdf);
+  const w = dims.width;
+
+  const nombreProyecto = opts.nombreProyecto || "Proyecto";
+  const logo = opts.logo || null;
+
+  const marginX = 20;
+  const textY = 18;
+
+  let logoBottomY = textY;
+
+  if (logo?.dataUrl) {
+    const ratio = logo.width / logo.height || 2.5;
+    const logoW = 25;
+    const logoH = logoW / ratio;
+    const logoX = w - marginX - logoW;
+    const logoY = textY - 6;
 
     try {
       pdf.addImage(logo.dataUrl, "PNG", logoX, logoY, logoW, logoH);
       logoBottomY = logoY + logoH;
     } catch (e) {
-      console.warn("No se pudo dibujar logo en header:", e);
+      console.warn("[DOC] No se pudo dibujar logo en header:", e);
     }
   }
 
@@ -1079,7 +1277,7 @@ function drawTechHeader(pdf, opts) {
   pdf.setTextColor(55, 65, 81);
   pdf.text(nombreProyecto, marginX, textY);
 
-  var lineY = Math.max(textY + 2, logoBottomY + 2);
+  const lineY = Math.max(textY + 2, logoBottomY + 2);
   pdf.setDrawColor(226, 232, 240);
   pdf.setLineWidth(0.3);
   pdf.line(marginX, lineY, w - marginX, lineY);
@@ -1087,13 +1285,12 @@ function drawTechHeader(pdf, opts) {
   return lineY + 8;
 }
 
-function drawTechFooter(pdf, opts) {
-  opts = opts || {};
-  var dims = getDocPageDimensions(pdf);
-  var h = dims.height;
+function drawTechFooter(pdf, opts = {}) {
+  const dims = getDocPageDimensions(pdf);
+  const h = dims.height;
 
-  var idioma = opts.idioma || "es";
-  var txt =
+  const idioma = opts.idioma || "es";
+  let txt =
     idioma === "en"
       ? "IP video intercom & access control solution – 2N®"
       : idioma === "pt"
@@ -1106,166 +1303,57 @@ function drawTechFooter(pdf, opts) {
   pdf.text(txt, 20, h - 10);
 }
 
-function setupTechContentPage(pdf, opts) {
-  var startY = drawTechHeader(pdf, opts);
+function setupTechContentPage(pdf, opts = {}) {
+  const startY = drawTechHeader(pdf, opts);
   drawTechFooter(pdf, opts);
   return startY;
 }
 
-// ======================================================
-// IMÁGENES EN PDF TÉCNICO
-// ======================================================
+// ---------------- PDF técnico completo ----------------
 
-function getSectionImages(sectionKey) {
-  var map = appState.documentacion.sectionMedia || {};
-  var ids = map[sectionKey] || [];
-
-  return ids
-    .map(function (id) {
-      return (appState.documentacion.mediaLibrary || []).find(function (m) {
-        return m.id === id;
-      });
-    })
-    .filter(function (m) {
-      if (!m || !m.url) return false;
-      var mime = (m.mimeType || "").toLowerCase();
-      var url = (m.url || "").toLowerCase();
-      return (
-        mime.startsWith("image/") ||
-        url.endsWith(".png") ||
-        url.endsWith(".jpg") ||
-        url.endsWith(".jpeg") ||
-        url.endsWith(".webp") ||
-        url.endsWith(".gif")
-      );
-    });
-}
-
-function removeExtension(name) {
-  if (!name) return "";
-  return name.replace(/\.[^.]+$/, "");
-}
-
-async function insertImagesForSection(doc, sectionKey, y, onNewPage) {
-  var images = getSectionImages(sectionKey);
-  if (!images.length) return y;
-
-  var dims = getDocPageDimensions(doc);
-  var maxY = dims.height - 25;
-  var pageWidth = dims.width;
-
-  for (var i = 0; i < images.length; i++) {
-    var m = images[i];
-    try {
-      var obj = await loadImageAsDataUrl(m.url);
-      var ratio = obj.width / obj.height;
-
-      var imgW = 60;
-      var imgH = imgW / ratio;
-
-      if (imgH > 38) {
-        imgH = 38;
-        imgW = imgH * ratio;
-      }
-
-      var needed = imgH + 10;
-      if (y + needed > maxY) {
-        y = onNewPage();
-      }
-
-      var x = (pageWidth - imgW) / 2;
-      doc.addImage(obj.dataUrl, "PNG", x, y, imgW, imgH);
-      y += imgH + 4;
-
-      var caption = removeExtension(m.nombre || "");
-      doc.setFont("helvetica", "italic");
-      doc.setFontSize(8);
-      doc.setTextColor(80, 80, 80);
-      doc.text(caption, pageWidth / 2, y, { align: "center" });
-
-      y += 6;
-    } catch (e) {
-      console.warn("Error insertando imagen sección:", e);
-    }
-  }
-
-  return y;
-}
-
-// ======================================================
-// EXPORTACIÓN PDF (selector modo)
-// ======================================================
-
-async function exportarDocumentacionPDF() {
-  if (!window.jspdf || !window.jspdf.jsPDF) {
-    alert("jsPDF no está cargado.");
-    return;
-  }
-  var modo = appState.documentacion.modo || "comercial";
-  if (modo === "tecnica") {
-    await exportarPDFTecnico();
-  } else {
-    await exportarPDFComercial();
-  }
-}
-
-// ======================================================
-// EXPORTACIÓN PDF (selector modo)
-// ======================================================
-
-async function exportarDocumentacionPDF() {
-  if (!window.jspdf || !window.jspdf.jsPDF) {
-    alert("jsPDF no está cargado.");
-    return;
-  }
-  var modo = appState.documentacion.modo || "comercial";
-  if (modo === "tecnica") {
-    await exportarPDFTecnico();
-  } else {
-    await exportarPDFComercial();
-  }
-}
 async function exportarPDFTecnico() {
-  var jsPDF = window.jspdf.jsPDF;
-  var doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const jsPDF = window.jspdf.jsPDF;
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
-  var idioma = appState.documentacion.idioma || "es";
-  var secciones = appState.documentacion.secciones || {};
-  var included = appState.documentacion.includedSections || {};
+  const idioma = appState.documentacion.idioma || "es";
+  const secciones = appState.documentacion.secciones || {};
+  const included = appState.documentacion.includedSections || {};
 
-  var proyecto = appState.proyecto || {};
-  var presupuesto =
+  const proyecto = appState.proyecto || {};
+  const presupuesto =
     typeof window.getPresupuestoActual === "function"
       ? window.getPresupuestoActual()
       : null;
 
-  var nombreProyecto =
+  const nombreProyecto =
     proyecto.nombre ||
     proyecto.nombreProyecto ||
-    (presupuesto && presupuesto.nombreProyecto) ||
+    presupuesto?.nombreProyecto ||
     "Proyecto";
 
-  var promotora =
+  const promotora =
     proyecto.promotora ||
     proyecto.cliente ||
-    (presupuesto && presupuesto.cliente) ||
+    presupuesto?.cliente ||
     "";
 
-  var logo = await getDocLogoImage();
-  var dims = getDocPageDimensions(doc);
-  var pageW = dims.width;
-  var pageH = dims.height;
+  const logo = await getDocLogoImage();
+  const dims = getDocPageDimensions(doc);
+  const pageW = dims.width;
+  const pageH = dims.height;
 
-  var titulo = "Memoria de calidades";
+  let titulo = "Memoria de calidades";
   if (idioma === "en") titulo = "Technical specification";
   if (idioma === "pt") titulo = "Memória descritiva";
 
+  // Portada
   try {
-    var cover = await loadImageAsDataUrl(DOC_TECH_COVER_URL);
-    if (cover && cover.dataUrl) {
-      var ratio = cover.width / cover.height;
-      var pageRatio = pageW / pageH;
-      var w, h, x, y;
+    const cover = await loadImageAsDataUrl(DOC_TECH_COVER_URL);
+    if (cover?.dataUrl) {
+      const ratio = cover.width / cover.height;
+      const pageRatio = pageW / pageH;
+
+      let w, h, x, y;
 
       if (ratio > pageRatio) {
         h = pageH;
@@ -1278,24 +1366,26 @@ async function exportarPDFTecnico() {
         x = 0;
         y = (pageH - h) / 2;
       }
+
       doc.addImage(cover.dataUrl, "PNG", x, y, w, h);
     }
   } catch (e) {
-    console.warn("No se pudo cargar portada técnica:", e);
+    console.warn("[DOC] No se pudo cargar portada técnica:", e);
   }
 
-  var gradHeight = 70;
-  var gradStart = pageH - gradHeight;
-  for (var i = 0; i < 6; i++) {
-    var gy = gradStart + (i * gradHeight) / 6;
-    var gh = gradHeight / 6 + 0.5;
-    var shade = 255 - i * 8;
+  const gradHeight = 70;
+  const gradStart = pageH - gradHeight;
+  for (let i = 0; i < 6; i++) {
+    const y = gradStart + (i * gradHeight) / 6;
+    const h = gradHeight / 6 + 0.5;
+    const shade = 255 - i * 8;
     doc.setFillColor(shade, shade, shade);
-    doc.rect(0, gy, pageW, gh, "F");
+    doc.rect(0, y, pageW, h, "F");
   }
 
-  var panelH = 55;
-  var panelY = pageH - panelH;
+  const panelH = 55;
+  const panelY = pageH - panelH;
+
   doc.setFillColor(255, 255, 255);
   doc.rect(0, panelY, pageW, panelH, "F");
 
@@ -1308,12 +1398,13 @@ async function exportarPDFTecnico() {
   doc.setFontSize(12);
   doc.text("Videoportero y control de accesos 2N", 20, panelY + 7);
 
-  var y = panelY + 18;
+  let y = panelY + 18;
+
   doc.setFont("helvetica", "bold");
   doc.text("Proyecto:", 20, y);
   doc.setFont("helvetica", "normal");
 
-  var linesProyecto = doc.splitTextToSize(nombreProyecto, pageW - 60);
+  const linesProyecto = doc.splitTextToSize(nombreProyecto, pageW - 60);
   doc.text(linesProyecto, 45, y);
   y += linesProyecto.length * 6 + 4;
 
@@ -1321,49 +1412,50 @@ async function exportarPDFTecnico() {
     doc.setFont("helvetica", "bold");
     doc.text("Promotor:", 20, y);
     doc.setFont("helvetica", "normal");
-    var linesProm = doc.splitTextToSize(promotora, pageW - 60);
+    const linesProm = doc.splitTextToSize(promotora, pageW - 60);
     doc.text(linesProm, 45, y);
     y += linesProm.length * 6 + 4;
   }
 
-  drawTechFooter(doc, { idioma: idioma });
+  drawTechFooter(doc, { idioma });
 
+  // Índice
   doc.addPage();
-  var tocPage = doc.getNumberOfPages();
-  var tocStartY = setupTechContentPage(doc, {
-    idioma: idioma,
-    nombreProyecto: nombreProyecto,
-    logo: logo,
+  const tocPage = doc.getNumberOfPages();
+  const tocStartY = setupTechContentPage(doc, {
+    idioma,
+    nombreProyecto,
+    logo,
   });
 
-  var tocEntries = [];
+  const tocEntries = [];
 
-  var includePresentacion = included["presentacion_empresa"] !== false;
+  // Página presentación empresa (si incluida)
+  const includePresentacion =
+    included["presentacion_empresa"] !== false;
+
   if (includePresentacion) {
     doc.addPage();
-    var current = doc.getNumberOfPages();
+    let current = doc.getNumberOfPages();
     y = setupTechContentPage(doc, {
-      idioma: idioma,
-      nombreProyecto: nombreProyecto,
-      logo: logo,
+      idioma,
+      nombreProyecto,
+      logo,
     });
 
-    var titPres =
+    const title =
       idioma === "en"
         ? "Company introduction"
         : idioma === "pt"
         ? "Apresentação da empresa"
         : "Presentación de empresa";
 
-    tocEntries.push({
-      title: titPres,
-      page: current,
-    });
+    tocEntries.push({ title, page: current });
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
     doc.setTextColor(30, 64, 175);
-    doc.text(titPres, 20, y);
+    doc.text(title, 20, y);
     y += 4;
 
     doc.setDrawColor(226, 232, 240);
@@ -1371,43 +1463,38 @@ async function exportarPDFTecnico() {
     doc.line(20, y, pageW - 20, y);
     y += 6;
 
-    var textoPres = secciones["presentacion_empresa"] || "";
+    const texto = secciones["presentacion_empresa"] || "";
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
     doc.setTextColor(55, 65, 81);
 
-    var linesPres = doc.splitTextToSize(textoPres, pageW - 40);
-    doc.text(linesPres, 20, y);
-    y += linesPres.length * 5 + 6;
+    const lines = doc.splitTextToSize(texto, pageW - 40);
+    doc.text(lines, 20, y);
+    y += lines.length * 5 + 6;
   }
 
+  // Resto secciones
   doc.addPage();
-  var currentPage = doc.getNumberOfPages();
-  y = setupTechContentPage(doc, {
-    idioma: idioma,
-    nombreProyecto: nombreProyecto,
-    logo: logo,
-  });
+  let currentPage = doc.getNumberOfPages();
+  y = setupTechContentPage(doc, { idioma, nombreProyecto, logo });
+
+  const pageHLimit = pageH - 25;
 
   function newPage() {
     doc.addPage();
     currentPage = doc.getNumberOfPages();
-    y = setupTechContentPage(doc, {
-      idioma: idioma,
-      nombreProyecto: nombreProyecto,
-      logo: logo,
-    });
+    y = setupTechContentPage(doc, { idioma, nombreProyecto, logo });
     return y;
   }
 
   function ensureSpace(lines) {
-    var need = lines * 5 + 12;
-    if (y + need > pageH - 25) {
+    const need = lines * 5 + 12;
+    if (y + need > pageHLimit) {
       newPage();
     }
   }
 
-  var sectionKeys = [
+  const sectionKeys = [
     "resumen",
     "sistema",
     "equipos",
@@ -1419,18 +1506,14 @@ async function exportarPDFTecnico() {
     "otros",
   ];
 
-  for (var s = 0; s < sectionKeys.length; s++) {
-    var key = sectionKeys[s];
+  for (const key of sectionKeys) {
     if (included[key] === false) continue;
 
-    var contenido = (secciones[key] || "").trim();
-    var imgs = getSectionImages(key);
-    if (!contenido && imgs.length === 0) continue;
+    const contenido = (secciones[key] || "").trim();
+    const imgsIds = appState.documentacion.sectionMedia?.[key] || [];
+    if (!contenido && imgsIds.length === 0) continue;
 
-    tocEntries.push({
-      title: getSectionTitle(key),
-      page: currentPage,
-    });
+    tocEntries.push({ title: getSectionTitle(key), page: currentPage });
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
@@ -1447,13 +1530,13 @@ async function exportarPDFTecnico() {
       doc.setFontSize(10);
       doc.setTextColor(55, 65, 81);
 
-      var lines = doc.splitTextToSize(contenido, pageW - 40);
-      var block = [];
-      var maxBlock = 35;
+      const lines = doc.splitTextToSize(contenido, pageW - 40);
+      let block = [];
+      const maxBlock = 35;
 
-      for (var li = 0; li < lines.length; li++) {
-        block.push(lines[li]);
-        if (block.length === maxBlock || li === lines.length - 1) {
+      for (let i = 0; i < lines.length; i++) {
+        block.push(lines[i]);
+        if (block.length === maxBlock || i === lines.length - 1) {
           ensureSpace(block.length);
           doc.text(block, 20, y);
           y += block.length * 5 + 4;
@@ -1466,37 +1549,29 @@ async function exportarPDFTecnico() {
     y += 4;
   }
 
-  var allMedia = appState.documentacion.mediaLibrary || [];
-  var selected = appState.documentacion.selectedFichasMediaIds || [];
-  var fichas = allMedia.filter(function (m) {
-    return selected.indexOf(m.id) !== -1;
-  });
+  // Anexo fichas técnicas
+  const allMedia = appState.documentacion.mediaLibrary || [];
+  const selected = appState.documentacion.selectedFichasMediaIds || [];
+  const fichas = allMedia.filter((m) => selected.includes(m.id));
 
   if (fichas.length > 0) {
     doc.addPage();
     currentPage = doc.getNumberOfPages();
-    y = setupTechContentPage(doc, {
-      idioma: idioma,
-      nombreProyecto: nombreProyecto,
-      logo: logo,
-    });
+    y = setupTechContentPage(doc, { idioma, nombreProyecto, logo });
 
-    var titAnexo =
+    let tituloAnexo =
       idioma === "en"
         ? "Appendix – Technical documentation"
         : idioma === "pt"
         ? "Anexo – Documentação técnica"
         : "Anexo – Fichas técnicas adjuntas";
 
-    tocEntries.push({
-      title: titAnexo,
-      page: currentPage,
-    });
+    tocEntries.push({ title: tituloAnexo, page: currentPage });
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
     doc.setTextColor(30, 64, 175);
-    doc.text(titAnexo, 20, y);
+    doc.text(tituloAnexo, 20, y);
     y += 6;
 
     doc.setDrawColor(226, 232, 240);
@@ -1506,20 +1581,21 @@ async function exportarPDFTecnico() {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
 
-    for (var f = 0; f < fichas.length; f++) {
-      var m = fichas[f];
-      var extra = m.folderName ? " – " + m.folderName : "";
-      var text =
+    for (const m of fichas) {
+      const extra = m.folderName ? " – " + m.folderName : "";
+      const text =
         "• " + m.nombre + extra + (m.url ? " (" + m.url + ")" : "");
-      var linesFicha = doc.splitTextToSize(text, pageW - 40);
-      ensureSpace(linesFicha.length);
-      doc.text(linesFicha, 20, y);
-      y += linesFicha.length * 4.8 + 2;
+
+      const lines = doc.splitTextToSize(text, pageW - 40);
+      ensureSpace(lines.length);
+      doc.text(lines, 20, y);
+      y += lines.length * 4.8 + 2;
     }
   }
 
+  // Reescribir índice
   doc.setPage(tocPage);
-  var yToc = tocStartY;
+  let yToc = tocStartY;
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(14);
@@ -1531,14 +1607,13 @@ async function exportarPDFTecnico() {
   doc.setFontSize(11);
   doc.setTextColor(55, 65, 81);
 
-  for (var t = 0; t < tocEntries.length; t++) {
-    var entry = tocEntries[t];
+  for (const entry of tocEntries) {
     if (yToc > pageH - 25) {
       doc.addPage();
       yToc = setupTechContentPage(doc, {
-        idioma: idioma,
-        nombreProyecto: nombreProyecto,
-        logo: logo,
+        idioma,
+        nombreProyecto,
+        logo,
       });
 
       doc.setFont("helvetica", "bold");
@@ -1551,9 +1626,9 @@ async function exportarPDFTecnico() {
       doc.setTextColor(55, 65, 81);
     }
 
-    var label = entry.title;
-    var pageStr = String(entry.page);
-    var textWidth = doc.getTextWidth(pageStr);
+    const label = entry.title;
+    const pageStr = String(entry.page);
+    const textWidth = doc.getTextWidth(pageStr);
 
     doc.text(label, 25, yToc);
     doc.text(pageStr, pageW - 25 - textWidth, yToc);
@@ -1564,14 +1639,14 @@ async function exportarPDFTecnico() {
     yToc += 7;
   }
 
-  var base =
+  let base =
     idioma === "en"
       ? "technical_specification"
       : idioma === "pt"
       ? "memoria_descritiva"
       : "memoria_calidades";
 
-  var safe = nombreProyecto
+  const safe = nombreProyecto
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "");
@@ -1580,94 +1655,95 @@ async function exportarPDFTecnico() {
 }
 
 // ======================================================
-// PDF COMERCIAL (diseño multipágina)
+// PDF COMERCIAL (reutilizamos tu diseño limpio)
 // ======================================================
 
 async function exportarPDFComercial() {
-  var jsPDF = window.jspdf.jsPDF;
+  const jsPDF = window.jspdf.jsPDF;
 
-  var doc = new jsPDF({
+  const doc = new jsPDF({
     orientation: "portrait",
     unit: "mm",
     format: "a4",
   });
 
-  var idioma = appState.documentacion.idioma || "es";
-  var secciones = appState.documentacion.secciones || {};
-
-  var proyecto = appState.proyecto || {};
-  var presupuesto =
+  const idioma = appState.documentacion.idioma || "es";
+  const secciones = appState.documentacion.secciones || {};
+  const proyecto = appState.proyecto || {};
+  const presupuesto =
     typeof window.getPresupuestoActual === "function"
       ? window.getPresupuestoActual()
       : null;
 
-  var nombreProyecto =
+  const nombreProyecto =
     proyecto.nombre ||
     proyecto.nombreProyecto ||
-    (presupuesto && presupuesto.nombreProyecto) ||
+    presupuesto?.nombreProyecto ||
     "Proyecto";
 
-  var promotora =
+  const promotora =
     proyecto.promotora ||
     proyecto.cliente ||
-    (presupuesto && presupuesto.cliente) ||
+    presupuesto?.cliente ||
     "";
 
-  var logo = await getDocLogoImage();
-  var dims = getDocPageDimensions(doc);
-  var pageW = dims.width;
-  var pageH = dims.height;
+  const logo = await getDocLogoImage();
+  const dims = getDocPageDimensions(doc);
+  const pageW = dims.width;
+  const pageH = dims.height;
 
-  var marginX = 20;
-  var marginTop = 20;
-  var marginBottom = 20;
+  const marginX = 20;
+  const marginTop = 20;
+  const marginBottom = 20;
 
-  function drawSalesforceCard(cfg) {
-    var x = cfg.x;
-    var y = cfg.y;
-    var width = cfg.width;
-    var title = cfg.title;
-    var body = cfg.body;
-    var pdf = cfg.doc;
-    var maxBodyWidth = cfg.maxBodyWidth || width - 16;
-    var minHeight = cfg.minHeight || 45;
+  // Helpers locales
+  function drawSalesforceCard({
+    x,
+    y,
+    width,
+    title,
+    body,
+    doc,
+    maxBodyWidth,
+    minHeight,
+  }) {
+    const paddingX = 8;
+    const paddingTop = 8;
+    const paddingBottom = 8;
 
-    var paddingX = 8;
-    var paddingTop = 8;
-    var paddingBottom = 8;
-    var headerHeight = 8;
+    const bodyW = maxBodyWidth || width - paddingX * 2;
+    const lines = body ? doc.splitTextToSize(body, bodyW) : [];
+    const bodyH = lines.length * 4.4;
 
-    var bodyW = maxBodyWidth;
-    var lines = body ? pdf.splitTextToSize(body, bodyW) : [];
-    var bodyH = lines.length * 4.4;
+    let cardH = paddingTop + 8 + 4 + bodyH + paddingBottom;
+    if (minHeight && cardH < minHeight) cardH = minHeight;
 
-    var cardH =
-      paddingTop + headerHeight + 4 + bodyH + paddingBottom;
-    if (cardH < minHeight) cardH = minHeight;
+    doc.setFillColor(229, 231, 235);
+    doc.roundedRect(x + 1.2, y + 1.8, width, cardH, 3, 3, "F");
 
-    pdf.setFillColor(229, 231, 235);
-    pdf.roundedRect(x + 1.2, y + 1.8, width, cardH, 3, 3, "F");
+    doc.setFillColor(255, 255, 255);
+    doc.setDrawColor(209, 213, 219);
+    doc.roundedRect(x, y, width, cardH, 3, 3, "FD");
 
-    pdf.setFillColor(255, 255, 255);
-    pdf.setDrawColor(209, 213, 219);
-    pdf.roundedRect(x, y, width, cardH, 3, 3, "FD");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(31, 41, 55);
+    const titleLines = doc.splitTextToSize(title, width - paddingX * 2);
+    doc.text(titleLines, x + paddingX, y + paddingTop + 5);
 
-    pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(10);
-    pdf.setTextColor(31, 41, 55);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(75, 85, 99);
 
-    var titleLines = pdf.splitTextToSize(title, width - paddingX * 2);
-    var titleY = y + paddingTop + 5;
-    pdf.text(titleLines, x + paddingX, titleY);
-
-    pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(9);
-    pdf.setTextColor(75, 85, 99);
-    var yBody =
-      titleY + titleLines.length * 4.2 + 3;
+    const yBody =
+      y +
+      paddingTop +
+      5 +
+      titleLines.length * 4.2 +
+      3;
 
     if (lines.length) {
-      pdf.text(lines, x + paddingX, yBody);
+      doc.text(lines, x + paddingX, yBody);
     }
 
     return {
@@ -1676,33 +1752,26 @@ async function exportarPDFComercial() {
     };
   }
 
-  function cleanCaption(name) {
-    return name ? name.replace(/\.[^/.]+$/, "") : "";
-  }
-
   function collectSectionImagesWithCaptions() {
-    var map = appState.documentacion.sectionMedia || {};
-    var media = appState.documentacion.mediaLibrary || [];
-    var byId = {};
-    media.forEach(function (m) {
-      byId[m.id] = m;
-    });
+    const map = appState.documentacion.sectionMedia || {};
+    const media = appState.documentacion.mediaLibrary || [];
+    const byId = {};
+    media.forEach((m) => (byId[m.id] = m));
 
-    var used = {};
-    var out = [];
+    const used = new Set();
+    const out = [];
 
-    Object.keys(map).forEach(function (key) {
-      var ids = map[key] || [];
-      ids.forEach(function (id) {
-        if (used[id]) return;
-        var m = byId[id];
-        if (!m || !m.url) return;
+    for (const key of Object.keys(map)) {
+      for (const id of map[key]) {
+        if (used.has(id)) continue;
+        const m = byId[id];
+        if (!m?.url) continue;
 
-        var mime = (m.mimeType || "").toLowerCase();
-        var type = (m.type || "").toLowerCase();
-        var url = (m.url || "").toLowerCase();
+        const mime = (m.mimeType || "").toLowerCase();
+        const type = (m.type || "").toLowerCase();
+        const url = m.url.toLowerCase();
 
-        var isImg =
+        const isImg =
           mime.startsWith("image/") ||
           type === "image" ||
           url.endsWith(".png") ||
@@ -1711,24 +1780,27 @@ async function exportarPDFComercial() {
           url.endsWith(".webp") ||
           url.endsWith(".gif");
 
-        if (!isImg) return;
-        used[id] = true;
+        if (!isImg) continue;
+
+        used.add(id);
         out.push({
           media: m,
-          caption: cleanCaption(m.nombre || ""),
+          caption: (m.nombre || "").replace(/\.[^/.]+$/, ""),
         });
-      });
-    });
+      }
+    }
 
-    return out.slice(0, 8);
+  return out.slice(0, 8);
   }
 
+  // Portada
   try {
-    var cover = await loadImageAsDataUrl(DOC_TECH_COVER_URL);
-    if (cover && cover.dataUrl) {
-      var ratio = cover.width / cover.height;
-      var pageRatio = pageW / pageH;
-      var w, h, x, y;
+    const cover = await loadImageAsDataUrl(DOC_TECH_COVER_URL);
+    if (cover?.dataUrl) {
+      const ratio = cover.width / cover.height;
+      const pageRatio = pageW / pageH;
+
+      let w, h, x, y;
 
       if (ratio > pageRatio) {
         h = pageH;
@@ -1741,29 +1813,30 @@ async function exportarPDFComercial() {
         x = 0;
         y = (pageH - h) / 2;
       }
+
       doc.addImage(cover.dataUrl, "PNG", x, y, w, h);
     }
   } catch (e) {
-    console.warn("Error portada comercial:", e);
+    console.warn("[DOC] Error portada comercial:", e);
   }
 
-  var gradH = 70;
-  var gradStart = pageH - gradH;
-  for (var gi = 0; gi < 6; gi++) {
-    var yG = gradStart + (gi * gradH) / 6;
-    var hG = gradH / 6 + 0.5;
-    var shadeG = 255 - gi * 8;
-    doc.setFillColor(shadeG, shadeG, shadeG);
-    doc.rect(0, yG, pageW, hG, "F");
+  const gradH = 70;
+  const gradStart = pageH - gradH;
+  for (let i = 0; i < 6; i++) {
+    const y = gradStart + (i * gradH) / 6;
+    const h = gradH / 6 + 0.5;
+    const shade = 255 - i * 8;
+    doc.setFillColor(shade, shade, shade);
+    doc.rect(0, y, pageW, h, "F");
   }
 
-  var panelH = 55;
-  var panelY = pageH - panelH;
+  const panelH = 55;
+  const panelY = pageH - panelH;
 
   doc.setFillColor(255, 255, 255);
   doc.rect(0, panelY, pageW, panelH, "F");
 
-  var tituloCom =
+  let titulo =
     idioma === "en"
       ? "Highlights – IP access & video intercom solution"
       : idioma === "pt"
@@ -1773,73 +1846,76 @@ async function exportarPDFComercial() {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(14);
   doc.setTextColor(15, 23, 42);
-
-  var linesTitulo = doc.splitTextToSize(
-    tituloCom,
+  let linesTitulo = doc.splitTextToSize(
+    titulo,
     pageW - marginX * 2 - 40
   );
-  var yCom = panelY + 11;
-  doc.text(linesTitulo, marginX, yCom);
-  yCom += linesTitulo.length * 5 + 1;
+  let y = panelY + 11;
+  doc.text(linesTitulo, marginX, y);
+
+  y += linesTitulo.length * 5 + 1;
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
 
-  var subtitulo = nombreProyecto;
+  let subtitulo = nombreProyecto;
   if (promotora) subtitulo += " · " + promotora;
-  var stLines = doc.splitTextToSize(
+
+  const stLines = doc.splitTextToSize(
     subtitulo,
     pageW - marginX * 2 - 40
   );
-  doc.text(stLines, marginX, yCom);
-  yCom += stLines.length * 4.8 + 2;
+  doc.text(stLines, marginX, y);
+  y += stLines.length * 4.8 + 2;
 
   doc.setFont("helvetica", "italic");
   doc.setFontSize(9);
   doc.setTextColor(107, 114, 128);
 
-  var claim =
+  let claim =
     idioma === "en"
       ? "Architecture, design and IP technology for a truly premium access experience."
       : idioma === "pt"
       ? "Arquitetura, design e tecnologia IP para uma experiência de acesso verdadeiramente premium."
       : "Arquitectura, diseño y tecnología IP para una experiencia de acceso verdaderamente premium.";
 
-  var claimLines = doc.splitTextToSize(
+  const claimLines = doc.splitTextToSize(
     claim,
     pageW - marginX * 2 - 40
   );
-  doc.text(claimLines, marginX, yCom);
+  doc.text(claimLines, marginX, y);
 
-  if (logo && logo.dataUrl) {
-    var ratioL = logo.width / logo.height || 2.5;
-    var lw = 32;
-    var lh = lw / ratioL;
-    var lx = pageW - marginX - lw;
-    var ly = panelY + panelH - lh - 6;
+  if (logo?.dataUrl) {
+    const ratio = logo.width / logo.height || 2.5;
+    const lw = 32;
+    const lh = lw / ratio;
+
+    const lx = pageW - marginX - lw;
+    const ly = panelY + panelH - lh - 6;
+
     try {
       doc.addImage(logo.dataUrl, "PNG", lx, ly, lw, lh);
     } catch (e) {
-      console.warn("Logo portada comercial:", e);
+      console.warn("[DOC] Logo portada comercial:", e);
     }
   }
 
-  var includePresentacion =
-    (appState.documentacion.includedSections || {})
-      .presentacion_empresa !== false;
+  // Página 2 – Presentación de empresa
+  const includePresentacion =
+    appState.documentacion.includedSections?.presentacion_empresa !==
+    false;
 
   if (includePresentacion) {
     doc.addPage();
-    var dims2 = getDocPageDimensions(doc);
-    var pw2 = dims2.width;
+    const dims2 = getDocPageDimensions(doc);
 
-    var y2 = marginTop;
+    let y2 = marginTop;
 
-    var tit =
+    const tit =
       idioma === "en"
         ? "Company introduction"
         : idioma === "pt"
-        ? "Apresentação da empresa"
+        ? "Apresentação de empresa"
         : "Presentación de empresa";
 
     doc.setFont("helvetica", "bold");
@@ -1849,28 +1925,42 @@ async function exportarPDFComercial() {
 
     doc.setDrawColor(209, 213, 219);
     doc.setLineWidth(0.4);
-    doc.line(marginX, y2 + 2.5, pw2 - marginX, y2 + 2.5);
+    doc.line(
+      marginX,
+      y2 + 2.5,
+      dims2.width - marginX,
+      y2 + 2.5
+    );
+
     y2 += 12;
 
-    var texto = secciones["presentacion_empresa"] || "";
+    const texto = secciones["presentacion_empresa"] || "";
+
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
     doc.setTextColor(55, 65, 81);
 
-    var lines = doc.splitTextToSize(texto, pw2 - marginX * 2);
+    const lines = doc.splitTextToSize(
+      texto,
+      dims2.width - marginX * 2
+    );
+
     doc.text(lines, marginX, y2);
   }
 
+  // Página 3 – Resumen + Sistema
   doc.addPage();
-  var dims3 = getDocPageDimensions(doc);
-  var pw3 = dims3.width;
-  var yCards = marginTop;
+
+  const dims3 = getDocPageDimensions(doc);
+  const pw3 = dims3.width;
+
+  let yCards = marginTop;
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
   doc.setTextColor(31, 41, 55);
 
-  var tit2 =
+  let tit2 =
     idioma === "en"
       ? "Project overview"
       : idioma === "pt"
@@ -1880,13 +1970,14 @@ async function exportarPDFComercial() {
   doc.text(tit2, marginX, yCards);
   doc.setDrawColor(209, 213, 219);
   doc.line(marginX, yCards + 2.5, pw3 - marginX, yCards + 2.5);
+
   yCards += 10;
 
-  var cardWidth = pw3 - marginX * 2;
+  const cardWidth = pw3 - marginX * 2;
 
-  var bloques2 = [];
+  const bloques2 = [];
 
-  if (secciones.resumen && secciones.resumen.trim()) {
+  if (secciones.resumen?.trim()) {
     bloques2.push({
       title:
         idioma === "en"
@@ -1898,7 +1989,7 @@ async function exportarPDFComercial() {
     });
   }
 
-  if (secciones.sistema && secciones.sistema.trim()) {
+  if (secciones.sistema?.trim()) {
     bloques2.push({
       title:
         idioma === "en"
@@ -1910,40 +2001,37 @@ async function exportarPDFComercial() {
     });
   }
 
-  for (var b = 0; b < bloques2.length; b++) {
-    var r = drawSalesforceCard({
+  for (const b of bloques2) {
+    const r = drawSalesforceCard({
       x: marginX,
       y: yCards,
       width: cardWidth,
-      title: bloques2[b].title,
-      body: bloques2[b].body,
-      doc: doc,
+      title: b.title,
+      body: b.body,
+      doc,
       maxBodyWidth: cardWidth - 16,
       minHeight: 45,
     });
     yCards = r.bottomY + 8;
   }
 
-  var tieneServicios =
-    secciones.servicios && secciones.servicios.trim().length > 0;
-  var tieneInfra =
-    secciones.infraestructura &&
-    secciones.infraestructura.trim().length > 0;
-  var tieneOtros =
-    secciones.otros && secciones.otros.trim().length > 0;
+  // Página 4 – Servicios / Infraestructura / Otros
+  const tieneServicios = secciones.servicios?.trim().length > 0;
+  const tieneInfra = secciones.infraestructura?.trim().length > 0;
+  const tieneOtros = secciones.otros?.trim().length > 0;
 
   if (tieneServicios || tieneInfra || tieneOtros) {
     doc.addPage();
-    var dims4 = getDocPageDimensions(doc);
-    var pw4 = dims4.width;
+    const dims4 = getDocPageDimensions(doc);
+    const pw4 = dims4.width;
 
-    var y4 = marginTop;
+    let y4 = marginTop;
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
     doc.setTextColor(31, 41, 55);
 
-    var tit3 =
+    let tit3 =
       idioma === "en"
         ? "Services, operation & infrastructure"
         : idioma === "pt"
@@ -1953,9 +2041,10 @@ async function exportarPDFComercial() {
     doc.text(tit3, marginX, y4);
     doc.setDrawColor(209, 213, 219);
     doc.line(marginX, y4 + 2.5, pw4 - marginX, y4 + 2.5);
+
     y4 += 10;
 
-    var bloques3 = [];
+    const bloques3 = [];
 
     if (tieneServicios) {
       bloques3.push({
@@ -1993,91 +2082,104 @@ async function exportarPDFComercial() {
       });
     }
 
-    for (var j = 0; j < bloques3.length; j++) {
-      var r2 = drawSalesforceCard({
+    for (const b of bloques3) {
+      const r = drawSalesforceCard({
         x: marginX,
         y: y4,
         width: pw4 - marginX * 2,
-        title: bloques3[j].title,
-        body: bloques3[j].body,
-        doc: doc,
+        title: b.title,
+        body: b.body,
+        doc,
         maxBodyWidth: pw4 - marginX * 2 - 16,
         minHeight: 45,
       });
-      y4 = r2.bottomY + 8;
+
+      y4 = r.bottomY + 8;
     }
   }
 
-  var galeria = collectSectionImagesWithCaptions();
+  // Página 5 – Galería visual
+  const galeria = collectSectionImagesWithCaptions();
 
   if (galeria.length) {
     doc.addPage();
 
-    var dimsG = getDocPageDimensions(doc);
-    var pwG = dimsG.width;
-    var phG = dimsG.height;
+    const dimsG = getDocPageDimensions(doc);
+    const pwG = dimsG.width;
+    const phG = dimsG.height;
 
-    var yGal = marginTop;
+    let yG = marginTop;
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
     doc.setTextColor(31, 41, 55);
 
-    var tituloGaleria =
+    let tituloGaleria =
       idioma === "en"
         ? "Visual gallery of the solution"
         : idioma === "pt"
         ? "Galeria visual da solução"
         : "Galería visual de la solución";
 
-    doc.text(tituloGaleria, marginX, yGal);
+    doc.text(tituloGaleria, marginX, yG);
     doc.setDrawColor(209, 213, 219);
-    doc.line(marginX, yGal + 2.5, pwG - marginX, yGal + 2.5);
-    yGal += 12;
+    doc.line(marginX, yG + 2.5, pwG - marginX, yG + 2.5);
 
-    var maxW = (pwG - marginX * 2 - 10) / 2;
-    var maxH = 38;
-    var rowH = maxH + 20;
+    yG += 12;
 
-    for (var k = 0; k < galeria.length; k++) {
-      var item = galeria[k];
-      var m = item.media;
-      var caption = item.caption || "";
-      var col = k % 2;
+    const maxW = (pwG - marginX * 2 - 10) / 2;
+    const maxH = 38;
+    const rowH = maxH + 20;
 
-      if (k % 2 === 0 && k !== 0) yGal += rowH;
+    for (let i = 0; i < galeria.length; i++) {
+      const item = galeria[i];
+      const m = item.media;
+      const caption = item.caption || "";
+      const col = i % 2;
 
-      if (yGal + rowH > phG - marginBottom) {
+      if (i % 2 === 0 && i !== 0) yG += rowH;
+
+      if (yG + rowH > phG - marginBottom) {
         doc.addPage();
-        yGal = marginTop;
+        yG = marginTop;
 
         doc.setFont("helvetica", "bold");
         doc.setFontSize(12);
         doc.setTextColor(31, 41, 55);
-        doc.text(tituloGaleria, marginX, yGal);
+        doc.text(tituloGaleria, marginX, yG);
+
         doc.setDrawColor(209, 213, 219);
-        doc.line(marginX, yGal + 2.5, pwG - marginX, yGal + 2.5);
-        yGal += 12;
+        doc.line(
+          marginX,
+          yG + 2.5,
+          pwG - marginX,
+          yG + 2.5
+        );
+
+        yG += 12;
       }
 
       try {
-        var imgObj = await loadImageAsDataUrl(m.url);
+        const imgObj = await loadImageAsDataUrl(m.url);
 
-        var ratio = imgObj.width / imgObj.height || 1.5;
-        var wImg = maxW;
-        var hImg = wImg / ratio;
+        const ratio = imgObj.width / imgObj.height || 1.5;
+        let w = maxW;
+        let h = w / ratio;
 
-        if (hImg > maxH) {
-          hImg = maxH;
-          wImg = hImg * ratio;
+        if (h > maxH) {
+          h = maxH;
+          w = h * ratio;
         }
 
-        var xImg =
-          marginX + col * (maxW + 10) + (maxW - wImg) / 2;
+        const xImg =
+          marginX + col * (maxW + 10) + (maxW - w) / 2;
 
-        doc.addImage(imgObj.dataUrl, "PNG", xImg, yGal, wImg, hImg);
+        doc.addImage(imgObj.dataUrl, "PNG", xImg, yG, w, h);
 
-        var captionLines = doc.splitTextToSize(caption, maxW);
+        const captionLines = doc.splitTextToSize(
+          caption,
+          maxW
+        );
 
         doc.setFont("helvetica", "normal");
         doc.setFontSize(8.5);
@@ -2085,135 +2187,76 @@ async function exportarPDFComercial() {
 
         doc.text(
           captionLines,
-          xImg + wImg / 2,
-          yGal + hImg + 5,
+          xImg + w / 2,
+          yG + h + 5,
           { align: "center" }
         );
       } catch (e) {
-        console.warn("Error imagen galería:", e);
+        console.warn("[DOC] Error imagen galería:", e);
       }
     }
 
-    if (logo && logo.dataUrl) {
-      var rLogo = logo.width / logo.height || 2.5;
-      var lw2 = 24;
-      var lh2 = lw2 / rLogo;
+    if (logo?.dataUrl) {
+      const r = logo.width / logo.height || 2.5;
+      const lw = 24;
+      const lh = lw / r;
 
-      var lx2 = pwG - marginX - lw2;
-      var ly2 = phG - marginBottom - lh2 + 4;
+      const lx = pwG - marginX - lw;
+      const ly = phG - marginBottom - lh + 4;
 
       try {
-        doc.addImage(logo.dataUrl, "PNG", lx2, ly2, lw2, lh2);
+        doc.addImage(logo.dataUrl, "PNG", lx, ly, lw, lh);
       } catch (e) {
-        console.warn("Logo galería:", e);
+        console.warn("[DOC] Logo galería:", e);
       }
     }
   }
 
-  var baseCom =
+  let baseCom =
     idioma === "en"
       ? "highlights_access_solution"
       : idioma === "pt"
       ? "highlights_acessos"
       : "highlights_accesos";
 
-  var safeCom = nombreProyecto
+  const safeCom = nombreProyecto
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "");
 
   doc.save(baseCom + "_" + safeCom + ".pdf");
 }
+
 // ======================================================
-// HANDLERS: SECCIONES, GRID MEDIA, MODAL, ETC.
+// EXPORTAR PDF SEGÚN MODO
 // ======================================================
 
-function attachDocMediaGridHandlers(container) {
-  container.querySelectorAll(".doc-media-item").forEach(function (item) {
-    item.addEventListener("dragstart", function (ev) {
-      var id = item.getAttribute("data-media-id");
-      if (id && ev.dataTransfer) {
-        ev.dataTransfer.setData("text/plain", id);
-        ev.dataTransfer.effectAllowed = "copy";
-      }
-    });
-  });
-
-  container.querySelectorAll("[data-media-view-id]").forEach(function (btn) {
-    btn.addEventListener("click", function () {
-      var id = btn.getAttribute("data-media-view-id");
-      if (!id) return;
-
-      var item = (appState.documentacion.mediaLibrary || []).find(
-        function (m) {
-          return m.id === id;
-        }
-      );
-
-      if (!item || !item.url) {
-        alert("Imagen no encontrada.");
-        return;
-      }
-
-      var mime = (item.mimeType || "").toLowerCase();
-      var url = (item.url || "").toLowerCase();
-
-      var isImg =
-        mime.startsWith("image/") ||
-        url.endsWith(".png") ||
-        url.endsWith(".jpg") ||
-        url.endsWith(".jpeg") ||
-        url.endsWith(".webp") ||
-        url.endsWith(".gif");
-
-      if (isImg) {
-        openDocImageFloatingPreview(item);
-      } else {
-        window.open(item.url, "_blank");
-      }
-    });
-  });
-
-  container
-    .querySelectorAll(".doc-section-media-remove")
-    .forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        var id = btn.getAttribute("data-remove-media-id");
-        var zone = btn.closest("[data-doc-section-drop]");
-        var sec = zone ? zone.getAttribute("data-doc-section-drop") : null;
-        if (!id || !sec) return;
-        detachMediaFromSection(sec, id);
-      });
-    });
-}
-
-function attachDocSearchHandlers(container) {
-  var inputImg = container.querySelector("#docMediaSearchInput");
-  if (inputImg) {
-    inputImg.addEventListener("input", function () {
-      appState.documentacion.mediaSearchTerm = inputImg.value || "";
-      saveDocStateToLocalStorage();
-      refreshDocMediaGridOnly();
-    });
+async function exportarDocumentacionPDF() {
+  if (!window.jspdf || !window.jspdf.jsPDF) {
+    alert("jsPDF no está cargado.");
+    return;
   }
 
-  var inputFich = container.querySelector("#docFichasSearchInput");
-  if (inputFich) {
-    inputFich.addEventListener("input", function () {
-      appState.documentacion.fichasSearchTerm =
-        inputFich.value || "";
-      saveDocStateToLocalStorage();
-      renderDocumentacionView();
-    });
+  const modo = appState.documentacion.modo || "comercial";
+
+  if (modo === "tecnica") {
+    await exportarPDFTecnico();
+  } else {
+    await exportarPDFComercial();
   }
 }
+
+// ======================================================
+// HANDLERS DE UI (inputs, botones, drag & drop)
+// ======================================================
 
 function attachDocSectionHandlers(container) {
+  // Títulos
   container
     .querySelectorAll(".doc-section-title-input")
-    .forEach(function (inp) {
-      inp.addEventListener("input", function () {
-        var key = inp.getAttribute("data-doc-section-title");
+    .forEach((inp) => {
+      inp.addEventListener("input", () => {
+        const key = inp.getAttribute("data-doc-section-title");
         if (!key) return;
 
         appState.documentacion.sectionTitles =
@@ -2225,11 +2268,12 @@ function attachDocSectionHandlers(container) {
       });
     });
 
+  // Textareas
   container
     .querySelectorAll(".doc-section-textarea")
-    .forEach(function (txt) {
-      txt.addEventListener("input", function () {
-        var key = txt.getAttribute("data-doc-section-text");
+    .forEach((txt) => {
+      txt.addEventListener("input", () => {
+        const key = txt.getAttribute("data-doc-section-text");
         if (!key) return;
 
         appState.documentacion.secciones =
@@ -2240,57 +2284,59 @@ function attachDocSectionHandlers(container) {
       });
     });
 
+  // Checkbox incluir sección
   container
     .querySelectorAll("[data-doc-section-enable]")
-    .forEach(function (chk) {
-      chk.addEventListener("change", function () {
-        var key = chk.getAttribute("data-doc-section-enable");
+    .forEach((chk) => {
+      chk.addEventListener("change", () => {
+        const key = chk.getAttribute("data-doc-section-enable");
         if (!key) return;
 
         appState.documentacion.includedSections =
           appState.documentacion.includedSections || {};
-        appState.documentacion.includedSections[key] =
-          chk.checked;
+
+        appState.documentacion.includedSections[key] = chk.checked;
 
         saveDocStateToLocalStorage();
       });
     });
 
+  // Botón IA
   container
     .querySelectorAll("[data-doc-ai-section]")
-    .forEach(function (btn) {
-      btn.addEventListener("click", async function () {
-        var key = btn.getAttribute("data-doc-ai-section");
+    .forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const key = btn.getAttribute("data-doc-ai-section");
         if (!key) return;
 
-        var nuevo = await askAIForSection(key);
+        const nuevo = await askAIForSection(key);
+
         appState.documentacion.secciones[key] = nuevo;
         saveDocStateToLocalStorage();
         renderDocumentacionView();
       });
     });
 
+  // Drag & drop en zonas de sección
   container
     .querySelectorAll("[data-doc-section-drop]")
-    .forEach(function (zone) {
-      zone.addEventListener("dragover", function (ev) {
+    .forEach((zone) => {
+      zone.addEventListener("dragover", (ev) => {
         ev.preventDefault();
         zone.classList.add("is-drag-over");
         if (ev.dataTransfer) ev.dataTransfer.dropEffect = "copy";
       });
 
-      zone.addEventListener("dragleave", function () {
-        zone.classList.remove("is-drag-over");
-      });
+      zone.addEventListener("dragleave", () =>
+        zone.classList.remove("is-drag-over")
+      );
 
-      zone.addEventListener("drop", function (ev) {
+      zone.addEventListener("drop", (ev) => {
         ev.preventDefault();
         zone.classList.remove("is-drag-over");
 
-        var mediaId = ev.dataTransfer
-          ? ev.dataTransfer.getData("text/plain")
-          : null;
-        var sectionKey = zone.getAttribute("data-doc-section-drop");
+        const mediaId = ev.dataTransfer?.getData("text/plain");
+        const sectionKey = zone.getAttribute("data-doc-section-drop");
 
         if (!mediaId || !sectionKey) return;
 
@@ -2299,252 +2345,192 @@ function attachDocSectionHandlers(container) {
     });
 }
 
-// ======================================================
-// MODAL BLOQUES CUSTOM
-// ======================================================
-
-function openDocCustomModal() {
-  var modal = document.getElementById("docCustomModal");
-  var back = document.getElementById("docModalBackdrop");
-
-  if (modal) modal.classList.remove("hidden");
-  if (back) back.classList.remove("hidden");
-
-  var txt = document.getElementById("docCustomText");
-  if (txt) txt.value = "";
-}
-
-function closeDocCustomModal() {
-  var modal = document.getElementById("docCustomModal");
-  var back = document.getElementById("docModalBackdrop");
-
-  if (modal) modal.classList.add("hidden");
-  if (back) back.classList.add("hidden");
-}
-
-function saveDocCustomBlock() {
-  var select = document.getElementById("docCustomSectionSelect");
-  var textarea = document.getElementById("docCustomText");
-
-  if (!select || !textarea) return;
-
-  var sec = select.value;
-  var text = textarea.value.trim();
-
-  if (!text) {
-    closeDocCustomModal();
-    return;
+function attachDocSearchHandlers(container) {
+  const inputImg = container.querySelector("#docMediaSearchInput");
+  if (inputImg) {
+    inputImg.addEventListener("input", () => {
+      appState.documentacion.mediaSearchTerm = inputImg.value || "";
+      saveDocStateToLocalStorage();
+      refreshDocMediaGridOnly();
+    });
   }
 
-  var secs = (appState.documentacion.secciones ||= {});
-  var actual = secs[sec] || "";
-  var nuevo =
-    actual.trim().length > 0
-      ? actual.trim() + "\n\n" + text
-      : text;
-
-  secs[sec] = nuevo;
-
-  (appState.documentacion.customBlocks ||= []).push({
-    section: sec,
-    text: text,
-    ts: new Date().toISOString(),
-  });
-
-  saveDocStateToLocalStorage();
-  closeDocCustomModal();
-  renderDocumentacionView();
-}
-
-// ======================================================
-// AÑADIR / QUITAR MEDIA A SECCIÓN (LÍMITE 10 IMÁGENES)
-// ======================================================
-
-function attachMediaToSection(sectionKey, mediaId) {
-  appState.documentacion.sectionMedia =
-    appState.documentacion.sectionMedia || {};
-  const arr = appState.documentacion.sectionMedia[sectionKey] || [];
-
-  // Límite máximo de 10 imágenes por sección
-  if (arr.indexOf(mediaId) === -1) {
-    if (arr.length >= 10) {
-      alert("Solo puedes adjuntar hasta 10 imágenes en esta sección.");
-      return;
-    }
-    arr.push(mediaId);
-    appState.documentacion.sectionMedia[sectionKey] = arr;
+  const inputFich = container.querySelector("#docFichasSearchInput");
+  if (inputFich) {
+    inputFich.addEventListener("input", () => {
+      appState.documentacion.fichasSearchTerm =
+        inputFich.value || "";
+      saveDocStateToLocalStorage();
+      renderDocumentacionView();
+    });
   }
-
-  saveDocStateToLocalStorage();
-  renderDocumentacionView();
-}
-
-function detachMediaFromSection(sectionKey, mediaId) {
-  var map = appState.documentacion.sectionMedia || {};
-  var arr = map[sectionKey] || [];
-  map[sectionKey] = arr.filter(function (id) {
-    return id !== mediaId;
-  });
-  appState.documentacion.sectionMedia = map;
-  saveDocStateToLocalStorage();
-  renderDocumentacionView();
 }
 
 // ======================================================
-// RENDER PRINCIPAL
+// RENDER PRINCIPAL DE LA PÁGINA DE DOCUMENTACIÓN
 // ======================================================
 
-async function renderDocumentacionView() {
-  var container = getDocAppContent();
+function renderDocumentacionView() {
+  const container = getDocAppContent();
   if (!container) return;
 
-  await ensureDocMediaLoaded();
+  const d = appState.documentacion;
+  const idioma = d.idioma || "es";
 
-  var idioma = appState.documentacion.idioma || "es";
-  var modo = appState.documentacion.modo || "comercial";
-
-  var langButtons = Object.keys(DOC_LANGS)
-    .map(function (code) {
-      var cfg = DOC_LANGS[code];
-      var active = code === idioma ? "btn-primary" : "btn-soft";
-      return (
-        '<button type="button" class="btn btn-xs ' +
-        active +
-        '" data-doc-lang="' +
-        cfg.code +
-        '">' +
-        cfg.label +
-        "</button>"
-      );
+  const langButtons = Object.values(DOC_LANGS)
+    .map((l) => {
+      const active = idioma === l.code ? "btn-primary" : "btn-light";
+      return `
+        <button class="btn btn-xs ${active}"
+          data-doc-lang="${l.code}">
+          ${l.label}
+        </button>
+      `;
     })
     .join("");
 
-  var modoComActive = modo === "comercial" ? "btn-primary" : "btn-soft";
-  var modoTecActive = modo === "tecnica" ? "btn-primary" : "btn-soft";
+  const modo = d.modo || "comercial";
+  const modoComActive = modo === "comercial" ? "btn-primary" : "btn-light";
+  const modoTecActive = modo === "tecnica" ? "btn-primary" : "btn-light";
 
-  container.innerHTML =
-    '<div class="doc-layout">' +
-    '<div class="doc-main-column">' +
-    '<div class="card mb-3">' +
-    '<div class="card-header doc-header-flex">' +
-    '<div>' +
-    '<div class="card-title">Documentación del proyecto</div>' +
-    '<div class="card-subtitle">' +
-    "Genera y edita la memoria de calidades y la presentación comercial." +
-    "</div>" +
-    "</div>" +
-    '<div class="doc-header-controls">' +
-    '<div class="btn-group btn-group-xs" role="group">' +
-    langButtons +
-    "</div>" +
-    '<div class="btn-group btn-group-xs" role="group" style="margin-left:8px;">' +
-    '<button id="docModoComercialBtn" type="button" class="btn ' +
-    modoComActive +
-    '">Comercial</button>' +
-    '<button id="docModoTecnicoBtn" type="button" class="btn ' +
-    modoTecActive +
-    '">Técnica</button>' +
-    "</div>" +
-    "</div>" +
-    "</div>" +
-    '<div class="card-body">' +
-    '<p class="text-muted" style="font-size:0.85rem;">' +
-    "Puedes regenerar los textos base según el idioma y luego ajustar cada sección manualmente o con ayuda de la IA." +
-    "</p>" +
-    '<button id="docRegenerarBtn" type="button" class="btn btn-sm btn-outline-primary">' +
-    "🔁 Regenerar texto base por idioma" +
-    "</button>" +
-    "</div>" +
-    "</div>" +
-    '<div id="docSectionsContainer">' +
-    renderDocSectionsHTML() +
-    "</div>" +
-    "</div>" +
-    '<div class="doc-sidebar">' +
-    '<div class="card mb-3">' +
-    '<div class="card-header">' +
-    '<div class="card-title">Documentación gráfica</div>' +
-    '<div class="card-subtitle">Arrastra las imágenes a las secciones</div>' +
-    "</div>" +
-    '<div class="card-body">' +
-    '<input type="text" id="docMediaSearchInput" class="form-control mb-2" placeholder="Buscar imagen..." value="' +
-    docEscapeHtml(appState.documentacion.mediaSearchTerm || "") +
-    '">' +
-    '<div class="doc-media-body">' +
-    renderDocMediaLibraryHTML() +
-    "</div>" +
-    "</div>" +
-    "</div>" +
-    '<div class="card mb-3">' +
-    '<div class="card-header">' +
-    '<div class="card-title">Fichas técnicas</div>' +
-    "</div>" +
-    '<div class="card-body">' +
-    renderDocFichasHTML() +
-    "</div>" +
-    "</div>" +
-    '<div class="card">' +
-    '<div class="card-header">' +
-    '<div class="card-title">Exportar / bloques extra</div>' +
-    "</div>" +
-    '<div class="card-body">' +
-    '<button id="docExportarBtn" type="button" class="btn btn-sm btn-primary mb-2" style="width:100%;">' +
-    "📄 Exportar PDF (" +
-    (modo === "tecnica" ? "técnico" : "comercial") +
-    ")" +
-    "</button>" +
-    '<button id="docNuevoBloqueBtn" type="button" class="btn btn-sm btn-soft w-100">' +
-    "➕ Añadir bloque personalizado" +
-    "</button>" +
-    "</div>" +
-    "</div>" +
-    "</div>" +
-    "</div>" +
-    '<div id="docModalBackdrop" class="doc-modal-backdrop hidden"></div>' +
-    '<div id="docCustomModal" class="doc-modal hidden">' +
-    '<div class="doc-modal-content">' +
-    '<div class="doc-modal-header">' +
-    "<h3>Añadir bloque personalizado</h3>" +
-    "</div>" +
-    '<div class="doc-modal-body">' +
-    '<label class="form-label">Sección destino</label>' +
-    '<select id="docCustomSectionSelect" class="form-control mb-2">' +
-    DOC_SECTION_ORDER.map(function (k) {
-      return (
-        '<option value="' +
-        k +
-        '">' +
-        docEscapeHtml(labelForSection(k)) +
-        "</option>"
-      );
-    }).join("") +
-    "</select>" +
-    '<label class="form-label">Texto a añadir</label>' +
-    '<textarea id="docCustomText" class="form-control" rows="6"></textarea>' +
-    "</div>" +
-    '<div class="doc-modal-footer">' +
-    '<button id="docCustomCancelBtn" type="button" class="btn btn-soft">Cancelar</button>' +
-    '<button id="docCustomSaveBtn" type="button" class="btn btn-primary">Guardar bloque</button>' +
-    "</div>" +
-    "</div>" +
-    "</div>";
+  container.innerHTML = `
+    <div class="doc-layout">
+      <div class="doc-header-bar card">
+        <div class="doc-header-left">
+          <div class="doc-title">Documentación del proyecto</div>
+          <div class="doc-subtitle">
+            Genera la memoria de calidades y la documentación técnica/comercial del proyecto.
+          </div>
+        </div>
+        <div class="doc-header-right">
+          <div class="doc-header-row">
+            <span class="doc-header-label">Idioma:</span>
+            <div class="btn-group btn-group-xs">
+              ${langButtons}
+            </div>
+          </div>
+          <div class="doc-header-row">
+            <span class="doc-header-label">Modo:</span>
+            <div class="btn-group btn-group-xs">
+              <button id="docModoComercialBtn" class="btn btn-xs ${modoComActive}">
+                Comercial
+              </button>
+              <button id="docModoTecnicoBtn" class="btn btn-xs ${modoTecActive}">
+                Técnico
+              </button>
+            </div>
+          </div>
+          <div class="doc-header-row">
+            <button id="docRegenerarBtn" class="btn btn-xs btn-outline">
+              🔁 Regenerar secciones
+            </button>
+            <button id="docNuevoBloqueBtn" class="btn btn-xs btn-outline">
+              ➕ Añadir bloque
+            </button>
+            <button id="docExportarBtn" class="btn btn-xs btn-primary">
+              📄 Exportar PDF
+            </button>
+          </div>
+        </div>
+      </div>
 
+      <div class="doc-main-grid">
+        <div class="doc-main-center">
+          ${renderDocSectionsHTML()}
+        </div>
+
+        <div class="doc-main-right">
+          <div class="card mb-3">
+            <div class="card-header">
+              <div class="doc-right-title">Documentación gráfica</div>
+              <div class="doc-right-subtitle">
+                Arrastra las imágenes a cada sección.
+              </div>
+              <input type="text" id="docMediaSearchInput"
+                class="form-control form-control-sm"
+                placeholder="Buscar imágenes..."
+                value="${docEscapeHtml(d.mediaSearchTerm || "")}">
+            </div>
+            <div class="card-body doc-media-body">
+              ${renderDocMediaLibraryHTML()}
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-body">
+              ${renderDocFichasHTML()}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal bloques custom -->
+    <div id="docModalBackdrop" class="doc-modal-backdrop hidden"></div>
+    <div id="docCustomModal" class="doc-modal hidden">
+      <div class="doc-modal-content">
+        <div class="doc-modal-header">
+          <div class="doc-modal-title">Añadir bloque de texto</div>
+          <button id="docCustomCancelBtn" class="btn btn-xs btn-light">
+            ✕
+          </button>
+        </div>
+        <div class="doc-modal-body">
+          <div class="form-group">
+            <label for="docCustomSectionSelect">Sección destino</label>
+            <select id="docCustomSectionSelect" class="form-control">
+              ${DOC_SECTION_ORDER.map(
+                (k) =>
+                  `<option value="${k}">${docEscapeHtml(
+                    labelForSection(k)
+                  )}</option>`
+              ).join("")}
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="docCustomText">Texto a añadir</label>
+            <textarea id="docCustomText"
+              class="form-control"
+              rows="6"
+              placeholder="Escribe aquí el texto adicional..."></textarea>
+          </div>
+        </div>
+        <div class="doc-modal-footer">
+          <button id="docCustomSaveBtn" class="btn btn-primary btn-sm">
+            Guardar bloque
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // HANDLERS
   attachDocSearchHandlers(container);
   attachDocSectionHandlers(container);
+  attachDocMediaGridHandlers(container);
 
-  var regenBtn = container.querySelector("#docRegenerarBtn");
+  // Botones superiores
+  const regenBtn = container.querySelector("#docRegenerarBtn");
   if (regenBtn) {
-    regenBtn.addEventListener("click", function () {
+    regenBtn.addEventListener("click", () => {
       autoGenerateDocumentacion(appState.documentacion.idioma || "es");
       renderDocumentacionView();
     });
   }
 
-  var modoComBtn = container.querySelector("#docModoComercialBtn");
-  var modoTecBtn = container.querySelector("#docModoTecnicoBtn");
+  container.querySelectorAll("[data-doc-lang]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const lang = btn.getAttribute("data-doc-lang");
+      autoGenerateDocumentacion(lang);
+      renderDocumentacionView();
+    });
+  });
+
+  const modoComBtn = container.querySelector("#docModoComercialBtn");
+  const modoTecBtn = container.querySelector("#docModoTecnicoBtn");
 
   if (modoComBtn) {
-    modoComBtn.addEventListener("click", function () {
+    modoComBtn.addEventListener("click", () => {
       appState.documentacion.modo = "comercial";
       saveDocStateToLocalStorage();
       renderDocumentacionView();
@@ -2552,54 +2538,44 @@ async function renderDocumentacionView() {
   }
 
   if (modoTecBtn) {
-    modoTecBtn.addEventListener("click", function () {
+    modoTecBtn.addEventListener("click", () => {
       appState.documentacion.modo = "tecnica";
       saveDocStateToLocalStorage();
       renderDocumentacionView();
     });
   }
 
-  container
-    .querySelectorAll("[data-doc-lang]")
-    .forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        var lang = btn.getAttribute("data-doc-lang");
-        autoGenerateDocumentacion(lang);
-        renderDocumentacionView();
-      });
-    });
-
-  var nuevoBloqueBtn = container.querySelector("#docNuevoBloqueBtn");
+  const nuevoBloqueBtn = container.querySelector("#docNuevoBloqueBtn");
   if (nuevoBloqueBtn) {
     nuevoBloqueBtn.addEventListener("click", openDocCustomModal);
   }
 
-  var exportBtn = container.querySelector("#docExportarBtn");
+  const exportBtn = container.querySelector("#docExportarBtn");
   if (exportBtn) {
-    exportBtn.addEventListener("click", function () {
-      exportarDocumentacionPDF().catch(function (err) {
-        console.error("Error exportando PDF:", err);
-      });
+    exportBtn.addEventListener("click", () => {
+      exportarDocumentacionPDF().catch((err) =>
+        console.error("[DOC] Error exportando PDF:", err)
+      );
     });
   }
 
-  var modal = document.getElementById("docCustomModal");
-  var cancelBtn = modal && modal.querySelector("#docCustomCancelBtn");
-  var saveBtn = modal && modal.querySelector("#docCustomSaveBtn");
-  var backdrop = document.getElementById("docModalBackdrop");
+  const modal = document.getElementById("docCustomModal");
+  const cancelBtn =
+    modal && modal.querySelector("#docCustomCancelBtn");
+  const saveBtn = modal && modal.querySelector("#docCustomSaveBtn");
+  const backdrop = document.getElementById("docModalBackdrop");
 
   if (cancelBtn) cancelBtn.addEventListener("click", closeDocCustomModal);
   if (saveBtn) saveBtn.addEventListener("click", saveDocCustomBlock);
-  if (backdrop)
-    backdrop.addEventListener("click", function () {
-      closeDocCustomModal();
-    });
-
-  attachDocMediaGridHandlers(container);
+  if (backdrop) backdrop.addEventListener("click", closeDocCustomModal);
 }
 
 // ======================================================
-// EXPONER RENDER
+// EXPONER FUNCIONES PÚBLICAS
 // ======================================================
 
 window.renderDocumentacionView = renderDocumentacionView;
+window.ensureDocMediaLoaded = ensureDocMediaLoaded;
+window.saveMediaFileToStorageAndFirestore =
+  saveMediaFileToStorageAndFirestore;
+window.deleteMediaById = deleteMediaById;
