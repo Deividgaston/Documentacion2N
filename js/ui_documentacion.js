@@ -1976,74 +1976,53 @@ async function exportarPDFComercial() {
     }
   }
 
-   // Página 2 – Presentación (título 20 / texto 11, sin grandes huecos)
+   // Página 2 – Presentación de empresa como ficha Salesforce
   const includePresentacion =
     appState.documentacion.includedSections?.presentacion_empresa !==
     false;
 
   if (includePresentacion) {
     doc.addPage();
-    let dims2 = getDocPageDimensions(doc);
+    const dims2 = getDocPageDimensions(doc);
+    const pw2 = dims2.width;
 
     let y2 = marginTop;
 
-    const baseTitle =
+    // Título de sección (como "Project overview")
+    const sectionLabel =
       idioma === "en"
         ? "Company introduction"
         : idioma === "pt"
-        ? "Apresentação de empresa"
+        ? "Apresentação da empresa"
         : "Presentación de empresa";
 
-    function drawIntroHeader(isCont) {
-      dims2 = getDocPageDimensions(doc);
-      y2 = marginTop;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.setTextColor(31, 41, 55);
+    doc.text(sectionLabel, marginX, y2);
 
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(20);
-      doc.setTextColor(31, 41, 55);
-      doc.text(
-        isCont ? baseTitle + " (cont.)" : baseTitle,
-        marginX,
-        y2
-      );
+    doc.setDrawColor(209, 213, 219);
+    doc.setLineWidth(0.4);
+    doc.line(marginX, y2 + 2.5, pw2 - marginX, y2 + 2.5);
 
-      doc.setDrawColor(209, 213, 219);
-      doc.setLineWidth(0.4);
-      doc.line(
-        marginX,
-        y2 + 3,
-        dims2.width - marginX,
-        y2 + 3
-      );
+    y2 += 10;
 
-      y2 += 14;
+    // Contenido de la presentación como UNA FICHA tipo Salesforce
+    const bodyText = secciones["presentacion_empresa"] || "";
 
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(11);
-      doc.setTextColor(55, 65, 81);
-    }
-
-    drawIntroHeader(false);
-
-    const texto = secciones["presentacion_empresa"] || "";
-    const lines = doc.splitTextToSize(
-      texto,
-      dims2.width - marginX * 2
-    );
-
-    const lineH = 5.5;
-    const limit = () => getDocPageDimensions(doc).height - marginBottom;
-
-    for (let i = 0; i < lines.length; i++) {
-      if (y2 + lineH > limit()) {
-        doc.addPage();
-        drawIntroHeader(true);
-      }
-      doc.text(lines[i], marginX, y2);
-      y2 += lineH;
-    }
+    drawSalesforceCard({
+      x: marginX,
+      y: y2,
+      width: pw2 - marginX * 2,
+      title: sectionLabel, // título dentro de la tarjeta
+      body: bodyText,
+      doc,
+      maxBodyWidth: pw2 - marginX * 2 - 16,
+      minHeight: 60,
+      marginTop,
+      marginBottom,
+    });
   }
-
 
   // Página 3 – Resumen + Sistema
   doc.addPage();
