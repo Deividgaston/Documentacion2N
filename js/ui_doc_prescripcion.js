@@ -27,8 +27,7 @@ function openPrescModal({ title, bodyHTML, onSave }) {
   const cancelBtn = document.getElementById("prescModalCancel");
 
   if (!modal || !titleEl || !bodyEl || !saveBtn || !closeBtn || !cancelBtn) {
-    console.warn("[PRESCRIPCION] Modal global no encontrado, usando prompt fallback.");
-    // fallback mínimo por si falta el HTML
+    console.warn("[PRESCRIPCION] Modal global no encontrado, usando fallback mínimo.");
     if (typeof onSave === "function") {
       onSave();
     }
@@ -961,6 +960,86 @@ async function renderDocPrescripcionView() {
       .join("");
   }
 
+  // --------- Previsualización capítulo (debajo de todo, opción A) ---------
+  let previewHTML = "";
+  if (!capSel) {
+    previewHTML = `
+      <p class="text-muted" style="font-size:0.85rem;">
+        Selecciona un capítulo en la columna izquierda para ver su previsualización de mediciones.
+      </p>
+    `;
+  } else {
+    const lineasPrev = capSel.lineas || [];
+    if (!lineasPrev.length) {
+      previewHTML = `
+        <p class="text-muted" style="font-size:0.85rem;">
+          Este capítulo todavía no tiene referencias asociadas.
+        </p>
+      `;
+    } else {
+      let totalCapitulo = 0;
+      const rows = lineasPrev
+        .map((l) => {
+          const cod = l.codigo || "";
+          const desc = l.descripcion || "";
+          const cant = Number(l.cantidad) || 0;
+          const pvp = typeof l.pvp === "number" ? l.pvp : 0;
+          const importe = cant * pvp;
+          totalCapitulo += importe;
+
+          let unidad = "Ud";
+          if (l.tipo === "extra" && l.extraRefId && extraRefs && extraRefs.length) {
+            const ref = extraRefs.find((r) => r.id === l.extraRefId);
+            if (ref) {
+              unidad = ref.unidad || "Ud";
+            }
+          }
+
+          return `
+            <tr>
+              <td style="width:2rem;">+</td>
+              <td>${cod}</td>
+              <td>${desc}</td>
+              <td>${unidad}</td>
+              <td style="text-align:right;">${cant}</td>
+              <td style="text-align:right;">${pvp.toFixed(2)} €</td>
+              <td style="text-align:right;">${importe.toFixed(2)} €</td>
+            </tr>
+          `;
+        })
+        .join("");
+
+      previewHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+          <div style="font-weight:600;">
+            Capítulo: ${capSel.nombre || "(sin título)"}
+          </div>
+          <div style="font-weight:600; font-size:0.95rem;">
+            Total capítulo: ${totalCapitulo.toFixed(2)} €
+          </div>
+        </div>
+        <div style="max-height:30vh; overflow:auto;">
+          <table class="table table-compact" style="width:100%; font-size:0.8rem; border-collapse:collapse;">
+            <thead>
+              <tr>
+                <th style="width:2rem;"></th>
+                <th style="text-align:left;">Código</th>
+                <th style="text-align:left;">Descripción</th>
+                <th style="text-align:left;">Ud</th>
+                <th style="text-align:right;">Cant.</th>
+                <th style="text-align:right;">PVP</th>
+                <th style="text-align:right;">Importe</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+  }
+
   container.innerHTML = `
     <div class="presc-root" style="display:flex; flex-direction:column; height:100%; min-height:calc(100vh - 80px);">
       <div class="card" style="margin-bottom:0.75rem; flex:0 0 auto;">
@@ -1071,6 +1150,21 @@ async function renderDocPrescripcionView() {
           </div>
         </div>
       </div>
+
+      <!-- Previsualización del capítulo (debajo, ancho completo) -->
+      <div class="card" style="margin-top:0.75rem; flex:0 0 auto;">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Previsualización del capítulo</div>
+            <div class="card-subtitle">
+              Vista rápida del capítulo seleccionado con sus referencias, unidades, precios e importes.
+            </div>
+          </div>
+        </div>
+        <div class="card-body">
+          ${previewHTML}
+        </div>
+      </div>
     </div>
   `;
 
@@ -1135,8 +1229,15 @@ function attachPrescripcionHandlers() {
             <textarea id="extDesc" class="form-control" rows="3"></textarea>
           </div>
           <div class="form-group">
-            <label>Unidad</label>
-            <input id="extUnidad" type="text" class="form-control" value="Ud">
+            <label>Unidad de medida</label>
+            <select id="extUnidad" class="form-control">
+              <option value="Ud" selected>Ud (unidad)</option>
+              <option value="m">m (metro)</option>
+              <option value="m²">m² (metro cuadrado)</option>
+              <option value="h">h (hora)</option>
+              <option value="m³">m³ (metro cúbico)</option>
+              <option value="kg">kg</option>
+            </select>
           </div>
           <div class="form-group">
             <label>PVP</label>
@@ -1146,7 +1247,7 @@ function attachPrescripcionHandlers() {
         onSave: async () => {
           const codigo = (document.getElementById("extCodigo").value || "").trim();
           const descripcion = (document.getElementById("extDesc").value || "").trim();
-          const unidad = (document.getElementById("extUnidad").value || "").trim() || "Ud";
+          const unidad = (document.getElementById("extUnidad").value || "Ud").trim() || "Ud";
           const pvp = Number(document.getElementById("extPvp").value || 0);
           await createExtraRef(codigo, descripcion, unidad, pvp);
           renderDocPrescripcionView();
@@ -1395,20 +1496,29 @@ function attachPrescripcionHandlers() {
         const ref = list.find((r) => r.id === id);
         if (!ref) return;
 
+        const unidadVal = ref.unidad || "Ud";
+
         openPrescModal({
           title: "Editar referencia extra",
           bodyHTML: `
             <div class="form-group">
               <label>Código</label>
-              <input id="extCodigo" type="text" class="form-control" value="${ref.codigo || ""}">
+              <input id="extCodigo" type="text" class="form-control" value="${(ref.codigo || "").replace(/"/g, "&quot;")}">
             </div>
             <div class="form-group">
               <label>Descripción</label>
               <textarea id="extDesc" class="form-control" rows="3">${ref.descripcion || ""}</textarea>
             </div>
             <div class="form-group">
-              <label>Unidad</label>
-              <input id="extUnidad" type="text" class="form-control" value="${ref.unidad || "Ud"}">
+              <label>Unidad de medida</label>
+              <select id="extUnidad" class="form-control">
+                <option value="Ud" ${unidadVal === "Ud" ? "selected" : ""}>Ud (unidad)</option>
+                <option value="m" ${unidadVal === "m" ? "selected" : ""}>m (metro)</option>
+                <option value="m²" ${unidadVal === "m²" ? "selected" : ""}>m² (metro cuadrado)</option>
+                <option value="h" ${unidadVal === "h" ? "selected" : ""}>h (hora)</option>
+                <option value="m³" ${unidadVal === "m³" ? "selected" : ""}>m³ (metro cúbico)</option>
+                <option value="kg" ${unidadVal === "kg" ? "selected" : ""}>kg</option>
+              </select>
             </div>
             <div class="form-group">
               <label>PVP</label>
@@ -1418,7 +1528,7 @@ function attachPrescripcionHandlers() {
           onSave: async () => {
             const codigo = (document.getElementById("extCodigo").value || "").trim();
             const descripcion = (document.getElementById("extDesc").value || "").trim();
-            const unidad = (document.getElementById("extUnidad").value || "").trim() || "Ud";
+            const unidad = (document.getElementById("extUnidad").value || "Ud").trim() || "Ud";
             const pvp = Number(document.getElementById("extPvp").value || 0);
 
             await updateExtraRef(id, codigo, descripcion, unidad, pvp);
