@@ -1565,41 +1565,55 @@ async function exportarPDFTecnico() {
     const imgsIds = appState.documentacion.sectionMedia?.[key] || [];
     if (!contenido && imgsIds.length === 0) continue;
 
-    tocEntries.push({ title: getSectionTitle(key), page: currentPage });
+    // Si no cabe ni el título ni unas pocas líneas, pasamos sección a la siguiente página
+    const minSpaceForSection = 25; // espacio mínimo después del título
+    if (y + minSpaceForSection > pageHLimit) {
+      newPage();
+    }
 
+    const sectionTitle = getSectionTitle(key);
+    const sectionStartPage = currentPage;
+    tocEntries.push({ title: sectionTitle, page: sectionStartPage });
+
+    // TÍTULO SECCIÓN: 20
     doc.setFont("helvetica", "bold");
     doc.setFontSize(20);
     doc.setTextColor(30, 64, 175);
-    doc.text(getSectionTitle(key), 20, y);
+    doc.text(sectionTitle, 20, y);
     y += 6;
 
+    // Línea bajo título
     doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.3);
     doc.line(20, y, pageW - 20, y);
     y += 8;
 
+    // CUERPO: 11, LÍNEA A LÍNEA
     if (contenido) {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(11);
       doc.setTextColor(55, 65, 81);
 
       const lines = doc.splitTextToSize(contenido, pageW - 40);
-      let block = [];
-      const maxBlock = 30;
+      const lineH = 5.5;
 
       for (let i = 0; i < lines.length; i++) {
-        block.push(lines[i]);
-        if (block.length === maxBlock || i === lines.length - 1) {
-          ensureSpace(block.length);
-          doc.text(block, 20, y);
-          y += block.length * 5.5 + 4;
-          block = [];
+        if (y + lineH > pageHLimit) {
+          // Nueva página, preservando encabezado/footers
+          newPage();
         }
+        doc.text(lines[i], 20, y);
+        y += lineH;
       }
+
+      y += 4; // pequeño espacio después del texto
     }
 
+    // Imágenes asociadas a la sección (con control de saltos de página)
     y = await insertImagesForSection(doc, key, y, newPage);
     y += 4;
   }
+
 
   // Anexo fichas técnicas
   const allMedia = appState.documentacion.mediaLibrary || [];
