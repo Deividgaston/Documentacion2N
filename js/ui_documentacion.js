@@ -89,76 +89,73 @@ const DOC_LOGO_DEFAULT_URL = "img/logo_2n.svg";
 const DOC_TECH_COVER_URL = "img/PortadaTecnica.jpg";
 
 // ======================================================
-// PLANTILLAS BASE (para IA / autogeneración)
+// PLANTILLAS BASE
 // ======================================================
 
 const DOC_BASE_TEMPLATES = {
   es: {
+    presentacion_empresa:
+      "2N es líder en tecnología de videoportero IP y control de accesos, combinando diseño arquitectónico, seguridad y experiencia de usuario.\n\n" +
+      "Con más de 30 años de experiencia en el desarrollo de soluciones IP, 2N forma parte del grupo Axis y dispone de un porfolio completo de intercomunicadores, unidades interiores, lectores de acceso y soluciones para ascensores.\n\n" +
+      "Las soluciones propuestas para {{NOMBRE_PROYECTO}} se han diseñado para ofrecer una experiencia premium a residentes, visitantes y operadores del edificio.",
     resumen:
       "El presente documento describe la solución de videoportero IP y control de accesos propuesta para el proyecto {{NOMBRE_PROYECTO}}, promovido por {{PROMOTORA}}.",
     sistema:
-      "La solución se basa en un sistema de videoportero IP totalmente distribuido, con dispositivos 2N conectados a la red informática del edificio...",
+      "La solución se basa en un sistema de videoportero IP totalmente distribuido...",
     equipos:
       "La solución incluye los siguientes equipos principales:\n\n{{LISTADO_EQUIPOS}}",
     infraestructura:
-      "Toda la infraestructura de comunicaciones se apoya en una red IP basada en cableado estructurado y electrónica de red gestionable...",
+      "Toda la infraestructura de comunicaciones se apoya en una red IP basada en cableado estructurado...",
     servicios:
-      "La solución puede complementarse con servicios cloud para gestión remota, monitorización proactiva y actualizaciones de firmware...",
+      "La solución puede complementarse con servicios cloud para gestión remota...",
     normativa_red:
-      "Los equipos cumplen con la Directiva RED (Radio Equipment Directive) y las normas europeas aplicables en materia de compatibilidad electromagnética...",
-    normativa_lpd:
-      "La instalación deberá cumplir con la normativa de protección de datos (LPD / GDPR), estableciendo políticas claras de conservación y acceso a las grabaciones...",
-    normativa_ciber:
-      "Los dispositivos de 2N forman parte del grupo Axis Communications, lo que garantiza un exigente enfoque en ciberseguridad, actualizaciones periódicas y hardening de la solución...",
+      "Normativa RED (Radio Equipment Directive) – 1 de agosto de 2025...",
+    normativa_lpd: "Protección de datos (LPD / GDPR)...",
+    normativa_ciber: "Ciberseguridad y certificaciones 2N...",
     otros:
-      "En caso de requerirlo, se podrán añadir servicios adicionales, integraciones con plataformas de terceros o funcionalidades específicas para el proyecto.",
+      "En caso de requerirlo, se podrán añadir servicios adicionales o integraciones.",
   },
-
   en: {
+    presentacion_empresa:
+      "2N is a leading provider of IP video intercom and access control technology, combining architectural design, security and user experience.\n\n" +
+      "With more than 30 years of experience and as part of Axis group, 2N delivers a complete portfolio of IP intercoms, indoor stations, access readers and lift solutions.\n\n" +
+      "The solution proposed for {{NOMBRE_PROYECTO}} has been designed to provide a premium experience for residents, visitors and building operators.",
     resumen:
-      "This document describes the proposed IP video intercom and access control solution for project {{NOMBRE_PROYECTO}}, developed by {{PROMOTORA}}.",
-    sistema:
-      "The solution is based on a fully distributed IP video intercom system, using 2N devices connected to the building’s IT network...",
+      "This document describes the proposed IP video intercom and access control solution for the project {{NOMBRE_PROYECTO}}, developed by {{PROMOTORA}}.",
+    sistema: "The solution is based on a fully distributed IP video door system...",
     equipos:
       "The solution includes the following main devices:\n\n{{LISTADO_EQUIPOS}}",
-    infraestructura:
-      "All communication infrastructure relies on an IP network with structured cabling and manageable network switches...",
-    servicios:
-      "The solution can be complemented with cloud services for remote management, proactive monitoring, and firmware updates...",
-    normativa_red:
-      "The equipment complies with the Radio Equipment Directive (RED) and applicable European EMC standards...",
-    normativa_lpd:
-      "The system must comply with GDPR and local data protection regulations, including retention and access policies for recordings...",
-    normativa_ciber:
-      "2N devices are part of Axis Communications Group, following strict cybersecurity practices, regular updates, and hardening guidelines...",
-    otros:
-      "If required, additional services, third-party integrations, or project-specific features can be added.",
+    infraestructura: "All communication infrastructure is based on an IP network...",
+    servicios: "Cloud services can be added to enhance...",
+    normativa_red: "RED Directive compliance...",
+    normativa_lpd: "GDPR compliance information...",
+    normativa_ciber: "Cybersecurity and Axis Group practices...",
+    otros: "Additional notes and optional integrations.",
   },
-
   pt: {
+    presentacion_empresa:
+      "A 2N é líder em tecnologia de videoporteiro IP e controlo de acessos, aliando design arquitectónico, segurança e experiência de utilizador.\n\n" +
+      "Com mais de 30 anos de experiência e integrada no grupo Axis, a 2N oferece um portefólio completo de intercomunicadores, unidades interiores, leitores de acesso e soluções para elevadores.\n\n" +
+      "A solução proposta para {{NOMBRE_PROYECTO}} foi desenhada para proporcionar uma experiência premium a residentes, visitantes e operadores do edifício.",
     resumen:
       "O presente documento descreve a solução proposta de videoporteiro IP e controlo de acessos para o projeto {{NOMBRE_PROYECTO}}, promovido por {{PROMOTORA}}.",
     sistema:
-      "A solução baseia-se num sistema de videoporteiro IP totalmente distribuído, com dispositivos 2N ligados à rede informática do edifício...",
+      "A solução baseia-se num sistema de videoporteiro IP totalmente distribuído...",
     equipos:
       "A solução inclui os seguintes equipamentos principais:\n\n{{LISTADO_EQUIPOS}}",
     infraestructura:
-      "Toda a infraestrutura de comunicações assenta numa rede IP com cablagem estruturada e switches geríveis...",
+      "A infraestrutura de comunicações assenta numa rede IP com cablagem estruturada...",
     servicios:
-      "A solução pode ser complementada com serviços cloud para gestão remota, monitorização proactiva e atualizações de firmware...",
-    normativa_red:
-      "Os equipamentos cumprem a Diretiva RED (Radio Equipment Directive) e as normas europeias aplicáveis em compatibilidade electromagnética...",
-    normativa_lpd:
-      "A instalação deve cumprir o RGPD e a legislação local de proteção de dados, definindo políticas claras de conservação e acesso às gravações...",
-    normativa_ciber:
-      "Os dispositivos 2N fazem parte do grupo Axis Communications, seguindo práticas rigorosas de cibersegurança e atualizações periódicas...",
-    otros:
-      "Se necessário, podem ser adicionados serviços adicionais, integrações com plataformas de terceiros ou funcionalidades específicas para o projeto.",
+      "A solução pode ser complementada com serviços cloud para gestão remota...",
+    normativa_red: "Norma RED e requisitos de cibersegurança...",
+    normativa_lpd: "Informações sobre RGPD...",
+    normativa_ciber: "Práticas de cibersegurança e Axis...",
+    otros: "Notas adicionais.",
   },
 };
 
 // ======================================================
-// HELPERS PARA TOKENS Y AUTOGENERACIÓN
+// HELPERS TOKENS / TEXTO
 // ======================================================
 
 function buildDocTokens() {
@@ -181,18 +178,15 @@ function buildDocTokens() {
     "la propiedad";
 
   let listado = "";
-
   if (presupuesto && Array.isArray(presupuesto.lineas)) {
-    const eq = presupuesto.lineas
+    listado = presupuesto.lineas
       .map((l) => {
         const ref = l.ref || l.referencia || "";
         const desc = l.descripcion || "";
         const qty = l.cantidad || 1;
-        return `• ${ref} – ${desc} (x${qty})`;
+        return "• " + ref + " – " + desc + " (x" + qty + ")";
       })
       .join("\n");
-
-    listado = eq;
   }
 
   return {
@@ -203,39 +197,13 @@ function buildDocTokens() {
 }
 
 function applyTokensToTemplate(txt, tokens) {
-  let out = txt || "";
   if (!txt) return "";
-  Object.keys(tokens).forEach((k) => {
+  let out = txt;
+  Object.keys(tokens).forEach(function (k) {
     out = out.replace(new RegExp(k, "g"), tokens[k]);
   });
   return out;
 }
-
-// ======================================================
-// AUTOGENERACIÓN DE SECCIONES
-// ======================================================
-
-function autoGenerateDocumentacion(idioma) {
-  const lang = DOC_BASE_TEMPLATES[idioma] ? idioma : "es";
-  const base = DOC_BASE_TEMPLATES[lang];
-  const tokens = buildDocTokens();
-
-  const nuevas = {};
-
-  DOC_SECTION_ORDER.forEach((key) => {
-    const tpl = base[key] || "";
-    nuevas[key] = applyTokensToTemplate(tpl, tokens);
-  });
-
-  appState.documentacion.secciones = nuevas;
-  appState.documentacion.ultimaAutoGen = new Date().toISOString();
-
-  saveDocStateToLocalStorage();
-}
-
-// ======================================================
-// HELPERS BÁSICOS
-// ======================================================
 
 function docEscapeHtml(str) {
   if (!str) return "";
@@ -245,24 +213,36 @@ function docEscapeHtml(str) {
     .replace(/>/g, "&gt;");
 }
 
-function getDocAppContent() {
-  if (typeof window.getDocAppContent === "function") {
-    return window.getDocAppContent();
-  }
-  if (typeof window.getAppContent === "function") {
-    return window.getAppContent();
-  }
-  return document.getElementById("appContent");
+// ======================================================
+// AUTO-GENERACIÓN
+// ======================================================
+
+function autoGenerateDocumentacion(idioma) {
+  const lang = DOC_BASE_TEMPLATES[idioma] ? idioma : "es";
+  const base = DOC_BASE_TEMPLATES[lang];
+  const tokens = buildDocTokens();
+  const nuevas = {};
+
+  DOC_SECTION_ORDER.forEach(function (key) {
+    const tpl = base[key] || "";
+    nuevas[key] = applyTokensToTemplate(tpl, tokens);
+  });
+
+  appState.documentacion.secciones = nuevas;
+  appState.documentacion.ultimaAutoGen = new Date().toISOString();
+  appState.documentacion.idioma = lang;
+
+  saveDocStateToLocalStorage();
 }
 
 // ======================================================
-// LABELS Y TÍTULOS
+// HELPERS DE SECCIONES
 // ======================================================
 
 function labelForSection(key) {
   switch (key) {
     case "presentacion_empresa":
-      return "Presentación de la empresa";
+      return "Presentación de empresa";
     case "resumen":
       return "Resumen del proyecto";
     case "sistema":
@@ -289,7 +269,9 @@ function labelForSection(key) {
 function getSectionTitle(key) {
   const titles = appState.documentacion.sectionTitles || {};
   const custom = titles[key];
-  if (custom && custom.trim().length > 0) return custom.trim();
+  if (custom && String(custom).trim().length > 0) {
+    return String(custom).trim();
+  }
   return labelForSection(key);
 }
 
@@ -300,19 +282,37 @@ function getSectionIncluded(key) {
 }
 
 // ======================================================
-// RENDER SECCIONES
+// HELPERS BÁSICOS DE CONTENEDOR
+// ======================================================
+
+function getDocAppContent() {
+  if (typeof window.getAppContent === "function") {
+    return window.getAppContent();
+  }
+  return document.getElementById("appContent");
+}
+
+// ======================================================
+// RENDER SECCIONES HTML (cuerpo central)
 // ======================================================
 
 function renderSectionMediaHTML(sectionKey) {
   const mediaLib = appState.documentacion.mediaLibrary || [];
   const map = {};
-  mediaLib.forEach((m) => (map[m.id] = m));
+  mediaLib.forEach(function (m) {
+    map[m.id] = m;
+  });
 
-  const ids = (appState.documentacion.sectionMedia || {})[sectionKey] || [];
+  const ids =
+    appState.documentacion.sectionMedia &&
+    appState.documentacion.sectionMedia[sectionKey]
+      ? appState.documentacion.sectionMedia[sectionKey]
+      : [];
+
   if (!ids.length) return "";
 
   return ids
-    .map((id) => {
+    .map(function (id) {
       const m = map[id];
       if (!m) return "";
 
@@ -323,27 +323,29 @@ function renderSectionMediaHTML(sectionKey) {
 
       const caption = m.nombre || "";
 
-      return `
-        <div class="doc-section-media-chip">
-          <div class="doc-section-media-thumb">
-            ${
-              isImg
-                ? `<img src="${m.url}" alt="${caption}">`
-                : `<div class="doc-section-media-icon">📄</div>`
-            }
-          </div>
-          <div class="doc-section-media-foot">
-            <div class="doc-section-media-caption-wrap">
-              <span class="doc-section-media-caption">${caption}</span>
-            </div>
-            <button
-              type="button"
-              class="doc-section-media-remove"
-              data-remove-media-id="${id}"
-            >✕</button>
-          </div>
-        </div>
-      `;
+      return (
+        '<div class="doc-section-media-chip">' +
+        '<div class="doc-section-media-thumb">' +
+        (isImg
+          ? '<img src="' +
+            m.url +
+            '" alt="' +
+            docEscapeHtml(caption) +
+            '">' 
+          : '<div class="doc-section-media-icon">📄</div>') +
+        "</div>" +
+        '<div class="doc-section-media-foot">' +
+        '<div class="doc-section-media-caption-wrap">' +
+        '<span class="doc-section-media-caption">' +
+        docEscapeHtml(caption) +
+        "</span>" +
+        "</div>" +
+        '<button type="button" class="doc-section-media-remove" data-remove-media-id="' +
+        id +
+        '">✕</button>' +
+        "</div>" +
+        "</div>"
+      );
     })
     .join("");
 }
@@ -352,70 +354,73 @@ function renderDocSectionsHTML() {
   const secciones = appState.documentacion.secciones || {};
   const included = appState.documentacion.includedSections || {};
 
-  return DOC_SECTION_ORDER.map((key) => {
+  return DOC_SECTION_ORDER.map(function (key) {
     const contenido = secciones[key] || "";
     const title = getSectionTitle(key);
     const checked = included[key] !== false ? "checked" : "";
+    const isReadonly = false; // ahora todas las secciones, incluida presentación, pueden usar IA
 
-    return `
-      <div class="card doc-section-card" data-doc-section="${key}">
-        <div class="card-header">
-          <div class="doc-section-title-wrap" style="flex:1;max-width:60%;">
-            <input
-              type="text"
-              class="form-control doc-section-title-input"
-              data-doc-section-title="${key}"
-              value="${docEscapeHtml(title)}"
-              placeholder="${docEscapeHtml(labelForSection(key))}"
-            >
-          </div>
-
-          <div class="doc-section-header-actions">
-            <label class="doc-section-include-toggle">
-              <input type="checkbox"
-                data-doc-section-enable="${key}"
-                ${checked}
-              >
-              Incluir en PDF
-            </label>
-
-            <button class="btn btn-xs btn-outline"
-              data-doc-ai-section="${key}">
-              ✨ Preguntar a IA
-            </button>
-          </div>
-        </div>
-
-        <div class="card-body">
-          <textarea
-            class="form-control doc-section-textarea"
-            data-doc-section-text="${key}"
-            rows="8"
-          >${contenido}</textarea>
-
-          <div class="doc-section-media-drop"
-            data-doc-section-drop="${key}">
-            <div class="doc-section-media-items">
-              ${renderSectionMediaHTML(key)}
-            </div>
-            <div class="doc-section-media-hint">
-              Arrastra aquí imágenes para adjuntar a esta sección.
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
+    return (
+      '<div class="card doc-section-card" data-doc-section="' +
+      key +
+      '">' +
+      '<div class="card-header">' +
+      '<div class="doc-section-title-wrap" style="flex:1;max-width:60%;">' +
+      '<input type="text" class="form-control doc-section-title-input" ' +
+      'data-doc-section-title="' +
+      key +
+      '" value="' +
+      docEscapeHtml(title) +
+      '" placeholder="' +
+      docEscapeHtml(labelForSection(key)) +
+      '">' +
+      "</div>" +
+      '<div class="doc-section-header-actions">' +
+      '<label class="doc-section-include-toggle">' +
+      '<input type="checkbox" data-doc-section-enable="' +
+      key +
+      '" ' +
+      checked +
+      "> Incluir en PDF</label>" +
+      '<button class="btn btn-xs btn-outline" data-doc-ai-section="' +
+      key +
+      '">✨ Preguntar a IA</button>' +
+      "</div>" +
+      "</div>" +
+      '<div class="card-body">' +
+      '<textarea class="form-control doc-section-textarea" data-doc-section-text="' +
+      key +
+      '" rows="8"' +
+      (isReadonly ? " readonly" : "") +
+      ">" +
+      contenido +
+      "</textarea>" +
+      (isReadonly
+        ? ""
+        : '<div class="doc-section-media-drop" data-doc-section-drop="' +
+          key +
+          '">' +
+          '<div class="doc-section-media-items">' +
+          renderSectionMediaHTML(key) +
+          "</div>" +
+          '<div class="doc-section-media-hint">' +
+          "Arrastra aquí imágenes para adjuntar a esta sección." +
+          "</div>" +
+          "</div>") +
+      "</div>" +
+      "</div>"
+    );
   }).join("");
 }
 
 // ======================================================
-// FICHAS TÉCNICAS
+// FICHAS TÉCNICAS (sidebar)
 // ======================================================
 
 function renderDocFichasHTML() {
   const media = appState.documentacion.mediaLibrary || [];
 
-  const fichas = media.filter((m) => {
+  const fichas = media.filter(function (m) {
     const cat = (m.docCategory || "").toLowerCase();
     const mime = (m.mimeType || "").toLowerCase();
 
@@ -427,7 +432,6 @@ function renderDocFichasHTML() {
       mime === "application/msword"
     )
       return true;
-
     return false;
   });
 
@@ -440,7 +444,7 @@ function renderDocFichasHTML() {
     .toLowerCase();
 
   const filtered = term
-    ? fichas.filter((m) => {
+    ? fichas.filter(function (m) {
         const t =
           (m.nombre || "") +
           " " +
@@ -452,76 +456,75 @@ function renderDocFichasHTML() {
     : fichas;
 
   if (!filtered.length) {
-    return `
-      <p class="text-muted" style="font-size:0.85rem;">
-        No se han encontrado fichas técnicas. Puedes subirlas desde
-        <strong>Gestión de documentación</strong>.
-      </p>
-      <div class="form-group mb-2">
-        <input
-          type="text"
-          id="docFichasSearchInput"
-          class="form-control"
-          placeholder="Buscar por nombre..."
-          value="${appState.documentacion.fichasSearchTerm || ""}"
-        >
-      </div>
-    `;
+    return (
+      '<p class="text-muted" style="font-size:0.85rem;">' +
+      "No se han encontrado fichas técnicas. Puedes subirlas desde " +
+      "<strong>Gestión de documentación</strong>." +
+      "</p>" +
+      '<div class="form-group mb-2">' +
+      '<input type="text" id="docFichasSearchInput" class="form-control" ' +
+      'placeholder="Buscar por nombre..." value="' +
+      docEscapeHtml(
+        appState.documentacion.fichasSearchTerm || ""
+      ) +
+      '">' +
+      "</div>"
+    );
   }
 
   const list = filtered
-    .map((m) => {
+    .map(function (m) {
       const checked = selected.has(m.id) ? "checked" : "";
       const main = m.folderName
-        ? `<strong>${m.folderName}</strong> – ${m.nombre}`
-        : `<strong>${m.nombre}</strong>`;
-
-      return `
-        <label class="doc-ficha-item">
-          <input type="checkbox"
-            data-doc-ficha-media-id="${m.id}"
-            ${checked}
-          >
-          <span class="doc-ficha-main">${main}</span>
-        </label>
-      `;
+        ? "<strong>" + m.folderName + "</strong> – " + m.nombre
+        : "<strong>" + m.nombre + "</strong>";
+      return (
+        '<label class="doc-ficha-item">' +
+        '<input type="checkbox" data-doc-ficha-media-id="' +
+        m.id +
+        '" ' +
+        checked +
+        ">" +
+        '<span class="doc-ficha-main">' +
+        main +
+        "</span>" +
+        "</label>"
+      );
     })
     .join("");
 
-  return `
-    <div class="doc-fichas-section">
-      <div class="doc-fichas-block">
-        <div class="doc-fichas-title">Fichas técnicas de biblioteca</div>
-        <p class="doc-fichas-help">
-          Selecciona las fichas que quieras incluir en el PDF técnico.
-        </p>
-
-        <div class="form-group mb-2">
-          <input
-            type="text"
-            id="docFichasSearchInput"
-            class="form-control"
-            placeholder="Buscar por nombre..."
-            value="${appState.documentacion.fichasSearchTerm || ""}"
-          >
-        </div>
-
-        <div class="doc-fichas-list doc-fichas-media-list">
-          ${list}
-        </div>
-      </div>
-    </div>
-  `;
+  return (
+    '<div class="doc-fichas-section">' +
+    '<div class="doc-fichas-block">' +
+    '<div class="doc-fichas-title">Fichas técnicas de biblioteca</div>' +
+    '<p class="doc-fichas-help">' +
+    "Selecciona las fichas que quieras incluir en el PDF técnico." +
+    "</p>" +
+    '<div class="form-group mb-2">' +
+    '<input type="text" id="docFichasSearchInput" class="form-control" ' +
+    'placeholder="Buscar por nombre..." value="' +
+    docEscapeHtml(
+      appState.documentacion.fichasSearchTerm || ""
+    ) +
+    '">' +
+    "</div>" +
+    '<div class="doc-fichas-list doc-fichas-media-list">' +
+    list +
+    "</div>" +
+    "</div>" +
+    "</div>"
+  );
 }
+
 // ======================================================
-// DOCUMENTACIÓN GRÁFICA (solo imágenes)
+// DOCUMENTACIÓN GRÁFICA (solo IMÁGENES)
 // ======================================================
 
 function cleanInvalidMediaItems() {
   const list = appState.documentacion.mediaLibrary || [];
-  appState.documentacion.mediaLibrary = list.filter(
-    (m) => m && m.id && typeof m.id === "string" && m.id.trim()
-  );
+  appState.documentacion.mediaLibrary = list.filter(function (m) {
+    return m && m.id && typeof m.id === "string" && m.id.trim();
+  });
 }
 
 function renderDocMediaLibraryHTML() {
@@ -529,7 +532,7 @@ function renderDocMediaLibraryHTML() {
 
   const all = appState.documentacion.mediaLibrary || [];
 
-  const images = all.filter((m) => {
+  const images = all.filter(function (m) {
     const mime = (m.mimeType || "").toLowerCase();
     const type = (m.type || "").toLowerCase();
     const url = (m.url || "").toLowerCase();
@@ -546,11 +549,11 @@ function renderDocMediaLibraryHTML() {
   });
 
   if (!images.length) {
-    return `
-      <p class="text-muted" style="font-size:0.85rem;">
-        Todavía no has subido documentación gráfica.
-      </p>
-    `;
+    return (
+      '<p class="text-muted" style="font-size:0.85rem;">' +
+      "Todavía no has subido documentación gráfica." +
+      "</p>"
+    );
   }
 
   const term = (appState.documentacion.mediaSearchTerm || "")
@@ -558,7 +561,7 @@ function renderDocMediaLibraryHTML() {
     .toLowerCase();
 
   const filtered = term
-    ? images.filter((m) => {
+    ? images.filter(function (m) {
         const t =
           (m.nombre || "") +
           " " +
@@ -570,41 +573,42 @@ function renderDocMediaLibraryHTML() {
     : images;
 
   if (!filtered.length) {
-    return `
-      <p class="text-muted" style="font-size:0.85rem;">
-        No se han encontrado imágenes que coincidan con la búsqueda.
-      </p>
-    `;
+    return (
+      '<p class="text-muted" style="font-size:0.85rem;">' +
+      "No se han encontrado imágenes que coincidan con la búsqueda." +
+      "</p>"
+    );
   }
 
-  return `
-    <div class="doc-media-list doc-fichas-list">
-      ${filtered
-        .map((m) => {
-          const caption =
-            m.folderName && m.nombre
-              ? `${m.folderName} – ${m.nombre}`
-              : m.nombre;
-          return `
-            <div class="doc-media-item doc-media-row"
-              draggable="true"
-              data-media-id="${m.id}">
-              <div class="doc-media-row-main">
-                <span class="doc-media-row-icon">🖼️</span>
-                <span class="doc-media-caption">${caption}</span>
-              </div>
-              <div class="doc-media-row-actions">
-                <button class="btn btn-xs"
-                  data-media-view-id="${m.id}">
-                  👁 Ver
-                </button>
-              </div>
-            </div>
-          `;
-        })
-        .join("")}
-    </div>
-  `;
+  return (
+    '<div class="doc-media-list doc-fichas-list">' +
+    filtered
+      .map(function (m) {
+        const caption =
+          m.folderName && m.nombre
+            ? m.folderName + " – " + m.nombre
+            : m.nombre;
+        return (
+          '<div class="doc-media-item doc-media-row" draggable="true" data-media-id="' +
+          m.id +
+          '">' +
+          '<div class="doc-media-row-main">' +
+          '<span class="doc-media-row-icon">🖼️</span>' +
+          '<span class="doc-media-caption">' +
+          docEscapeHtml(caption) +
+          "</span>" +
+          "</div>" +
+          '<div class="doc-media-row-actions">' +
+          '<button class="btn btn-xs" data-media-view-id="' +
+          m.id +
+          '">👁 Ver</button>' +
+          "</div>" +
+          "</div>"
+        );
+      })
+      .join("") +
+    "</div>"
+  );
 }
 
 function refreshDocMediaGridOnly() {
@@ -615,350 +619,318 @@ function refreshDocMediaGridOnly() {
   if (!body) return;
 
   body.innerHTML = renderDocMediaLibraryHTML();
-
   attachDocMediaGridHandlers(container);
 }
-
-// ======================================================
-// BUSCADORES (fichas / imágenes)
-// ======================================================
-
-function attachDocSearchHandlers(container) {
-  const inputImg = container.querySelector("#docMediaSearchInput");
-  if (inputImg) {
-    inputImg.addEventListener("input", () => {
-      appState.documentacion.mediaSearchTerm = inputImg.value || "";
-      saveDocStateToLocalStorage();
-      refreshDocMediaGridOnly();
-    });
-  }
-
-  const inputFich = container.querySelector("#docFichasSearchInput");
-  if (inputFich) {
-    inputFich.addEventListener("input", () => {
-      appState.documentacion.fichasSearchTerm =
-        inputFich.value || "";
-      saveDocStateToLocalStorage();
-      renderDocumentacionView();
-    });
-  }
-}
-
-// ======================================================
-// HANDLERS DE SECCIONES
-// ======================================================
-
-function attachDocSectionHandlers(container) {
-  container
-    .querySelectorAll(".doc-section-title-input")
-    .forEach((inp) => {
-      inp.addEventListener("input", () => {
-        const key = inp.getAttribute("data-doc-section-title");
-        if (!key) return;
-
-        appState.documentacion.sectionTitles =
-          appState.documentacion.sectionTitles || {};
-        appState.documentacion.sectionTitles[key] =
-          inp.value || "";
-
-        saveDocStateToLocalStorage();
-      });
-    });
-
-  container
-    .querySelectorAll(".doc-section-textarea")
-    .forEach((txt) => {
-      txt.addEventListener("input", () => {
-        const key = txt.getAttribute("data-doc-section-text");
-        if (!key) return;
-
-        appState.documentacion.secciones =
-          appState.documentacion.secciones || {};
-        appState.documentacion.secciones[key] = txt.value;
-
-        saveDocStateToLocalStorage();
-      });
-    });
-
-  container
-    .querySelectorAll("[data-doc-section-enable]")
-    .forEach((chk) => {
-      chk.addEventListener("change", () => {
-        const key = chk.getAttribute("data-doc-section-enable");
-        if (!key) return;
-
-        appState.documentacion.includedSections =
-          appState.documentacion.includedSections || {};
-
-        appState.documentacion.includedSections[key] = chk.checked;
-
-        saveDocStateToLocalStorage();
-      });
-    });
-
-  container
-    .querySelectorAll("[data-doc-ai-section]")
-    .forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        const key = btn.getAttribute("data-doc-ai-section");
-        if (!key) return;
-
-        const nuevo = await askAIForSection(key);
-
-        appState.documentacion.secciones[key] = nuevo;
-        saveDocStateToLocalStorage();
-        renderDocumentacionView();
-      });
-    });
-}
-
-// ======================================================
-// DRAG & DROP MEDIA
-// ======================================================
-
-function attachDocMediaGridHandlers(container) {
-  container.querySelectorAll(".doc-media-item").forEach((item) => {
-    item.addEventListener("dragstart", (ev) => {
-      const id = item.getAttribute("data-media-id");
-      if (id && ev.dataTransfer) {
-        ev.dataTransfer.setData("text/plain", id);
-        ev.dataTransfer.effectAllowed = "copy";
-      }
-    });
+  const images = (appState.documentacion.mediaLibrary || []).filter(function (
+    m
+  ) {
+    const mime = (m.mimeType || "").toLowerCase();
+    const type = (m.type || "").toLowerCase();
+    const url = (m.url || "").toLowerCase();
+    return (
+      mime.startsWith("image/") ||
+      type === "image" ||
+      url.endsWith(".png") ||
+      url.endsWith(".jpg") ||
+      url.endsWith(".jpeg") ||
+      url.endsWith(".webp") ||
+      url.endsWith(".gif")
+    );
   });
 
-  container.querySelectorAll("[data-media-view-id]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const id = btn.getAttribute("data-media-view-id");
-      if (!id) return;
+  if (!images.length) {
+    return;
+  }
 
-      const item =
-        (appState.documentacion.mediaLibrary || []).find(
-          (m) => m.id === id
-        );
-
-      if (!item || !item.url) {
-        alert("Imagen no encontrada.");
-        return;
-      }
-
-      const mime = (item.mimeType || "").toLowerCase();
-      const url = (item.url || "").toLowerCase();
-
-      const isImg =
-        mime.startsWith("image/") ||
-        url.endsWith(".png") ||
-        url.endsWith(".jpg") ||
-        url.endsWith(".jpeg") ||
-        url.endsWith(".webp") ||
-        url.endsWith(".gif");
-
-      if (isImg) {
-        openDocImageFloatingPreview(item);
-      } else {
-        window.open(item.url, "_blank");
-      }
-    });
-  });
-
-  container
-    .querySelectorAll(".doc-section-media-remove")
-    .forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const id = btn.getAttribute("data-remove-media-id");
-        const zone = btn.closest("[data-doc-section-drop]");
-        const sec = zone
-          ? zone.getAttribute("data-doc-section-drop")
-          : null;
-
-        if (!id || !sec) return;
-
-        detachMediaFromSection(sec, id);
-      });
-    });
+  for (var i = 0; i < images.length; i++) {
+    var m = images[i];
+    try {
+      URL.revokeObjectURL(m.url);
+    } catch (e) {}
+  }
 }
 
 // ======================================================
-// OVERLAY PREVIEW IMAGEN
+// PREVISUALIZADOR FLOTANTE
 // ======================================================
 
 function openDocImageFloatingPreview(item) {
-  if (!item?.url) return;
+  if (!item || !item.url) return;
 
-  const prev = document.getElementById("docMediaFloatingPreview");
+  var prev = document.getElementById("docMediaFloatingPreview");
   if (prev) prev.remove();
 
-  const title =
+  var title =
     item.folderName && item.nombre
       ? item.folderName + " – " + item.nombre
       : item.nombre || "Imagen";
 
-  const overlay = document.createElement("div");
+  var overlay = document.createElement("div");
   overlay.id = "docMediaFloatingPreview";
   overlay.style =
     "position:fixed;inset:0;background:rgba(0,0,0,0.65);display:flex;" +
     "align-items:center;justify-content:center;z-index:999999;";
 
-  overlay.innerHTML = `
-    <div style="
-      position:relative;
-      max-width:90vw;
-      max-height:90vh;
-      background:#111827;
-      padding:12px;
-      border-radius:12px;
-      box-shadow:0 15px 40px rgba(0,0,0,0.6);
-      display:flex;
-      flex-direction:column;
-    ">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-        <div style="
-          color:#e5e7eb;
-          font-size:0.9rem;
-          font-weight:500;
-          overflow:hidden;
-          text-overflow:ellipsis;
-          white-space:nowrap;
-          max-width:70vw;
-        ">
-          ${docEscapeHtml(title)}
-        </div>
-        <button id="docMediaFloatingCloseBtn"
-          style="border:none;background:#374151;color:#f9fafb;border-radius:999px;
-          padding:4px 10px;font-size:0.8rem;cursor:pointer;">
-          ✕ Cerrar
-        </button>
-      </div>
-      <div style="flex:1;display:flex;align-items:center;justify-content:center;">
-        <img src="${item.url}"
-          style="max-width:86vw;max-height:80vh;object-fit:contain;border-radius:6px;background:#000;">
-      </div>
-    </div>
-  `;
+  overlay.innerHTML =
+    '<div style="position:relative;max-width:90vw;max-height:90vh;' +
+    "background:#111827;padding:12px;border-radius:12px;" +
+    'box-shadow:0 15px 40px rgba(0,0,0,0.6);display:flex;flex-direction:column;">' +
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">' +
+    '<div style="color:#e5e7eb;font-size:0.9rem;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:70vw;">' +
+    docEscapeHtml(title) +
+    "</div>" +
+    '<button id="docMediaFloatingCloseBtn" style="border:none;background:#374151;color:#f9fafb;border-radius:999px;padding:4px 10px;font-size:0.8rem;cursor:pointer;">✕ Cerrar</button>' +
+    "</div>" +
+    '<div style="flex:1;display:flex;align-items:center;justify-content:center;">' +
+    '<img src="' +
+    item.url +
+    '" style="max-width:86vw;max-height:80vh;object-fit:contain;border-radius:6px;background:#000;">' +
+    "</div>" +
+    "</div>";
 
   document.body.appendChild(overlay);
 
-  overlay.addEventListener("click", (ev) => {
+  overlay.addEventListener("click", function (ev) {
     if (ev.target === overlay) overlay.remove();
   });
 
-  document
-    .getElementById("docMediaFloatingCloseBtn")
-    ?.addEventListener("click", () => overlay.remove());
+  var closeBtn = document.getElementById("docMediaFloatingCloseBtn");
+  if (closeBtn) {
+    closeBtn.addEventListener("click", function () {
+      overlay.remove();
+    });
+  }
 }
+
 // ======================================================
-// MEDIA ↔ SECCIONES
+// MEDIA: ESTADO Y FIREBASE
 // ======================================================
 
-function attachMediaToSection(sectionKey, mediaId) {
-  appState.documentacion.sectionMedia =
-    appState.documentacion.sectionMedia || {};
+async function ensureDocMediaLoaded() {
+  if (appState.documentacion.mediaLoaded) return;
 
-  const arr = appState.documentacion.sectionMedia[sectionKey] || [];
+  var db =
+    window.db ||
+    (window.firebase && window.firebase.firestore
+      ? window.firebase.firestore()
+      : null);
 
-  // Aquí limitabas a 4; ahora permitimos hasta 10
-  if (arr.includes(mediaId)) return;
-  if (arr.length >= 10) {
-    alert("Puedes adjuntar hasta 10 imágenes por sección.");
-    return;
+  if (!db) return;
+
+  try {
+    var auth =
+      window.auth ||
+      (window.firebase && window.firebase.auth
+        ? window.firebase.auth()
+        : null);
+
+    var user = auth && auth.currentUser ? auth.currentUser : null;
+    var uid = user ? user.uid : null;
+
+    var query = db.collection("documentacion_media");
+    if (uid) query = query.where("uid", "==", uid);
+
+    var snap = await query.limit(200).get();
+    var media = [];
+
+    snap.forEach(function (d) {
+      media.push(
+        Object.assign(
+          {
+            id: d.id,
+          },
+          d.data()
+        )
+      );
+    });
+
+    appState.documentacion.mediaLibrary = media;
+    appState.documentacion.mediaLoaded = true;
+    console.log("[DOC] Media cargada:", media.length);
+  } catch (e) {
+    console.error("Error cargando documentación media:", e);
+    appState.documentacion.mediaLoaded = false;
+  }
+}
+
+async function saveMediaFileToStorageAndFirestore(file, options) {
+  options = options || {};
+  var name = file.name || "archivo";
+  var now = new Date().toISOString();
+  var isImg = file.type && file.type.startsWith("image/");
+  var type = isImg ? "image" : "file";
+
+  var folderName = options.folderName || "";
+  var docCategory = options.docCategory || "imagen";
+
+  var folderSlug = slugifyFolderName(folderName);
+
+  var storage =
+    window.storage ||
+    (window.firebase && window.firebase.storage
+      ? window.firebase.storage()
+      : null);
+  var db =
+    window.db ||
+    (window.firebase && window.firebase.firestore
+      ? window.firebase.firestore()
+      : null);
+  var auth =
+    window.auth ||
+    (window.firebase && window.firebase.auth
+      ? window.firebase.auth()
+      : null);
+
+  var url = null;
+  var storagePath = null;
+  var uid = auth && auth.currentUser ? auth.currentUser.uid : null;
+
+  if (storage) {
+    storagePath =
+      "documentacion_media/" +
+      (uid || "anon") +
+      "/" +
+      folderSlug +
+      "/" +
+      Date.now() +
+      "_" +
+      name;
+
+    var ref = storage.ref().child(storagePath);
+    await ref.put(file);
+    url = await ref.getDownloadURL();
+  } else {
+    url = URL.createObjectURL(file);
   }
 
-  arr.push(mediaId);
-  appState.documentacion.sectionMedia[sectionKey] = arr;
+  var mediaData = {
+    nombre: name,
+    type: type,
+    mimeType: file.type,
+    url: url,
+    storagePath: storagePath,
+    uploadedAt: now,
+    folderName: folderName || null,
+    docCategory: docCategory,
+  };
 
-  saveDocStateToLocalStorage();
-  renderDocumentacionView();
-}
-
-function detachMediaFromSection(sectionKey, mediaId) {
-  const map = appState.documentacion.sectionMedia || {};
-  const arr = map[sectionKey] || [];
-
-  map[sectionKey] = arr.filter((id) => id !== mediaId);
-  appState.documentacion.sectionMedia = map;
-
-  saveDocStateToLocalStorage();
-  renderDocumentacionView();
-}
-
-// ======================================================
-// MODAL BLOQUES CUSTOM
-// ======================================================
-
-function openDocCustomModal() {
-  const modal = document.getElementById("docCustomModal");
-  const back = document.getElementById("docModalBackdrop");
-
-  if (modal) modal.classList.remove("hidden");
-  if (back) back.classList.remove("hidden");
-
-  const txt = document.getElementById("docCustomText");
-  if (txt) txt.value = "";
-}
-
-function closeDocCustomModal() {
-  document.getElementById("docCustomModal")?.classList.add("hidden");
-  document.getElementById("docModalBackdrop")?.classList.add("hidden");
-}
-
-function saveDocCustomBlock() {
-  const select = document.getElementById("docCustomSectionSelect");
-  const textarea = document.getElementById("docCustomText");
-
-  if (!select || !textarea) return;
-
-  const sec = select.value;
-  const text = textarea.value.trim();
-
-  if (!text) {
-    closeDocCustomModal();
-    return;
+  if (db) {
+    var refDoc = await db.collection("documentacion_media").add(
+      Object.assign({}, mediaData, {
+        uid: uid,
+      })
+    );
+    mediaData.id = refDoc.id;
+  } else {
+    mediaData.id =
+      "local_" +
+      Date.now() +
+      "_" +
+      Math.random().toString(36).slice(2, 8);
   }
 
-  const secs = (appState.documentacion.secciones ||= {});
-  secs[sec] =
-    secs[sec]?.trim().length > 0
-      ? secs[sec].trim() + "\n\n" + text
-      : text;
+  return mediaData;
+}
 
-  (appState.documentacion.customBlocks ||= []).push({
-    section: sec,
-    text,
-    ts: new Date().toISOString(),
+async function deleteMediaById(mediaId) {
+  var media = appState.documentacion.mediaLibrary || [];
+  var item = media.find(function (m) {
+    return m.id === mediaId;
+  });
+  if (!item) return;
+
+  var storage =
+    window.storage ||
+    (window.firebase && window.firebase.storage
+      ? window.firebase.storage()
+      : null);
+  var db =
+    window.db ||
+    (window.firebase && window.firebase.firestore
+      ? window.firebase.firestore()
+      : null);
+
+  if (storage && item.storagePath) {
+    try {
+      await storage.ref().child(item.storagePath).delete();
+    } catch (e) {
+      console.warn("No se pudo borrar en Storage:", e);
+    }
+  }
+
+  if (db) {
+    try {
+      await db.collection("documentacion_media").doc(mediaId).delete();
+    } catch (e) {
+      console.warn("No se pudo borrar en Firestore:", e);
+    }
+  }
+
+  appState.documentacion.mediaLibrary = media.filter(function (m) {
+    return m.id !== mediaId;
   });
 
+  var map = appState.documentacion.sectionMedia || {};
+  Object.keys(map).forEach(function (sec) {
+    map[sec] = map[sec].filter(function (id) {
+      return id !== mediaId;
+    });
+  });
+
+  appState.documentacion.selectedFichasMediaIds =
+    (appState.documentacion.selectedFichasMediaIds || []).filter(function (
+      id
+    ) {
+      return id !== mediaId;
+    });
+
   saveDocStateToLocalStorage();
-  closeDocCustomModal();
   renderDocumentacionView();
 }
 
 // ======================================================
-// IA POR SECCIÓN (incluye presentacion_empresa)
+// SLUGIFY
+// ======================================================
+
+function slugifyFolderName(name) {
+  if (!name) return "general";
+  return (
+    String(name)
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "") || "general"
+  );
+}
+
+// ======================================================
+// IA POR SECCIÓN
 // ======================================================
 
 async function askAIForSection(sectionKey) {
-  const idioma = appState.documentacion.idioma || "es";
-  const secciones = appState.documentacion.secciones || {};
-  const textoActual = secciones[sectionKey] || "";
-  const titulo = getSectionTitle(sectionKey);
-  const proyecto = appState.proyecto || {};
-  const presupuesto =
+  var idioma = appState.documentacion.idioma || "es";
+  var secciones = appState.documentacion.secciones || {};
+  var textoActual = secciones[sectionKey] || "";
+  var titulo = getSectionTitle(sectionKey);
+  var proyecto = appState.proyecto || {};
+  var presupuesto =
     typeof window.getPresupuestoActual === "function"
       ? window.getPresupuestoActual()
       : null;
 
-  const modo = appState.documentacion.modo || "comercial";
+  var modo = appState.documentacion.modo || "comercial";
 
   if (typeof window.handleDocSectionAI === "function") {
     try {
-      const nuevo = await window.handleDocSectionAI({
-        sectionKey,
-        idioma,
-        titulo,
+      var nuevo = await window.handleDocSectionAI({
+        sectionKey: sectionKey,
+        idioma: idioma,
+        titulo: titulo,
         texto: textoActual,
-        proyecto,
-        presupuesto,
-        modo,
+        proyecto: proyecto,
+        presupuesto: presupuesto,
+        modo: modo,
       });
 
       if (typeof nuevo === "string" && nuevo.trim()) {
@@ -978,256 +950,56 @@ async function askAIForSection(sectionKey) {
   return textoActual;
 }
 
-// Implementación por defecto (Cloud Run)
+// Implementación por defecto usando tu endpoint Cloud Run
 if (typeof window.handleDocSectionAI !== "function") {
-  window.handleDocSectionAI = async ({
-    sectionKey,
-    idioma,
-    titulo,
-    texto,
-    proyecto,
-    presupuesto,
-    modo,
-  }) => {
-    const payload = {
-      sectionKey,
-      idioma,
-      titulo,
-      texto,
-      proyecto,
-      presupuesto,
-      modo,
-    };
-
-    const url = "https://docsectionai-is2pkrfj5a-uc.a.run.app";
-
-    const resp = await fetch(url, {
+  window.handleDocSectionAI = async function (payload) {
+    var url = "https://docsectionai-is2pkrfj5a-uc.a.run.app";
+    var resp = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
 
     if (!resp.ok) {
-      const extra = await resp.text().catch(() => "");
+      var extra = "";
+      try {
+        extra = await resp.text();
+      } catch (e) {}
       throw new Error("IA error " + resp.status + ": " + extra);
     }
 
-    const data = await resp.json().catch(() => null);
+    var data = null;
+    try {
+      data = await resp.json();
+    } catch (e) {}
     if (!data || typeof data.text !== "string") {
-      throw new Error("Respuesta IA inválida: falta ‘text’");
+      throw new Error("Respuesta IA inválida: falta 'text'");
     }
-
     return data.text;
   };
 }
 
 // ======================================================
-// FIRESTORE / STORAGE: CARGA MEDIA
+// UTILIDADES PDF (IMÁGENES)
 // ======================================================
-
-async function ensureDocMediaLoaded() {
-  const db =
-    window.db ||
-    (window.firebase?.firestore ? window.firebase.firestore() : null);
-
-  if (!db) return;
-
-  try {
-    const auth =
-      window.auth ||
-      (window.firebase?.auth ? window.firebase.auth() : null);
-
-    const user = auth?.currentUser || null;
-    const uid = user ? user.uid : null;
-
-    let query = db.collection("documentacion_media");
-    if (uid) query = query.where("uid", "==", uid);
-
-    const snap = await query.limit(200).get();
-    const media = [];
-
-    snap.forEach((d) => media.push({ ...d.data(), id: d.id }));
-
-    appState.documentacion.mediaLibrary = media;
-    appState.documentacion.mediaLoaded = true;
-
-    console.log("[DOC] Media cargada:", media.length);
-  } catch (e) {
-    console.error("Error cargando documentación media:", e);
-    appState.documentacion.mediaLoaded = false;
-  }
-}
-
-// ======================================================
-// GUARDAR ARCHIVOS (Storage + Firestore)
-// ======================================================
-
-function slugifyFolderName(name) {
-  if (!name) return "general";
-
-  return (
-    String(name)
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^a-z0-9]+/g, "_")
-      .replace(/^_+|_+$/g, "") || "general"
-  );
-}
-
-async function saveMediaFileToStorageAndFirestore(file, options = {}) {
-  const name = file.name || "archivo";
-  const now = new Date().toISOString();
-  const isImg = file.type?.startsWith("image/");
-  const type = isImg ? "image" : "file";
-
-  const folderName = options.folderName || "";
-  const docCategory = options.docCategory || "imagen";
-
-  const folderSlug = slugifyFolderName(folderName);
-
-  const storage =
-    window.storage ||
-    (window.firebase?.storage ? window.firebase.storage() : null);
-  const db =
-    window.db ||
-    (window.firebase?.firestore ? window.firebase.firestore() : null);
-  const auth =
-    window.auth ||
-    (window.firebase?.auth ? window.firebase.auth() : null);
-
-  let url = null;
-  let storagePath = null;
-
-  let uid = auth?.currentUser?.uid || null;
-
-  if (storage) {
-    storagePath =
-      "documentacion_media/" +
-      (uid || "anon") +
-      "/" +
-      folderSlug +
-      "/" +
-      Date.now() +
-      "_" +
-      name;
-
-    const ref = storage.ref().child(storagePath);
-    await ref.put(file);
-    url = await ref.getDownloadURL();
-  } else {
-    url = URL.createObjectURL(file);
-  }
-
-  const mediaData = {
-    nombre: name,
-    type,
-    mimeType: file.type,
-    url,
-    storagePath,
-    uploadedAt: now,
-    folderName: folderName || null,
-    docCategory,
-  };
-
-  if (db) {
-    const ref = await db.collection("documentacion_media").add({
-      ...mediaData,
-      uid,
-    });
-
-    mediaData.id = ref.id;
-  } else {
-    mediaData.id =
-      "local_" +
-      Date.now() +
-      "_" +
-      Math.random().toString(36).slice(2, 8);
-  }
-
-  return mediaData;
-}
-// ======================================================
-// BORRAR MEDIA
-// ======================================================
-
-async function deleteMediaById(mediaId) {
-  const media = appState.documentacion.mediaLibrary || [];
-  const item = media.find((m) => m.id === mediaId);
-  if (!item) return;
-
-  const storage =
-    window.storage ||
-    (window.firebase?.storage ? window.firebase.storage() : null);
-  const db =
-    window.db ||
-    (window.firebase?.firestore ? window.firebase.firestore() : null);
-
-  if (storage && item.storagePath) {
-    try {
-      await storage.ref().child(item.storagePath).delete();
-    } catch (e) {
-      console.warn("No se pudo borrar en Storage:", e);
-    }
-  }
-
-  if (db) {
-    try {
-      await db.collection("documentacion_media").doc(mediaId).delete();
-    } catch (e) {
-      console.warn("No se pudo borrar en Firestore:", e);
-    }
-  }
-
-  appState.documentacion.mediaLibrary = media.filter(
-    (m) => m.id !== mediaId
-  );
-
-  const map = appState.documentacion.sectionMedia || {};
-  Object.keys(map).forEach((sec) => {
-    map[sec] = map[sec].filter((id) => id !== mediaId);
-  });
-
-  appState.documentacion.selectedFichasMediaIds =
-    (appState.documentacion.selectedFichasMediaIds || []).filter(
-      (id) => id !== mediaId
-    );
-
-  saveDocStateToLocalStorage();
-  renderDocumentacionView();
-}
-
-// ======================================================
-// UTILS IMÁGENES PARA PDF
-// ======================================================
-
-function getImagenRef(ref) {
-  if (!ref) return null;
-  const clean = String(ref).trim().toUpperCase();
-  if (window.DOC_IMAGENES_POR_REF?.[clean]) {
-    return window.DOC_IMAGENES_POR_REF[clean];
-  }
-  return "img/devices/" + clean + ".png";
-}
 
 function loadImageAsDataUrl(url) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
+  return new Promise(function (resolve, reject) {
+    var img = new Image();
     img.crossOrigin = "Anonymous";
 
-    img.onload = () => {
+    img.onload = function () {
       try {
-        const maxDim = 1200;
-        let w = img.naturalWidth || img.width;
-        let h = img.naturalHeight || img.height;
-        const max = Math.max(w, h);
-        const scale = max > maxDim ? maxDim / max : 1;
+        var maxDim = 1200;
+        var w = img.naturalWidth || img.width;
+        var h = img.naturalHeight || img.height;
+        var max = Math.max(w, h);
+        var scale = max > maxDim ? maxDim / max : 1;
 
-        const canvas = document.createElement("canvas");
+        var canvas = document.createElement("canvas");
         canvas.width = Math.round(w * scale);
         canvas.height = Math.round(h * scale);
-        const ctx = canvas.getContext("2d");
-
+        var ctx = canvas.getContext("2d");
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
         resolve({
@@ -1250,13 +1022,11 @@ async function getDocLogoImage() {
     return appState.documentacion.logoData;
   }
 
-  const url =
-    window.DOC_LOGO_URL ||
-    DOC_LOGO_DEFAULT_URL ||
-    "img/logo_2n.svg";
+  var url =
+    window.DOC_LOGO_URL || DOC_LOGO_DEFAULT_URL || "img/logo_2n.svg";
 
   try {
-    const obj = await loadImageAsDataUrl(url);
+    var obj = await loadImageAsDataUrl(url);
     appState.documentacion.logoData = obj;
     return obj;
   } catch (e) {
@@ -1265,36 +1035,36 @@ async function getDocLogoImage() {
   }
 }
 
-// ======================================================
-// MEDIDAS PDF / HEADER / FOOTER
-// ======================================================
-
 function getDocPageDimensions(pdf) {
-  const size = pdf.internal.pageSize;
+  var size = pdf.internal.pageSize;
   return {
     width: size.getWidth ? size.getWidth() : size.width,
     height: size.getHeight ? size.getHeight() : size.height,
   };
 }
 
-function drawTechHeader(pdf, opts = {}) {
-  const dims = getDocPageDimensions(pdf);
-  const w = dims.width;
+// ======================================================
+// CABECERA / PIE PDF TÉCNICO
+// ======================================================
 
-  const nombreProyecto = opts.nombreProyecto || "Proyecto";
-  const logo = opts.logo || null;
+function drawTechHeader(pdf, opts) {
+  opts = opts || {};
+  var dims = getDocPageDimensions(pdf);
+  var w = dims.width;
 
-  const marginX = 20;
-  const textY = 18;
+  var nombreProyecto = opts.nombreProyecto || "Proyecto";
+  var logo = opts.logo || null;
 
-  let logoBottomY = textY;
+  var marginX = 20;
+  var textY = 18;
+  var logoBottomY = textY;
 
-  if (logo?.dataUrl) {
-    const ratio = logo.width / logo.height || 2.5;
-    const logoW = 25;
-    const logoH = logoW / ratio;
-    const logoX = w - marginX - logoW;
-    const logoY = textY - 6;
+  if (logo && logo.dataUrl) {
+    var ratio = logo.width / logo.height || 2.5;
+    var logoW = 25;
+    var logoH = logoW / ratio;
+    var logoX = w - marginX - logoW;
+    var logoY = textY - 6;
 
     try {
       pdf.addImage(logo.dataUrl, "PNG", logoX, logoY, logoW, logoH);
@@ -1309,7 +1079,7 @@ function drawTechHeader(pdf, opts = {}) {
   pdf.setTextColor(55, 65, 81);
   pdf.text(nombreProyecto, marginX, textY);
 
-  const lineY = Math.max(textY + 2, logoBottomY + 2);
+  var lineY = Math.max(textY + 2, logoBottomY + 2);
   pdf.setDrawColor(226, 232, 240);
   pdf.setLineWidth(0.3);
   pdf.line(marginX, lineY, w - marginX, lineY);
@@ -1317,12 +1087,13 @@ function drawTechHeader(pdf, opts = {}) {
   return lineY + 8;
 }
 
-function drawTechFooter(pdf, opts = {}) {
-  const dims = getDocPageDimensions(pdf);
-  const h = dims.height;
+function drawTechFooter(pdf, opts) {
+  opts = opts || {};
+  var dims = getDocPageDimensions(pdf);
+  var h = dims.height;
 
-  const idioma = opts.idioma || "es";
-  let txt =
+  var idioma = opts.idioma || "es";
+  var txt =
     idioma === "en"
       ? "IP video intercom & access control solution – 2N®"
       : idioma === "pt"
@@ -1335,30 +1106,30 @@ function drawTechFooter(pdf, opts = {}) {
   pdf.text(txt, 20, h - 10);
 }
 
-function setupTechContentPage(pdf, opts = {}) {
-  const startY = drawTechHeader(pdf, opts);
+function setupTechContentPage(pdf, opts) {
+  var startY = drawTechHeader(pdf, opts);
   drawTechFooter(pdf, opts);
   return startY;
 }
 
 // ======================================================
-// IMÁGENES POR SECCIÓN (PDF TÉCNICO)
+// IMÁGENES EN PDF TÉCNICO
 // ======================================================
 
 function getSectionImages(sectionKey) {
-  const map = appState.documentacion.sectionMedia || {};
-  const ids = map[sectionKey] || [];
+  var map = appState.documentacion.sectionMedia || {};
+  var ids = map[sectionKey] || [];
 
   return ids
-    .map((id) =>
-      (appState.documentacion.mediaLibrary || []).find(
-        (m) => m.id === id
-      )
-    )
-    .filter((m) => {
-      if (!m?.url) return false;
-      const mime = (m.mimeType || "").toLowerCase();
-      const url = (m.url || "").toLowerCase();
+    .map(function (id) {
+      return (appState.documentacion.mediaLibrary || []).find(function (m) {
+        return m.id === id;
+      });
+    })
+    .filter(function (m) {
+      if (!m || !m.url) return false;
+      var mime = (m.mimeType || "").toLowerCase();
+      var url = (m.url || "").toLowerCase();
       return (
         mime.startsWith("image/") ||
         url.endsWith(".png") ||
@@ -1376,38 +1147,37 @@ function removeExtension(name) {
 }
 
 async function insertImagesForSection(doc, sectionKey, y, onNewPage) {
-  const images = getSectionImages(sectionKey);
+  var images = getSectionImages(sectionKey);
   if (!images.length) return y;
 
-  const dims = getDocPageDimensions(doc);
-  const maxY = dims.height - 25;
-  const pageWidth = dims.width;
+  var dims = getDocPageDimensions(doc);
+  var maxY = dims.height - 25;
+  var pageWidth = dims.width;
 
-  for (const m of images) {
+  for (var i = 0; i < images.length; i++) {
+    var m = images[i];
     try {
-      const obj = await loadImageAsDataUrl(m.url);
-      const ratio = obj.width / obj.height;
+      var obj = await loadImageAsDataUrl(m.url);
+      var ratio = obj.width / obj.height;
 
-      let imgW = 60;
-      let imgH = imgW / ratio;
+      var imgW = 60;
+      var imgH = imgW / ratio;
 
       if (imgH > 38) {
         imgH = 38;
         imgW = imgH * ratio;
       }
 
-      const needed = imgH + 10;
-
+      var needed = imgH + 10;
       if (y + needed > maxY) {
         y = onNewPage();
       }
 
-      const x = (pageWidth - imgW) / 2;
+      var x = (pageWidth - imgW) / 2;
       doc.addImage(obj.dataUrl, "PNG", x, y, imgW, imgH);
       y += imgH + 4;
 
-      const caption = removeExtension(m.nombre || "");
-
+      var caption = removeExtension(m.nombre || "");
       doc.setFont("helvetica", "italic");
       doc.setFontSize(8);
       doc.setTextColor(80, 80, 80);
@@ -1423,7 +1193,7 @@ async function insertImagesForSection(doc, sectionKey, y, onNewPage) {
 }
 
 // ======================================================
-// EXPORTAR PDF (selector modo)
+// EXPORTACIÓN PDF (selector modo)
 // ======================================================
 
 async function exportarDocumentacionPDF() {
@@ -1431,62 +1201,54 @@ async function exportarDocumentacionPDF() {
     alert("jsPDF no está cargado.");
     return;
   }
-
-  const modo = appState.documentacion.modo || "comercial";
-
+  var modo = appState.documentacion.modo || "comercial";
   if (modo === "tecnica") {
     await exportarPDFTecnico();
   } else {
     await exportarPDFComercial();
   }
 }
-// ======================================================
-// PDF TÉCNICO COMPLETO
-// ======================================================
-
 async function exportarPDFTecnico() {
-  const jsPDF = window.jspdf.jsPDF;
-  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  var jsPDF = window.jspdf.jsPDF;
+  var doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
-  const idioma = appState.documentacion.idioma || "es";
-  const secciones = appState.documentacion.secciones || {};
-  const included = appState.documentacion.includedSections || {};
+  var idioma = appState.documentacion.idioma || "es";
+  var secciones = appState.documentacion.secciones || {};
+  var included = appState.documentacion.includedSections || {};
 
-  const proyecto = appState.proyecto || {};
-  const presupuesto =
+  var proyecto = appState.proyecto || {};
+  var presupuesto =
     typeof window.getPresupuestoActual === "function"
       ? window.getPresupuestoActual()
       : null;
 
-  const nombreProyecto =
+  var nombreProyecto =
     proyecto.nombre ||
     proyecto.nombreProyecto ||
-    presupuesto?.nombreProyecto ||
+    (presupuesto && presupuesto.nombreProyecto) ||
     "Proyecto";
 
-  const promotora =
+  var promotora =
     proyecto.promotora ||
     proyecto.cliente ||
-    presupuesto?.cliente ||
+    (presupuesto && presupuesto.cliente) ||
     "";
 
-  const logo = await getDocLogoImage();
-  const dims = getDocPageDimensions(doc);
-  const pageW = dims.width;
-  const pageH = dims.height;
+  var logo = await getDocLogoImage();
+  var dims = getDocPageDimensions(doc);
+  var pageW = dims.width;
+  var pageH = dims.height;
 
-  let titulo = "Memoria de calidades";
+  var titulo = "Memoria de calidades";
   if (idioma === "en") titulo = "Technical specification";
   if (idioma === "pt") titulo = "Memória descritiva";
 
-  // Portada técnica
   try {
-    const cover = await loadImageAsDataUrl(DOC_TECH_COVER_URL);
-    if (cover?.dataUrl) {
-      const ratio = cover.width / cover.height;
-      const pageRatio = pageW / pageH;
-
-      let w, h, x, y;
+    var cover = await loadImageAsDataUrl(DOC_TECH_COVER_URL);
+    if (cover && cover.dataUrl) {
+      var ratio = cover.width / cover.height;
+      var pageRatio = pageW / pageH;
+      var w, h, x, y;
 
       if (ratio > pageRatio) {
         h = pageH;
@@ -1499,26 +1261,24 @@ async function exportarPDFTecnico() {
         x = 0;
         y = (pageH - h) / 2;
       }
-
       doc.addImage(cover.dataUrl, "PNG", x, y, w, h);
     }
   } catch (e) {
     console.warn("No se pudo cargar portada técnica:", e);
   }
 
-  const gradHeight = 70;
-  const gradStart = pageH - gradHeight;
-  for (let i = 0; i < 6; i++) {
-    const y = gradStart + (i * gradHeight) / 6;
-    const h = gradHeight / 6 + 0.5;
-    const shade = 255 - i * 8;
+  var gradHeight = 70;
+  var gradStart = pageH - gradHeight;
+  for (var i = 0; i < 6; i++) {
+    var gy = gradStart + (i * gradHeight) / 6;
+    var gh = gradHeight / 6 + 0.5;
+    var shade = 255 - i * 8;
     doc.setFillColor(shade, shade, shade);
-    doc.rect(0, y, pageW, h, "F");
+    doc.rect(0, gy, pageW, gh, "F");
   }
 
-  const panelH = 55;
-  const panelY = pageH - panelH;
-
+  var panelH = 55;
+  var panelY = pageH - panelH;
   doc.setFillColor(255, 255, 255);
   doc.rect(0, panelY, pageW, panelH, "F");
 
@@ -1531,13 +1291,12 @@ async function exportarPDFTecnico() {
   doc.setFontSize(12);
   doc.text("Videoportero y control de accesos 2N", 20, panelY + 7);
 
-  let y = panelY + 18;
-
+  var y = panelY + 18;
   doc.setFont("helvetica", "bold");
   doc.text("Proyecto:", 20, y);
   doc.setFont("helvetica", "normal");
 
-  const linesProyecto = doc.splitTextToSize(nombreProyecto, pageW - 60);
+  var linesProyecto = doc.splitTextToSize(nombreProyecto, pageW - 60);
   doc.text(linesProyecto, 45, y);
   y += linesProyecto.length * 6 + 4;
 
@@ -1545,35 +1304,34 @@ async function exportarPDFTecnico() {
     doc.setFont("helvetica", "bold");
     doc.text("Promotor:", 20, y);
     doc.setFont("helvetica", "normal");
-    const linesProm = doc.splitTextToSize(promotora, pageW - 60);
+    var linesProm = doc.splitTextToSize(promotora, pageW - 60);
     doc.text(linesProm, 45, y);
     y += linesProm.length * 6 + 4;
   }
 
-  drawTechFooter(doc, { idioma });
+  drawTechFooter(doc, { idioma: idioma });
 
-  // Página de índice
   doc.addPage();
-  const tocPage = doc.getNumberOfPages();
-  const tocStartY = setupTechContentPage(doc, {
-    idioma,
-    nombreProyecto,
-    logo,
+  var tocPage = doc.getNumberOfPages();
+  var tocStartY = setupTechContentPage(doc, {
+    idioma: idioma,
+    nombreProyecto: nombreProyecto,
+    logo: logo,
   });
 
-  const tocEntries = [];
+  var tocEntries = [];
 
-  // Presentación de empresa (si está incluida)
-  if (included["presentacion_empresa"] !== false) {
+  var includePresentacion = included["presentacion_empresa"] !== false;
+  if (includePresentacion) {
     doc.addPage();
-    let current = doc.getNumberOfPages();
+    var current = doc.getNumberOfPages();
     y = setupTechContentPage(doc, {
-      idioma,
-      nombreProyecto,
-      logo,
+      idioma: idioma,
+      nombreProyecto: nombreProyecto,
+      logo: logo,
     });
 
-    const title =
+    var titPres =
       idioma === "en"
         ? "Company introduction"
         : idioma === "pt"
@@ -1581,14 +1339,14 @@ async function exportarPDFTecnico() {
         : "Presentación de empresa";
 
     tocEntries.push({
-      title,
+      title: titPres,
       page: current,
     });
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
     doc.setTextColor(30, 64, 175);
-    doc.text(title, 20, y);
+    doc.text(titPres, 20, y);
     y += 4;
 
     doc.setDrawColor(226, 232, 240);
@@ -1596,36 +1354,43 @@ async function exportarPDFTecnico() {
     doc.line(20, y, pageW - 20, y);
     y += 6;
 
-    const texto = secciones["presentacion_empresa"] || "";
+    var textoPres = secciones["presentacion_empresa"] || "";
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
     doc.setTextColor(55, 65, 81);
 
-    const lines = doc.splitTextToSize(texto, pageW - 40);
-    doc.text(lines, 20, y);
-    y += lines.length * 5 + 6;
+    var linesPres = doc.splitTextToSize(textoPres, pageW - 40);
+    doc.text(linesPres, 20, y);
+    y += linesPres.length * 5 + 6;
   }
 
-  // Resto de secciones
   doc.addPage();
-  let currentPage = doc.getNumberOfPages();
-  y = setupTechContentPage(doc, { idioma, nombreProyecto, logo });
+  var currentPage = doc.getNumberOfPages();
+  y = setupTechContentPage(doc, {
+    idioma: idioma,
+    nombreProyecto: nombreProyecto,
+    logo: logo,
+  });
 
   function newPage() {
     doc.addPage();
     currentPage = doc.getNumberOfPages();
-    y = setupTechContentPage(doc, { idioma, nombreProyecto, logo });
+    y = setupTechContentPage(doc, {
+      idioma: idioma,
+      nombreProyecto: nombreProyecto,
+      logo: logo,
+    });
     return y;
   }
 
   function ensureSpace(lines) {
-    const need = lines * 5 + 12;
+    var need = lines * 5 + 12;
     if (y + need > pageH - 25) {
       newPage();
     }
   }
 
-  const sectionKeys = [
+  var sectionKeys = [
     "resumen",
     "sistema",
     "equipos",
@@ -1637,14 +1402,18 @@ async function exportarPDFTecnico() {
     "otros",
   ];
 
-  for (const key of sectionKeys) {
+  for (var s = 0; s < sectionKeys.length; s++) {
+    var key = sectionKeys[s];
     if (included[key] === false) continue;
 
-    const contenido = (secciones[key] || "").trim();
-    const imgs = getSectionImages(key);
+    var contenido = (secciones[key] || "").trim();
+    var imgs = getSectionImages(key);
     if (!contenido && imgs.length === 0) continue;
 
-    tocEntries.push({ title: getSectionTitle(key), page: currentPage });
+    tocEntries.push({
+      title: getSectionTitle(key),
+      page: currentPage,
+    });
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
@@ -1661,13 +1430,13 @@ async function exportarPDFTecnico() {
       doc.setFontSize(10);
       doc.setTextColor(55, 65, 81);
 
-      const lines = doc.splitTextToSize(contenido, pageW - 40);
-      let block = [];
-      const maxBlock = 35;
+      var lines = doc.splitTextToSize(contenido, pageW - 40);
+      var block = [];
+      var maxBlock = 35;
 
-      for (let i = 0; i < lines.length; i++) {
-        block.push(lines[i]);
-        if (block.length === maxBlock || i === lines.length - 1) {
+      for (var li = 0; li < lines.length; li++) {
+        block.push(lines[li]);
+        if (block.length === maxBlock || li === lines.length - 1) {
           ensureSpace(block.length);
           doc.text(block, 20, y);
           y += block.length * 5 + 4;
@@ -1680,29 +1449,37 @@ async function exportarPDFTecnico() {
     y += 4;
   }
 
-  // Anexo fichas técnicas
-  const allMedia = appState.documentacion.mediaLibrary || [];
-  const selected = appState.documentacion.selectedFichasMediaIds || [];
-  const fichas = allMedia.filter((m) => selected.includes(m.id));
+  var allMedia = appState.documentacion.mediaLibrary || [];
+  var selected = appState.documentacion.selectedFichasMediaIds || [];
+  var fichas = allMedia.filter(function (m) {
+    return selected.indexOf(m.id) !== -1;
+  });
 
   if (fichas.length > 0) {
     doc.addPage();
     currentPage = doc.getNumberOfPages();
-    y = setupTechContentPage(doc, { idioma, nombreProyecto, logo });
+    y = setupTechContentPage(doc, {
+      idioma: idioma,
+      nombreProyecto: nombreProyecto,
+      logo: logo,
+    });
 
-    let tituloAnexo =
+    var titAnexo =
       idioma === "en"
         ? "Appendix – Technical documentation"
         : idioma === "pt"
         ? "Anexo – Documentação técnica"
         : "Anexo – Fichas técnicas adjuntas";
 
-    tocEntries.push({ title: tituloAnexo, page: currentPage });
+    tocEntries.push({
+      title: titAnexo,
+      page: currentPage,
+    });
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
     doc.setTextColor(30, 64, 175);
-    doc.text(tituloAnexo, 20, y);
+    doc.text(titAnexo, 20, y);
     y += 6;
 
     doc.setDrawColor(226, 232, 240);
@@ -1712,21 +1489,20 @@ async function exportarPDFTecnico() {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
 
-    for (const m of fichas) {
-      const extra = m.folderName ? " – " + m.folderName : "";
-      const text =
+    for (var f = 0; f < fichas.length; f++) {
+      var m = fichas[f];
+      var extra = m.folderName ? " – " + m.folderName : "";
+      var text =
         "• " + m.nombre + extra + (m.url ? " (" + m.url + ")" : "");
-
-      const lines = doc.splitTextToSize(text, pageW - 40);
-      ensureSpace(lines.length);
-      doc.text(lines, 20, y);
-      y += lines.length * 4.8 + 2;
+      var linesFicha = doc.splitTextToSize(text, pageW - 40);
+      ensureSpace(linesFicha.length);
+      doc.text(linesFicha, 20, y);
+      y += linesFicha.length * 4.8 + 2;
     }
   }
 
-  // Reescribir índice
   doc.setPage(tocPage);
-  let yToc = tocStartY;
+  var yToc = tocStartY;
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(14);
@@ -1738,13 +1514,14 @@ async function exportarPDFTecnico() {
   doc.setFontSize(11);
   doc.setTextColor(55, 65, 81);
 
-  for (const entry of tocEntries) {
+  for (var t = 0; t < tocEntries.length; t++) {
+    var entry = tocEntries[t];
     if (yToc > pageH - 25) {
       doc.addPage();
       yToc = setupTechContentPage(doc, {
-        idioma,
-        nombreProyecto,
-        logo,
+        idioma: idioma,
+        nombreProyecto: nombreProyecto,
+        logo: logo,
       });
 
       doc.setFont("helvetica", "bold");
@@ -1757,9 +1534,9 @@ async function exportarPDFTecnico() {
       doc.setTextColor(55, 65, 81);
     }
 
-    const label = entry.title;
-    const pageStr = String(entry.page);
-    const textWidth = doc.getTextWidth(pageStr);
+    var label = entry.title;
+    var pageStr = String(entry.page);
+    var textWidth = doc.getTextWidth(pageStr);
 
     doc.text(label, 25, yToc);
     doc.text(pageStr, pageW - 25 - textWidth, yToc);
@@ -1770,322 +1547,987 @@ async function exportarPDFTecnico() {
     yToc += 7;
   }
 
-  let base =
+  var base =
     idioma === "en"
       ? "technical_specification"
       : idioma === "pt"
       ? "memoria_descritiva"
       : "memoria_calidades";
 
-  const safe = nombreProyecto
+  var safe = nombreProyecto
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "");
 
   doc.save(base + "_" + safe + ".pdf");
 }
+
 // ======================================================
-// EXPORTAR PDF COMERCIAL (diseño multipágina)
+// PDF COMERCIAL (diseño multipágina)
 // ======================================================
 
 async function exportarPDFComercial() {
-  const jsPDF = window.jspdf.jsPDF;
+  var jsPDF = window.jspdf.jsPDF;
 
-  const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
-
-  const idioma = appState.documentacion.idioma || "es";
-  const secciones = appState.documentacion.secciones || {};
-  const proyecto = appState.proyecto || {};
-
-  const nombreProyecto =
-    proyecto.nombre ||
-    proyecto.nombreProyecto ||
-    "Proyecto";
-
-  const promotora =
-    proyecto.promotora ||
-    proyecto.cliente ||
-    "";
-
-  const logo = await getDocLogoImage();
-  const dims = getDocPageDimensions(pdf);
-  const W = dims.width;
-  const H = dims.height;
-
-  // Portada
-  try {
-    const cover = await loadImageAsDataUrl(DOC_TECH_COVER_URL);
-
-    let cw = W;
-    let ch = cw / (cover.width / cover.height);
-    let cx = 0;
-    let cy = (H - ch) / 2;
-
-    if (ch < H) {
-      ch = H;
-      cw = ch * (cover.width / cover.height);
-      cx = (W - cw) / 2;
-      cy = 0;
-    }
-
-    pdf.addImage(cover.dataUrl, "PNG", cx, cy, cw, ch);
-  } catch (e) {
-    console.warn("Portada comercial no cargada:", e);
-  }
-
-  if (logo?.dataUrl) {
-    const ratio = logo.width / logo.height;
-    const lw = 40;
-    const lh = lw / ratio;
-    const lx = W - lw - 20;
-    const ly = H - lh - 20;
-    pdf.addImage(logo.dataUrl, "PNG", lx, ly, lw, lh);
-  }
-
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(24);
-  pdf.setTextColor(255, 255, 255);
-  pdf.text("Solución IP de accesos y videoportero", 20, 40);
-
-  // Página presentación empresa (horizontal)
-  pdf.addPage("landscape");
-  const dims2 = getDocPageDimensions(pdf);
-  let y = 25;
-
-  if (
-    appState.documentacion.includedSections?.presentacion_empresa !==
-    false
-  ) {
-    const texto = secciones.presentacion_empresa || "";
-
-    pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(18);
-    pdf.setTextColor(30, 30, 30);
-    pdf.text("Presentación corporativa", 20, y);
-    y += 10;
-
-    pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(12);
-    const lines = pdf.splitTextToSize(
-      texto,
-      dims2.width - 40
-    );
-    pdf.text(lines, 20, y);
-    y += lines.length * 6 + 8;
-  }
-
-  // Página resumen + sistema (horizontal)
-  pdf.addPage("landscape");
-  const dW = dims2.width;
-  let boxY = 25;
-
-  const halfW = (dW - 40) / 2;
-
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(16);
-  pdf.setTextColor(20, 20, 20);
-
-  if (secciones.resumen?.trim()) {
-    pdf.text("Resumen del proyecto", 20, boxY);
-    pdf.setDrawColor(200, 200, 200);
-    pdf.rect(18, boxY + 3, halfW, 80);
-
-    pdf.setFontSize(11);
-    const t = pdf.splitTextToSize(
-      secciones.resumen || "",
-      halfW - 6
-    );
-    pdf.text(t, 21, boxY + 10);
-  }
-
-  if (secciones.sistema?.trim()) {
-    pdf.text("Sistema", 20 + halfW + 10, boxY);
-    pdf.rect(18 + halfW + 10, boxY + 3, halfW, 80);
-
-    pdf.setFontSize(11);
-    const t2 = pdf.splitTextToSize(
-      secciones.sistema || "",
-      halfW - 6
-    );
-    pdf.text(t2, 21 + halfW + 10, boxY + 10);
-  }
-
-  // Galería visual (limitada a 10 imágenes)
-  pdf.addPage("landscape");
-  let posY = 25;
-  const gap = 65;
-
-  const all = appState.documentacion.mediaLibrary || [];
-  const images = all.filter((m) => {
-    const mime = (m.mimeType || "").toLowerCase();
-    const url = (m.url || "").toLowerCase();
-    return (
-      mime.startsWith("image/") ||
-      url.match(/\.(png|jpg|jpeg|webp|gif)$/i)
-    );
+  var doc = new jsPDF({
+    orientation: "portrait",
+    unit: "mm",
+    format: "a4",
   });
 
-  const topImages = images.slice(0, 10); // ← AQUÍ estaba 4, ahora 10
+  var idioma = appState.documentacion.idioma || "es";
+  var secciones = appState.documentacion.secciones || {};
 
-  for (const m of topImages) {
-    try {
-      const obj = await loadImageAsDataUrl(m.url);
-      const ratio = obj.width / obj.height;
+  var proyecto = appState.proyecto || {};
+  var presupuesto =
+    typeof window.getPresupuestoActual === "function"
+      ? window.getPresupuestoActual()
+      : null;
 
-      let iw = 100;
-      let ih = iw / ratio;
+  var nombreProyecto =
+    proyecto.nombre ||
+    proyecto.nombreProyecto ||
+    (presupuesto && presupuesto.nombreProyecto) ||
+    "Proyecto";
 
-      if (ih > 55) {
-        ih = 55;
-        iw = ih * ratio;
-      }
+  var promotora =
+    proyecto.promotora ||
+    proyecto.cliente ||
+    (presupuesto && presupuesto.cliente) ||
+    "";
 
-      pdf.addImage(obj.dataUrl, "PNG", 20, posY, iw, ih);
+  var logo = await getDocLogoImage();
+  var dims = getDocPageDimensions(doc);
+  var pageW = dims.width;
+  var pageH = dims.height;
 
-      pdf.setFont("helvetica", "italic");
-      pdf.setFontSize(9);
-      pdf.setTextColor(80, 80, 80);
+  var marginX = 20;
+  var marginTop = 20;
+  var marginBottom = 20;
 
-      const caption = removeExtension(m.nombre);
-      pdf.text(caption, 20 + iw / 2, posY + ih + 5, {
-        align: "center",
+  function drawSalesforceCard(cfg) {
+    var x = cfg.x;
+    var y = cfg.y;
+    var width = cfg.width;
+    var title = cfg.title;
+    var body = cfg.body;
+    var pdf = cfg.doc;
+    var maxBodyWidth = cfg.maxBodyWidth || width - 16;
+    var minHeight = cfg.minHeight || 45;
+
+    var paddingX = 8;
+    var paddingTop = 8;
+    var paddingBottom = 8;
+    var headerHeight = 8;
+
+    var bodyW = maxBodyWidth;
+    var lines = body ? pdf.splitTextToSize(body, bodyW) : [];
+    var bodyH = lines.length * 4.4;
+
+    var cardH =
+      paddingTop + headerHeight + 4 + bodyH + paddingBottom;
+    if (cardH < minHeight) cardH = minHeight;
+
+    pdf.setFillColor(229, 231, 235);
+    pdf.roundedRect(x + 1.2, y + 1.8, width, cardH, 3, 3, "F");
+
+    pdf.setFillColor(255, 255, 255);
+    pdf.setDrawColor(209, 213, 219);
+    pdf.roundedRect(x, y, width, cardH, 3, 3, "FD");
+
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(10);
+    pdf.setTextColor(31, 41, 55);
+
+    var titleLines = pdf.splitTextToSize(title, width - paddingX * 2);
+    var titleY = y + paddingTop + 5;
+    pdf.text(titleLines, x + paddingX, titleY);
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(9);
+    pdf.setTextColor(75, 85, 99);
+    var yBody =
+      titleY + titleLines.length * 4.2 + 3;
+
+    if (lines.length) {
+      pdf.text(lines, x + paddingX, yBody);
+    }
+
+    return {
+      bottomY: y + cardH,
+      height: cardH,
+    };
+  }
+
+  function cleanCaption(name) {
+    return name ? name.replace(/\.[^/.]+$/, "") : "";
+  }
+
+  function collectSectionImagesWithCaptions() {
+    var map = appState.documentacion.sectionMedia || {};
+    var media = appState.documentacion.mediaLibrary || [];
+    var byId = {};
+    media.forEach(function (m) {
+      byId[m.id] = m;
+    });
+
+    var used = {};
+    var out = [];
+
+    Object.keys(map).forEach(function (key) {
+      var ids = map[key] || [];
+      ids.forEach(function (id) {
+        if (used[id]) return;
+        var m = byId[id];
+        if (!m || !m.url) return;
+
+        var mime = (m.mimeType || "").toLowerCase();
+        var type = (m.type || "").toLowerCase();
+        var url = (m.url || "").toLowerCase();
+
+        var isImg =
+          mime.startsWith("image/") ||
+          type === "image" ||
+          url.endsWith(".png") ||
+          url.endsWith(".jpg") ||
+          url.endsWith(".jpeg") ||
+          url.endsWith(".webp") ||
+          url.endsWith(".gif");
+
+        if (!isImg) return;
+        used[id] = true;
+        out.push({
+          media: m,
+          caption: cleanCaption(m.nombre || ""),
+        });
       });
+    });
 
-      posY += ih + gap;
-      if (posY > 170) {
-        pdf.addPage("landscape");
-        posY = 25;
+    return out.slice(0, 8);
+  }
+
+  try {
+    var cover = await loadImageAsDataUrl(DOC_TECH_COVER_URL);
+    if (cover && cover.dataUrl) {
+      var ratio = cover.width / cover.height;
+      var pageRatio = pageW / pageH;
+      var w, h, x, y;
+
+      if (ratio > pageRatio) {
+        h = pageH;
+        w = h * ratio;
+        x = (pageW - w) / 2;
+        y = 0;
+      } else {
+        w = pageW;
+        h = w / ratio;
+        x = 0;
+        y = (pageH - h) / 2;
       }
+      doc.addImage(cover.dataUrl, "PNG", x, y, w, h);
+    }
+  } catch (e) {
+    console.warn("Error portada comercial:", e);
+  }
+
+  var gradH = 70;
+  var gradStart = pageH - gradH;
+  for (var gi = 0; gi < 6; gi++) {
+    var yG = gradStart + (gi * gradH) / 6;
+    var hG = gradH / 6 + 0.5;
+    var shadeG = 255 - gi * 8;
+    doc.setFillColor(shadeG, shadeG, shadeG);
+    doc.rect(0, yG, pageW, hG, "F");
+  }
+
+  var panelH = 55;
+  var panelY = pageH - panelH;
+
+  doc.setFillColor(255, 255, 255);
+  doc.rect(0, panelY, pageW, panelH, "F");
+
+  var tituloCom =
+    idioma === "en"
+      ? "Highlights – IP access & video intercom solution"
+      : idioma === "pt"
+      ? "Highlights – solução IP de acessos e videoporteiro"
+      : "Highlights – solución de accesos y videoportero IP";
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.setTextColor(15, 23, 42);
+
+  var linesTitulo = doc.splitTextToSize(
+    tituloCom,
+    pageW - marginX * 2 - 40
+  );
+  var yCom = panelY + 11;
+  doc.text(linesTitulo, marginX, yCom);
+  yCom += linesTitulo.length * 5 + 1;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+
+  var subtitulo = nombreProyecto;
+  if (promotora) subtitulo += " · " + promotora;
+  var stLines = doc.splitTextToSize(
+    subtitulo,
+    pageW - marginX * 2 - 40
+  );
+  doc.text(stLines, marginX, yCom);
+  yCom += stLines.length * 4.8 + 2;
+
+  doc.setFont("helvetica", "italic");
+  doc.setFontSize(9);
+  doc.setTextColor(107, 114, 128);
+
+  var claim =
+    idioma === "en"
+      ? "Architecture, design and IP technology for a truly premium access experience."
+      : idioma === "pt"
+      ? "Arquitetura, design e tecnologia IP para uma experiência de acesso verdadeiramente premium."
+      : "Arquitectura, diseño y tecnología IP para una experiencia de acceso verdaderamente premium.";
+
+  var claimLines = doc.splitTextToSize(
+    claim,
+    pageW - marginX * 2 - 40
+  );
+  doc.text(claimLines, marginX, yCom);
+
+  if (logo && logo.dataUrl) {
+    var ratioL = logo.width / logo.height || 2.5;
+    var lw = 32;
+    var lh = lw / ratioL;
+    var lx = pageW - marginX - lw;
+    var ly = panelY + panelH - lh - 6;
+    try {
+      doc.addImage(logo.dataUrl, "PNG", lx, ly, lw, lh);
     } catch (e) {
-      console.warn("Error imagen galería:", e);
+      console.warn("Logo portada comercial:", e);
     }
   }
 
-  pdf.save(
-    "presentacion_comercial_" +
-      removeExtension(nombreProyecto).toLowerCase()
-        .replace(/[^a-z0-9]+/g, "_") +
-      ".pdf"
-  );
+  var includePresentacion =
+    (appState.documentacion.includedSections || {})
+      .presentacion_empresa !== false;
+
+  if (includePresentacion) {
+    doc.addPage();
+    var dims2 = getDocPageDimensions(doc);
+    var pw2 = dims2.width;
+
+    var y2 = marginTop;
+
+    var tit =
+      idioma === "en"
+        ? "Company introduction"
+        : idioma === "pt"
+        ? "Apresentação da empresa"
+        : "Presentación de empresa";
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.setTextColor(31, 41, 55);
+    doc.text(tit, marginX, y2);
+
+    doc.setDrawColor(209, 213, 219);
+    doc.setLineWidth(0.4);
+    doc.line(marginX, y2 + 2.5, pw2 - marginX, y2 + 2.5);
+    y2 += 12;
+
+    var texto = secciones["presentacion_empresa"] || "";
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(55, 65, 81);
+
+    var lines = doc.splitTextToSize(texto, pw2 - marginX * 2);
+    doc.text(lines, marginX, y2);
+  }
+
+  doc.addPage();
+  var dims3 = getDocPageDimensions(doc);
+  var pw3 = dims3.width;
+  var yCards = marginTop;
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(12);
+  doc.setTextColor(31, 41, 55);
+
+  var tit2 =
+    idioma === "en"
+      ? "Project overview"
+      : idioma === "pt"
+      ? "Visão geral do projeto"
+      : "Visión general del proyecto";
+
+  doc.text(tit2, marginX, yCards);
+  doc.setDrawColor(209, 213, 219);
+  doc.line(marginX, yCards + 2.5, pw3 - marginX, yCards + 2.5);
+  yCards += 10;
+
+  var cardWidth = pw3 - marginX * 2;
+
+  var bloques2 = [];
+
+  if (secciones.resumen && secciones.resumen.trim()) {
+    bloques2.push({
+      title:
+        idioma === "en"
+          ? "Project summary"
+          : idioma === "pt"
+          ? "Resumo do projeto"
+          : "Resumen del proyecto",
+      body: secciones.resumen,
+    });
+  }
+
+  if (secciones.sistema && secciones.sistema.trim()) {
+    bloques2.push({
+      title:
+        idioma === "en"
+          ? "System architecture"
+          : idioma === "pt"
+          ? "Arquitetura do sistema"
+          : "Sistema de videoportero y accesos",
+      body: secciones.sistema,
+    });
+  }
+
+  for (var b = 0; b < bloques2.length; b++) {
+    var r = drawSalesforceCard({
+      x: marginX,
+      y: yCards,
+      width: cardWidth,
+      title: bloques2[b].title,
+      body: bloques2[b].body,
+      doc: doc,
+      maxBodyWidth: cardWidth - 16,
+      minHeight: 45,
+    });
+    yCards = r.bottomY + 8;
+  }
+
+  var tieneServicios =
+    secciones.servicios && secciones.servicios.trim().length > 0;
+  var tieneInfra =
+    secciones.infraestructura &&
+    secciones.infraestructura.trim().length > 0;
+  var tieneOtros =
+    secciones.otros && secciones.otros.trim().length > 0;
+
+  if (tieneServicios || tieneInfra || tieneOtros) {
+    doc.addPage();
+    var dims4 = getDocPageDimensions(doc);
+    var pw4 = dims4.width;
+
+    var y4 = marginTop;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.setTextColor(31, 41, 55);
+
+    var tit3 =
+      idioma === "en"
+        ? "Services, operation & infrastructure"
+        : idioma === "pt"
+        ? "Serviços, operação e infraestrutura"
+        : "Servicios, operación e infraestructura";
+
+    doc.text(tit3, marginX, y4);
+    doc.setDrawColor(209, 213, 219);
+    doc.line(marginX, y4 + 2.5, pw4 - marginX, y4 + 2.5);
+    y4 += 10;
+
+    var bloques3 = [];
+
+    if (tieneServicios) {
+      bloques3.push({
+        title:
+          idioma === "en"
+            ? "Cloud services & operation"
+            : idioma === "pt"
+            ? "Serviços cloud e operação"
+            : "Servicios cloud y operación",
+        body: secciones.servicios,
+      });
+    }
+
+    if (tieneInfra) {
+      bloques3.push({
+        title:
+          idioma === "en"
+            ? "Infrastructure & IP network"
+            : idioma === "pt"
+            ? "Infraestrutura e rede IP"
+            : "Infraestructura y red IP",
+        body: secciones.infraestructura,
+      });
+    }
+
+    if (tieneOtros) {
+      bloques3.push({
+        title:
+          idioma === "en"
+            ? "Additional notes & options"
+            : idioma === "pt"
+            ? "Notas adicionais e opções"
+            : "Otros aspectos y opciones",
+        body: secciones.otros,
+      });
+    }
+
+    for (var j = 0; j < bloques3.length; j++) {
+      var r2 = drawSalesforceCard({
+        x: marginX,
+        y: y4,
+        width: pw4 - marginX * 2,
+        title: bloques3[j].title,
+        body: bloques3[j].body,
+        doc: doc,
+        maxBodyWidth: pw4 - marginX * 2 - 16,
+        minHeight: 45,
+      });
+      y4 = r2.bottomY + 8;
+    }
+  }
+
+  var galeria = collectSectionImagesWithCaptions();
+
+  if (galeria.length) {
+    doc.addPage();
+
+    var dimsG = getDocPageDimensions(doc);
+    var pwG = dimsG.width;
+    var phG = dimsG.height;
+
+    var yGal = marginTop;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.setTextColor(31, 41, 55);
+
+    var tituloGaleria =
+      idioma === "en"
+        ? "Visual gallery of the solution"
+        : idioma === "pt"
+        ? "Galeria visual da solução"
+        : "Galería visual de la solución";
+
+    doc.text(tituloGaleria, marginX, yGal);
+    doc.setDrawColor(209, 213, 219);
+    doc.line(marginX, yGal + 2.5, pwG - marginX, yGal + 2.5);
+    yGal += 12;
+
+    var maxW = (pwG - marginX * 2 - 10) / 2;
+    var maxH = 38;
+    var rowH = maxH + 20;
+
+    for (var k = 0; k < galeria.length; k++) {
+      var item = galeria[k];
+      var m = item.media;
+      var caption = item.caption || "";
+      var col = k % 2;
+
+      if (k % 2 === 0 && k !== 0) yGal += rowH;
+
+      if (yGal + rowH > phG - marginBottom) {
+        doc.addPage();
+        yGal = marginTop;
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(12);
+        doc.setTextColor(31, 41, 55);
+        doc.text(tituloGaleria, marginX, yGal);
+        doc.setDrawColor(209, 213, 219);
+        doc.line(marginX, yGal + 2.5, pwG - marginX, yGal + 2.5);
+        yGal += 12;
+      }
+
+      try {
+        var imgObj = await loadImageAsDataUrl(m.url);
+
+        var ratio = imgObj.width / imgObj.height || 1.5;
+        var wImg = maxW;
+        var hImg = wImg / ratio;
+
+        if (hImg > maxH) {
+          hImg = maxH;
+          wImg = hImg * ratio;
+        }
+
+        var xImg =
+          marginX + col * (maxW + 10) + (maxW - wImg) / 2;
+
+        doc.addImage(imgObj.dataUrl, "PNG", xImg, yGal, wImg, hImg);
+
+        var captionLines = doc.splitTextToSize(caption, maxW);
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8.5);
+        doc.setTextColor(75, 85, 99);
+
+        doc.text(
+          captionLines,
+          xImg + wImg / 2,
+          yGal + hImg + 5,
+          { align: "center" }
+        );
+      } catch (e) {
+        console.warn("Error imagen galería:", e);
+      }
+    }
+
+    if (logo && logo.dataUrl) {
+      var rLogo = logo.width / logo.height || 2.5;
+      var lw2 = 24;
+      var lh2 = lw2 / rLogo;
+
+      var lx2 = pwG - marginX - lw2;
+      var ly2 = phG - marginBottom - lh2 + 4;
+
+      try {
+        doc.addImage(logo.dataUrl, "PNG", lx2, ly2, lw2, lh2);
+      } catch (e) {
+        console.warn("Logo galería:", e);
+      }
+    }
+  }
+
+  var baseCom =
+    idioma === "en"
+      ? "highlights_access_solution"
+      : idioma === "pt"
+      ? "highlights_acessos"
+      : "highlights_accesos";
+
+  var safeCom = nombreProyecto
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+
+  doc.save(baseCom + "_" + safeCom + ".pdf");
+}
+// ======================================================
+// HANDLERS: SECCIONES, GRID MEDIA, MODAL, ETC.
+// ======================================================
+
+function attachDocMediaGridHandlers(container) {
+  container.querySelectorAll(".doc-media-item").forEach(function (item) {
+    item.addEventListener("dragstart", function (ev) {
+      var id = item.getAttribute("data-media-id");
+      if (id && ev.dataTransfer) {
+        ev.dataTransfer.setData("text/plain", id);
+        ev.dataTransfer.effectAllowed = "copy";
+      }
+    });
+  });
+
+  container.querySelectorAll("[data-media-view-id]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var id = btn.getAttribute("data-media-view-id");
+      if (!id) return;
+
+      var item = (appState.documentacion.mediaLibrary || []).find(
+        function (m) {
+          return m.id === id;
+        }
+      );
+
+      if (!item || !item.url) {
+        alert("Imagen no encontrada.");
+        return;
+      }
+
+      var mime = (item.mimeType || "").toLowerCase();
+      var url = (item.url || "").toLowerCase();
+
+      var isImg =
+        mime.startsWith("image/") ||
+        url.endsWith(".png") ||
+        url.endsWith(".jpg") ||
+        url.endsWith(".jpeg") ||
+        url.endsWith(".webp") ||
+        url.endsWith(".gif");
+
+      if (isImg) {
+        openDocImageFloatingPreview(item);
+      } else {
+        window.open(item.url, "_blank");
+      }
+    });
+  });
+
+  container
+    .querySelectorAll(".doc-section-media-remove")
+    .forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var id = btn.getAttribute("data-remove-media-id");
+        var zone = btn.closest("[data-doc-section-drop]");
+        var sec = zone ? zone.getAttribute("data-doc-section-drop") : null;
+        if (!id || !sec) return;
+        detachMediaFromSection(sec, id);
+      });
+    });
+}
+
+function attachDocSearchHandlers(container) {
+  var inputImg = container.querySelector("#docMediaSearchInput");
+  if (inputImg) {
+    inputImg.addEventListener("input", function () {
+      appState.documentacion.mediaSearchTerm = inputImg.value || "";
+      saveDocStateToLocalStorage();
+      refreshDocMediaGridOnly();
+    });
+  }
+
+  var inputFich = container.querySelector("#docFichasSearchInput");
+  if (inputFich) {
+    inputFich.addEventListener("input", function () {
+      appState.documentacion.fichasSearchTerm =
+        inputFich.value || "";
+      saveDocStateToLocalStorage();
+      renderDocumentacionView();
+    });
+  }
+}
+
+function attachDocSectionHandlers(container) {
+  container
+    .querySelectorAll(".doc-section-title-input")
+    .forEach(function (inp) {
+      inp.addEventListener("input", function () {
+        var key = inp.getAttribute("data-doc-section-title");
+        if (!key) return;
+
+        appState.documentacion.sectionTitles =
+          appState.documentacion.sectionTitles || {};
+        appState.documentacion.sectionTitles[key] =
+          inp.value || "";
+
+        saveDocStateToLocalStorage();
+      });
+    });
+
+  container
+    .querySelectorAll(".doc-section-textarea")
+    .forEach(function (txt) {
+      txt.addEventListener("input", function () {
+        var key = txt.getAttribute("data-doc-section-text");
+        if (!key) return;
+
+        appState.documentacion.secciones =
+          appState.documentacion.secciones || {};
+        appState.documentacion.secciones[key] = txt.value;
+
+        saveDocStateToLocalStorage();
+      });
+    });
+
+  container
+    .querySelectorAll("[data-doc-section-enable]")
+    .forEach(function (chk) {
+      chk.addEventListener("change", function () {
+        var key = chk.getAttribute("data-doc-section-enable");
+        if (!key) return;
+
+        appState.documentacion.includedSections =
+          appState.documentacion.includedSections || {};
+        appState.documentacion.includedSections[key] =
+          chk.checked;
+
+        saveDocStateToLocalStorage();
+      });
+    });
+
+  container
+    .querySelectorAll("[data-doc-ai-section]")
+    .forEach(function (btn) {
+      btn.addEventListener("click", async function () {
+        var key = btn.getAttribute("data-doc-ai-section");
+        if (!key) return;
+
+        var nuevo = await askAIForSection(key);
+        appState.documentacion.secciones[key] = nuevo;
+        saveDocStateToLocalStorage();
+        renderDocumentacionView();
+      });
+    });
+
+  container
+    .querySelectorAll("[data-doc-section-drop]")
+    .forEach(function (zone) {
+      zone.addEventListener("dragover", function (ev) {
+        ev.preventDefault();
+        zone.classList.add("is-drag-over");
+        if (ev.dataTransfer) ev.dataTransfer.dropEffect = "copy";
+      });
+
+      zone.addEventListener("dragleave", function () {
+        zone.classList.remove("is-drag-over");
+      });
+
+      zone.addEventListener("drop", function (ev) {
+        ev.preventDefault();
+        zone.classList.remove("is-drag-over");
+
+        var mediaId = ev.dataTransfer
+          ? ev.dataTransfer.getData("text/plain")
+          : null;
+        var sectionKey = zone.getAttribute("data-doc-section-drop");
+
+        if (!mediaId || !sectionKey) return;
+
+        attachMediaToSection(sectionKey, mediaId);
+      });
+    });
+}
+
+// ======================================================
+// MODAL BLOQUES CUSTOM
+// ======================================================
+
+function openDocCustomModal() {
+  var modal = document.getElementById("docCustomModal");
+  var back = document.getElementById("docModalBackdrop");
+
+  if (modal) modal.classList.remove("hidden");
+  if (back) back.classList.remove("hidden");
+
+  var txt = document.getElementById("docCustomText");
+  if (txt) txt.value = "";
+}
+
+function closeDocCustomModal() {
+  var modal = document.getElementById("docCustomModal");
+  var back = document.getElementById("docModalBackdrop");
+
+  if (modal) modal.classList.add("hidden");
+  if (back) back.classList.add("hidden");
+}
+
+function saveDocCustomBlock() {
+  var select = document.getElementById("docCustomSectionSelect");
+  var textarea = document.getElementById("docCustomText");
+
+  if (!select || !textarea) return;
+
+  var sec = select.value;
+  var text = textarea.value.trim();
+
+  if (!text) {
+    closeDocCustomModal();
+    return;
+  }
+
+  var secs = (appState.documentacion.secciones ||= {});
+  var actual = secs[sec] || "";
+  var nuevo =
+    actual.trim().length > 0
+      ? actual.trim() + "\n\n" + text
+      : text;
+
+  secs[sec] = nuevo;
+
+  (appState.documentacion.customBlocks ||= []).push({
+    section: sec,
+    text: text,
+    ts: new Date().toISOString(),
+  });
+
+  saveDocStateToLocalStorage();
+  closeDocCustomModal();
+  renderDocumentacionView();
+}
+
+// ======================================================
+// AÑADIR / QUITAR MEDIA A SECCIÓN (LÍMITE 10 IMÁGENES)
+// ======================================================
+
+function attachMediaToSection(sectionKey, mediaId) {
+  appState.documentacion.sectionMedia =
+    appState.documentacion.sectionMedia || {};
+  const arr = appState.documentacion.sectionMedia[sectionKey] || [];
+
+  // Límite máximo de 10 imágenes por sección
+  if (arr.indexOf(mediaId) === -1) {
+    if (arr.length >= 10) {
+      alert("Solo puedes adjuntar hasta 10 imágenes en esta sección.");
+      return;
+    }
+    arr.push(mediaId);
+    appState.documentacion.sectionMedia[sectionKey] = arr;
+  }
+
+  saveDocStateToLocalStorage();
+  renderDocumentacionView();
+}
+
+function detachMediaFromSection(sectionKey, mediaId) {
+  var map = appState.documentacion.sectionMedia || {};
+  var arr = map[sectionKey] || [];
+  map[sectionKey] = arr.filter(function (id) {
+    return id !== mediaId;
+  });
+  appState.documentacion.sectionMedia = map;
+  saveDocStateToLocalStorage();
+  renderDocumentacionView();
 }
 
 // ======================================================
 // RENDER PRINCIPAL
 // ======================================================
 
-function renderDocumentacionView() {
-  const container = getDocAppContent();
+async function renderDocumentacionView() {
+  var container = getDocAppContent();
   if (!container) return;
 
-  const idioma = appState.documentacion.idioma || "es";
+  await ensureDocMediaLoaded();
 
-  const mediaHtml = renderDocMediaLibraryHTML();
-  const fichasHtml = renderDocFichasHTML();
-  const sectionsHtml = renderDocSectionsHTML();
+  var idioma = appState.documentacion.idioma || "es";
+  var modo = appState.documentacion.modo || "comercial";
 
-  container.innerHTML = `
-    <div class="doc-layout">
-      <div class="doc-sidebar">
-        <div class="card">
-          <div class="card-header">
-            <div class="card-title">Documentación gráfica</div>
-          </div>
-          <div class="card-body doc-media-body">
-            <div class="form-group mb-2">
-              <input
-                type="text"
-                id="docMediaSearchInput"
-                class="form-control"
-                placeholder="Buscar imágenes..."
-                value="${docEscapeHtml(
-                  appState.documentacion.mediaSearchTerm || ""
-                )}"
-              >
-            </div>
-            ${mediaHtml}
-          </div>
-        </div>
+  var langButtons = Object.keys(DOC_LANGS)
+    .map(function (code) {
+      var cfg = DOC_LANGS[code];
+      var active = code === idioma ? "btn-primary" : "btn-soft";
+      return (
+        '<button type="button" class="btn btn-xs ' +
+        active +
+        '" data-doc-lang="' +
+        cfg.code +
+        '">' +
+        cfg.label +
+        "</button>"
+      );
+    })
+    .join("");
 
-        <div class="card">
-          <div class="card-header">
-            <div class="card-title">Fichas técnicas</div>
-          </div>
-          <div class="card-body">
-            ${fichasHtml}
-          </div>
-        </div>
-      </div>
+  var modoComActive = modo === "comercial" ? "btn-primary" : "btn-soft";
+  var modoTecActive = modo === "tecnica" ? "btn-primary" : "btn-soft";
 
-      <div class="doc-main">
-        <div class="doc-toolbar card mb-3">
-          <div class="card-body doc-toolbar-body">
-            <div class="doc-toolbar-left">
-              <button id="docModoComercialBtn"
-                class="btn btn-sm ${
-                  appState.documentacion.modo === "comercial"
-                    ? "btn-primary"
-                    : "btn-ghost"
-                }">
-                Modo comercial
-              </button>
-              <button id="docModoTecnicoBtn"
-                class="btn btn-sm ${
-                  appState.documentacion.modo === "tecnica"
-                    ? "btn-primary"
-                    : "btn-ghost"
-                }">
-                Modo técnico
-              </button>
-            </div>
-
-            <div class="doc-toolbar-center">
-              ${Object.values(DOC_LANGS)
-                .map(
-                  (l) => `
-                <button
-                  class="btn btn-xs ${
-                    appState.documentacion.idioma === l.code
-                      ? "btn-primary"
-                      : "btn-ghost"
-                  }"
-                  data-doc-lang="${l.code}"
-                >
-                  ${l.label}
-                </button>`
-                )
-                .join("")}
-            </div>
-
-            <div class="doc-toolbar-right">
-              <button id="docRegenerarBtn" class="btn btn-sm btn-outline">
-                🔁 Regenerar texto base
-              </button>
-              <button id="docNuevoBloqueBtn" class="btn btn-sm">
-                ➕ Añadir bloque personalizado
-              </button>
-              <button id="docExportarBtn" class="btn btn-sm btn-primary">
-                📄 Exportar PDF
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div class="doc-sections-wrapper">
-          ${sectionsHtml}
-        </div>
-      </div>
-    </div>
-  `;
+  container.innerHTML =
+    '<div class="doc-layout">' +
+    '<div class="doc-main-column">' +
+    '<div class="card mb-3">' +
+    '<div class="card-header doc-header-flex">' +
+    '<div>' +
+    '<div class="card-title">Documentación del proyecto</div>' +
+    '<div class="card-subtitle">' +
+    "Genera y edita la memoria de calidades y la presentación comercial." +
+    "</div>" +
+    "</div>" +
+    '<div class="doc-header-controls">' +
+    '<div class="btn-group btn-group-xs" role="group">' +
+    langButtons +
+    "</div>" +
+    '<div class="btn-group btn-group-xs" role="group" style="margin-left:8px;">' +
+    '<button id="docModoComercialBtn" type="button" class="btn ' +
+    modoComActive +
+    '">Comercial</button>' +
+    '<button id="docModoTecnicoBtn" type="button" class="btn ' +
+    modoTecActive +
+    '">Técnica</button>' +
+    "</div>" +
+    "</div>" +
+    "</div>" +
+    '<div class="card-body">' +
+    '<p class="text-muted" style="font-size:0.85rem;">' +
+    "Puedes regenerar los textos base según el idioma y luego ajustar cada sección manualmente o con ayuda de la IA." +
+    "</p>" +
+    '<button id="docRegenerarBtn" type="button" class="btn btn-sm btn-outline-primary">' +
+    "🔁 Regenerar texto base por idioma" +
+    "</button>" +
+    "</div>" +
+    "</div>" +
+    '<div id="docSectionsContainer">' +
+    renderDocSectionsHTML() +
+    "</div>" +
+    "</div>" +
+    '<div class="doc-sidebar">' +
+    '<div class="card mb-3">' +
+    '<div class="card-header">' +
+    '<div class="card-title">Documentación gráfica</div>' +
+    '<div class="card-subtitle">Arrastra las imágenes a las secciones</div>' +
+    "</div>" +
+    '<div class="card-body">' +
+    '<input type="text" id="docMediaSearchInput" class="form-control mb-2" placeholder="Buscar imagen..." value="' +
+    docEscapeHtml(appState.documentacion.mediaSearchTerm || "") +
+    '">' +
+    '<div class="doc-media-body">' +
+    renderDocMediaLibraryHTML() +
+    "</div>" +
+    "</div>" +
+    "</div>" +
+    '<div class="card mb-3">' +
+    '<div class="card-header">' +
+    '<div class="card-title">Fichas técnicas</div>' +
+    "</div>" +
+    '<div class="card-body">' +
+    renderDocFichasHTML() +
+    "</div>" +
+    "</div>" +
+    '<div class="card">' +
+    '<div class="card-header">' +
+    '<div class="card-title">Exportar / bloques extra</div>' +
+    "</div>" +
+    '<div class="card-body">' +
+    '<button id="docExportarBtn" type="button" class="btn btn-sm btn-primary mb-2" style="width:100%;">' +
+    "📄 Exportar PDF (" +
+    (modo === "tecnica" ? "técnico" : "comercial") +
+    ")" +
+    "</button>" +
+    '<button id="docNuevoBloqueBtn" type="button" class="btn btn-sm btn-soft w-100">' +
+    "➕ Añadir bloque personalizado" +
+    "</button>" +
+    "</div>" +
+    "</div>" +
+    "</div>" +
+    "</div>" +
+    '<div id="docModalBackdrop" class="doc-modal-backdrop hidden"></div>' +
+    '<div id="docCustomModal" class="doc-modal hidden">' +
+    '<div class="doc-modal-content">' +
+    '<div class="doc-modal-header">' +
+    "<h3>Añadir bloque personalizado</h3>" +
+    "</div>" +
+    '<div class="doc-modal-body">' +
+    '<label class="form-label">Sección destino</label>' +
+    '<select id="docCustomSectionSelect" class="form-control mb-2">' +
+    DOC_SECTION_ORDER.map(function (k) {
+      return (
+        '<option value="' +
+        k +
+        '">' +
+        docEscapeHtml(labelForSection(k)) +
+        "</option>"
+      );
+    }).join("") +
+    "</select>" +
+    '<label class="form-label">Texto a añadir</label>' +
+    '<textarea id="docCustomText" class="form-control" rows="6"></textarea>' +
+    "</div>" +
+    '<div class="doc-modal-footer">' +
+    '<button id="docCustomCancelBtn" type="button" class="btn btn-soft">Cancelar</button>' +
+    '<button id="docCustomSaveBtn" type="button" class="btn btn-primary">Guardar bloque</button>' +
+    "</div>" +
+    "</div>" +
+    "</div>";
 
   attachDocSearchHandlers(container);
   attachDocSectionHandlers(container);
-  attachDocMediaGridHandlers(container);
 
-  const modoComBtn = container.querySelector("#docModoComercialBtn");
-  const modoTecBtn = container.querySelector("#docModoTecnicoBtn");
+  var regenBtn = container.querySelector("#docRegenerarBtn");
+  if (regenBtn) {
+    regenBtn.addEventListener("click", function () {
+      autoGenerateDocumentacion(appState.documentacion.idioma || "es");
+      renderDocumentacionView();
+    });
+  }
+
+  var modoComBtn = container.querySelector("#docModoComercialBtn");
+  var modoTecBtn = container.querySelector("#docModoTecnicoBtn");
 
   if (modoComBtn) {
-    modoComBtn.addEventListener("click", () => {
+    modoComBtn.addEventListener("click", function () {
       appState.documentacion.modo = "comercial";
       saveDocStateToLocalStorage();
       renderDocumentacionView();
@@ -2093,34 +2535,54 @@ function renderDocumentacionView() {
   }
 
   if (modoTecBtn) {
-    modoTecBtn.addEventListener("click", () => {
+    modoTecBtn.addEventListener("click", function () {
       appState.documentacion.modo = "tecnica";
       saveDocStateToLocalStorage();
       renderDocumentacionView();
     });
   }
 
-  const regenBtn = container.querySelector("#docRegenerarBtn");
-  if (regenBtn) {
-    regenBtn.addEventListener("click", () => {
-      autoGenerateDocumentacion(appState.documentacion.idioma || "es");
-      renderDocumentacionView();
+  container
+    .querySelectorAll("[data-doc-lang]")
+    .forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var lang = btn.getAttribute("data-doc-lang");
+        autoGenerateDocumentacion(lang);
+        renderDocumentacionView();
+      });
     });
-  }
 
-  const nuevoBloqueBtn = container.querySelector("#docNuevoBloqueBtn");
+  var nuevoBloqueBtn = container.querySelector("#docNuevoBloqueBtn");
   if (nuevoBloqueBtn) {
     nuevoBloqueBtn.addEventListener("click", openDocCustomModal);
   }
 
-  const exportBtn = container.querySelector("#docExportarBtn");
+  var exportBtn = container.querySelector("#docExportarBtn");
   if (exportBtn) {
-    exportBtn.addEventListener("click", () => {
-      exportarDocumentacionPDF().catch((err) =>
-        console.error("Error exportando PDF:", err)
-      );
+    exportBtn.addEventListener("click", function () {
+      exportarDocumentacionPDF().catch(function (err) {
+        console.error("Error exportando PDF:", err);
+      });
     });
   }
+
+  var modal = document.getElementById("docCustomModal");
+  var cancelBtn = modal && modal.querySelector("#docCustomCancelBtn");
+  var saveBtn = modal && modal.querySelector("#docCustomSaveBtn");
+  var backdrop = document.getElementById("docModalBackdrop");
+
+  if (cancelBtn) cancelBtn.addEventListener("click", closeDocCustomModal);
+  if (saveBtn) saveBtn.addEventListener("click", saveDocCustomBlock);
+  if (backdrop)
+    backdrop.addEventListener("click", function () {
+      closeDocCustomModal();
+    });
+
+  attachDocMediaGridHandlers(container);
 }
+
+// ======================================================
+// EXPONER RENDER
+// ======================================================
 
 window.renderDocumentacionView = renderDocumentacionView;
