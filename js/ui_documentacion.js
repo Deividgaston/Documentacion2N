@@ -887,6 +887,33 @@ function saveDocCustomBlock() {
 // ======================================================
 // IA POR SECCIÓN
 // ======================================================
+// Limpia formato Markdown y viñetas que pueda devolver la IA
+function sanitizeAIText(raw) {
+  if (!raw) return "";
+
+  const lines = String(raw).split(/\r?\n/).map((line) => {
+    let l = line;
+
+    // Quitar encabezados tipo "# Título", "## Título"
+    l = l.replace(/^\s*#{1,6}\s*/g, "");
+
+    // Quitar viñetas al inicio de línea: "-", "*", "•"
+    l = l.replace(/^\s*[-*•]\s+/g, "");
+
+    // Quitar numeraciones tipo "1. Texto", "2) Texto"
+    l = l.replace(/^\s*\d+[\.\)]\s+/g, "");
+
+    // Quitar negritas/cursivas markdown (**texto**, *texto*, _texto_, __texto__)
+    l = l.replace(/\*\*(.+?)\*\*/g, "$1");
+    l = l.replace(/\*(.+?)\*/g, "$1");
+    l = l.replace(/__(.+?)__/g, "$1");
+    l = l.replace(/_(.+?)_/g, "$1");
+
+    return l;
+  });
+
+  return lines.join("\n").trim();
+}
 
 async function askAIForSection(sectionKey) {
   const idioma = appState.documentacion.idioma || "es";
@@ -914,7 +941,8 @@ async function askAIForSection(sectionKey) {
       });
 
       if (typeof nuevo === "string" && nuevo.trim()) {
-        return nuevo;
+        const limpio = sanitizeAIText(nuevo);
+        return limpio || textoActual;
       }
       return textoActual;
     } catch (e) {
@@ -929,6 +957,8 @@ async function askAIForSection(sectionKey) {
   );
   return textoActual;
 }
+
+
 
 // Implementación por defecto si no existe
 if (typeof window.handleDocSectionAI !== "function") {
@@ -965,13 +995,15 @@ if (typeof window.handleDocSectionAI !== "function") {
     }
 
     const data = await resp.json().catch(() => null);
-    if (!data || typeof data.text !== "string") {
+        if (!data || typeof data.text !== "string") {
       throw new Error("Respuesta IA inválida: falta ‘text’");
     }
 
-    return data.text;
+    // Limpiamos símbolos (*, #, -, listas...) antes de devolver
+    return sanitizeAIText(data.text);
   };
 }
+
 // ======================================================
 // CARGA MEDIA (Firestore + Storage)
 // ======================================================
