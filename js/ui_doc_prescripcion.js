@@ -69,7 +69,6 @@ function buildCapitulosFromPresupuesto() {
   const capitulosBySec = {};
 
   lineas.forEach((l) => {
-    // Intentamos localizar la "sección" / "capítulo" de cada línea
     const secId =
       l.seccionId ||
       l.sectionId ||
@@ -116,9 +115,7 @@ function buildCapitulosFromPresupuesto() {
     });
   });
 
-  // Pasamos a array y ordenamos por algún criterio razonable
   const capitulos = Object.values(capitulosBySec);
-
   capitulos.sort((a, b) => {
     const na = (a.nombre || "").toString();
     const nb = (b.nombre || "").toString();
@@ -275,7 +272,6 @@ async function createPrescripcionPlantilla(nombre, texto) {
       "[PRESCRIPCION] Error creando plantilla en Firestore:",
       e
     );
-    // Si falla Firestore, al menos mantenemos local
     appState.prescripcion.plantillas =
       [newItem].concat(appState.prescripcion.plantillas || []);
   }
@@ -346,7 +342,7 @@ async function deletePrescripcionPlantilla(id) {
 // Render principal
 // ==============================
 
-async function renderPrescripcionView() {
+async function renderDocPrescripcionView() {
   const container = getPrescripcionAppContent();
   if (!container) return;
 
@@ -672,7 +668,7 @@ function attachPrescripcionHandlers() {
         ? caps[0].id
         : null;
 
-      renderPrescripcionView();
+      renderDocPrescripcionView();
     });
   }
 
@@ -684,7 +680,7 @@ function attachPrescripcionHandlers() {
         const id = btn.getAttribute("data-presc-cap-id");
         if (!id) return;
         setSelectedCapitulo(id);
-        renderPrescripcionView();
+        renderDocPrescripcionView();
       });
     });
 
@@ -752,7 +748,7 @@ function attachPrescripcionHandlers() {
       });
     });
 
-  // Crear nueva plantilla (usamos prompts sencillos = cuadro flotante nativo)
+  // Crear nueva plantilla
   const newBtn = container.querySelector("#prescNewPlantillaBtn");
   if (newBtn) {
     newBtn.addEventListener("click", async () => {
@@ -769,7 +765,7 @@ function attachPrescripcionHandlers() {
       if (texto === null) return;
 
       await createPrescripcionPlantilla(nombre, texto);
-      renderPrescripcionView();
+      renderDocPrescripcionView();
     });
   }
 
@@ -840,7 +836,7 @@ function attachPrescripcionHandlers() {
           nuevoNombre,
           nuevoTexto
         );
-        renderPrescripcionView();
+        renderDocPrescripcionView();
       });
     });
 
@@ -855,7 +851,7 @@ function attachPrescripcionHandlers() {
         if (!id) return;
 
         await deletePrescripcionPlantilla(id);
-        renderPrescripcionView();
+        renderDocPrescripcionView();
       });
     });
 }
