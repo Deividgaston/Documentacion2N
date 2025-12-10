@@ -1208,6 +1208,23 @@ async function exportarDocumentacionPDF() {
     await exportarPDFComercial();
   }
 }
+
+// ======================================================
+// EXPORTACIÓN PDF (selector modo)
+// ======================================================
+
+async function exportarDocumentacionPDF() {
+  if (!window.jspdf || !window.jspdf.jsPDF) {
+    alert("jsPDF no está cargado.");
+    return;
+  }
+  var modo = appState.documentacion.modo || "comercial";
+  if (modo === "tecnica") {
+    await exportarPDFTecnico();
+  } else {
+    await exportarPDFComercial();
+  }
+}
 async function exportarPDFTecnico() {
   var jsPDF = window.jspdf.jsPDF;
   var doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
