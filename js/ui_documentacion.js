@@ -1451,32 +1451,31 @@ async function exportarPDFTecnico() {
   const tocEntries = [];
   const pageHLimit = pageH - 25;
 
-  // Página Presentación de empresa (si incluida)
+   // Página de Presentación de empresa (si incluida)
   const includePresentacion =
     included["presentacion_empresa"] !== false;
 
   if (includePresentacion) {
     doc.addPage();
     let current = doc.getNumberOfPages();
-    y = setupTechContentPage(doc, {
+    let y = setupTechContentPage(doc, {
       idioma,
       nombreProyecto,
       logo,
     });
 
-    const title =
+    const baseTitle =
       idioma === "en"
         ? "Company introduction"
         : idioma === "pt"
-        ? "Apresentação da empresa"
+        ? "Apresentação de empresa"
         : "Presentación de empresa";
 
-    tocEntries.push({ title, page: current });
-
+    // TÍTULO SECCIÓN: 20
     doc.setFont("helvetica", "bold");
     doc.setFontSize(20);
     doc.setTextColor(30, 64, 175);
-    doc.text(title, 20, y);
+    doc.text(baseTitle, 20, y);
     y += 6;
 
     doc.setDrawColor(226, 232, 240);
@@ -1486,38 +1485,47 @@ async function exportarPDFTecnico() {
 
     const texto = secciones["presentacion_empresa"] || "";
 
+    // TEXTO: 11, fluyendo línea a línea hasta el final de página
     doc.setFont("helvetica", "normal");
     doc.setFontSize(11);
     doc.setTextColor(55, 65, 81);
 
     const lines = doc.splitTextToSize(texto, pageW - 40);
-    const maxBlock = 30;
+    const lineH = 5.5;
+    const limitY = pageH - 25;
+
+    tocEntries.push({ title: baseTitle, page: current });
 
     function newPagePresentacion() {
       doc.addPage();
       current = doc.getNumberOfPages();
       y = setupTechContentPage(doc, { idioma, nombreProyecto, logo });
-      return y;
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(20);
+      doc.setTextColor(30, 64, 175);
+      doc.text(baseTitle + " (cont.)", 20, y);
+      y += 6;
+
+      doc.setDrawColor(226, 232, 240);
+      doc.setLineWidth(0.3);
+      doc.line(20, y, pageW - 20, y);
+      y += 8;
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(11);
+      doc.setTextColor(55, 65, 81);
     }
 
-    function ensureSpacePresentacion(numLines) {
-      const need = numLines * 5.5 + 14;
-      if (y + need > pageHLimit) {
+    for (let i = 0; i < lines.length; i++) {
+      if (y + lineH > limitY) {
         newPagePresentacion();
       }
-    }
-
-    let block = [];
-    for (let i = 0; i < lines.length; i++) {
-      block.push(lines[i]);
-      if (block.length === maxBlock || i === lines.length - 1) {
-        ensureSpacePresentacion(block.length);
-        doc.text(block, 20, y);
-        y += block.length * 5.5 + 4;
-        block = [];
-      }
+      doc.text(lines[i], 20, y);
+      y += lineH;
     }
   }
+
 
   // Resto secciones
   doc.addPage();
