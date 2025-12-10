@@ -1338,7 +1338,7 @@ function drawTechHeader(pdf, opts = {}) {
   return lineY + 14; // antes: lineY + 8
 }
 
-}
+
 
 function drawTechFooter(pdf, opts = {}) {
   const dims = getDocPageDimensions(pdf);
