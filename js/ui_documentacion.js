@@ -1335,7 +1335,7 @@ function drawTechHeader(pdf, opts = {}) {
   pdf.line(marginX, lineY, w - marginX, lineY);
 
     // Subimos un poco más el margen para que el texto nunca invada el encabezado
-  return lineY + 16; // antes: lineY + 8
+  return lineY + 14; // antes: lineY + 8
 }
 
 
