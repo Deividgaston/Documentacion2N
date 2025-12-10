@@ -442,10 +442,15 @@ async function renderDocGestionView() {
   container.innerHTML = `
     <div
       class="proyecto-layout"
-      style="display:flex; flex-wrap:wrap; gap:1rem; align-items:flex-start;"
+      style="
+        display:grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        gap:1rem;
+        align-items:flex-start;
+      "
     >
-      <!-- Card de gestión / subida -->
-      <div class="card" style="flex:1 1 0; min-width:300px; max-width:100%;">
+      <!-- Card de gestión / subida (IZQUIERDA) -->
+      <div class="card" style="min-width:300px;">
         <div class="card-header">
           <div>
             <div class="card-title">Gestión de documentación</div>
@@ -512,8 +517,8 @@ async function renderDocGestionView() {
         </div>
       </div>
 
-      <!-- Card de listado -->
-      <div class="card" style="flex:1 1 0; min-width:300px; max-width:100%;">
+      <!-- Card de listado (DERECHA) -->
+      <div class="card" style="min-width:300px;">
         <div class="card-header">
           <div>
             <div class="card-title">Documentos subidos</div>
@@ -529,7 +534,7 @@ async function renderDocGestionView() {
               ? gruposHTML
               : `
             <p class="text-muted" style="font-size:0.85rem;">
-              Todavía no hay documentos subidos. Usa el formulario anterior para añadirlos.
+              Todavía no hay documentos subidos. Usa el formulario de la izquierda para añadirlos.
             </p>
           `
           }
