@@ -219,6 +219,37 @@ function applyTokensToTemplate(txt, tokens) {
   });
   return out;
 }
+const DOC_PRESENTACION_TEMPLATES = {
+  es:
+    "2N lidera el camino en tecnología de control de acceso: ofrecemos las mejores características modernas sin comprometer la confiabilidad y la facilidad de uso.\n\n" +
+    "2N tiene más de 30 años de experiencia en el desarrollo de productos innovadores y de alta calidad: después de inventar el primer intercomunicador IP del mundo en 2008 y el primer intercomunicador LTE / 4G diez años después, continuamos empujando los límites y reaccionando a las cambiantes demandas del mercado.\n\n" +
+    "Nuestra cartera incluye intercomunicadores, unidades contestadoras, lectores de control de acceso y sistemas de elevación, y nos aseguramos de que pueda ofrecer a sus clientes una tecnología fiable y preparada para el futuro, incluido el acceso móvil a través de Bluetooth y códigos QR.\n" +
+    "Juntos, estos productos innovadores crean una solución de control de acceso IP altamente avanzada, adecuada para cualquier proyecto residencial. También ofrecemos una gama de herramientas y software en línea diseñados para ayudar a los integradores y administradores de edificios en cada paso de su viaje, además de un soporte técnico integral disponible siempre que lo necesite.\n\n" +
+    "La flexibilidad y la facilidad de integración son importantes para usted, ¡así que también lo es para nosotros! Es por eso que los productos 2N se basan en protocolos abiertos (SIP, RTSP, ONVIF, HTTPS, open API) y tienen más de 200 socios de integración oficiales, que ofrecen una integración perfecta con una amplia gama de sistemas de terceros.\n\n" +
+    "En 2N nos tomamos el diseño tan en serio como la innovación, y los Red Dot e iF Design Awards lo demuestran. Invertimos mucho en desarrollo y pruebas, e incluso nuestros dispositivos de más alta tecnología pueden soportar condiciones climáticas exigentes y una gran afluencia.\n\n" +
+    "Historia de la empresa\n\n" +
+    "2N fue fundada en 1991 en Praga por tres amigos con una visión clara para innovar y tener éxito. Praga sigue siendo la sede mundial, y desde entonces nos hemos expandido, con equipos ahora en muchos otros países (Estados Unidos, Reino Unido, Alemania, Italia, Francia, España, Bélgica, Países Bajos, Dinamarca, Emiratos Árabes Unidos y Australia) y una extensa red de distribución en el resto del mundo. En 2016 nos convertimos en un orgulloso miembro del Grupo Axis, lo que ha mejorado nuestros recursos y nos ha dado aún más estabilidad.",
+
+  en:
+    "2N leads the way in access control technology: we offer the most advanced modern features without compromising reliability and ease of use.\n\n" +
+    "2N has more than 30 years of experience in developing innovative, high-quality products: after inventing the world’s first IP intercom in 2008 and the first LTE / 4G intercom ten years later, we continue to push the boundaries and respond to changing market demands.\n\n" +
+    "Our portfolio includes intercoms, answering units, access control readers and lift systems, ensuring you can offer your customers reliable, future-proof technology, including mobile access via Bluetooth and QR codes.\n" +
+    "Together, these innovative products create a highly advanced IP access control solution suitable for any residential project. We also offer a range of online tools and software designed to support integrators and building managers at every step of their journey, plus comprehensive technical support whenever it is needed.\n\n" +
+    "Flexibility and ease of integration are important to you – so they are also important to us! That’s why 2N products are based on open protocols (SIP, RTSP, ONVIF, HTTPS, open API) and integrate with more than 200 official technology partners, enabling seamless integration with a wide range of third-party systems.\n\n" +
+    "At 2N we take design as seriously as innovation – and our Red Dot and iF Design Awards prove it. We invest heavily in development and testing so that even our most advanced devices can withstand demanding weather conditions and high traffic.\n\n" +
+    "Company history\n\n" +
+    "2N was founded in 1991 in Prague by three friends with a clear vision to innovate and succeed. Prague remains our global headquarters and, since then, we have expanded with teams in many other countries (United States, United Kingdom, Germany, Italy, France, Spain, Belgium, the Netherlands, Denmark, United Arab Emirates and Australia) and an extensive distribution network worldwide. In 2016, we proudly became part of the Axis Group, which has strengthened our resources and given us even greater stability.",
+
+  pt:
+    "A 2N lidera o caminho na tecnologia de controlo de acessos: oferecemos as funcionalidades modernas mais avançadas sem comprometer a fiabilidade e a facilidade de utilização.\n\n" +
+    "A 2N tem mais de 30 anos de experiência no desenvolvimento de produtos inovadores e de alta qualidade: depois de lançar o primeiro intercomunicador IP do mundo em 2008 e o primeiro intercomunicador LTE / 4G dez anos mais tarde, continuamos a ultrapassar limites e a responder às exigências em constante mudança do mercado.\n\n" +
+    "O nosso portefólio inclui intercomunicadores, unidades interiores, leitores de controlo de acessos e sistemas de elevador, garantindo que pode oferecer aos seus clientes uma tecnologia fiável e preparada para o futuro, incluindo acesso móvel através de Bluetooth e códigos QR.\n" +
+    "Em conjunto, estes produtos inovadores criam uma solução de controlo de acessos IP altamente avançada, adequada para qualquer projeto residencial. Também oferecemos uma gama de ferramentas e software online pensados para apoiar integradores e administradores de edifícios em todas as fases do projeto, bem como um suporte técnico completo sempre que necessário.\n\n" +
+    "A flexibilidade e a facilidade de integração são importantes para si – e, por isso, também são para nós! É por isso que os produtos 2N se baseiam em protocolos abertos (SIP, RTSP, ONVIF, HTTPS, open API) e contam com mais de 200 parceiros oficiais de integração, permitindo uma integração perfeita com uma vasta gama de sistemas de terceiros.\n\n" +
+    "Na 2N levamos o design tão a sério quanto a inovação – e os prémios Red Dot e iF Design o demonstram. Investimos intensamente em desenvolvimento e testes para que mesmo os nossos dispositivos mais avançados possam suportar condições climatéricas exigentes e um grande fluxo de utilizadores.\n\n" +
+    "História da empresa\n\n" +
+    "A 2N foi fundada em 1991 em Praga por três amigos com uma visão clara de inovar e ter sucesso. Praga continua a ser a sede mundial e, desde então, expandimos com equipas em muitos outros países (Estados Unidos, Reino Unido, Alemanha, Itália, França, Espanha, Bélgica, Países Baixos, Dinamarca, Emirados Árabes Unidos e Austrália) e uma ampla rede de distribuição no resto do mundo. Em 2016 tornámo-nos um orgulhoso membro do Grupo Axis, o que reforçou os nossos recursos e nos deu ainda mais estabilidade.",
+};
 
 function autoGenerateDocumentacion(idioma) {
   const lang = DOC_BASE_TEMPLATES[idioma] ? idioma : "es";
@@ -228,27 +259,19 @@ function autoGenerateDocumentacion(idioma) {
   const nuevas = {};
   const d = appState.documentacion;
 
-  DOC_SECTION_ORDER.forEach((key) => {
-    if (key === "presentacion_empresa") {
-      const actual = d.secciones?.[key] || "";
-      if (actual && actual.trim().length > 0) {
-        nuevas[key] = actual;
-      } else {
-        nuevas[key] =
-          "2N lidera el camino en tecnología de control de acceso: ofrecemos las mejores características modernas sin comprometer la confiabilidad y la facilidad de uso.\n\n" +
-          "2N tiene más de 30 años de experiencia en el desarrollo de productos innovadores y de alta calidad: después de inventar el primer intercomunicador IP del mundo en 2008 y el primer intercomunicador LTE / 4G diez años después, continuamos empujando los límites y reaccionando a las cambiantes demandas del mercado.\n\n" +
-          "Nuestra cartera incluye intercomunicadores, unidades contestadoras, lectores de control de acceso y sistemas de elevación, y nos aseguramos de que pueda ofrecer a sus clientes una tecnología fiable y preparada para el futuro, incluido el acceso móvil a través de Bluetooth y códigos QR.\n" +
-          "Juntos, estos productos innovadores crean una solución de control de acceso IP altamente avanzada, adecuada para cualquier proyecto residencial. También ofrecemos una gama de herramientas y software en línea diseñados para ayudar a los integradores y administradores de edificios en cada paso de su viaje, además de un soporte técnico integral disponible siempre que lo necesite.\n\n" +
-          "La flexibilidad y la facilidad de integración son importantes para usted, ¡así que también lo es para nosotros! Es por eso que los productos 2N se basan en protocolos abiertos (SIP, RTSP, ONVIF, HTTPS, open API) y tienen más de 200 socios de integración oficiales, que ofrecen una integración perfecta con una amplia gama de sistemas de terceros.\n\n" +
-          "En 2N nos tomamos el diseño tan en serio como la innovación, y los Red Dot e iF Design Awards lo demuestran. Invertimos mucho en desarrollo y pruebas, e incluso nuestros dispositivos de más alta tecnología pueden soportar condiciones climáticas exigentes y una gran afluencia.\n\n" +
-          "Historia de la empresa\n\n" +
-          "2N fue fundada en 1991 en Praga por tres amigos con una visión clara para innovar y tener éxito. Praga sigue siendo la sede mundial, y desde entonces nos hemos expandido, con equipos ahora en muchos otros países (Estados Unidos, Reino Unido, Alemania, Italia, Francia, España, Bélgica, Países Bajos, Dinamarca, Emiratos Árabes Unidos y Australia) y una extensa red de distribución en el resto del mundo. En 2016 nos convertimos en un orgulloso miembro del Grupo Axis, lo que ha mejorado nuestros recursos y nos ha dado aún más estabilidad.";
-      }
-    } else {
-      const tpl = base[key] || "";
-      nuevas[key] = applyTokensToTemplate(tpl, tokens);
-    }
-  });
+ DOC_SECTION_ORDER.forEach((key) => {
+  if (key === "presentacion_empresa") {
+    // Opción A: SIEMPRE regenerar la presentación según el idioma seleccionado
+    const tpl =
+      DOC_PRESENTACION_TEMPLATES[lang] ||
+      DOC_PRESENTACION_TEMPLATES.es;
+    nuevas[key] = tpl;
+  } else {
+    const tpl = base[key] || "";
+    nuevas[key] = applyTokensToTemplate(tpl, tokens);
+  }
+});
+
 
   d.secciones = nuevas;
   d.ultimaAutoGen = new Date().toISOString();
