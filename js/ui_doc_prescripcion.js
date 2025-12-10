@@ -1,30 +1,22 @@
 // js/ui_doc_prescripcion.js
-// Página de PRESCRIPCIÓN / MEDICIONES
-// - 3 columnas: capítulos (izq), detalle (centro), plantillas de texto (dcha)
-// - Plantillas de prescripción completas (estructura de capítulos) en Firestore: prescripcion_templates
-// - Plantillas de texto de medición (videportero, accesos, monitores, etc.) en Firestore: prescripcion_bloques
-// - Carga perezosa: solo una lectura por colección y sesión
+// Página de PRESCRIPCIÓN (mediciones / capítulos a partir del presupuesto)
+// - Columna izquierda: capítulos (secciones del presupuesto + referencias y cantidades)
+// - Columna central: texto del capítulo seleccionado
+// - Columna derecha: plantillas (guardadas en Firestore) que se pueden aplicar por clic o drag&drop
 
 window.appState = window.appState || {};
-appState.documentacion = appState.documentacion || {
-  mediaLibrary: [],
-  mediaLoaded: false,
-};
-
 appState.prescripcion = appState.prescripcion || {
-  capitulos: [],            // [{id, codigo, titulo, textoMedicion, partidas: [...] }]
-  selectedCapId: null,
-  templates: [],            // plantillas de estructura de capítulos
-  templatesLoaded: false,
-  textBlocks: [],           // plantillas de texto de medición (bloques)
-  textBlocksLoaded: false,
+  capitulos: [],            // [{ id, nombre, texto, lineas: [{id,codigo,descripcion,cantidad,pvp}] }]
+  selectedCapituloId: null,
+  plantillas: [],           // [{ id, nombre, texto }]
+  plantillasLoaded: false,
 };
 
 // ==============================
-// Helpers comunes
+// Helpers de contenedor
 // ==============================
 
-function getDocPrescripcionAppContent() {
+function getPrescripcionAppContent() {
   if (typeof window.getDocAppContent === "function") {
     return window.getDocAppContent();
   }
@@ -34,1176 +26,841 @@ function getDocPrescripcionAppContent() {
   return document.getElementById("appContent");
 }
 
-function getFirestoreInstancePres() {
-  return (
-    window.db ||
-    (window.firebase &&
-      window.firebase.firestore &&
-      window.firebase.firestore())
-  );
-}
-
-function getAuthInstancePres() {
-  return (
-    window.auth ||
-    (window.firebase &&
-      window.firebase.auth &&
-      window.firebase.auth())
-  );
-}
-
-function ensurePrescripcionState() {
-  appState.prescripcion = appState.prescripcion || {};
-  const st = appState.prescripcion;
-  st.capitulos = st.capitulos || [];
-  st.templates = st.templates || [];
-  st.textBlocks = st.textBlocks || [];
-  if (!st.selectedCapId && st.capitulos.length > 0) {
-    st.selectedCapId = st.capitulos[0].id;
-  }
-}
-
-function createEmptyCapitulo() {
-  const timestamp = Date.now();
-  return {
-    id: "cap_" + timestamp + "_" + Math.floor(Math.random() * 10000),
-    codigo: "2N." + String((appState.prescripcion.capitulos.length + 1)).padStart(2, "0"),
-    titulo: "Nuevo capítulo de prescripción",
-    textoMedicion: "",
-    partidas: [], // [{id, ref, desc, unidad, cantidad, pvp}]
-  };
-}
-
-function createEmptyPartida() {
-  return {
-    id: "par_" + Date.now() + "_" + Math.floor(Math.random() * 10000),
-    ref: "",
-    desc: "",
-    unidad: "Ud",
-    cantidad: 1,
-    pvp: 0,
-  };
-}
-
 // ==============================
-// Plantillas de estructura (prescripcion_templates)
+// Helpers de presupuesto -> capítulos
 // ==============================
 
-async function loadPresTemplatesIfNeeded() {
-  ensurePrescripcionState();
-  if (appState.prescripcion.templatesLoaded) return;
-
-  const db = getFirestoreInstancePres();
-  const auth = getAuthInstancePres();
-  if (!db) {
-    console.warn("[PRESCRIPCION] Firestore no disponible para plantillas.");
-    return;
-  }
-
-  try {
-    let query = db.collection("prescripcion_templates");
-    if (auth && auth.currentUser) {
-      query = query.where("uid", "==", auth.currentUser.uid);
+function getPresupuestoActualSafe() {
+  if (typeof window.getPresupuestoActual === "function") {
+    try {
+      return window.getPresupuestoActual();
+    } catch (e) {
+      console.error(
+        "[PRESCRIPCION] Error obteniendo presupuesto actual:",
+        e
+      );
+      return null;
     }
-
-    const snap = await query.get();
-    const templates = [];
-    snap.forEach((doc) => {
-      const data = doc.data() || {};
-      templates.push({
-        id: doc.id,
-        name: data.name || "(sin nombre)",
-        description: data.description || "",
-        capitulos: Array.isArray(data.capitulos) ? data.capitulos : [],
-        updatedAt: data.updatedAt || data.createdAt || null,
-      });
-    });
-
-    appState.prescripcion.templates = templates;
-    appState.prescripcion.templatesLoaded = true;
-    console.log("[PRESCRIPCION] Plantillas de estructura cargadas:", templates.length);
-  } catch (e) {
-    console.error("[PRESCRIPCION] Error cargando plantillas:", e);
   }
-}
-
-async function saveCurrentPrescripcionAsTemplate() {
-  ensurePrescripcionState();
-  const db = getFirestoreInstancePres();
-  const auth = getAuthInstancePres();
-
-  if (!db) {
-    alert("No se puede guardar la plantilla: Firestore no está disponible.");
-    return;
-  }
-
-  const name = window.prompt("Nombre de la plantilla de prescripción (estructura de capítulos):");
-  if (!name) return;
-
-  const description =
-    window.prompt("Descripción breve de la plantilla (opcional):") || "";
-
-  const payload = {
-    name: name.trim(),
-    description: description.trim(),
-    capitulos: appState.prescripcion.capitulos || [],
-    uid: auth && auth.currentUser ? auth.currentUser.uid : null,
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-  };
-
-  try {
-    const docRef = await db.collection("prescripcion_templates").add(payload);
-    const template = { id: docRef.id, ...payload };
-    appState.prescripcion.templates.push(template);
-    appState.prescripcion.templatesLoaded = true;
-    alert("✅ Plantilla de estructura guardada correctamente.");
-    renderDocPrescripcionView();
-  } catch (e) {
-    console.error("[PRESCRIPCION] Error guardando plantilla:", e);
-    alert("Error al guardar la plantilla. Revisa la consola para más detalles.");
-  }
-}
-
-function applyPresTemplateById(templateId) {
-  ensurePrescripcionState();
-  const tpl = (appState.prescripcion.templates || []).find(
-    (t) => t.id === templateId
+  console.warn(
+    "[PRESCRIPCION] getPresupuestoActual no está definido. Revisa ui_presupuesto.js."
   );
-  if (!tpl) {
-    alert("No se ha encontrado la plantilla seleccionada.");
-    return;
-  }
-
-  const clonedCaps = (tpl.capitulos || []).map((c, idx) => ({
-    id:
-      c.id ||
-      "cap_tpl_" + idx + "_" + Date.now() + "_" + Math.floor(Math.random() * 10000),
-    codigo: c.codigo || "2N." + String(idx + 1).padStart(2, "0"),
-    titulo: c.titulo || "Capítulo de plantilla",
-    textoMedicion: c.textoMedicion || "",
-    partidas: Array.isArray(c.partidas)
-      ? c.partidas.map((p, j) => ({
-          id:
-            p.id ||
-            "par_tpl_" +
-              idx +
-              "_" +
-              j +
-              "_" +
-              Date.now() +
-              "_" +
-              Math.floor(Math.random() * 10000),
-          ref: p.ref || "",
-          desc: p.desc || "",
-          unidad: p.unidad || "Ud",
-          cantidad: typeof p.cantidad === "number" ? p.cantidad : 1,
-          pvp: typeof p.pvp === "number" ? p.pvp : 0,
-        }))
-      : [],
-  }));
-
-  appState.prescripcion.capitulos = clonedCaps;
-  appState.prescripcion.selectedCapId =
-    clonedCaps.length > 0 ? clonedCaps[0].id : null;
-
-  alert("✅ Plantilla de estructura aplicada a la prescripción actual.");
-  renderDocPrescripcionView();
+  return null;
 }
 
-// ==============================
-// Plantillas de texto (prescripcion_bloques)
-// ==============================
-
-async function loadPresTextBlocksIfNeeded() {
-  ensurePrescripcionState();
-  if (appState.prescripcion.textBlocksLoaded) return;
-
-  const db = getFirestoreInstancePres();
-  const auth = getAuthInstancePres();
-  if (!db) {
-    console.warn("[PRESCRIPCION] Firestore no disponible para bloques de texto.");
-    return;
-  }
-
-  try {
-    let query = db.collection("prescripcion_bloques");
-    if (auth && auth.currentUser) {
-      query = query.where("uid", "==", auth.currentUser.uid);
-    }
-
-    const snap = await query.get();
-    const blocks = [];
-    snap.forEach((doc) => {
-      const data = doc.data() || {};
-      blocks.push({
-        id: doc.id,
-        name: data.name || "(sin nombre)",
-        category: data.category || "general", // ej: videoportero, accesos, monitores...
-        texto: data.texto || "",
-        updatedAt: data.updatedAt || data.createdAt || null,
-      });
-    });
-
-    appState.prescripcion.textBlocks = blocks;
-    appState.prescripcion.textBlocksLoaded = true;
-    console.log("[PRESCRIPCION] Bloques de texto cargados:", blocks.length);
-  } catch (e) {
-    console.error("[PRESCRIPCION] Error cargando bloques de texto:", e);
-  }
-}
-
-async function savePresTextTemplate(name, category, texto) {
-  ensurePrescripcionState();
-  const db = getFirestoreInstancePres();
-  const auth = getAuthInstancePres();
-
-  if (!db) {
-    alert("No se puede guardar la plantilla de texto: Firestore no está disponible.");
-    return;
-  }
-
-  const payload = {
-    name: name.trim(),
-    category: (category || "general").trim() || "general",
-    texto: texto || "",
-    uid: auth && auth.currentUser ? auth.currentUser.uid : null,
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-  };
-
-  try {
-    const docRef = await db.collection("prescripcion_bloques").add(payload);
-    const block = { id: docRef.id, ...payload };
-    appState.prescripcion.textBlocks.push(block);
-    appState.prescripcion.textBlocksLoaded = true;
-    alert("✅ Plantilla de texto guardada correctamente.");
-    renderDocPrescripcionView();
-  } catch (e) {
-    console.error("[PRESCRIPCION] Error guardando plantilla de texto:", e);
-    alert("Error al guardar la plantilla de texto. Revisa la consola para más detalles.");
-  }
-}
-
-async function deletePresTextTemplate(blockId) {
-  ensurePrescripcionState();
-  const db = getFirestoreInstancePres();
-  if (!db) {
-    alert("No se puede borrar la plantilla de texto: Firestore no está disponible.");
-    return;
-  }
-
-  try {
-    await db.collection("prescripcion_bloques").doc(blockId).delete();
-    appState.prescripcion.textBlocks = (appState.prescripcion.textBlocks || []).filter(
-      (b) => b.id !== blockId
+// Intenta ser robusto con el formato del presupuesto
+function buildCapitulosFromPresupuesto() {
+  const presu = getPresupuestoActualSafe();
+  if (!presu) {
+    console.warn(
+      "[PRESCRIPCION] No hay presupuesto cargado. No se pueden generar capítulos."
     );
-    alert("✅ Plantilla de texto eliminada.");
-    renderDocPrescripcionView();
-  } catch (e) {
-    console.error("[PRESCRIPCION] Error borrando plantilla de texto:", e);
-    alert("Error al borrar la plantilla de texto. Revisa la consola para más detalles.");
+    return [];
+  }
+
+  console.log(
+    "[PRESCRIPCION] Presupuesto actual para construir capítulos:",
+    presu
+  );
+
+  const seccionesMap = presu.secciones || presu.sections || {};
+  const lineas = presu.lineas || presu.lines || presu.lineItems || [];
+
+  const capitulosBySec = {};
+
+  lineas.forEach((l) => {
+    // Intentamos localizar la "sección" / "capítulo" de cada línea
+    const secId =
+      l.seccionId ||
+      l.sectionId ||
+      l.seccion ||
+      l.capituloId ||
+      l.chapterId ||
+      "SIN_SECCION";
+
+    if (!capitulosBySec[secId]) {
+      const def =
+        seccionesMap[secId] || seccionesMap[String(secId)] || {};
+      const nombreCapitulo =
+        def.nombre ||
+        def.name ||
+        def.titulo ||
+        def.title ||
+        (secId === "SIN_SECCION" ? "Sin sección" : String(secId));
+
+      capitulosBySec[secId] = {
+        id: String(secId),
+        nombre: nombreCapitulo,
+        texto: "",
+        lineas: [],
+      };
+    }
+
+    capitulosBySec[secId].lineas.push({
+      id: l.id || l.key || l.codigo || l.ref || "",
+      codigo: l.codigo || l.ref || l.sku || "",
+      descripcion:
+        l.descripcion ||
+        l.desc ||
+        l.concepto ||
+        l.nombre ||
+        l.title ||
+        "",
+      cantidad:
+        l.cantidad ||
+        l.qty ||
+        l.unidades ||
+        l.cant ||
+        1,
+      pvp: l.pvp || l.precio || l.price || 0,
+    });
+  });
+
+  // Pasamos a array y ordenamos por algún criterio razonable
+  const capitulos = Object.values(capitulosBySec);
+
+  capitulos.sort((a, b) => {
+    const na = (a.nombre || "").toString();
+    const nb = (b.nombre || "").toString();
+    return na.localeCompare(nb, "es");
+  });
+
+  return capitulos;
+}
+
+function ensureCapitulosIniciales() {
+  appState.prescripcion = appState.prescripcion || {};
+  appState.prescripcion.capitulos =
+    appState.prescripcion.capitulos || [];
+
+  if (!appState.prescripcion.capitulos.length) {
+    const caps = buildCapitulosFromPresupuesto();
+    appState.prescripcion.capitulos = caps;
+    appState.prescripcion.selectedCapituloId = caps.length
+      ? caps[0].id
+      : null;
   }
 }
 
-// ==============================
-// Export (stubs) – siguiente hito
-// ==============================
+function getSelectedCapitulo() {
+  const caps = appState.prescripcion.capitulos || [];
+  if (!caps.length) return null;
 
-function exportPrescripcionPDF() {
-  console.log("[PRESCRIPCION] Export PDF – pendiente de implementar");
-  alert("Exportación PDF de mediciones se implementará en el siguiente hito.");
+  let selId = appState.prescripcion.selectedCapituloId;
+  if (!selId) {
+    selId = caps[0].id;
+    appState.prescripcion.selectedCapituloId = selId;
+  }
+  return caps.find((c) => c.id === selId) || caps[0] || null;
 }
 
-function exportPrescripcionBC3() {
-  console.log("[PRESCRIPCION] Export BC3 – pendiente de implementar");
-  alert("Exportación BC3 se implementará en el siguiente hito.");
+function setSelectedCapitulo(id) {
+  appState.prescripcion.selectedCapituloId = id || null;
+}
+
+// ==============================
+// Firestore: plantillas de prescripción
+// ==============================
+
+async function ensurePrescripcionPlantillasLoaded() {
+  appState.prescripcion = appState.prescripcion || {};
+  if (appState.prescripcion.plantillasLoaded) return;
+
+  const db =
+    typeof getFirestoreInstance === "function"
+      ? getFirestoreInstance()
+      : null;
+  const auth =
+    typeof getAuthInstance === "function"
+      ? getAuthInstance()
+      : null;
+
+  if (!db) {
+    console.warn(
+      "[PRESCRIPCION] No hay instancia de Firestore. Las plantillas serán solo locales."
+    );
+    appState.prescripcion.plantillasLoaded = true;
+    return;
+  }
+
+  let uid = null;
+  if (auth && auth.currentUser) {
+    uid = auth.currentUser.uid;
+  }
+
+  try {
+    let query = db.collection("prescripcion_plantillas");
+    if (uid) {
+      query = query.where("uid", "==", uid);
+    }
+
+    const snap = await query.get();
+    const plantillas = [];
+    snap.forEach((doc) => {
+      const data = doc.data() || {};
+      plantillas.push({
+        id: doc.id,
+        nombre: data.nombre || "(sin nombre)",
+        texto: data.texto || "",
+      });
+    });
+
+    appState.prescripcion.plantillas = plantillas;
+    appState.prescripcion.plantillasLoaded = true;
+
+    console.log(
+      "[PRESCRIPCION] Plantillas cargadas:",
+      plantillas.length
+    );
+  } catch (e) {
+    console.error(
+      "[PRESCRIPCION] Error cargando plantillas desde Firestore:",
+      e
+    );
+    appState.prescripcion.plantillasLoaded = true;
+  }
+}
+
+async function createPrescripcionPlantilla(nombre, texto) {
+  nombre = (nombre || "").trim();
+  texto = texto || "";
+
+  if (!nombre) {
+    alert("La plantilla necesita un nombre.");
+    return;
+  }
+
+  const db =
+    typeof getFirestoreInstance === "function"
+      ? getFirestoreInstance()
+      : null;
+  const auth =
+    typeof getAuthInstance === "function"
+      ? getAuthInstance()
+      : null;
+
+  let newItem = {
+    id: "local-" + Date.now(),
+    nombre,
+    texto,
+  };
+
+  if (!db) {
+    appState.prescripcion.plantillas =
+      [newItem].concat(appState.prescripcion.plantillas || []);
+    return;
+  }
+
+  let uid = null;
+  if (auth && auth.currentUser) {
+    uid = auth.currentUser.uid;
+  }
+
+  try {
+    const docRef = await db
+      .collection("prescripcion_plantillas")
+      .add({
+        uid: uid || null,
+        nombre,
+        texto,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+
+    newItem.id = docRef.id;
+    appState.prescripcion.plantillas =
+      [newItem].concat(appState.prescripcion.plantillas || []);
+  } catch (e) {
+    console.error(
+      "[PRESCRIPCION] Error creando plantilla en Firestore:",
+      e
+    );
+    // Si falla Firestore, al menos mantenemos local
+    appState.prescripcion.plantillas =
+      [newItem].concat(appState.prescripcion.plantillas || []);
+  }
+}
+
+async function updatePrescripcionPlantilla(id, nombre, texto) {
+  if (!id) return;
+  nombre = (nombre || "").trim();
+  texto = texto || "";
+
+  const list = appState.prescripcion.plantillas || [];
+  const idx = list.findIndex((p) => p.id === id);
+  if (idx !== -1) {
+    list[idx] = { ...list[idx], nombre, texto };
+    appState.prescripcion.plantillas = list;
+  }
+
+  const db =
+    typeof getFirestoreInstance === "function"
+      ? getFirestoreInstance()
+      : null;
+  if (!db) return;
+
+  try {
+    await db.collection("prescripcion_plantillas").doc(id).update({
+      nombre,
+      texto,
+      updatedAt: Date.now(),
+    });
+  } catch (e) {
+    console.error(
+      "[PRESCRIPCION] Error actualizando plantilla en Firestore:",
+      e
+    );
+  }
+}
+
+async function deletePrescripcionPlantilla(id) {
+  if (!id) return;
+
+  const ok = window.confirm(
+    "¿Seguro que quieres borrar esta plantilla?"
+  );
+  if (!ok) return;
+
+  appState.prescripcion.plantillas =
+    (appState.prescripcion.plantillas || []).filter(
+      (p) => p.id !== id
+    );
+
+  const db =
+    typeof getFirestoreInstance === "function"
+      ? getFirestoreInstance()
+      : null;
+  if (!db) return;
+
+  try {
+    await db.collection("prescripcion_plantillas").doc(id).delete();
+  } catch (e) {
+    console.error(
+      "[PRESCRIPCION] Error borrando plantilla en Firestore:",
+      e
+    );
+  }
 }
 
 // ==============================
 // Render principal
 // ==============================
 
-async function renderDocPrescripcionView() {
-  const container = getDocPrescripcionAppContent();
+async function renderPrescripcionView() {
+  const container = getPrescripcionAppContent();
   if (!container) return;
 
-  ensurePrescripcionState();
-  await loadPresTemplatesIfNeeded();
-  await loadPresTextBlocksIfNeeded();
+  ensureCapitulosIniciales();
+  await ensurePrescripcionPlantillasLoaded();
 
-  const state = appState.prescripcion;
-  const capitulos = state.capitulos || [];
-  const selectedId = state.selectedCapId;
-  const selectedCap = capitulos.find((c) => c.id === selectedId) || null;
+  const caps = appState.prescripcion.capitulos || [];
+  const plantillas = appState.prescripcion.plantillas || [];
+  const capSel = getSelectedCapitulo();
 
-  // ===== Barra de plantillas de estructura (arriba) =====
+  // Render capítulos (izquierda)
+  let capitulosHTML = "";
+  if (!caps.length) {
+    capitulosHTML = `
+      <p class="text-muted" style="font-size:0.85rem;">
+        No se han podido generar capítulos desde el presupuesto.<br />
+        Asegúrate de tener un presupuesto cargado.
+      </p>
+    `;
+  } else {
+    capitulosHTML = caps
+      .map((c) => {
+        const isSelected =
+          capSel && c.id === capSel.id;
+        const lineas = c.lineas || [];
+        const totalLineas = lineas.length;
+        const totalCant = lineas.reduce(
+          (acc, l) => acc + (Number(l.cantidad) || 0),
+          0
+        );
 
-  const templates = state.templates || [];
-  const templatesOptions =
-    templates.length > 0
-      ? templates
-          .map((t) => {
-            const label = t.updatedAt
-              ? `${t.name} (${new Date(t.updatedAt).toLocaleDateString()})`
-              : t.name;
-            return `<option value="${t.id}">${label}</option>`;
-          })
-          .join("")
-      : "";
-
-  const templatesBarHTML = `
-    <div class="card" style="margin-bottom:0.75rem;">
-      <div class="card-header">
-        <div>
-          <div class="card-title">Plantillas de prescripción (estructura)</div>
-          <div class="card-subtitle">
-            Guarda y reutiliza estructuras de capítulos de mediciones para futuros proyectos.
-          </div>
-        </div>
-        <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
-          <button id="presBtnExportPDF" class="btn btn-xs btn-outline">📄 Exportar mediciones (PDF)</button>
-          <button id="presBtnExportBC3" class="btn btn-xs btn-outline">📦 Exportar BC3</button>
-        </div>
-      </div>
-      <div class="card-body">
-        <div style="display:flex; gap:0.75rem; flex-wrap:wrap; align-items:center;">
-          <div style="display:flex; flex-direction:column; min-width:220px;">
-            <label style="font-size:0.8rem; color:#6b7280; margin-bottom:0.15rem;">Seleccionar plantilla</label>
-            <div style="display:flex; gap:0.5rem;">
-              <select id="presTemplateSelect" class="form-control" style="min-width:220px;">
-                <option value="">(Sin plantilla)</option>
-                ${templatesOptions}
-              </select>
-              <button id="presBtnApplyTemplate" class="btn btn-secondary btn-sm">Aplicar</button>
-            </div>
-          </div>
-
-          <div style="display:flex; flex-direction:column; min-width:200px;">
-            <label style="font-size:0.8rem; color:#6b7280; margin-bottom:0.15rem;">Guardar prescripción actual</label>
-            <button id="presBtnSaveTemplate" class="btn btn-primary btn-sm">
-              💾 Guardar como plantilla de estructura
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
-
-  // ===== Columna izquierda: Capítulos =====
-
-  const capitulosListHTML =
-    capitulos.length > 0
-      ? capitulos
-          .map((cap) => {
-            const isActive = cap.id === selectedId;
+        const refsPreview = lineas
+          .slice(0, 4)
+          .map((l) => {
+            const cod = l.codigo || "";
+            const desc = l.descripcion || "";
+            const cant =
+              typeof l.cantidad !== "undefined"
+                ? l.cantidad
+                : "";
             return `
-              <div
-                class="pres-capitulo-item ${isActive ? "active" : ""}"
-                data-pres-cap-id="${cap.id}"
-                style="
-                  padding:0.45rem 0.6rem;
-                  border-radius:0.35rem;
-                  border:1px solid ${isActive ? "#0ea5e9" : "#e5e7eb"};
-                  background:${isActive ? "#e0f2fe" : "#ffffff"};
-                  cursor:pointer;
-                  margin-bottom:0.4rem;
-                "
-              >
-                <div style="font-size:0.8rem; font-weight:600; color:#0f172a;">
-                  ${cap.codigo || ""} – ${cap.titulo || ""}
-                </div>
-                <div style="font-size:0.75rem; color:#6b7280; margin-top:0.1rem;">
-                  ${
-                    (cap.partidas && cap.partidas.length) || 0
-                  } partidas · ${
-              (cap.textoMedicion || "").length > 0 ? "Con texto" : "Sin texto"
-            }
-                </div>
+              <div class="presc-ref-line">
+                <span class="presc-ref-code">${cod}</span>
+                <span class="presc-ref-desc">${desc}</span>
+                <span class="presc-ref-qty">x${cant}</span>
               </div>
             `;
           })
-          .join("")
-      : `
-        <p class="text-muted" style="font-size:0.85rem;">
-          Aún no hay capítulos de prescripción. Crea uno nuevo para empezar a definir las mediciones.
-        </p>
-      `;
+          .join("");
 
-  // ===== Columna central: Detalle de capítulo =====
-
-  let detalleHTML = "";
-  if (!selectedCap) {
-    detalleHTML = `
-      <div class="card">
-        <div class="card-header">
-          <div>
-            <div class="card-title">Detalle de capítulo</div>
-            <div class="card-subtitle">
-              Selecciona un capítulo en la columna izquierda o crea uno nuevo.
+        return `
+          <button
+            type="button"
+            class="presc-capitulo-item ${
+              isSelected ? "presc-capitulo-selected" : ""
+            }"
+            data-presc-cap-id="${c.id}"
+          >
+            <div class="presc-capitulo-title">
+              ${c.nombre || "(sin título)"}
             </div>
-          </div>
-        </div>
-        <div class="card-body">
-          <p class="text-muted" style="font-size:0.9rem;">
-            Cada capítulo debería corresponder a una sección del presupuesto (videportero, control de accesos,
-            monitores, etc.). Aquí podrás definir el texto de medición y las referencias con PVP asociadas.
-          </p>
-        </div>
-      </div>
+            <div class="presc-capitulo-meta">
+              <span>${totalLineas} referencias</span>
+              <span>${totalCant} uds</span>
+            </div>
+            ${
+              refsPreview
+                ? `<div class="presc-capitulo-refs">${refsPreview}</div>`
+                : ""
+            }
+          </button>
+        `;
+      })
+      .join("");
+  }
+
+  // Texto del capítulo seleccionado (centro)
+  const textoCap =
+    (capSel && capSel.texto) ||
+    "";
+
+  const nombreCap =
+    (capSel && capSel.nombre) ||
+    "";
+
+  // Plantillas (derecha)
+  let plantillasHTML = "";
+  if (!plantillas.length) {
+    plantillasHTML = `
+      <p class="text-muted" style="font-size:0.85rem;">
+        Todavía no tienes plantillas de prescripción.<br />
+        Usa el botón "Nueva plantilla" para crear la primera.
+      </p>
     `;
   } else {
-    const partidas = selectedCap.partidas || [];
-    const partidasRowsHTML =
-      partidas.length > 0
-        ? partidas
-            .map((p) => {
-              const importe =
-                (Number(p.cantidad) || 0) * (Number(p.pvp) || 0);
-              return `
-                <tr data-pres-partida-id="${p.id}">
-                  <td>
-                    <input
-                      type="text"
-                      class="form-control pres-input-ref"
-                      value="${p.ref || ""}"
-                      placeholder="1120101, IP Style, etc."
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="text"
-                      class="form-control pres-input-desc"
-                      value="${p.desc || ""}"
-                      placeholder="Descripción corta"
-                    />
-                  </td>
-                  <td style="width:70px;">
-                    <input
-                      type="text"
-                      class="form-control pres-input-unidad"
-                      value="${p.unidad || "Ud"}"
-                      style="text-align:center;"
-                    />
-                  </td>
-                  <td style="width:80px;">
-                    <input
-                      type="number"
-                      min="0"
-                      step="1"
-                      class="form-control pres-input-cantidad"
-                      value="${p.cantidad != null ? p.cantidad : 1}"
-                      style="text-align:right;"
-                    />
-                  </td>
-                  <td style="width:100px;">
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      class="form-control pres-input-pvp"
-                      value="${p.pvp != null ? p.pvp : 0}"
-                      style="text-align:right;"
-                    />
-                  </td>
-                  <td style="width:110px; text-align:right; font-variant-numeric:tabular-nums;">
-                    ${importe.toFixed(2)} €
-                  </td>
-                  <td style="width:40px; text-align:center;">
-                    <button type="button" class="btn btn-xs btn-outline pres-btn-del-partida">✖</button>
-                  </td>
-                </tr>
-              `;
-            })
-            .join("")
-        : `
-          <tr>
-            <td colspan="7" style="text-align:center; font-size:0.85rem; color:#6b7280;">
-              No hay referencias añadidas en este capítulo.
-            </td>
-          </tr>
-        `;
+    plantillasHTML = plantillas
+      .map((p) => {
+        const preview =
+          (p.texto || "")
+            .split("\n")
+            .slice(0, 3)
+            .join(" ")
+            .slice(0, 260) + (p.texto && p.texto.length > 260 ? "..." : "");
 
-    detalleHTML = `
-      <div class="card">
-        <div class="card-header">
-          <div>
-            <div class="card-title">Detalle de capítulo</div>
-            <div class="card-subtitle">
-              Define el código, título, texto de medición y las partidas con PVP asociadas.
-            </div>
-          </div>
-          <div style="display:flex; gap:0.5rem;">
-            <button id="presBtnDeleteCap" class="btn btn-xs btn-outline">🗑️ Eliminar capítulo</button>
-          </div>
-        </div>
-        <div class="card-body">
-          <div class="form-grid">
-            <div class="form-group">
-              <label>Código de capítulo</label>
-              <input
-                id="presCapCodigo"
-                type="text"
-                class="form-control"
-                value="${selectedCap.codigo || ""}"
-                placeholder="Ej. 2N.01, 2N.0101..."
-              />
-            </div>
-            <div class="form-group">
-              <label>Título de capítulo</label>
-              <input
-                id="presCapTitulo"
-                type="text"
-                class="form-control"
-                value="${selectedCap.titulo || ""}"
-                placeholder="Ej. Videportero y control de accesos"
-              />
-            </div>
-          </div>
-
-          <div class="form-group" style="margin-top:0.75rem;">
-            <label>Texto de medición</label>
-            <textarea
-              id="presCapTexto"
-              class="form-control"
-              rows="8"
-              placeholder="Describe aquí el sistema según lenguaje de mediciones para ingenierías..."
-            >${selectedCap.textoMedicion || ""}</textarea>
-            <p style="font-size:0.78rem; color:#6b7280; margin-top:0.25rem;">
-              Puedes arrastrar y soltar bloques de texto desde la columna derecha o pulsar en “Insertar en texto”.
-            </p>
-          </div>
-
-          <div style="margin-top:1rem;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.35rem;">
-              <div style="font-weight:600; font-size:0.9rem; color:#111827;">
-                Referencias y PVP asociados al capítulo
+        return `
+          <div
+            class="presc-plantilla-item"
+            draggable="true"
+            data-presc-plantilla-id="${p.id}"
+            title="Arrastra esta plantilla al texto del capítulo o haz clic en Aplicar"
+          >
+            <div class="presc-plantilla-header">
+              <div class="presc-plantilla-name">
+                📄 ${p.nombre}
               </div>
-              <div style="display:flex; gap:0.5rem;">
-                <!-- Próximo hito: Importar desde presupuesto -->
-                <button id="presBtnAddPartida" class="btn btn-xs btn-primary">
-                  ➕ Añadir referencia
+              <div class="presc-plantilla-actions">
+                <button
+                  type="button"
+                  class="btn btn-xs btn-outline"
+                  data-presc-plantilla-edit="${p.id}"
+                >
+                  ✏️
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-xs"
+                  data-presc-plantilla-delete="${p.id}"
+                >
+                  🗑️
                 </button>
               </div>
             </div>
-
-            <div class="table-responsive" style="max-width:100%; overflow:auto;">
-              <table class="table table-compact">
-                <thead>
-                  <tr>
-                    <th style="min-width:140px;">Referencia / Código</th>
-                    <th style="min-width:220px;">Descripción</th>
-                    <th style="width:70px;">Ud</th>
-                    <th style="width:80px; text-align:right;">Cant.</th>
-                    <th style="width:100px; text-align:right;">PVP</th>
-                    <th style="width:110px; text-align:right;">Importe</th>
-                    <th style="width:40px;"></th>
-                  </tr>
-                </thead>
-                <tbody id="presPartidasBody">
-                  ${partidasRowsHTML}
-                </tbody>
-              </table>
+            <div class="presc-plantilla-preview">
+              ${preview || "<i>(texto vacío)</i>"}
+            </div>
+            <div class="presc-plantilla-footer">
+              <button
+                type="button"
+                class="btn btn-xs"
+                data-presc-plantilla-apply="${p.id}"
+              >
+                ➕ Aplicar al capítulo
+              </button>
             </div>
           </div>
-        </div>
-      </div>
-    `;
+        `;
+      })
+      .join("");
   }
 
-  // ===== Columna derecha: Plantillas de texto (bloques) =====
-
-  const textBlocks = state.textBlocks || [];
-  const categoriesSet = new Set(
-    textBlocks.map((b) => (b.category || "general").toLowerCase())
-  );
-  const categories = ["todas", ...Array.from(categoriesSet)];
-  const categoryOptions = categories
-    .map(
-      (c) =>
-        `<option value="${c}">${c === "todas" ? "Todas las categorías" : c}</option>`
-    )
-    .join("");
-
-  const blocksListHTML =
-    textBlocks.length > 0
-      ? textBlocks
-          .map((b) => {
-            const cat = (b.category || "general").toLowerCase();
-            const shortText =
-              (b.texto || "").length > 140
-                ? (b.texto || "").slice(0, 140) + "..."
-                : b.texto || "";
-            return `
-              <div
-                class="pres-block-item"
-                data-pres-block-id="${b.id}"
-                data-pres-block-cat="${cat}"
-                draggable="true"
-                style="
-                  border:1px solid #e5e7eb;
-                  border-radius:0.4rem;
-                  padding:0.45rem 0.55rem;
-                  margin-bottom:0.45rem;
-                  background:#ffffff;
-                  cursor:grab;
-                "
-              >
-                <div style="display:flex; justify-content:space-between; gap:0.5rem; align-items:flex-start;">
-                  <div>
-                    <div style="font-size:0.78rem; font-weight:600; color:#0f172a;">
-                      ${b.name || "(sin nombre)"}
-                    </div>
-                    <div style="font-size:0.7rem; color:#6b7280; margin-top:0.15rem;">
-                      <span class="doc-gestion-pill">${cat}</span>
-                    </div>
-                  </div>
-                  <div style="display:flex; flex-direction:column; gap:0.25rem; align-items:flex-end;">
-                    <button
-                      type="button"
-                      class="btn btn-xs btn-outline pres-block-insert-btn"
-                      title="Insertar en el texto de medición"
-                    >
-                      ⤵ Insertar
-                    </button>
-                    <button
-                      type="button"
-                      class="btn btn-xs btn-ghost pres-block-delete-btn"
-                      title="Eliminar plantilla de texto"
-                    >
-                      ✖
-                    </button>
-                  </div>
-                </div>
-                <div style="font-size:0.74rem; color:#374151; margin-top:0.35rem; white-space:pre-wrap;">
-                  ${shortText}
-                </div>
-              </div>
-            `;
-          })
-          .join("")
-      : `
-        <p class="text-muted" style="font-size:0.85rem;">
-          Todavía no has creado plantillas de texto. Usa el botón
-          <strong>“Nueva plantilla de texto”</strong> para guardar textos tipo
-          de videportero, control de accesos, monitores, etc.
-        </p>
-      `;
-
-  const rightColumnHTML = `
-    <div class="card">
-      <div class="card-header">
-        <div>
-          <div class="card-title">Plantillas de texto de prescripción</div>
-          <div class="card-subtitle">
-            Textos tipo para videportero, control de accesos, monitores, etc. Arrastra o inserta sobre el capítulo.
-          </div>
-        </div>
-        <div>
-          <button id="presBtnNewTextTpl" class="btn btn-xs btn-primary">
-            ➕ Nueva plantilla de texto
-          </button>
-        </div>
-      </div>
-      <div class="card-body">
-        <div style="margin-bottom:0.5rem;">
-          <label style="font-size:0.78rem; color:#6b7280; margin-bottom:0.15rem; display:block;">
-            Filtrar por categoría
-          </label>
-          <select id="presBlocksFilter" class="form-control" style="max-width:100%;">
-            ${categoryOptions}
-          </select>
-        </div>
-
-        <div id="presBlocksList">
-          ${blocksListHTML}
-        </div>
-      </div>
-    </div>
-  `;
-
-  // ===== Modal flotante para nueva plantilla de texto =====
-
-  const modalHTML = `
+  container.innerHTML = `
     <div
-      id="presTextTplModal"
+      class="proyecto-layout"
       style="
-        position:fixed;
-        inset:0;
-        background:rgba(15,23,42,0.45);
-        display:none;
-        align-items:center;
-        justify-content:center;
-        z-index:9999;
+        display:grid;
+        grid-template-columns: 1fr 1.4fr 1.2fr;
+        gap: 1rem;
+        align-items:flex-start;
       "
     >
-      <div
-        style="
-          background:#ffffff;
-          border-radius:0.75rem;
-          max-width:640px;
-          width:100%;
-          margin:1rem;
-          box-shadow:0 20px 40px rgba(15,23,42,0.35);
-        "
-      >
-        <div style="padding:0.9rem 1rem 0.6rem; border-bottom:1px solid #e5e7eb; display:flex; justify-content:space-between; align-items:center;">
+      <!-- Columna 1: Capítulos -->
+      <div class="card">
+        <div class="card-header">
           <div>
-            <div style="font-weight:600; font-size:0.95rem; color:#111827;">Nueva plantilla de texto</div>
-            <div style="font-size:0.8rem; color:#6b7280;">
-              Guarda un texto tipo para reutilizarlo en las mediciones (videportero, control de accesos, monitores, etc.).
+            <div class="card-title">Capítulos de prescripción</div>
+            <div class="card-subtitle">
+              Se generan automáticamente a partir de las secciones y referencias del presupuesto.
             </div>
           </div>
-          <button id="presTplCloseX" class="btn btn-xs btn-ghost" style="font-size:1rem;">✖</button>
-        </div>
-
-        <div style="padding:0.9rem 1rem 0.75rem;">
-          <div class="form-group">
-            <label>Nombre de la plantilla</label>
-            <input
-              id="presTplName"
-              type="text"
-              class="form-control"
-              placeholder="Ej. Videportero IP Style – Pliego base"
-            />
-          </div>
-
-          <div class="form-group">
-            <label>Categoría</label>
-            <input
-              id="presTplCategory"
-              type="text"
-              class="form-control"
-              placeholder="Ej. videoportero, accesos, monitores..."
-            />
-            <p style="font-size:0.75rem; color:#6b7280; margin-top:0.15rem;">
-              La categoría te ayudará a filtrar (ej. “videoportero”, “control accesos”, “monitores vivienda”).
-            </p>
-          </div>
-
-          <div class="form-group">
-            <label>Texto de medición</label>
-            <textarea
-              id="presTplTexto"
-              class="form-control"
-              rows="8"
-              placeholder="Introduce aquí el texto técnico/comercial de la medición..."
-            ></textarea>
+          <div style="display:flex; gap:0.5rem; align-items:center;">
+            <span class="chip">Prescripción</span>
+            <button
+              type="button"
+              id="prescReloadFromBudgetBtn"
+              class="btn btn-xs btn-outline"
+              title="Regenerar capítulos desde el presupuesto actual"
+            >
+              🔄 Regenerar
+            </button>
           </div>
         </div>
-
-        <div style="padding:0.75rem 1rem 0.9rem; border-top:1px solid #e5e7eb; display:flex; justify-content:flex-end; gap:0.5rem;">
-          <button id="presTplCancelBtn" class="btn btn-secondary btn-sm">Cancelar</button>
-          <button id="presTplSaveBtn" class="btn btn-primary btn-sm">Guardar plantilla de texto</button>
+        <div class="card-body presc-capitulos-list">
+          ${capitulosHTML}
         </div>
       </div>
-    </div>
-  `;
 
-  // ===== Montar todo =====
+      <!-- Columna 2: Texto del capítulo -->
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">
+              Texto del capítulo
+            </div>
+            <div class="card-subtitle">
+              Selecciona un capítulo a la izquierda y edita aquí el texto de mediciones.
+              Puedes arrastrar una plantilla desde la columna derecha.
+            </div>
+          </div>
+        </div>
+        <div class="card-body">
+          ${
+            capSel
+              ? `
+            <div class="form-group">
+              <label>Título del capítulo</label>
+              <input
+                type="text"
+                id="prescCapituloTituloInput"
+                class="form-control"
+                value="${nombreCap.replace(/"/g, "&quot;")}"
+              />
+            </div>
 
-  container.innerHTML = `
-    ${modalHTML}
+            <div class="form-group">
+              <label>Texto de mediciones</label>
+              <textarea
+                id="prescCapituloTexto"
+                class="form-control"
+                rows="14"
+                placeholder="Arrastra aquí una plantilla o escribe el texto de mediciones..."
+              >${textoCap}</textarea>
+              <p style="font-size:0.78rem; color:#6b7280; margin-top:0.25rem;">
+                Drag & drop: arrastra una plantilla desde la derecha sobre este cuadro para
+                rellenar el capítulo.
+              </p>
+            </div>
 
-    <div class="proyecto-layout" style="display:flex; flex-direction:column; gap:0.75rem;">
-      ${templatesBarHTML}
-
-      <div
-        style="
-          display:grid;
-          grid-template-columns: minmax(240px, 0.8fr) minmax(360px, 1.4fr) minmax(260px, 1.1fr);
-          gap:1rem;
-          align-items:flex-start;
-        "
-      >
-        <!-- Columna izquierda: Capítulos -->
-        <div>
-          <div class="card">
-            <div class="card-header">
-              <div>
-                <div class="card-title">Capítulos de prescripción</div>
-                <div class="card-subtitle">
-                  Cada capítulo puede corresponder a una sección del presupuesto (videportero, accesos, monitores...).
+            <div class="form-group">
+              <label>Referencias incluidas en este capítulo</label>
+              ${
+                (capSel.lineas || []).length
+                  ? `
+                <div class="presc-capitulo-ref-table">
+                  ${(capSel.lineas || [])
+                    .map((l) => {
+                      const cod = l.codigo || "";
+                      const desc = l.descripcion || "";
+                      const cant =
+                        typeof l.cantidad !== "undefined"
+                          ? l.cantidad
+                          : "";
+                      return `
+                        <div class="presc-ref-row">
+                          <span class="presc-ref-code">${cod}</span>
+                          <span class="presc-ref-desc">${desc}</span>
+                          <span class="presc-ref-qty">x${cant}</span>
+                        </div>
+                      `;
+                    })
+                    .join("")}
                 </div>
-              </div>
-              <div style="display:flex; gap:0.5rem;">
-                <button id="presBtnAddCap" class="btn btn-xs btn-primary">➕ Nuevo capítulo</button>
-              </div>
+              `
+                  : `
+                <p class="text-muted" style="font-size:0.8rem;">
+                  Este capítulo no tiene referencias asociadas en el presupuesto.
+                </p>
+              `
+              }
             </div>
-            <div class="card-body">
-              ${capitulosListHTML}
+          `
+              : `
+            <p class="text-muted" style="font-size:0.85rem;">
+              No hay ningún capítulo seleccionado. Genera capítulos desde el presupuesto
+              o haz clic en uno de la columna izquierda.
+            </p>
+          `
+          }
+        </div>
+      </div>
+
+      <!-- Columna 3: Plantillas -->
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Plantillas de prescripción</div>
+            <div class="card-subtitle">
+              Define textos estándar por tipo de sistema (videoportero, control de accesos, monitores, etc.)
+              y aplícalos a los capítulos.
             </div>
           </div>
+          <div>
+            <button
+              type="button"
+              id="prescNewPlantillaBtn"
+              class="btn btn-sm btn-primary"
+            >
+              ➕ Nueva plantilla
+            </button>
+          </div>
         </div>
-
-        <!-- Columna central: Detalle del capítulo -->
-        <div>
-          ${detalleHTML}
-        </div>
-
-        <!-- Columna derecha: Plantillas de texto -->
-        <div>
-          ${rightColumnHTML}
+        <div class="card-body presc-plantillas-list">
+          ${plantillasHTML}
         </div>
       </div>
     </div>
   `;
 
-  attachDocPrescripcionHandlers();
+  attachPrescripcionHandlers();
 }
 
 // ==============================
 // Handlers
 // ==============================
 
-function attachDocPrescripcionHandlers() {
-  const container = getDocPrescripcionAppContent();
+function attachPrescripcionHandlers() {
+  const container = getPrescripcionAppContent();
   if (!container) return;
 
-  const state = appState.prescripcion;
-  const capitulos = state.capitulos || [];
-  const selectedId = state.selectedCapId;
-  const selectedCapIndex = capitulos.findIndex((c) => c.id === selectedId);
-  const selectedCap =
-    selectedCapIndex >= 0 ? capitulos[selectedCapIndex] : null;
-
-  // ---- Botones barra superior (estructura) ----
-
-  const btnSaveTpl = container.querySelector("#presBtnSaveTemplate");
-  if (btnSaveTpl) {
-    btnSaveTpl.addEventListener("click", () => {
-      saveCurrentPrescripcionAsTemplate().catch((e) =>
-        console.error("Error guardando plantilla:", e)
-      );
-    });
-  }
-
-  const btnApplyTpl = container.querySelector("#presBtnApplyTemplate");
-  if (btnApplyTpl) {
-    btnApplyTpl.addEventListener("click", () => {
-      const select = container.querySelector("#presTemplateSelect");
-      const tplId = select ? select.value : "";
-      if (!tplId) {
-        alert("Selecciona una plantilla antes de aplicar.");
-        return;
-      }
-      applyPresTemplateById(tplId);
-    });
-  }
-
-  const btnExportPDF = container.querySelector("#presBtnExportPDF");
-  if (btnExportPDF) {
-    btnExportPDF.addEventListener("click", () => {
-      exportPrescripcionPDF();
-    });
-  }
-
-  const btnExportBC3 = container.querySelector("#presBtnExportBC3");
-  if (btnExportBC3) {
-    btnExportBC3.addEventListener("click", () => {
-      exportPrescripcionBC3();
-    });
-  }
-
-  // ---- Añadir / seleccionar capítulo ----
-
-  const btnAddCap = container.querySelector("#presBtnAddCap");
-  if (btnAddCap) {
-    btnAddCap.addEventListener("click", () => {
-      const newCap = createEmptyCapitulo();
-      capitulos.push(newCap);
-      state.capitulos = capitulos;
-      state.selectedCapId = newCap.id;
-      renderDocPrescripcionView();
-    });
-  }
-
-  container
-    .querySelectorAll("[data-pres-cap-id]")
-    .forEach((item) => {
-      item.addEventListener("click", () => {
-        const capId = item.getAttribute("data-pres-cap-id");
-        if (!capId) return;
-        state.selectedCapId = capId;
-        renderDocPrescripcionView();
-      });
-    });
-
-  if (!selectedCap) {
-    // No hay capítulo seleccionado → nada más que hacer
-    setupTextBlocksHandlers(container, null);
-    setupTextTemplateModalHandlers(container);
-    return;
-  }
-
-  // ---- Eliminar capítulo ----
-
-  const btnDeleteCap = container.querySelector("#presBtnDeleteCap");
-  if (btnDeleteCap) {
-    btnDeleteCap.addEventListener("click", () => {
+  // Regenerar capítulos desde presupuesto
+  const reloadBtn = container.querySelector("#prescReloadFromBudgetBtn");
+  if (reloadBtn) {
+    reloadBtn.addEventListener("click", () => {
       const ok = window.confirm(
-        "¿Seguro que quieres eliminar este capítulo de prescripción?"
+        "Esto regenerará los capítulos desde el presupuesto actual.\n\n" +
+          "⚠️ Se perderán los textos de capítulo que tengas escritos.\n\n" +
+          "¿Quieres continuar?"
       );
       if (!ok) return;
 
-      const newCaps = capitulos.filter((c) => c.id !== selectedCap.id);
-      state.capitulos = newCaps;
-      state.selectedCapId = newCaps[0] ? newCaps[0].id : null;
-      renderDocPrescripcionView();
+      const caps = buildCapitulosFromPresupuesto();
+      appState.prescripcion.capitulos = caps;
+      appState.prescripcion.selectedCapituloId = caps.length
+        ? caps[0].id
+        : null;
+
+      renderPrescripcionView();
     });
   }
 
-  // ---- Código / título / texto del capítulo ----
-
-  const inputCodigo = container.querySelector("#presCapCodigo");
-  if (inputCodigo) {
-    inputCodigo.addEventListener("input", () => {
-      selectedCap.codigo = inputCodigo.value;
-    });
-  }
-
-  const inputTitulo = container.querySelector("#presCapTitulo");
-  if (inputTitulo) {
-    inputTitulo.addEventListener("input", () => {
-      selectedCap.titulo = inputTitulo.value;
-    });
-  }
-
-  const inputTexto = container.querySelector("#presCapTexto");
-  if (inputTexto) {
-    inputTexto.addEventListener("input", () => {
-      selectedCap.textoMedicion = inputTexto.value;
-    });
-  }
-
-  // ---- Partidas del capítulo ----
-
-  const btnAddPartida = container.querySelector("#presBtnAddPartida");
-  if (btnAddPartida) {
-    btnAddPartida.addEventListener("click", () => {
-      const newPar = createEmptyPartida();
-      selectedCap.partidas = selectedCap.partidas || [];
-      selectedCap.partidas.push(newPar);
-      renderDocPrescripcionView();
-    });
-  }
-
-  const tbody = container.querySelector("#presPartidasBody");
-  if (tbody) {
-    tbody.querySelectorAll("tr[data-pres-partida-id]").forEach((row) => {
-      const parId = row.getAttribute("data-pres-partida-id");
-      const partida =
-        selectedCap.partidas &&
-        selectedCap.partidas.find((p) => p.id === parId);
-      if (!partida) return;
-
-      const inputRef = row.querySelector(".pres-input-ref");
-      const inputDesc = row.querySelector(".pres-input-desc");
-      const inputUnidad = row.querySelector(".pres-input-unidad");
-      const inputCant = row.querySelector(".pres-input-cantidad");
-      const inputPvp = row.querySelector(".pres-input-pvp");
-      const btnDel = row.querySelector(".pres-btn-del-partida");
-
-      if (inputRef) {
-        inputRef.addEventListener("input", () => {
-          partida.ref = inputRef.value;
-        });
-      }
-      if (inputDesc) {
-        inputDesc.addEventListener("input", () => {
-          partida.desc = inputDesc.value;
-        });
-      }
-      if (inputUnidad) {
-        inputUnidad.addEventListener("input", () => {
-          partida.unidad = inputUnidad.value;
-        });
-      }
-      if (inputCant) {
-        inputCant.addEventListener("input", () => {
-          partida.cantidad = Number(inputCant.value) || 0;
-        });
-      }
-      if (inputPvp) {
-        inputPvp.addEventListener("input", () => {
-          partida.pvp = Number(inputPvp.value) || 0;
-        });
-      }
-      if (btnDel) {
-        btnDel.addEventListener("click", () => {
-          const ok = window.confirm(
-            "¿Eliminar esta referencia del capítulo?"
-          );
-          if (!ok) return;
-          selectedCap.partidas = (selectedCap.partidas || []).filter(
-            (p) => p.id !== parId
-          );
-          renderDocPrescripcionView();
-        });
-      }
-    });
-  }
-
-  // ---- Bloques de texto (columna derecha) ----
-
-  setupTextBlocksHandlers(container, inputTexto);
-  setupTextTemplateModalHandlers(container);
-}
-
-// ==============================
-// Handlers: bloques de texto + modal
-// ==============================
-
-function setupTextBlocksHandlers(container, capTextoTextarea) {
-  const filterSelect = container.querySelector("#presBlocksFilter");
-  const blocksContainer = container.querySelector("#presBlocksList");
-  const blocks = appState.prescripcion.textBlocks || [];
-
-  // Filtrado por categoría
-  if (filterSelect && blocksContainer) {
-    filterSelect.addEventListener("change", () => {
-      const catFilter = filterSelect.value || "todas";
-      blocksContainer
-        .querySelectorAll(".pres-block-item")
-        .forEach((item) => {
-          const cat = item.getAttribute("data-pres-block-cat") || "general";
-          if (
-            catFilter === "todas" ||
-            catFilter === "" ||
-            cat === catFilter
-          ) {
-            item.style.display = "";
-          } else {
-            item.style.display = "none";
-          }
-        });
-    });
-  }
-
-  // Insertar / eliminar / drag & drop
-  if (!blocksContainer) return;
-
-  blocksContainer
-    .querySelectorAll(".pres-block-item")
-    .forEach((item) => {
-      const blockId = item.getAttribute("data-pres-block-id");
-      const block = blocks.find((b) => b.id === blockId);
-      if (!block) return;
-
-      const insertBtn = item.querySelector(".pres-block-insert-btn");
-      const deleteBtn = item.querySelector(".pres-block-delete-btn");
-
-      if (insertBtn && capTextoTextarea) {
-        insertBtn.addEventListener("click", () => {
-          const current = capTextoTextarea.value || "";
-          const separator =
-            current && !current.endsWith("\n") ? "\n\n" : "";
-          capTextoTextarea.value = current + separator + (block.texto || "");
-          capTextoTextarea.dispatchEvent(new Event("input"));
-        });
-      }
-
-      if (deleteBtn) {
-        deleteBtn.addEventListener("click", () => {
-          const ok = window.confirm(
-            "¿Eliminar esta plantilla de texto de forma permanente?"
-          );
-          if (!ok) return;
-          deletePresTextTemplate(blockId).catch((e) =>
-            console.error("Error borrando plantilla de texto:", e)
-          );
-        });
-      }
-
-      // Drag & drop de texto
-      item.addEventListener("dragstart", (ev) => {
-        ev.dataTransfer.setData("text/plain", block.texto || "");
-        ev.dataTransfer.effectAllowed = "copy";
+  // Selección de capítulo
+  container
+    .querySelectorAll("[data-presc-cap-id]")
+    .forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.getAttribute("data-presc-cap-id");
+        if (!id) return;
+        setSelectedCapitulo(id);
+        renderPrescripcionView();
       });
     });
 
-  // Zona de drop en el textarea
-  if (capTextoTextarea) {
-    capTextoTextarea.addEventListener("dragover", (ev) => {
-      ev.preventDefault();
-      ev.dataTransfer.dropEffect = "copy";
-    });
-    capTextoTextarea.addEventListener("drop", (ev) => {
-      ev.preventDefault();
-      const text = ev.dataTransfer.getData("text/plain") || "";
-      if (!text) return;
-      const current = capTextoTextarea.value || "";
-      const separator = current && !current.endsWith("\n") ? "\n\n" : "";
-      capTextoTextarea.value = current + separator + text;
-      capTextoTextarea.dispatchEvent(new Event("input"));
+  // Edición título capítulo
+  const tituloInput = container.querySelector(
+    "#prescCapituloTituloInput"
+  );
+  if (tituloInput) {
+    tituloInput.addEventListener("input", (ev) => {
+      const cap = getSelectedCapitulo();
+      if (!cap) return;
+      cap.nombre = ev.target.value || "";
     });
   }
 
-  // Botón Nueva plantilla de texto
-  const btnNewTextTpl = container.querySelector("#presBtnNewTextTpl");
-  if (btnNewTextTpl) {
-    btnNewTextTpl.addEventListener("click", () => {
-      const modal = container.querySelector("#presTextTplModal");
-      if (modal) {
-        modal.style.display = "flex";
-        const nameInput = modal.querySelector("#presTplName");
-        if (nameInput) nameInput.focus();
-      }
+  // Edición texto capítulo
+  const textoArea = container.querySelector("#prescCapituloTexto");
+  if (textoArea) {
+    textoArea.addEventListener("input", (ev) => {
+      const cap = getSelectedCapitulo();
+      if (!cap) return;
+      cap.texto = ev.target.value || "";
     });
-  }
-}
 
-function setupTextTemplateModalHandlers(container) {
-  const modal = container.querySelector("#presTextTplModal");
-  if (!modal) return;
+    // Drag & drop: permitir soltar una plantilla
+    textoArea.addEventListener("dragover", (ev) => {
+      ev.preventDefault();
+    });
 
-  const close = () => {
-    modal.style.display = "none";
-  };
-
-  const inputName = modal.querySelector("#presTplName");
-  const inputCat = modal.querySelector("#presTplCategory");
-  const inputTexto = modal.querySelector("#presTplTexto");
-
-  const btnCloseX = modal.querySelector("#presTplCloseX");
-  const btnCancel = modal.querySelector("#presTplCancelBtn");
-  const btnSave = modal.querySelector("#presTplSaveBtn");
-
-  if (btnCloseX) btnCloseX.addEventListener("click", close);
-  if (btnCancel) btnCancel.addEventListener("click", close);
-
-  if (btnSave) {
-    btnSave.addEventListener("click", () => {
-      const name = (inputName && inputName.value) || "";
-      const cat = (inputCat && inputCat.value) || "";
-      const txt = (inputTexto && inputTexto.value) || "";
-
-      if (!name.trim()) {
-        alert("Introduce un nombre para la plantilla de texto.");
-        return;
-      }
-      if (!txt.trim()) {
-        alert("Introduce un texto para la plantilla.");
-        return;
-      }
-
-      savePresTextTemplate(name, cat, txt).catch((e) =>
-        console.error("Error guardando plantilla de texto:", e)
+    textoArea.addEventListener("drop", (ev) => {
+      ev.preventDefault();
+      const plantillaId = ev.dataTransfer.getData(
+        "text/presc-plantilla-id"
       );
-      // El propio render posterior cerrará el modal, pero lo cerramos por UX inmediata
-      close();
+      if (!plantillaId) return;
+
+      const plantillas =
+        appState.prescripcion.plantillas || [];
+      const tpl = plantillas.find(
+        (p) => p.id === plantillaId
+      );
+      if (!tpl) return;
+
+      const cap = getSelectedCapitulo();
+      if (!cap) return;
+
+      cap.texto = tpl.texto || "";
+      textoArea.value = cap.texto;
     });
   }
 
-  // Cerrar modal si se hace click fuera
-  modal.addEventListener("click", (ev) => {
-    if (ev.target === modal) {
-      close();
-    }
-  });
+  // Drag start en plantillas
+  container
+    .querySelectorAll("[data-presc-plantilla-id]")
+    .forEach((el) => {
+      el.addEventListener("dragstart", (ev) => {
+        const id = el.getAttribute(
+          "data-presc-plantilla-id"
+        );
+        if (!id) return;
+        ev.dataTransfer.setData(
+          "text/presc-plantilla-id",
+          id
+        );
+      });
+    });
+
+  // Crear nueva plantilla (usamos prompts sencillos = cuadro flotante nativo)
+  const newBtn = container.querySelector("#prescNewPlantillaBtn");
+  if (newBtn) {
+    newBtn.addEventListener("click", async () => {
+      const nombre = window.prompt(
+        "Nombre de la plantilla:",
+        ""
+      );
+      if (nombre === null) return;
+
+      const texto = window.prompt(
+        "Texto de la plantilla (puedes editarlo más tarde):",
+        ""
+      );
+      if (texto === null) return;
+
+      await createPrescripcionPlantilla(nombre, texto);
+      renderPrescripcionView();
+    });
+  }
+
+  // Aplicar plantilla al capítulo seleccionado (clic)
+  container
+    .querySelectorAll("[data-presc-plantilla-apply]")
+    .forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.getAttribute(
+          "data-presc-plantilla-apply"
+        );
+        if (!id) return;
+
+        const plantillas =
+          appState.prescripcion.plantillas || [];
+        const tpl = plantillas.find((p) => p.id === id);
+        if (!tpl) return;
+
+        const cap = getSelectedCapitulo();
+        if (!cap) {
+          alert(
+            "Selecciona primero un capítulo en la columna izquierda."
+          );
+          return;
+        }
+
+        cap.texto = tpl.texto || "";
+
+        const textoAreaLocal =
+          container.querySelector(
+            "#prescCapituloTexto"
+          );
+        if (textoAreaLocal) {
+          textoAreaLocal.value = cap.texto;
+        }
+      });
+    });
+
+  // Editar plantilla
+  container
+    .querySelectorAll("[data-presc-plantilla-edit]")
+    .forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const id = btn.getAttribute(
+          "data-presc-plantilla-edit"
+        );
+        if (!id) return;
+
+        const plantillas =
+          appState.prescripcion.plantillas || [];
+        const tpl = plantillas.find((p) => p.id === id);
+        if (!tpl) return;
+
+        const nuevoNombre = window.prompt(
+          "Nuevo nombre de la plantilla:",
+          tpl.nombre || ""
+        );
+        if (nuevoNombre === null) return;
+
+        const nuevoTexto = window.prompt(
+          "Nuevo texto de la plantilla:",
+          tpl.texto || ""
+        );
+        if (nuevoTexto === null) return;
+
+        await updatePrescripcionPlantilla(
+          id,
+          nuevoNombre,
+          nuevoTexto
+        );
+        renderPrescripcionView();
+      });
+    });
+
+  // Borrar plantilla
+  container
+    .querySelectorAll("[data-presc-plantilla-delete]")
+    .forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const id = btn.getAttribute(
+          "data-presc-plantilla-delete"
+        );
+        if (!id) return;
+
+        await deletePrescripcionPlantilla(id);
+        renderPrescripcionView();
+      });
+    });
 }
 
 console.log(
-  "%cUI Prescripción / Mediciones inicializada (ui_doc_prescripcion.js)",
-  "color:#22c55e; font-weight:600;"
+  "%cUI Prescripción inicializada (ui_doc_prescripcion.js)",
+  "color:#10b981; font-weight:600;"
 );
