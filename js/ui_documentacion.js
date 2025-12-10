@@ -2507,27 +2507,27 @@ function renderDocumentacionView() {
         <!-- Barra derecha: documentación gráfica + fichas técnicas -->
         <div class="doc-main-right"
              style="max-width:320px;flex:0 0 300px;">
-                   <div class="card mb-3">
-            <div class="card-header">
-             <div class="doc-fichas-title">Documentación gráfica</div>
-            <p class="doc-fichas-help">
-            Arrastra las imágenes a cada sección.
-            </p>
+                  <div class="card mb-3">
+  <div class="card-header">
+    <div class="doc-right-title">Documentación gráfica</div>
+    <p class="doc-right-subtitle" style="margin:4px 0 0;font-size:0.8rem;">
+      Arrastra las imágenes a cada sección.
+    </p>
+  </div>
+  <div class="card-body doc-media-body">
+    <div class="form-group mb-2">
+      <input
+        type="text"
+        id="docMediaSearchInput"
+        class="form-control form-control-sm"
+        placeholder="Buscar imágenes..."
+        value="${docEscapeHtml(d.mediaSearchTerm || "")}"
+      >
+    </div>
+    ${renderDocMediaLibraryHTML()}
+  </div>
+</div>
 
-            </div>
-            <div class="card-body doc-media-body">
-              <div class="form-group mb-2">
-                <input
-                  type="text"
-                  id="docMediaSearchInput"
-                  class="form-control form-control-sm"
-                  placeholder="Buscar imágenes..."
-                  value="${docEscapeHtml(d.mediaSearchTerm || "")}"
-                >
-              </div>
-              ${renderDocMediaLibraryHTML()}
-            </div>
-          </div>
 
 
           <div class="card">
