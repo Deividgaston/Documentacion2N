@@ -1,15 +1,17 @@
 // js/ui_doc_prescripcion.js
 // Página de PRESCRIPCIÓN (mediciones / capítulos a partir del presupuesto)
-// - Columna izquierda: capítulos (secciones del presupuesto + referencias y cantidades)
-// - Columna central: texto del capítulo seleccionado
-// - Columna derecha: plantillas (guardadas en Firestore) que se pueden aplicar por clic o drag&drop
+// - Columna izquierda: capítulos (secciones del presupuesto + capítulos manuales)
+// - Columna central: texto del capítulo + referencias (líneas del presupuesto + extra)
+// - Columna derecha: plantillas de texto + referencias extra reutilizables
 
 window.appState = window.appState || {};
 appState.prescripcion = appState.prescripcion || {
-  capitulos: [],            // [{ id, nombre, texto, lineas: [{id,codigo,descripcion,cantidad,pvp}] }]
+  capitulos: [],            // [{ id, nombre, texto, lineas: [{id,tipo,codigo,descripcion,cantidad,pvp,extraRefId}] }]
   selectedCapituloId: null,
   plantillas: [],           // [{ id, nombre, texto }]
   plantillasLoaded: false,
+  extraRefs: [],            // [{ id, codigo, descripcion, unidad, pvp }]
+  extraRefsLoaded: false,
 };
 
 // ==============================
@@ -27,7 +29,43 @@ function getPrescripcionAppContent() {
 }
 
 // ==============================
-// Helpers de presupuesto -> capítulos
+// Helpers Firestore/Auth (compat con el resto del proyecto)
+// ==============================
+
+function getFirestorePresc() {
+  if (typeof window.getFirestoreInstance === "function") {
+    const inst = window.getFirestoreInstance();
+    if (inst) return inst;
+  }
+  if (window.db) return window.db;
+  if (window.firebase && window.firebase.firestore) {
+    try {
+      return window.firebase.firestore();
+    } catch (e) {
+      console.error("[PRESCRIPCION] Error obteniendo Firestore:", e);
+    }
+  }
+  return null;
+}
+
+function getAuthPresc() {
+  if (typeof window.getAuthInstance === "function") {
+    const inst = window.getAuthInstance();
+    if (inst) return inst;
+  }
+  if (window.auth) return window.auth;
+  if (window.firebase && window.firebase.auth) {
+    try {
+      return window.firebase.auth();
+    } catch (e) {
+      console.error("[PRESCRIPCION] Error obteniendo Auth:", e);
+    }
+  }
+  return null;
+}
+
+// ==============================
+// Helpers presupuesto -> capítulos
 // ==============================
 
 function getPresupuestoActualSafe() {
@@ -48,7 +86,7 @@ function getPresupuestoActualSafe() {
   return null;
 }
 
-// Intenta ser robusto con el formato del presupuesto
+// Construye capítulos a partir de secciones + líneas del presupuesto
 function buildCapitulosFromPresupuesto() {
   const presu = getPresupuestoActualSafe();
   if (!presu) {
@@ -57,11 +95,6 @@ function buildCapitulosFromPresupuesto() {
     );
     return [];
   }
-
-  console.log(
-    "[PRESCRIPCION] Presupuesto actual para construir capítulos:",
-    presu
-  );
 
   const seccionesMap = presu.secciones || presu.sections || {};
   const lineas = presu.lineas || presu.lines || presu.lineItems || [];
@@ -97,6 +130,7 @@ function buildCapitulosFromPresupuesto() {
 
     capitulosBySec[secId].lineas.push({
       id: l.id || l.key || l.codigo || l.ref || "",
+      tipo: "budget", // viene del presupuesto
       codigo: l.codigo || l.ref || l.sku || "",
       descripcion:
         l.descripcion ||
@@ -112,6 +146,7 @@ function buildCapitulosFromPresupuesto() {
         l.cant ||
         1,
       pvp: l.pvp || l.precio || l.price || 0,
+      extraRefId: null,
     });
   });
 
@@ -139,6 +174,20 @@ function ensureCapitulosIniciales() {
   }
 }
 
+function createManualCapitulo() {
+  const id = "manual-" + Date.now();
+  const nuevo = {
+    id,
+    nombre: "Capítulo manual",
+    texto: "",
+    lineas: [], // solo tendrá referencias extra que añadas
+  };
+  appState.prescripcion.capitulos =
+    appState.prescripcion.capitulos || [];
+  appState.prescripcion.capitulos.push(nuevo);
+  appState.prescripcion.selectedCapituloId = id;
+}
+
 function getSelectedCapitulo() {
   const caps = appState.prescripcion.capitulos || [];
   if (!caps.length) return null;
@@ -156,21 +205,15 @@ function setSelectedCapitulo(id) {
 }
 
 // ==============================
-// Firestore: plantillas de prescripción
+// Firestore: plantillas de prescripción (texto)
 // ==============================
 
 async function ensurePrescripcionPlantillasLoaded() {
   appState.prescripcion = appState.prescripcion || {};
   if (appState.prescripcion.plantillasLoaded) return;
 
-  const db =
-    typeof getFirestoreInstance === "function"
-      ? getFirestoreInstance()
-      : null;
-  const auth =
-    typeof getAuthInstance === "function"
-      ? getAuthInstance()
-      : null;
+  const db = getFirestorePresc();
+  const auth = getAuthPresc();
 
   if (!db) {
     console.warn(
@@ -227,14 +270,8 @@ async function createPrescripcionPlantilla(nombre, texto) {
     return;
   }
 
-  const db =
-    typeof getFirestoreInstance === "function"
-      ? getFirestoreInstance()
-      : null;
-  const auth =
-    typeof getAuthInstance === "function"
-      ? getAuthInstance()
-      : null;
+  const db = getFirestorePresc();
+  const auth = getAuthPresc();
 
   let newItem = {
     id: "local-" + Date.now(),
@@ -289,10 +326,7 @@ async function updatePrescripcionPlantilla(id, nombre, texto) {
     appState.prescripcion.plantillas = list;
   }
 
-  const db =
-    typeof getFirestoreInstance === "function"
-      ? getFirestoreInstance()
-      : null;
+  const db = getFirestorePresc();
   if (!db) return;
 
   try {
@@ -322,10 +356,7 @@ async function deletePrescripcionPlantilla(id) {
       (p) => p.id !== id
     );
 
-  const db =
-    typeof getFirestoreInstance === "function"
-      ? getFirestoreInstance()
-      : null;
+  const db = getFirestorePresc();
   if (!db) return;
 
   try {
@@ -339,6 +370,243 @@ async function deletePrescripcionPlantilla(id) {
 }
 
 // ==============================
+// Firestore: referencias extra (material, mano de obra, etc.)
+// ==============================
+
+async function ensureExtraRefsLoaded() {
+  appState.prescripcion = appState.prescripcion || {};
+  if (appState.prescripcion.extraRefsLoaded) return;
+
+  const db = getFirestorePresc();
+  const auth = getAuthPresc();
+
+  if (!db) {
+    console.warn(
+      "[PRESCRIPCION] No hay instancia de Firestore. Referencias extra solo locales."
+    );
+    appState.prescripcion.extraRefsLoaded = true;
+    return;
+  }
+
+  let uid = null;
+  if (auth && auth.currentUser) {
+    uid = auth.currentUser.uid;
+  }
+
+  try {
+    let query = db.collection("prescripcion_referencias_extra");
+    if (uid) {
+      query = query.where("uid", "==", uid);
+    }
+
+    const snap = await query.get();
+    const refs = [];
+    snap.forEach((doc) => {
+      const d = doc.data() || {};
+      refs.push({
+        id: doc.id,
+        codigo: d.codigo || "",
+        descripcion: d.descripcion || "",
+        unidad: d.unidad || "Ud",
+        pvp: typeof d.pvp === "number" ? d.pvp : 0,
+      });
+    });
+
+    appState.prescripcion.extraRefs = refs;
+    appState.prescripcion.extraRefsLoaded = true;
+
+    console.log(
+      "[PRESCRIPCION] Referencias extra cargadas:",
+      refs.length
+    );
+  } catch (e) {
+    console.error(
+      "[PRESCRIPCION] Error cargando referencias extra:",
+      e
+    );
+    appState.prescripcion.extraRefsLoaded = true;
+  }
+}
+
+async function createExtraRef(codigo, descripcion, unidad, pvp) {
+  codigo = (codigo || "").trim();
+  descripcion = (descripcion || "").trim();
+  unidad = (unidad || "Ud").trim() || "Ud";
+  pvp = Number(pvp) || 0;
+
+  if (!codigo && !descripcion) {
+    alert("La referencia necesita al menos código o descripción.");
+    return;
+  }
+
+  const db = getFirestorePresc();
+  const auth = getAuthPresc();
+
+  let newItem = {
+    id: "local-" + Date.now(),
+    codigo,
+    descripcion,
+    unidad,
+    pvp,
+  };
+
+  if (!db) {
+    appState.prescripcion.extraRefs =
+      [newItem].concat(appState.prescripcion.extraRefs || []);
+    return;
+  }
+
+  let uid = null;
+  if (auth && auth.currentUser) {
+    uid = auth.currentUser.uid;
+  }
+
+  try {
+    const docRef = await db
+      .collection("prescripcion_referencias_extra")
+      .add({
+        uid: uid || null,
+        codigo,
+        descripcion,
+        unidad,
+        pvp,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+    newItem.id = docRef.id;
+    appState.prescripcion.extraRefs =
+      [newItem].concat(appState.prescripcion.extraRefs || []);
+  } catch (e) {
+    console.error(
+      "[PRESCRIPCION] Error creando referencia extra:",
+      e
+    );
+    appState.prescripcion.extraRefs =
+      [newItem].concat(appState.prescripcion.extraRefs || []);
+  }
+}
+
+async function updateExtraRef(id, codigo, descripcion, unidad, pvp) {
+  if (!id) return;
+  codigo = (codigo || "").trim();
+  descripcion = (descripcion || "").trim();
+  unidad = (unidad || "Ud").trim() || "Ud";
+  pvp = Number(pvp) || 0;
+
+  const list = appState.prescripcion.extraRefs || [];
+  const idx = list.findIndex((r) => r.id === id);
+  if (idx !== -1) {
+    list[idx] = { ...list[idx], codigo, descripcion, unidad, pvp };
+    appState.prescripcion.extraRefs = list;
+  }
+
+  const db = getFirestorePresc();
+  if (!db) return;
+
+  try {
+    await db
+      .collection("prescripcion_referencias_extra")
+      .doc(id)
+      .update({
+        codigo,
+        descripcion,
+        unidad,
+        pvp,
+        updatedAt: Date.now(),
+      });
+  } catch (e) {
+    console.error(
+      "[PRESCRIPCION] Error actualizando referencia extra:",
+      e
+    );
+  }
+}
+
+async function deleteExtraRef(id) {
+  if (!id) return;
+  const ok = window.confirm(
+    "¿Seguro que quieres borrar esta referencia extra?"
+  );
+  if (!ok) return;
+
+  appState.prescripcion.extraRefs =
+    (appState.prescripcion.extraRefs || []).filter(
+      (r) => r.id !== id
+    );
+
+  const db = getFirestorePresc();
+  if (!db) return;
+
+  try {
+    await db
+      .collection("prescripcion_referencias_extra")
+      .doc(id)
+      .delete();
+  } catch (e) {
+    console.error(
+      "[PRESCRIPCION] Error borrando referencia extra:",
+      e
+    );
+  }
+}
+
+async function duplicateExtraRef(id) {
+  const list = appState.prescripcion.extraRefs || [];
+  const ref = list.find((r) => r.id === id);
+  if (!ref) return;
+
+  const nuevoCodigo =
+    ref.codigo ? ref.codigo + "_COPY" : "";
+  await createExtraRef(
+    nuevoCodigo,
+    ref.descripcion,
+    ref.unidad,
+    ref.pvp
+  );
+}
+
+// Añadir referencia extra a capítulo actual
+function addExtraRefToCurrentCap(extraId) {
+  const cap = getSelectedCapitulo();
+  if (!cap) {
+    alert(
+      "Selecciona primero un capítulo en la columna izquierda."
+    );
+    return;
+  }
+  const list = appState.prescripcion.extraRefs || [];
+  const ref = list.find((r) => r.id === extraId);
+  if (!ref) return;
+
+  cap.lineas = cap.lineas || [];
+  cap.lineas.push({
+    id: "extra-" + extraId + "-" + Date.now(),
+    tipo: "extra",
+    codigo: ref.codigo || "",
+    descripcion: ref.descripcion || "",
+    cantidad: 1,
+    pvp: ref.pvp || 0,
+    extraRefId: extraId,
+  });
+}
+
+// ==============================
+// Export (stubs)
+// ==============================
+
+function exportPrescripcionPDF() {
+  alert(
+    "La exportación PDF de mediciones se implementará en un siguiente hito."
+  );
+}
+
+function exportPrescripcionBC3() {
+  alert(
+    "La exportación BC3 se implementará en un siguiente hito."
+  );
+}
+
+// ==============================
 // Render principal
 // ==============================
 
@@ -348,18 +616,20 @@ async function renderDocPrescripcionView() {
 
   ensureCapitulosIniciales();
   await ensurePrescripcionPlantillasLoaded();
+  await ensureExtraRefsLoaded();
 
   const caps = appState.prescripcion.capitulos || [];
   const plantillas = appState.prescripcion.plantillas || [];
+  const extraRefs = appState.prescripcion.extraRefs || [];
   const capSel = getSelectedCapitulo();
 
-  // Render capítulos (izquierda)
+  // --------- Columna izquierda: capítulos ---------
   let capitulosHTML = "";
   if (!caps.length) {
     capitulosHTML = `
       <p class="text-muted" style="font-size:0.85rem;">
         No se han podido generar capítulos desde el presupuesto.<br />
-        Asegúrate de tener un presupuesto cargado.
+        Asegúrate de tener un presupuesto cargado o crea un capítulo manual.
       </p>
     `;
   } else {
@@ -373,9 +643,10 @@ async function renderDocPrescripcionView() {
           (acc, l) => acc + (Number(l.cantidad) || 0),
           0
         );
+        const esManual = String(c.id).startsWith("manual-");
 
         const refsPreview = lineas
-          .slice(0, 4)
+          .slice(0, 3)
           .map((l) => {
             const cod = l.codigo || "";
             const desc = l.descripcion || "";
@@ -402,7 +673,9 @@ async function renderDocPrescripcionView() {
             data-presc-cap-id="${c.id}"
           >
             <div class="presc-capitulo-title">
-              ${c.nombre || "(sin título)"}
+              ${c.nombre || "(sin título)"}${
+          esManual ? ' <span class="chip chip-soft">manual</span>' : ""
+        }
             </div>
             <div class="presc-capitulo-meta">
               <span>${totalLineas} referencias</span>
@@ -419,16 +692,114 @@ async function renderDocPrescripcionView() {
       .join("");
   }
 
-  // Texto del capítulo seleccionado (centro)
-  const textoCap =
-    (capSel && capSel.texto) ||
-    "";
+  // --------- Columna central: texto + referencias ---------
+  const textoCap = capSel ? capSel.texto || "" : "";
+  const nombreCap = capSel ? capSel.nombre || "" : "";
 
-  const nombreCap =
-    (capSel && capSel.nombre) ||
-    "";
+  let refsCapituloHTML = "";
+  if (!capSel || !(capSel.lineas || []).length) {
+    refsCapituloHTML = `
+      <p class="text-muted" style="font-size:0.8rem;">
+        Este capítulo no tiene referencias asociadas todavía.
+      </p>
+    `;
+  } else {
+    refsCapituloHTML = `
+      <div class="presc-capitulo-ref-table">
+        ${(capSel.lineas || [])
+          .map((l) => {
+            const tipo = l.tipo || "budget";
+            const cod = l.codigo || "";
+            const desc = l.descripcion || "";
+            const cant =
+              typeof l.cantidad !== "undefined"
+                ? l.cantidad
+                : "";
+            const pvp =
+              typeof l.pvp === "number" ? l.pvp : 0;
+            const importe =
+              (Number(cant) || 0) * (Number(pvp) || 0);
 
-  // Plantillas (derecha)
+            const readonly = tipo === "budget";
+            return `
+              <div class="presc-ref-row" data-presc-ref-row-id="${l.id}">
+                <span class="presc-ref-code">${cod}</span>
+                <span class="presc-ref-desc">${desc}</span>
+                <span class="presc-ref-qty">
+                  ${
+                    readonly
+                      ? `x${cant}`
+                      : `<input type="number" min="0" step="0.01"
+                               class="presc-ref-qty-input"
+                               value="${cant}" />`
+                  }
+                </span>
+                <span class="presc-ref-pvp">${
+                  pvp.toFixed(2)
+                } €</span>
+                <span class="presc-ref-importe">${
+                  importe.toFixed(2)
+                } €</span>
+                <span class="presc-ref-actions">
+                  ${
+                    readonly
+                      ? ""
+                      : `<button type="button"
+                                 class="btn btn-xs btn-outline presc-ref-del-btn"
+                                 title="Quitar referencia extra del capítulo">
+                            ✖
+                         </button>`
+                  }
+                </span>
+              </div>
+            `;
+          })
+          .join("")}
+      </div>
+    `;
+  }
+
+  const columnaCentralHTML = capSel
+    ? `
+      <div class="form-group">
+        <label>Título del capítulo</label>
+        <input
+          type="text"
+          id="prescCapituloTituloInput"
+          class="form-control"
+          value="${nombreCap.replace(/"/g, "&quot;")}"
+        />
+      </div>
+
+      <div class="form-group">
+        <label>Texto de mediciones</label>
+        <textarea
+          id="prescCapituloTexto"
+          class="form-control"
+          rows="14"
+          placeholder="Arrastra aquí una plantilla o escribe el texto de mediciones..."
+        >${textoCap}</textarea>
+        <p style="font-size:0.78rem; color:#6b7280; margin-top:0.25rem;">
+          Drag & drop: arrastra una plantilla desde la derecha sobre este cuadro para
+          rellenar o sustituir el texto del capítulo.
+        </p>
+      </div>
+
+      <div class="form-group">
+        <label>Referencias incluidas en este capítulo</label>
+        ${refsCapituloHTML}
+      </div>
+    `
+    : `
+      <p class="text-muted" style="font-size:0.85rem;">
+        No hay ningún capítulo seleccionado. Selecciona uno en la columna izquierda
+        o crea un capítulo manual.
+      </p>
+    `;
+
+  // --------- Columna derecha: plantillas + referencias extra ---------
+
+  // Plantillas
   let plantillasHTML = "";
   if (!plantillas.length) {
     plantillasHTML = `
@@ -493,12 +864,80 @@ async function renderDocPrescripcionView() {
       .join("");
   }
 
+  // Referencias extra
+  let extraRefsHTML = "";
+  if (!extraRefs.length) {
+    extraRefsHTML = `
+      <p class="text-muted" style="font-size:0.85rem;">
+        Aún no hay referencias extra (switches, cableado, mano de obra...).<br/>
+        Usa el botón "Nueva referencia extra" para crear la primera.
+      </p>
+    `;
+  } else {
+    extraRefsHTML = extraRefs
+      .map((r) => {
+        const cod = r.codigo || "";
+        const desc = r.descripcion || "";
+        const unidad = r.unidad || "Ud";
+        const pvp =
+          typeof r.pvp === "number" ? r.pvp : 0;
+
+        return `
+          <div class="presc-extra-item" data-presc-extra-id="${r.id}">
+            <div class="presc-extra-main">
+              <div class="presc-extra-line1">
+                <span class="presc-extra-code">${cod}</span>
+                <span class="presc-extra-price">${pvp.toFixed(
+                  2
+                )} € / ${unidad}</span>
+              </div>
+              <div class="presc-extra-desc">
+                ${desc || "<i>(sin descripción)</i>"}
+              </div>
+            </div>
+            <div class="presc-extra-actions">
+              <button type="button" class="btn btn-xs" data-presc-extra-add="${r.id}">
+                ➕ Añadir al capítulo
+              </button>
+              <button type="button" class="btn btn-xs btn-outline" data-presc-extra-dup="${r.id}">
+                ⧉
+              </button>
+              <button type="button" class="btn btn-xs btn-outline" data-presc-extra-edit="${r.id}">
+                ✏️
+              </button>
+              <button type="button" class="btn btn-xs" data-presc-extra-del="${r.id}">
+                🗑️
+              </button>
+            </div>
+          </div>
+        `;
+      })
+      .join("");
+  }
+
   container.innerHTML = `
+    <div class="card" style="margin-bottom:0.75rem;">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Prescripción: resumen inteligente de documentación</div>
+          <div class="card-subtitle">
+            Genera mediciones a partir del presupuesto, añade referencias extra y aplica plantillas de texto técnicas.
+          </div>
+        </div>
+        <div style="display:flex; flex-wrap:wrap; gap:0.5rem;">
+          <button type="button" id="prescExportPdfBtn" class="btn btn-xs btn-outline">📄 PDF mediciones</button>
+          <button type="button" id="prescExportBc3Btn" class="btn btn-xs btn-outline">📦 Exportar BC3</button>
+          <button type="button" id="prescNewPlantillaBtn" class="btn btn-xs btn-primary">➕ Nueva plantilla</button>
+          <button type="button" id="prescNewExtraRefBtn" class="btn btn-xs btn-secondary">➕ Nueva referencia extra</button>
+        </div>
+      </div>
+    </div>
+
     <div
       class="proyecto-layout"
       style="
         display:grid;
-        grid-template-columns: 1fr 1.4fr 1.2fr;
+        grid-template-columns: 1fr 1.5fr 1.4fr;
         gap: 1rem;
         align-items:flex-start;
       "
@@ -509,11 +948,10 @@ async function renderDocPrescripcionView() {
           <div>
             <div class="card-title">Capítulos de prescripción</div>
             <div class="card-subtitle">
-              Se generan automáticamente a partir de las secciones y referencias del presupuesto.
+              Se generan desde las secciones del presupuesto o como capítulos manuales.
             </div>
           </div>
           <div style="display:flex; gap:0.5rem; align-items:center;">
-            <span class="chip">Prescripción</span>
             <button
               type="button"
               id="prescReloadFromBudgetBtn"
@@ -521,6 +959,14 @@ async function renderDocPrescripcionView() {
               title="Regenerar capítulos desde el presupuesto actual"
             >
               🔄 Regenerar
+            </button>
+            <button
+              type="button"
+              id="prescNewManualCapBtn"
+              class="btn btn-xs btn-primary"
+              title="Crear un capítulo manual solo con referencias extra"
+            >
+              ➕ Capítulo manual
             </button>
           </div>
         </div>
@@ -533,108 +979,45 @@ async function renderDocPrescripcionView() {
       <div class="card">
         <div class="card-header">
           <div>
-            <div class="card-title">
-              Texto del capítulo
-            </div>
+            <div class="card-title">Texto del capítulo</div>
             <div class="card-subtitle">
-              Selecciona un capítulo a la izquierda y edita aquí el texto de mediciones.
-              Puedes arrastrar una plantilla desde la columna derecha.
+              Define el texto de mediciones y visualiza todas las referencias asociadas (2N + extras).
             </div>
           </div>
         </div>
         <div class="card-body">
-          ${
-            capSel
-              ? `
-            <div class="form-group">
-              <label>Título del capítulo</label>
-              <input
-                type="text"
-                id="prescCapituloTituloInput"
-                class="form-control"
-                value="${nombreCap.replace(/"/g, "&quot;")}"
-              />
-            </div>
-
-            <div class="form-group">
-              <label>Texto de mediciones</label>
-              <textarea
-                id="prescCapituloTexto"
-                class="form-control"
-                rows="14"
-                placeholder="Arrastra aquí una plantilla o escribe el texto de mediciones..."
-              >${textoCap}</textarea>
-              <p style="font-size:0.78rem; color:#6b7280; margin-top:0.25rem;">
-                Drag & drop: arrastra una plantilla desde la derecha sobre este cuadro para
-                rellenar el capítulo.
-              </p>
-            </div>
-
-            <div class="form-group">
-              <label>Referencias incluidas en este capítulo</label>
-              ${
-                (capSel.lineas || []).length
-                  ? `
-                <div class="presc-capitulo-ref-table">
-                  ${(capSel.lineas || [])
-                    .map((l) => {
-                      const cod = l.codigo || "";
-                      const desc = l.descripcion || "";
-                      const cant =
-                        typeof l.cantidad !== "undefined"
-                          ? l.cantidad
-                          : "";
-                      return `
-                        <div class="presc-ref-row">
-                          <span class="presc-ref-code">${cod}</span>
-                          <span class="presc-ref-desc">${desc}</span>
-                          <span class="presc-ref-qty">x${cant}</span>
-                        </div>
-                      `;
-                    })
-                    .join("")}
-                </div>
-              `
-                  : `
-                <p class="text-muted" style="font-size:0.8rem;">
-                  Este capítulo no tiene referencias asociadas en el presupuesto.
-                </p>
-              `
-              }
-            </div>
-          `
-              : `
-            <p class="text-muted" style="font-size:0.85rem;">
-              No hay ningún capítulo seleccionado. Genera capítulos desde el presupuesto
-              o haz clic en uno de la columna izquierda.
-            </p>
-          `
-          }
+          ${columnaCentralHTML}
         </div>
       </div>
 
-      <!-- Columna 3: Plantillas -->
-      <div class="card">
-        <div class="card-header">
-          <div>
-            <div class="card-title">Plantillas de prescripción</div>
-            <div class="card-subtitle">
-              Define textos estándar por tipo de sistema (videoportero, control de accesos, monitores, etc.)
-              y aplícalos a los capítulos.
+      <!-- Columna 3: Plantillas + referencias extra -->
+      <div style="display:flex; flex-direction:column; gap:0.75rem;">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Plantillas de texto</div>
+              <div class="card-subtitle">
+                Textos estándar por tipo de sistema (videoportero, accesos, monitores, etc.).
+              </div>
             </div>
           </div>
-          <div>
-            <button
-              type="button"
-              id="prescNewPlantillaBtn"
-              class="btn btn-sm btn-primary"
-            >
-              ➕ Nueva plantilla
-            </button>
+          <div class="card-body presc-plantillas-list">
+            ${plantillasHTML}
           </div>
         </div>
-        <div class="card-body presc-plantillas-list">
-          ${plantillasHTML}
+
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Referencias extra (no 2N)</div>
+              <div class="card-subtitle">
+                Switches, cableado, mano de obra, etc. Añádelas a cualquier capítulo o crea capítulos solo con ellas.
+              </div>
+            </div>
+          </div>
+          <div class="card-body presc-extra-list">
+            ${extraRefsHTML}
+          </div>
         </div>
       </div>
     </div>
@@ -651,23 +1034,85 @@ function attachPrescripcionHandlers() {
   const container = getPrescripcionAppContent();
   if (!container) return;
 
-  // Regenerar capítulos desde presupuesto
+  // Acciones superiores
+  const pdfBtn = container.querySelector("#prescExportPdfBtn");
+  if (pdfBtn) {
+    pdfBtn.addEventListener("click", exportPrescripcionPDF);
+  }
+  const bc3Btn = container.querySelector("#prescExportBc3Btn");
+  if (bc3Btn) {
+    bc3Btn.addEventListener("click", exportPrescripcionBC3);
+  }
+
+  const newPlantillaBtn = container.querySelector("#prescNewPlantillaBtn");
+  if (newPlantillaBtn) {
+    newPlantillaBtn.addEventListener("click", async () => {
+      const nombre = window.prompt(
+        "Nombre de la plantilla:",
+        ""
+      );
+      if (nombre === null) return;
+
+      const texto = window.prompt(
+        "Texto de la plantilla (puedes editarlo más tarde):",
+        ""
+      );
+      if (texto === null) return;
+
+      await createPrescripcionPlantilla(nombre, texto);
+      renderDocPrescripcionView();
+    });
+  }
+
+  const newExtraBtn = container.querySelector("#prescNewExtraRefBtn");
+  if (newExtraBtn) {
+    newExtraBtn.addEventListener("click", async () => {
+      const codigo = window.prompt("Código de la referencia:", "");
+      if (codigo === null) return;
+      const descripcion = window.prompt("Descripción:", "");
+      if (descripcion === null) return;
+      const unidad = window.prompt("Unidad (Ud, m, h...):", "Ud");
+      if (unidad === null) return;
+      const pvpStr = window.prompt("PVP (número):", "0");
+      if (pvpStr === null) return;
+      const pvp = Number(pvpStr) || 0;
+
+      await createExtraRef(codigo, descripcion, unidad, pvp);
+      renderDocPrescripcionView();
+    });
+  }
+
+  // Capítulos: regenerar / nuevo manual
   const reloadBtn = container.querySelector("#prescReloadFromBudgetBtn");
   if (reloadBtn) {
     reloadBtn.addEventListener("click", () => {
       const ok = window.confirm(
         "Esto regenerará los capítulos desde el presupuesto actual.\n\n" +
-          "⚠️ Se perderán los textos de capítulo que tengas escritos.\n\n" +
+          "⚠️ Se perderán los textos y referencias extra asociadas a capítulos generados automáticamente.\n\n" +
           "¿Quieres continuar?"
       );
       if (!ok) return;
 
       const caps = buildCapitulosFromPresupuesto();
-      appState.prescripcion.capitulos = caps;
-      appState.prescripcion.selectedCapituloId = caps.length
-        ? caps[0].id
-        : null;
+      // mantenemos capítulos manuales
+      const manuales =
+        (appState.prescripcion.capitulos || []).filter((c) =>
+          String(c.id).startsWith("manual-")
+        );
+      appState.prescripcion.capitulos = caps.concat(manuales);
+      appState.prescripcion.selectedCapituloId =
+        appState.prescripcion.capitulos.length
+          ? appState.prescripcion.capitulos[0].id
+          : null;
 
+      renderDocPrescripcionView();
+    });
+  }
+
+  const newManualCapBtn = container.querySelector("#prescNewManualCapBtn");
+  if (newManualCapBtn) {
+    newManualCapBtn.addEventListener("click", () => {
+      createManualCapitulo();
       renderDocPrescripcionView();
     });
   }
@@ -685,9 +1130,7 @@ function attachPrescripcionHandlers() {
     });
 
   // Edición título capítulo
-  const tituloInput = container.querySelector(
-    "#prescCapituloTituloInput"
-  );
+  const tituloInput = container.querySelector("#prescCapituloTituloInput");
   if (tituloInput) {
     tituloInput.addEventListener("input", (ev) => {
       const cap = getSelectedCapitulo();
@@ -732,7 +1175,7 @@ function attachPrescripcionHandlers() {
     });
   }
 
-  // Drag start en plantillas
+  // Plantillas: drag, aplicar, editar, borrar
   container
     .querySelectorAll("[data-presc-plantilla-id]")
     .forEach((el) => {
@@ -748,28 +1191,6 @@ function attachPrescripcionHandlers() {
       });
     });
 
-  // Crear nueva plantilla
-  const newBtn = container.querySelector("#prescNewPlantillaBtn");
-  if (newBtn) {
-    newBtn.addEventListener("click", async () => {
-      const nombre = window.prompt(
-        "Nombre de la plantilla:",
-        ""
-      );
-      if (nombre === null) return;
-
-      const texto = window.prompt(
-        "Texto de la plantilla (puedes editarlo más tarde):",
-        ""
-      );
-      if (texto === null) return;
-
-      await createPrescripcionPlantilla(nombre, texto);
-      renderDocPrescripcionView();
-    });
-  }
-
-  // Aplicar plantilla al capítulo seleccionado (clic)
   container
     .querySelectorAll("[data-presc-plantilla-apply]")
     .forEach((btn) => {
@@ -804,7 +1225,6 @@ function attachPrescripcionHandlers() {
       });
     });
 
-  // Editar plantilla
   container
     .querySelectorAll("[data-presc-plantilla-edit]")
     .forEach((btn) => {
@@ -840,7 +1260,6 @@ function attachPrescripcionHandlers() {
       });
     });
 
-  // Borrar plantilla
   container
     .querySelectorAll("[data-presc-plantilla-delete]")
     .forEach((btn) => {
@@ -854,6 +1273,118 @@ function attachPrescripcionHandlers() {
         renderDocPrescripcionView();
       });
     });
+
+  // Referencias extra: add / dup / edit / delete
+  container
+    .querySelectorAll("[data-presc-extra-add]")
+    .forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.getAttribute(
+          "data-presc-extra-add"
+        );
+        if (!id) return;
+        addExtraRefToCurrentCap(id);
+        renderDocPrescripcionView();
+      });
+    });
+
+  container
+    .querySelectorAll("[data-presc-extra-dup]")
+    .forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const id = btn.getAttribute(
+          "data-presc-extra-dup"
+        );
+        if (!id) return;
+        await duplicateExtraRef(id);
+        renderDocPrescripcionView();
+      });
+    });
+
+  container
+    .querySelectorAll("[data-presc-extra-edit]")
+    .forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const id = btn.getAttribute(
+          "data-presc-extra-edit"
+        );
+        if (!id) return;
+
+        const list = appState.prescripcion.extraRefs || [];
+        const ref = list.find((r) => r.id === id);
+        if (!ref) return;
+
+        const codigo = window.prompt(
+          "Código:",
+          ref.codigo || ""
+        );
+        if (codigo === null) return;
+        const descripcion = window.prompt(
+          "Descripción:",
+          ref.descripcion || ""
+        );
+        if (descripcion === null) return;
+        const unidad = window.prompt(
+          "Unidad:",
+          ref.unidad || "Ud"
+        );
+        if (unidad === null) return;
+        const pvpStr = window.prompt(
+          "PVP:",
+          String(ref.pvp || 0)
+        );
+        if (pvpStr === null) return;
+        const pvp = Number(pvpStr) || 0;
+
+        await updateExtraRef(id, codigo, descripcion, unidad, pvp);
+        renderDocPrescripcionView();
+      });
+    });
+
+  container
+    .querySelectorAll("[data-presc-extra-del]")
+    .forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const id = btn.getAttribute(
+          "data-presc-extra-del"
+        );
+        if (!id) return;
+
+        await deleteExtraRef(id);
+        renderDocPrescripcionView();
+      });
+    });
+
+  // Referencias extra ya añadidas al capítulo (cambiar cantidad / borrar)
+  const cap = getSelectedCapitulo();
+  if (cap && cap.lineas && cap.lineas.length) {
+    const rows = container.querySelectorAll(
+      ".presc-ref-row[data-presc-ref-row-id]"
+    );
+    rows.forEach((row) => {
+      const rowId = row.getAttribute(
+        "data-presc-ref-row-id"
+      );
+      const linea = cap.lineas.find((l) => l.id === rowId);
+      if (!linea) return;
+      const tipo = linea.tipo || "budget";
+      if (tipo === "extra") {
+        const qtyInput = row.querySelector(".presc-ref-qty-input");
+        if (qtyInput) {
+          qtyInput.addEventListener("input", () => {
+            linea.cantidad = Number(qtyInput.value) || 0;
+          });
+        }
+        const delBtn = row.querySelector(".presc-ref-del-btn");
+        if (delBtn) {
+          delBtn.addEventListener("click", () => {
+            cap.lineas = cap.lineas.filter((l) => l.id !== rowId);
+            renderDocPrescripcionView();
+          });
+        }
+      }
+    });
+  }
 }
 
 console.log(
