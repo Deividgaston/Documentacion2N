@@ -1527,7 +1527,7 @@ async function exportarPDFTecnico() {
 
     const lines = doc.splitTextToSize(texto, pageW - 40);
     const lineH = 5.5;
-    const limitY = pageH - 25;
+    const limitY = pageH - 35;
 
     tocEntries.push({ title: baseTitle, page: current });
 
