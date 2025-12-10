@@ -1,10 +1,6 @@
 // js/ui_documentacion.js
 // Página de DOCUMENTACIÓN: memoria de calidades auto-generada + editor flotante
 
-// ======================================================
-// ESTADO INICIAL
-// ======================================================
-
 window.appState = window.appState || {};
 appState.documentacion = appState.documentacion || {
   idioma: "es", // "es" | "en" | "pt"
@@ -19,23 +15,10 @@ appState.documentacion = appState.documentacion || {
   selectedFichasMediaIds: [], // fichas técnicas seleccionadas desde la biblioteca
   mediaSearchTerm: "", // término de búsqueda para documentación gráfica
   fichasSearchTerm: "", // término de búsqueda para fichas técnicas
-  includedSections: {}, // mapa: sectionKey -> true/false (incluir en PDF técnico / comercial)
+  includedSections: {}, // mapa: sectionKey -> true/false (incluir en PDF técnico)
   logoData: null, // cache logo para PDF
   sectionTitles: {}, // títulos personalizados por sección
 };
-
-// ======================================================
-// HELPERS BÁSICOS DE CONTENEDOR
-// ======================================================
-
-// Helpers básicos de contenedor
-function getDocAppContent() {
-  // Usamos el mismo contenedor que el resto de vistas
-  if (typeof window.getAppContent === "function") {
-    return window.getAppContent();
-  }
-  return document.getElementById("appContent");
-}
 
 // ======================================================
 // PERSISTENCIA LOCAL
@@ -43,7 +26,6 @@ function getDocAppContent() {
 
 const DOC_STORAGE_KEY = "docState_v1";
 
-// Cargar estado guardado desde localStorage
 (function loadDocStateFromLocalStorage() {
   try {
     const raw = window.localStorage && localStorage.getItem(DOC_STORAGE_KEY);
@@ -58,7 +40,6 @@ const DOC_STORAGE_KEY = "docState_v1";
   }
 })();
 
-// Guardar estado relevante en localStorage
 function saveDocStateToLocalStorage() {
   try {
     if (!window.localStorage) return;
@@ -91,7 +72,6 @@ const DOC_LANGS = {
   pt: { code: "pt", label: "Português (PT)" },
 };
 
-// Orden de las secciones (incluye presentacion_empresa al inicio)
 const DOC_SECTION_ORDER = [
   "presentacion_empresa",
   "resumen",
@@ -105,14 +85,11 @@ const DOC_SECTION_ORDER = [
   "otros",
 ];
 
-// Logo por defecto
 const DOC_LOGO_DEFAULT_URL = "img/logo_2n.svg";
-
-// Imagen portada técnica / comercial
 const DOC_TECH_COVER_URL = "img/PortadaTecnica.jpg";
 
 // ======================================================
-// PLANTILLAS BASE POR IDIOMA
+// PLANTILLAS BASE (para IA / autogeneración)
 // ======================================================
 
 const DOC_BASE_TEMPLATES = {
@@ -120,68 +97,68 @@ const DOC_BASE_TEMPLATES = {
     resumen:
       "El presente documento describe la solución de videoportero IP y control de accesos propuesta para el proyecto {{NOMBRE_PROYECTO}}, promovido por {{PROMOTORA}}.",
     sistema:
-      "La solución se basa en un sistema de videoportero IP totalmente distribuido, con dispositivos 2N en acceso peatonal, zonas comunes y viviendas.",
+      "La solución se basa en un sistema de videoportero IP totalmente distribuido, con dispositivos 2N conectados a la red informática del edificio...",
     equipos:
       "La solución incluye los siguientes equipos principales:\n\n{{LISTADO_EQUIPOS}}",
     infraestructura:
-      "Toda la infraestructura de comunicaciones se apoya en una red IP basada en cableado estructurado y electrónica de red gestionable.",
+      "Toda la infraestructura de comunicaciones se apoya en una red IP basada en cableado estructurado y electrónica de red gestionable...",
     servicios:
-      "La solución puede complementarse con servicios cloud para gestión remota, credenciales móviles, QR temporales y monitorización.",
+      "La solución puede complementarse con servicios cloud para gestión remota, monitorización proactiva y actualizaciones de firmware...",
     normativa_red:
-      "Cumplimiento de la Directiva RED (Radio Equipment Directive) y marcado CE aplicable a los equipos 2N y su electrónica asociada.",
+      "Los equipos cumplen con la Directiva RED (Radio Equipment Directive) y las normas europeas aplicables en materia de compatibilidad electromagnética...",
     normativa_lpd:
-      "Cumplimiento de la normativa de protección de datos (LPD / GDPR), incluyendo principios de minimización, legitimación y deber de información.",
+      "La instalación deberá cumplir con la normativa de protección de datos (LPD / GDPR), estableciendo políticas claras de conservación y acceso a las grabaciones...",
     normativa_ciber:
-      "Buenas prácticas de ciberseguridad: dispositivos IP endurecidos, actualizaciones de firmware firmadas, segmentación de red y soporte del Grupo Axis.",
+      "Los dispositivos de 2N forman parte del grupo Axis Communications, lo que garantiza un exigente enfoque en ciberseguridad, actualizaciones periódicas y hardening de la solución...",
     otros:
-      "En caso de requerirlo, se podrán añadir servicios adicionales, integraciones con PMS / domótica y ampliaciones futuras de la solución.",
+      "En caso de requerirlo, se podrán añadir servicios adicionales, integraciones con plataformas de terceros o funcionalidades específicas para el proyecto.",
   },
 
   en: {
     resumen:
-      "This document describes the proposed IP video intercom and access control solution for the project {{NOMBRE_PROYECTO}}, developed by {{PROMOTORA}}.",
+      "This document describes the proposed IP video intercom and access control solution for project {{NOMBRE_PROYECTO}}, developed by {{PROMOTORA}}.",
     sistema:
-      "The solution is based on a fully distributed IP video door entry system, using 2N devices on main entrances, common areas and apartments.",
+      "The solution is based on a fully distributed IP video intercom system, using 2N devices connected to the building’s IT network...",
     equipos:
       "The solution includes the following main devices:\n\n{{LISTADO_EQUIPOS}}",
     infraestructura:
-      "All communication infrastructure is based on a structured cabling IP network with managed switches.",
+      "All communication infrastructure relies on an IP network with structured cabling and manageable network switches...",
     servicios:
-      "The solution can be complemented with cloud services for remote management, mobile credentials, temporary QR codes and monitoring.",
+      "The solution can be complemented with cloud services for remote management, proactive monitoring, and firmware updates...",
     normativa_red:
-      "RED Directive (Radio Equipment Directive) and CE marking compliance for 2N devices and associated network equipment.",
+      "The equipment complies with the Radio Equipment Directive (RED) and applicable European EMC standards...",
     normativa_lpd:
-      "GDPR and data protection compliance, including minimisation, legal basis and information duties.",
+      "The system must comply with GDPR and local data protection regulations, including retention and access policies for recordings...",
     normativa_ciber:
-      "Cybersecurity best practices: hardened IP devices, signed firmware updates, network segmentation and Axis Group support.",
+      "2N devices are part of Axis Communications Group, following strict cybersecurity practices, regular updates, and hardening guidelines...",
     otros:
-      "Additional services, PMS / home automation integrations and future extensions of the solution can be added upon request.",
+      "If required, additional services, third-party integrations, or project-specific features can be added.",
   },
 
   pt: {
     resumen:
       "O presente documento descreve a solução proposta de videoporteiro IP e controlo de acessos para o projeto {{NOMBRE_PROYECTO}}, promovido por {{PROMOTORA}}.",
     sistema:
-      "A solução baseia-se num sistema de videoporteiro IP totalmente distribuído, com dispositivos 2N nas entradas, zonas comuns e frações.",
+      "A solução baseia-se num sistema de videoporteiro IP totalmente distribuído, com dispositivos 2N ligados à rede informática do edifício...",
     equipos:
       "A solução inclui os seguintes equipamentos principais:\n\n{{LISTADO_EQUIPOS}}",
     infraestructura:
-      "Toda a infraestrutura de comunicações assenta numa rede IP com cablagem estruturada e switches geríveis.",
+      "Toda a infraestrutura de comunicações assenta numa rede IP com cablagem estruturada e switches geríveis...",
     servicios:
-      "A solução pode ser complementada com serviços cloud para gestão remota, credenciais móveis, QR temporários e monitorização.",
+      "A solução pode ser complementada com serviços cloud para gestão remota, monitorização proactiva e atualizações de firmware...",
     normativa_red:
-      "Cumprimento da Diretiva RED (Radio Equipment Directive) e marcação CE aplicável aos equipamentos 2N.",
+      "Os equipamentos cumprem a Diretiva RED (Radio Equipment Directive) e as normas europeias aplicáveis em compatibilidade electromagnética...",
     normativa_lpd:
-      "Cumprimento do RGPD e legislação de proteção de dados, incluindo minimização, base legal e dever de informação.",
+      "A instalação deve cumprir o RGPD e a legislação local de proteção de dados, definindo políticas claras de conservação e acesso às gravações...",
     normativa_ciber:
-      "Boas práticas de cibersegurança: dispositivos IP reforçados, firmware assinado, segmentação de rede e suporte do Grupo Axis.",
+      "Os dispositivos 2N fazem parte do grupo Axis Communications, seguindo práticas rigorosas de cibersegurança e atualizações periódicas...",
     otros:
-      "Podem ser adicionados serviços adicionais, integrações com PMS / domótica e futuras ampliações da solução.",
+      "Se necessário, podem ser adicionados serviços adicionais, integrações com plataformas de terceiros ou funcionalidades específicas para o projeto.",
   },
 };
 
 // ======================================================
-// HELPERS DE TOKENS Y AUTO-GENERACIÓN
+// HELPERS PARA TOKENS Y AUTOGENERACIÓN
 // ======================================================
 
 function buildDocTokens() {
@@ -226,15 +203,18 @@ function buildDocTokens() {
 }
 
 function applyTokensToTemplate(txt, tokens) {
+  let out = txt || "";
   if (!txt) return "";
-  let out = String(txt);
   Object.keys(tokens).forEach((k) => {
     out = out.replace(new RegExp(k, "g"), tokens[k]);
   });
   return out;
 }
 
-// Generar todas las secciones en base a plantillas
+// ======================================================
+// AUTOGENERACIÓN DE SECCIONES
+// ======================================================
+
 function autoGenerateDocumentacion(idioma) {
   const lang = DOC_BASE_TEMPLATES[idioma] ? idioma : "es";
   const base = DOC_BASE_TEMPLATES[lang];
@@ -243,44 +223,46 @@ function autoGenerateDocumentacion(idioma) {
   const nuevas = {};
 
   DOC_SECTION_ORDER.forEach((key) => {
-    if (key === "presentacion_empresa") {
-      // Texto fijo por defecto (se puede editar después)
-      nuevas[key] =
-        appState.documentacion.secciones[key] ||
-        "2N lidera el camino en tecnología de control de acceso: ofrecemos las mejores características modernas sin comprometer la confiabilidad y la facilidad de uso.\n\n" +
-          "2N tiene más de 30 años de experiencia en el desarrollo de productos innovadores y de alta calidad: después de inventar el primer intercomunicador IP del mundo en 2008 y el primer intercomunicador LTE / 4G diez años después, continuamos empujando los límites y reaccionando a las cambiantes demandas del mercado.\n\n" +
-          "Nuestra cartera incluye intercomunicadores, unidades contestadoras, lectores de control de acceso y sistemas de elevación. Juntos, estos productos crean una solución IP avanzada para cualquier proyecto residencial.\n\n" +
-          "En 2N nos tomamos el diseño tan en serio como la innovación, y los Red Dot e iF Design Awards lo demuestran.\n\n" +
-          "2N fue fundada en 1991 en Praga. En 2016 se unió al Grupo Axis, aumentando estabilidad e innovación.";
-    } else {
-      const tpl = base[key] || "";
-      nuevas[key] = applyTokensToTemplate(tpl, tokens);
-    }
+    const tpl = base[key] || "";
+    nuevas[key] = applyTokensToTemplate(tpl, tokens);
   });
 
   appState.documentacion.secciones = nuevas;
   appState.documentacion.ultimaAutoGen = new Date().toISOString();
-  appState.documentacion.idioma = lang;
 
   saveDocStateToLocalStorage();
 }
 
 // ======================================================
-// UTILIDADES GENERALES
+// HELPERS BÁSICOS
 // ======================================================
 
 function docEscapeHtml(str) {
-  if (!str && str !== 0) return "";
+  if (!str) return "";
   return String(str)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
 }
 
+function getDocAppContent() {
+  if (typeof window.getDocAppContent === "function") {
+    return window.getDocAppContent();
+  }
+  if (typeof window.getAppContent === "function") {
+    return window.getAppContent();
+  }
+  return document.getElementById("appContent");
+}
+
+// ======================================================
+// LABELS Y TÍTULOS
+// ======================================================
+
 function labelForSection(key) {
   switch (key) {
     case "presentacion_empresa":
-      return "Presentación de empresa";
+      return "Presentación de la empresa";
     case "resumen":
       return "Resumen del proyecto";
     case "sistema":
@@ -307,32 +289,26 @@ function labelForSection(key) {
 function getSectionTitle(key) {
   const titles = appState.documentacion.sectionTitles || {};
   const custom = titles[key];
-
-  if (custom && String(custom).trim().length > 0) {
-    return String(custom).trim();
-  }
+  if (custom && custom.trim().length > 0) return custom.trim();
   return labelForSection(key);
 }
 
 function getSectionIncluded(key) {
   const m = appState.documentacion.includedSections || {};
   if (typeof m[key] === "boolean") return m[key];
-  return true; // por defecto incluidas
+  return true;
 }
 
 // ======================================================
-// RENDER MEDIA DE SECCIÓN (chips)
+// RENDER SECCIONES
 // ======================================================
 
 function renderSectionMediaHTML(sectionKey) {
-  // La sección presentacion_empresa NO admite media
-  if (sectionKey === "presentacion_empresa") return "";
-
   const mediaLib = appState.documentacion.mediaLibrary || [];
   const map = {};
   mediaLib.forEach((m) => (map[m.id] = m));
 
-  const ids = appState.documentacion.sectionMedia?.[sectionKey] || [];
+  const ids = (appState.documentacion.sectionMedia || {})[sectionKey] || [];
   if (!ids.length) return "";
 
   return ids
@@ -341,10 +317,9 @@ function renderSectionMediaHTML(sectionKey) {
       if (!m) return "";
 
       const mime = (m.mimeType || "").toLowerCase();
-      const url = (m.url || "").toLowerCase();
       const isImg =
         mime.startsWith("image/") ||
-        url.match(/\.(png|jpg|jpeg|webp|gif)$/i);
+        (m.url || "").match(/\.(png|jpg|jpeg|webp|gif)$/i);
 
       const caption = m.nombre || "";
 
@@ -353,17 +328,13 @@ function renderSectionMediaHTML(sectionKey) {
           <div class="doc-section-media-thumb">
             ${
               isImg
-                ? `<img src="${m.url}" alt="${docEscapeHtml(
-                    caption
-                  )}">`
+                ? `<img src="${m.url}" alt="${caption}">`
                 : `<div class="doc-section-media-icon">📄</div>`
             }
           </div>
           <div class="doc-section-media-foot">
             <div class="doc-section-media-caption-wrap">
-              <span class="doc-section-media-caption">${docEscapeHtml(
-                caption
-              )}</span>
+              <span class="doc-section-media-caption">${caption}</span>
             </div>
             <button
               type="button"
@@ -377,18 +348,14 @@ function renderSectionMediaHTML(sectionKey) {
     .join("");
 }
 
-// ======================================================
-// RENDER DE SECCIONES (COLUMNA PRINCIPAL)
-// ======================================================
-
 function renderDocSectionsHTML() {
   const secciones = appState.documentacion.secciones || {};
+  const included = appState.documentacion.includedSections || {};
 
   return DOC_SECTION_ORDER.map((key) => {
     const contenido = secciones[key] || "";
     const title = getSectionTitle(key);
-    const included = getSectionIncluded(key);
-    const isPresentacion = key === "presentacion_empresa";
+    const checked = included[key] !== false ? "checked" : "";
 
     return `
       <div class="card doc-section-card" data-doc-section="${key}">
@@ -404,25 +371,18 @@ function renderDocSectionsHTML() {
           </div>
 
           <div class="doc-section-header-actions">
-            <label class="doc-section-include-toggle"
-              style="font-size:0.75rem;display:flex;align-items:center;gap:0.25rem;margin-right:0.5rem;">
+            <label class="doc-section-include-toggle">
               <input type="checkbox"
                 data-doc-section-enable="${key}"
-                ${included ? "checked" : ""}>
+                ${checked}
+              >
               Incluir en PDF
             </label>
 
-            ${
-              isPresentacion
-                ? `<button class="btn btn-xs btn-disabled" disabled
-                     title="IA no disponible para esta sección">
-                     ✨ IA no disponible
-                   </button>`
-                : `<button class="btn btn-xs btn-outline"
-                     data-doc-ai-section="${key}">
-                     ✨ Preguntar a IA
-                   </button>`
-            }
+            <button class="btn btn-xs btn-outline"
+              data-doc-ai-section="${key}">
+              ✨ Preguntar a IA
+            </button>
           </div>
         </div>
 
@@ -430,27 +390,18 @@ function renderDocSectionsHTML() {
           <textarea
             class="form-control doc-section-textarea"
             data-doc-section-text="${key}"
-            rows="${isPresentacion ? 12 : 10}"
+            rows="8"
           >${contenido}</textarea>
 
-          ${
-            isPresentacion
-              ? `<p class="text-muted" style="font-size:0.8rem;margin-top:8px;">
-                   Esta sección no admite imágenes ni documentos adjuntos.
-                 </p>`
-              : `
-                <div class="doc-section-media-drop"
-                  data-doc-section-drop="${key}">
-                  <div class="doc-section-media-items">
-                    ${renderSectionMediaHTML(key)}
-                  </div>
-                  <div class="doc-section-media-hint">
-                    Arrastra aquí imágenes para adjuntar a esta sección
-                    (máx. 10).
-                  </div>
-                </div>
-              `
-          }
+          <div class="doc-section-media-drop"
+            data-doc-section-drop="${key}">
+            <div class="doc-section-media-items">
+              ${renderSectionMediaHTML(key)}
+            </div>
+            <div class="doc-section-media-hint">
+              Arrastra aquí imágenes para adjuntar a esta sección.
+            </div>
+          </div>
         </div>
       </div>
     `;
@@ -458,7 +409,7 @@ function renderDocSectionsHTML() {
 }
 
 // ======================================================
-// RENDER FICHAS TÉCNICAS (SIDEBAR)
+// FICHAS TÉCNICAS
 // ======================================================
 
 function renderDocFichasHTML() {
@@ -471,16 +422,18 @@ function renderDocFichasHTML() {
     if (cat === "ficha") return true;
     if (mime === "application/pdf") return true;
     if (
-      mime === "application/msword" ||
       mime ===
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+      mime === "application/msword"
     )
       return true;
 
     return false;
   });
 
-  const selected = new Set(appState.documentacion.selectedFichasMediaIds || []);
+  const selected = new Set(
+    appState.documentacion.selectedFichasMediaIds || []
+  );
 
   const term = (appState.documentacion.fichasSearchTerm || "")
     .trim()
@@ -510,7 +463,7 @@ function renderDocFichasHTML() {
           id="docFichasSearchInput"
           class="form-control"
           placeholder="Buscar por nombre..."
-          value="${docEscapeHtml(appState.documentacion.fichasSearchTerm || "")}"
+          value="${appState.documentacion.fichasSearchTerm || ""}"
         >
       </div>
     `;
@@ -520,10 +473,8 @@ function renderDocFichasHTML() {
     .map((m) => {
       const checked = selected.has(m.id) ? "checked" : "";
       const main = m.folderName
-        ? `<strong>${docEscapeHtml(m.folderName)}</strong> – ${docEscapeHtml(
-            m.nombre || ""
-          )}`
-        : `<strong>${docEscapeHtml(m.nombre || "")}</strong>`;
+        ? `<strong>${m.folderName}</strong> – ${m.nombre}`
+        : `<strong>${m.nombre}</strong>`;
 
       return `
         <label class="doc-ficha-item">
@@ -551,7 +502,7 @@ function renderDocFichasHTML() {
             id="docFichasSearchInput"
             class="form-control"
             placeholder="Buscar por nombre..."
-            value="${docEscapeHtml(appState.documentacion.fichasSearchTerm || "")}"
+            value="${appState.documentacion.fichasSearchTerm || ""}"
           >
         </div>
 
@@ -562,9 +513,8 @@ function renderDocFichasHTML() {
     </div>
   `;
 }
-
 // ======================================================
-// SOLO IMÁGENES EN DOCUMENTACIÓN GRÁFICA (SIDEBAR)
+// DOCUMENTACIÓN GRÁFICA (solo imágenes)
 // ======================================================
 
 function cleanInvalidMediaItems() {
@@ -641,9 +591,7 @@ function renderDocMediaLibraryHTML() {
               data-media-id="${m.id}">
               <div class="doc-media-row-main">
                 <span class="doc-media-row-icon">🖼️</span>
-                <span class="doc-media-caption">${docEscapeHtml(
-                  caption || ""
-                )}</span>
+                <span class="doc-media-caption">${caption}</span>
               </div>
               <div class="doc-media-row-actions">
                 <button class="btn btn-xs"
@@ -659,10 +607,6 @@ function renderDocMediaLibraryHTML() {
   `;
 }
 
-// ======================================================
-// REFRESCAR SOLO GRID DE IMÁGENES
-// ======================================================
-
 function refreshDocMediaGridOnly() {
   const container = getDocAppContent();
   if (!container) return;
@@ -671,10 +615,171 @@ function refreshDocMediaGridOnly() {
   if (!body) return;
 
   body.innerHTML = renderDocMediaLibraryHTML();
+
   attachDocMediaGridHandlers(container);
 }
+
 // ======================================================
-// OVERLAY FLOTANTE PARA VER UNA IMAGEN
+// BUSCADORES (fichas / imágenes)
+// ======================================================
+
+function attachDocSearchHandlers(container) {
+  const inputImg = container.querySelector("#docMediaSearchInput");
+  if (inputImg) {
+    inputImg.addEventListener("input", () => {
+      appState.documentacion.mediaSearchTerm = inputImg.value || "";
+      saveDocStateToLocalStorage();
+      refreshDocMediaGridOnly();
+    });
+  }
+
+  const inputFich = container.querySelector("#docFichasSearchInput");
+  if (inputFich) {
+    inputFich.addEventListener("input", () => {
+      appState.documentacion.fichasSearchTerm =
+        inputFich.value || "";
+      saveDocStateToLocalStorage();
+      renderDocumentacionView();
+    });
+  }
+}
+
+// ======================================================
+// HANDLERS DE SECCIONES
+// ======================================================
+
+function attachDocSectionHandlers(container) {
+  container
+    .querySelectorAll(".doc-section-title-input")
+    .forEach((inp) => {
+      inp.addEventListener("input", () => {
+        const key = inp.getAttribute("data-doc-section-title");
+        if (!key) return;
+
+        appState.documentacion.sectionTitles =
+          appState.documentacion.sectionTitles || {};
+        appState.documentacion.sectionTitles[key] =
+          inp.value || "";
+
+        saveDocStateToLocalStorage();
+      });
+    });
+
+  container
+    .querySelectorAll(".doc-section-textarea")
+    .forEach((txt) => {
+      txt.addEventListener("input", () => {
+        const key = txt.getAttribute("data-doc-section-text");
+        if (!key) return;
+
+        appState.documentacion.secciones =
+          appState.documentacion.secciones || {};
+        appState.documentacion.secciones[key] = txt.value;
+
+        saveDocStateToLocalStorage();
+      });
+    });
+
+  container
+    .querySelectorAll("[data-doc-section-enable]")
+    .forEach((chk) => {
+      chk.addEventListener("change", () => {
+        const key = chk.getAttribute("data-doc-section-enable");
+        if (!key) return;
+
+        appState.documentacion.includedSections =
+          appState.documentacion.includedSections || {};
+
+        appState.documentacion.includedSections[key] = chk.checked;
+
+        saveDocStateToLocalStorage();
+      });
+    });
+
+  container
+    .querySelectorAll("[data-doc-ai-section]")
+    .forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const key = btn.getAttribute("data-doc-ai-section");
+        if (!key) return;
+
+        const nuevo = await askAIForSection(key);
+
+        appState.documentacion.secciones[key] = nuevo;
+        saveDocStateToLocalStorage();
+        renderDocumentacionView();
+      });
+    });
+}
+
+// ======================================================
+// DRAG & DROP MEDIA
+// ======================================================
+
+function attachDocMediaGridHandlers(container) {
+  container.querySelectorAll(".doc-media-item").forEach((item) => {
+    item.addEventListener("dragstart", (ev) => {
+      const id = item.getAttribute("data-media-id");
+      if (id && ev.dataTransfer) {
+        ev.dataTransfer.setData("text/plain", id);
+        ev.dataTransfer.effectAllowed = "copy";
+      }
+    });
+  });
+
+  container.querySelectorAll("[data-media-view-id]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = btn.getAttribute("data-media-view-id");
+      if (!id) return;
+
+      const item =
+        (appState.documentacion.mediaLibrary || []).find(
+          (m) => m.id === id
+        );
+
+      if (!item || !item.url) {
+        alert("Imagen no encontrada.");
+        return;
+      }
+
+      const mime = (item.mimeType || "").toLowerCase();
+      const url = (item.url || "").toLowerCase();
+
+      const isImg =
+        mime.startsWith("image/") ||
+        url.endsWith(".png") ||
+        url.endsWith(".jpg") ||
+        url.endsWith(".jpeg") ||
+        url.endsWith(".webp") ||
+        url.endsWith(".gif");
+
+      if (isImg) {
+        openDocImageFloatingPreview(item);
+      } else {
+        window.open(item.url, "_blank");
+      }
+    });
+  });
+
+  container
+    .querySelectorAll(".doc-section-media-remove")
+    .forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.getAttribute("data-remove-media-id");
+        const zone = btn.closest("[data-doc-section-drop]");
+        const sec = zone
+          ? zone.getAttribute("data-doc-section-drop")
+          : null;
+
+        if (!id || !sec) return;
+
+        detachMediaFromSection(sec, id);
+      });
+    });
+}
+
+// ======================================================
+// OVERLAY PREVIEW IMAGEN
 // ======================================================
 
 function openDocImageFloatingPreview(item) {
@@ -741,28 +846,24 @@ function openDocImageFloatingPreview(item) {
     .getElementById("docMediaFloatingCloseBtn")
     ?.addEventListener("click", () => overlay.remove());
 }
-
 // ======================================================
-// AÑADIR / QUITAR MEDIA A UNA SECCIÓN
-// (con límite de 10 imágenes por sección)
+// MEDIA ↔ SECCIONES
 // ======================================================
 
 function attachMediaToSection(sectionKey, mediaId) {
-  if (sectionKey === "presentacion_empresa") return; // no admite media
-
   appState.documentacion.sectionMedia =
     appState.documentacion.sectionMedia || {};
 
   const arr = appState.documentacion.sectionMedia[sectionKey] || [];
 
-  // 👉 NUEVA LIMITACIÓN: máximo 10 imágenes por sección
-  if (arr.length >= 10 && !arr.includes(mediaId)) {
-    alert("Has alcanzado el máximo de 10 imágenes para esta sección.");
+  // Aquí limitabas a 4; ahora permitimos hasta 10
+  if (arr.includes(mediaId)) return;
+  if (arr.length >= 10) {
+    alert("Puedes adjuntar hasta 10 imágenes por sección.");
     return;
   }
 
-  if (!arr.includes(mediaId)) arr.push(mediaId);
-
+  arr.push(mediaId);
   appState.documentacion.sectionMedia[sectionKey] = arr;
 
   saveDocStateToLocalStorage();
@@ -815,11 +916,10 @@ function saveDocCustomBlock() {
   }
 
   const secs = (appState.documentacion.secciones ||= {});
-  const actual = secs[sec] || "";
-  const nuevo =
-    actual.trim().length > 0 ? actual.trim() + "\n\n" + text : text;
-
-  secs[sec] = nuevo;
+  secs[sec] =
+    secs[sec]?.trim().length > 0
+      ? secs[sec].trim() + "\n\n" + text
+      : text;
 
   (appState.documentacion.customBlocks ||= []).push({
     section: sec,
@@ -833,15 +933,10 @@ function saveDocCustomBlock() {
 }
 
 // ======================================================
-// IA POR SECCIÓN (hook + implementación por defecto)
+// IA POR SECCIÓN (incluye presentacion_empresa)
 // ======================================================
 
 async function askAIForSection(sectionKey) {
-  // presentacion_empresa no usa IA
-  if (sectionKey === "presentacion_empresa") {
-    return appState.documentacion.secciones["presentacion_empresa"] || "";
-  }
-
   const idioma = appState.documentacion.idioma || "es";
   const secciones = appState.documentacion.secciones || {};
   const textoActual = secciones[sectionKey] || "";
@@ -851,6 +946,7 @@ async function askAIForSection(sectionKey) {
     typeof window.getPresupuestoActual === "function"
       ? window.getPresupuestoActual()
       : null;
+
   const modo = appState.documentacion.modo || "comercial";
 
   if (typeof window.handleDocSectionAI === "function") {
@@ -877,12 +973,12 @@ async function askAIForSection(sectionKey) {
   }
 
   alert(
-    "Función de IA no implementada. Debes añadir window.handleDocSectionAI."
+    "Función IA no implementada. Debes añadir window.handleDocSectionAI."
   );
   return textoActual;
 }
 
-// Implementación por defecto de IA (Cloud Run)
+// Implementación por defecto (Cloud Run)
 if (typeof window.handleDocSectionAI !== "function") {
   window.handleDocSectionAI = async ({
     sectionKey,
@@ -918,7 +1014,7 @@ if (typeof window.handleDocSectionAI !== "function") {
 
     const data = await resp.json().catch(() => null);
     if (!data || typeof data.text !== "string") {
-      throw new Error("Respuesta IA inválida: falta 'text'");
+      throw new Error("Respuesta IA inválida: falta ‘text’");
     }
 
     return data.text;
@@ -926,7 +1022,7 @@ if (typeof window.handleDocSectionAI !== "function") {
 }
 
 // ======================================================
-// FIRESTORE + STORAGE: CARGA / GUARDADO / BORRADO MEDIA
+// FIRESTORE / STORAGE: CARGA MEDIA
 // ======================================================
 
 async function ensureDocMediaLoaded() {
@@ -949,6 +1045,7 @@ async function ensureDocMediaLoaded() {
 
     const snap = await query.limit(200).get();
     const media = [];
+
     snap.forEach((d) => media.push({ ...d.data(), id: d.id }));
 
     appState.documentacion.mediaLibrary = media;
@@ -961,7 +1058,23 @@ async function ensureDocMediaLoaded() {
   }
 }
 
-// Reutilizable en ui_doc_gestion.js
+// ======================================================
+// GUARDAR ARCHIVOS (Storage + Firestore)
+// ======================================================
+
+function slugifyFolderName(name) {
+  if (!name) return "general";
+
+  return (
+    String(name)
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "") || "general"
+  );
+}
+
 async function saveMediaFileToStorageAndFirestore(file, options = {}) {
   const name = file.name || "archivo";
   const now = new Date().toISOString();
@@ -969,7 +1082,7 @@ async function saveMediaFileToStorageAndFirestore(file, options = {}) {
   const type = isImg ? "image" : "file";
 
   const folderName = options.folderName || "";
-  const docCategory = options.docCategory || (isImg ? "imagen" : "ficha");
+  const docCategory = options.docCategory || "imagen";
 
   const folderSlug = slugifyFolderName(folderName);
 
@@ -985,7 +1098,8 @@ async function saveMediaFileToStorageAndFirestore(file, options = {}) {
 
   let url = null;
   let storagePath = null;
-  const uid = auth?.currentUser?.uid || null;
+
+  let uid = auth?.currentUser?.uid || null;
 
   if (storage) {
     storagePath =
@@ -1021,6 +1135,7 @@ async function saveMediaFileToStorageAndFirestore(file, options = {}) {
       ...mediaData,
       uid,
     });
+
     mediaData.id = ref.id;
   } else {
     mediaData.id =
@@ -1032,8 +1147,10 @@ async function saveMediaFileToStorageAndFirestore(file, options = {}) {
 
   return mediaData;
 }
+// ======================================================
+// BORRAR MEDIA
+// ======================================================
 
-// Borrado completo (Storage + Firestore + estado local)
 async function deleteMediaById(mediaId) {
   const media = appState.documentacion.mediaLibrary || [];
   const item = media.find((m) => m.id === mediaId);
@@ -1062,38 +1179,28 @@ async function deleteMediaById(mediaId) {
     }
   }
 
-  appState.documentacion.mediaLibrary = media.filter((m) => m.id !== mediaId);
+  appState.documentacion.mediaLibrary = media.filter(
+    (m) => m.id !== mediaId
+  );
 
-  // Quitar de secciones
   const map = appState.documentacion.sectionMedia || {};
   Object.keys(map).forEach((sec) => {
     map[sec] = map[sec].filter((id) => id !== mediaId);
   });
 
-  // Quitar de fichas seleccionadas
-  appState.documentacion.selectedFichasMediaIds = (
-    appState.documentacion.selectedFichasMediaIds || []
-  ).filter((id) => id !== mediaId);
+  appState.documentacion.selectedFichasMediaIds =
+    (appState.documentacion.selectedFichasMediaIds || []).filter(
+      (id) => id !== mediaId
+    );
 
   saveDocStateToLocalStorage();
   renderDocumentacionView();
 }
 
-// Slug para carpetas de Storage
-function slugifyFolderName(name) {
-  if (!name) return "general";
+// ======================================================
+// UTILS IMÁGENES PARA PDF
+// ======================================================
 
-  return (
-    String(name)
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^a-z0-9]+/g, "_")
-      .replace(/^_+|_+$/g, "") || "general"
-  );
-}
-
-// Imagen por referencia (por si quieres usarlo en el futuro)
 function getImagenRef(ref) {
   if (!ref) return null;
   const clean = String(ref).trim().toUpperCase();
@@ -1102,10 +1209,6 @@ function getImagenRef(ref) {
   }
   return "img/devices/" + clean + ".png";
 }
-
-// ======================================================
-// UTILIDADES PDF (jsPDF)
-// ======================================================
 
 function loadImageAsDataUrl(url) {
   return new Promise((resolve, reject) => {
@@ -1162,6 +1265,10 @@ async function getDocLogoImage() {
   }
 }
 
+// ======================================================
+// MEDIDAS PDF / HEADER / FOOTER
+// ======================================================
+
 function getDocPageDimensions(pdf) {
   const size = pdf.internal.pageSize;
   return {
@@ -1169,8 +1276,6 @@ function getDocPageDimensions(pdf) {
     height: size.getHeight ? size.getHeight() : size.height,
   };
 }
-
-// Header / footer técnico
 
 function drawTechHeader(pdf, opts = {}) {
   const dims = getDocPageDimensions(pdf);
@@ -1236,14 +1341,19 @@ function setupTechContentPage(pdf, opts = {}) {
   return startY;
 }
 
-// Imágenes asociadas a secciones (solo imágenes válidas)
+// ======================================================
+// IMÁGENES POR SECCIÓN (PDF TÉCNICO)
+// ======================================================
+
 function getSectionImages(sectionKey) {
   const map = appState.documentacion.sectionMedia || {};
   const ids = map[sectionKey] || [];
 
   return ids
     .map((id) =>
-      (appState.documentacion.mediaLibrary || []).find((m) => m.id === id)
+      (appState.documentacion.mediaLibrary || []).find(
+        (m) => m.id === id
+      )
     )
     .filter((m) => {
       if (!m?.url) return false;
@@ -1289,7 +1399,7 @@ async function insertImagesForSection(doc, sectionKey, y, onNewPage) {
       const needed = imgH + 10;
 
       if (y + needed > maxY) {
-        y = typeof onNewPage === "function" ? onNewPage() : 25;
+        y = onNewPage();
       }
 
       const x = (pageWidth - imgW) / 2;
@@ -1297,6 +1407,7 @@ async function insertImagesForSection(doc, sectionKey, y, onNewPage) {
       y += imgH + 4;
 
       const caption = removeExtension(m.nombre || "");
+
       doc.setFont("helvetica", "italic");
       doc.setFontSize(8);
       doc.setTextColor(80, 80, 80);
@@ -1310,8 +1421,9 @@ async function insertImagesForSection(doc, sectionKey, y, onNewPage) {
 
   return y;
 }
+
 // ======================================================
-// EXPORTAR PDF (selector según modo)
+// EXPORTAR PDF (selector modo)
 // ======================================================
 
 async function exportarDocumentacionPDF() {
@@ -1328,7 +1440,6 @@ async function exportarDocumentacionPDF() {
     await exportarPDFComercial();
   }
 }
-
 // ======================================================
 // PDF TÉCNICO COMPLETO
 // ======================================================
@@ -1368,7 +1479,7 @@ async function exportarPDFTecnico() {
   if (idioma === "en") titulo = "Technical specification";
   if (idioma === "pt") titulo = "Memória descritiva";
 
-  // ---- Portada técnica con imagen ----
+  // Portada técnica
   try {
     const cover = await loadImageAsDataUrl(DOC_TECH_COVER_URL);
     if (cover?.dataUrl) {
@@ -1395,7 +1506,6 @@ async function exportarPDFTecnico() {
     console.warn("No se pudo cargar portada técnica:", e);
   }
 
-  // Degradado + panel blanco
   const gradHeight = 70;
   const gradStart = pageH - gradHeight;
   for (let i = 0; i < 6; i++) {
@@ -1412,7 +1522,6 @@ async function exportarPDFTecnico() {
   doc.setFillColor(255, 255, 255);
   doc.rect(0, panelY, pageW, panelH, "F");
 
-  // Título portada
   doc.setFont("helvetica", "bold");
   doc.setFontSize(22);
   doc.setTextColor(0, 0, 0);
@@ -1420,15 +1529,7 @@ async function exportarPDFTecnico() {
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(12);
-  doc.text(
-    idioma === "en"
-      ? "2N video intercom & access control"
-      : idioma === "pt"
-      ? "Videoporteiro e controlo de acessos 2N"
-      : "Videoportero y control de accesos 2N",
-    20,
-    panelY + 7
-  );
+  doc.text("Videoportero y control de accesos 2N", 20, panelY + 7);
 
   let y = panelY + 18;
 
@@ -1442,15 +1543,7 @@ async function exportarPDFTecnico() {
 
   if (promotora) {
     doc.setFont("helvetica", "bold");
-    doc.text(
-      idioma === "en"
-        ? "Developer:"
-        : idioma === "pt"
-        ? "Promotor:"
-        : "Promotor:",
-      20,
-      y
-    );
+    doc.text("Promotor:", 20, y);
     doc.setFont("helvetica", "normal");
     const linesProm = doc.splitTextToSize(promotora, pageW - 60);
     doc.text(linesProm, 45, y);
@@ -1459,7 +1552,7 @@ async function exportarPDFTecnico() {
 
   drawTechFooter(doc, { idioma });
 
-  // ---- Página índice ----
+  // Página de índice
   doc.addPage();
   const tocPage = doc.getNumberOfPages();
   const tocStartY = setupTechContentPage(doc, {
@@ -1467,18 +1560,18 @@ async function exportarPDFTecnico() {
     nombreProyecto,
     logo,
   });
+
   const tocEntries = [];
-  const pageDims = getDocPageDimensions(doc);
-  const pageH2 = pageDims.height;
 
-  // ---- Presentación de empresa (si está incluida) ----
-  const includePresentacion =
-    included["presentacion_empresa"] !== false;
-
-  if (includePresentacion) {
+  // Presentación de empresa (si está incluida)
+  if (included["presentacion_empresa"] !== false) {
     doc.addPage();
     let current = doc.getNumberOfPages();
-    y = setupTechContentPage(doc, { idioma, nombreProyecto, logo });
+    y = setupTechContentPage(doc, {
+      idioma,
+      nombreProyecto,
+      logo,
+    });
 
     const title =
       idioma === "en"
@@ -1487,7 +1580,10 @@ async function exportarPDFTecnico() {
         ? "Apresentação da empresa"
         : "Presentación de empresa";
 
-    tocEntries.push({ title, page: current });
+    tocEntries.push({
+      title,
+      page: current,
+    });
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
@@ -1507,9 +1603,10 @@ async function exportarPDFTecnico() {
 
     const lines = doc.splitTextToSize(texto, pageW - 40);
     doc.text(lines, 20, y);
+    y += lines.length * 5 + 6;
   }
 
-  // ---- Secciones técnicas ----
+  // Resto de secciones
   doc.addPage();
   let currentPage = doc.getNumberOfPages();
   y = setupTechContentPage(doc, { idioma, nombreProyecto, logo });
@@ -1523,7 +1620,7 @@ async function exportarPDFTecnico() {
 
   function ensureSpace(lines) {
     const need = lines * 5 + 12;
-    if (y + need > pageH2 - 25) {
+    if (y + need > pageH - 25) {
       newPage();
     }
   }
@@ -1583,7 +1680,7 @@ async function exportarPDFTecnico() {
     y += 4;
   }
 
-  // ---- Anexo fichas técnicas ----
+  // Anexo fichas técnicas
   const allMedia = appState.documentacion.mediaLibrary || [];
   const selected = appState.documentacion.selectedFichasMediaIds || [];
   const fichas = allMedia.filter((m) => selected.includes(m.id));
@@ -1614,12 +1711,11 @@ async function exportarPDFTecnico() {
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
-    doc.setTextColor(55, 65, 81);
 
     for (const m of fichas) {
       const extra = m.folderName ? " – " + m.folderName : "";
       const text =
-        "• " + (m.nombre || "") + extra + (m.url ? " (" + m.url + ")" : "");
+        "• " + m.nombre + extra + (m.url ? " (" + m.url + ")" : "");
 
       const lines = doc.splitTextToSize(text, pageW - 40);
       ensureSpace(lines.length);
@@ -1628,22 +1724,14 @@ async function exportarPDFTecnico() {
     }
   }
 
-  // ---- Reescribir índice ----
+  // Reescribir índice
   doc.setPage(tocPage);
   let yToc = tocStartY;
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(14);
   doc.setTextColor(15, 23, 42);
-  doc.text(
-    idioma === "en"
-      ? "Contents"
-      : idioma === "pt"
-      ? "Índice"
-      : "Contenido",
-    20,
-    yToc
-  );
+  doc.text("Contenido", 20, yToc);
   yToc += 10;
 
   doc.setFont("helvetica", "normal");
@@ -1651,7 +1739,7 @@ async function exportarPDFTecnico() {
   doc.setTextColor(55, 65, 81);
 
   for (const entry of tocEntries) {
-    if (yToc > pageH2 - 25) {
+    if (yToc > pageH - 25) {
       doc.addPage();
       yToc = setupTechContentPage(doc, {
         idioma,
@@ -1661,15 +1749,7 @@ async function exportarPDFTecnico() {
 
       doc.setFont("helvetica", "bold");
       doc.setFontSize(14);
-      doc.text(
-        idioma === "en"
-          ? "Contents (cont.)"
-          : idioma === "pt"
-          ? "Índice (cont.)"
-          : "Contenido (cont.)",
-        20,
-        yToc
-      );
+      doc.text("Contenido (cont.)", 20, yToc);
       yToc += 10;
 
       doc.setFont("helvetica", "normal");
@@ -1704,773 +1784,303 @@ async function exportarPDFTecnico() {
 
   doc.save(base + "_" + safe + ".pdf");
 }
-
 // ======================================================
-// PDF COMERCIAL (estilo Salesforce / highlights)
+// EXPORTAR PDF COMERCIAL (diseño multipágina)
 // ======================================================
 
 async function exportarPDFComercial() {
   const jsPDF = window.jspdf.jsPDF;
 
-  const doc = new jsPDF({
-    orientation: "portrait",
-    unit: "mm",
-    format: "a4",
-  });
+  const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
 
   const idioma = appState.documentacion.idioma || "es";
   const secciones = appState.documentacion.secciones || {};
   const proyecto = appState.proyecto || {};
+
   const nombreProyecto =
-    proyecto.nombre || proyecto.nombreProyecto || "Proyecto";
-  const promotora = proyecto.promotora || proyecto.cliente || "";
+    proyecto.nombre ||
+    proyecto.nombreProyecto ||
+    "Proyecto";
+
+  const promotora =
+    proyecto.promotora ||
+    proyecto.cliente ||
+    "";
+
   const logo = await getDocLogoImage();
+  const dims = getDocPageDimensions(pdf);
+  const W = dims.width;
+  const H = dims.height;
 
-  const dims = getDocPageDimensions(doc);
-  const pageW = dims.width;
-  const pageH = dims.height;
-  const marginX = 20;
-  const marginTop = 20;
-  const marginBottom = 20;
-
-  // Helper tarjeta tipo Salesforce
-  function drawSalesforceCard({
-    x,
-    y,
-    width,
-    title,
-    body,
-    doc,
-    maxBodyWidth,
-    minHeight,
-  }) {
-    const paddingX = 8;
-    const paddingTop = 8;
-    const paddingBottom = 8;
-    const headerHeight = 8;
-
-    const bodyW = maxBodyWidth || width - paddingX * 2;
-    const lines = body ? doc.splitTextToSize(body, bodyW) : [];
-    const bodyH = lines.length * 4.4;
-
-    let cardH =
-      paddingTop + headerHeight + 4 + bodyH + paddingBottom;
-    if (minHeight && cardH < minHeight) cardH = minHeight;
-
-    doc.setFillColor(229, 231, 235);
-    doc.roundedRect(x + 1.2, y + 1.8, width, cardH, 3, 3, "F");
-
-    doc.setFillColor(255, 255, 255);
-    doc.setDrawColor(209, 213, 219);
-    doc.roundedRect(x, y, width, cardH, 3, 3, "FD");
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.setTextColor(31, 41, 55);
-    const titleLines = doc.splitTextToSize(title, width - paddingX * 2);
-    doc.text(titleLines, x + paddingX, y + paddingTop + 5);
-
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.setTextColor(75, 85, 99);
-    const yBody =
-      y +
-      paddingTop +
-      5 +
-      titleLines.length * 4.2 +
-      3;
-
-    if (lines.length) {
-      doc.text(lines, x + paddingX, yBody);
-    }
-
-    return {
-      bottomY: y + cardH,
-      height: cardH,
-    };
-  }
-
-  function collectSectionImagesWithCaptions() {
-    const map = appState.documentacion.sectionMedia || {};
-    const media = appState.documentacion.mediaLibrary || [];
-    const byId = {};
-    media.forEach((m) => (byId[m.id] = m));
-
-    const used = new Set();
-    const out = [];
-
-    for (const key of Object.keys(map)) {
-      for (const id of map[key]) {
-        if (used.has(id)) continue;
-        const m = byId[id];
-        if (!m?.url) continue;
-
-        const mime = (m.mimeType || "").toLowerCase();
-        const type = (m.type || "").toLowerCase();
-        const url = m.url.toLowerCase();
-
-        const isImg =
-          mime.startsWith("image/") ||
-          type === "image" ||
-          url.endsWith(".png") ||
-          url.endsWith(".jpg") ||
-          url.endsWith(".jpeg") ||
-          url.endsWith(".webp") ||
-          url.endsWith(".gif");
-
-        if (!isImg) continue;
-
-        used.add(id);
-        out.push({
-          media: m,
-          caption: removeExtension(m.nombre || ""),
-        });
-      }
-    }
-
-    return out.slice(0, 8);
-  }
-
-  // ---- Página 1: portada comercial ----
+  // Portada
   try {
     const cover = await loadImageAsDataUrl(DOC_TECH_COVER_URL);
-    if (cover?.dataUrl) {
-      const ratio = cover.width / cover.height;
-      const pageRatio = pageW / pageH;
 
-      let w, h, x, y;
+    let cw = W;
+    let ch = cw / (cover.width / cover.height);
+    let cx = 0;
+    let cy = (H - ch) / 2;
 
-      if (ratio > pageRatio) {
-        h = pageH;
-        w = h * ratio;
-        x = (pageW - w) / 2;
-        y = 0;
-      } else {
-        w = pageW;
-        h = w / ratio;
-        x = 0;
-        y = (pageH - h) / 2;
-      }
-
-      doc.addImage(cover.dataUrl, "PNG", x, y, w, h);
+    if (ch < H) {
+      ch = H;
+      cw = ch * (cover.width / cover.height);
+      cx = (W - cw) / 2;
+      cy = 0;
     }
+
+    pdf.addImage(cover.dataUrl, "PNG", cx, cy, cw, ch);
   } catch (e) {
-    console.warn("Error portada comercial:", e);
+    console.warn("Portada comercial no cargada:", e);
   }
-
-  const gradH = 70;
-  const gradStart = pageH - gradH;
-  for (let i = 0; i < 6; i++) {
-    const y = gradStart + (i * gradH) / 6;
-    const h = gradH / 6 + 0.5;
-    const shade = 255 - i * 8;
-    doc.setFillColor(shade, shade, shade);
-    doc.rect(0, y, pageW, h, "F");
-  }
-
-  const panelH = 55;
-  const panelY = pageH - panelH;
-
-  doc.setFillColor(255, 255, 255);
-  doc.rect(0, panelY, pageW, panelH, "F");
-
-  let titulo =
-    idioma === "en"
-      ? "Highlights – IP access & video intercom solution"
-      : idioma === "pt"
-      ? "Highlights – solução IP de acessos e videoporteiro"
-      : "Highlights – solución de accesos y videoportero IP";
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(14);
-  doc.setTextColor(15, 23, 42);
-  let linesTitulo = doc.splitTextToSize(
-    titulo,
-    pageW - marginX * 2 - 40
-  );
-  let y = panelY + 11;
-  doc.text(linesTitulo, marginX, y);
-  y += linesTitulo.length * 5 + 1;
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  let subtitulo = nombreProyecto;
-  if (promotora) subtitulo += " · " + promotora;
-  const stLines = doc.splitTextToSize(
-    subtitulo,
-    pageW - marginX * 2 - 40
-  );
-  doc.text(stLines, marginX, y);
-  y += stLines.length * 4.8 + 2;
-
-  doc.setFont("helvetica", "italic");
-  doc.setFontSize(9);
-  doc.setTextColor(107, 114, 128);
-
-  let claim =
-    idioma === "en"
-      ? "Architecture, design and IP technology for a truly premium access experience."
-      : idioma === "pt"
-      ? "Arquitetura, design e tecnologia IP para uma experiência de acesso verdadeiramente premium."
-      : "Arquitectura, diseño y tecnología IP para una experiencia de acceso verdaderamente premium.";
-
-  const claimLines = doc.splitTextToSize(
-    claim,
-    pageW - marginX * 2 - 40
-  );
-  doc.text(claimLines, marginX, y);
 
   if (logo?.dataUrl) {
-    const ratio = logo.width / logo.height || 2.5;
-    const lw = 32;
+    const ratio = logo.width / logo.height;
+    const lw = 40;
     const lh = lw / ratio;
-    const lx = pageW - marginX - lw;
-    const ly = panelY + panelH - lh - 6;
-    try {
-      doc.addImage(logo.dataUrl, "PNG", lx, ly, lw, lh);
-    } catch (e) {
-      console.warn("Logo portada comercial:", e);
-    }
+    const lx = W - lw - 20;
+    const ly = H - lh - 20;
+    pdf.addImage(logo.dataUrl, "PNG", lx, ly, lw, lh);
   }
 
-  // ---- Página 2: presentación empresa ----
-  const includePresentacion =
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(24);
+  pdf.setTextColor(255, 255, 255);
+  pdf.text("Solución IP de accesos y videoportero", 20, 40);
+
+  // Página presentación empresa (horizontal)
+  pdf.addPage("landscape");
+  const dims2 = getDocPageDimensions(pdf);
+  let y = 25;
+
+  if (
     appState.documentacion.includedSections?.presentacion_empresa !==
-    false;
+    false
+  ) {
+    const texto = secciones.presentacion_empresa || "";
 
-  if (includePresentacion) {
-    doc.addPage();
-    let y2 = marginTop;
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(18);
+    pdf.setTextColor(30, 30, 30);
+    pdf.text("Presentación corporativa", 20, y);
+    y += 10;
 
-    const dims2 = getDocPageDimensions(doc);
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(12);
-    doc.setTextColor(31, 41, 55);
-
-    const tit =
-      idioma === "en"
-        ? "Company introduction"
-        : idioma === "pt"
-        ? "Apresentação de empresa"
-        : "Presentación de empresa";
-
-    doc.text(tit, marginX, y2);
-    doc.setDrawColor(209, 213, 219);
-    doc.setLineWidth(0.4);
-    doc.line(marginX, y2 + 2.5, dims2.width - marginX, y2 + 2.5);
-    y2 += 12;
-
-    const texto = secciones["presentacion_empresa"] || "";
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    doc.setTextColor(55, 65, 81);
-
-    const lines = doc.splitTextToSize(
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(12);
+    const lines = pdf.splitTextToSize(
       texto,
-      dims2.width - marginX * 2
+      dims2.width - 40
     );
-
-    doc.text(lines, marginX, y2);
+    pdf.text(lines, 20, y);
+    y += lines.length * 6 + 8;
   }
 
-  // ---- Página 3: resumen + sistema (tarjetas) ----
-  doc.addPage();
-  const dims3 = getDocPageDimensions(doc);
-  const pw3 = dims3.width;
-  let yCards = marginTop;
+  // Página resumen + sistema (horizontal)
+  pdf.addPage("landscape");
+  const dW = dims2.width;
+  let boxY = 25;
 
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(12);
-  doc.setTextColor(31, 41, 55);
+  const halfW = (dW - 40) / 2;
 
-  let tit2 =
-    idioma === "en"
-      ? "Project overview"
-      : idioma === "pt"
-      ? "Visão geral do projeto"
-      : "Visión general del proyecto";
-
-  doc.text(tit2, marginX, yCards);
-  doc.setDrawColor(209, 213, 219);
-  doc.line(marginX, yCards + 2.5, pw3 - marginX, yCards + 2.5);
-  yCards += 10;
-
-  const cardWidth = pw3 - marginX * 2;
-  const bloques2 = [];
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(16);
+  pdf.setTextColor(20, 20, 20);
 
   if (secciones.resumen?.trim()) {
-    bloques2.push({
-      title:
-        idioma === "en"
-          ? "Project summary"
-          : idioma === "pt"
-          ? "Resumo do projeto"
-          : "Resumen del proyecto",
-      body: secciones.resumen,
-    });
+    pdf.text("Resumen del proyecto", 20, boxY);
+    pdf.setDrawColor(200, 200, 200);
+    pdf.rect(18, boxY + 3, halfW, 80);
+
+    pdf.setFontSize(11);
+    const t = pdf.splitTextToSize(
+      secciones.resumen || "",
+      halfW - 6
+    );
+    pdf.text(t, 21, boxY + 10);
   }
 
   if (secciones.sistema?.trim()) {
-    bloques2.push({
-      title:
-        idioma === "en"
-          ? "System architecture"
-          : idioma === "pt"
-          ? "Arquitetura do sistema"
-          : "Sistema de videoportero y accesos",
-      body: secciones.sistema,
-    });
+    pdf.text("Sistema", 20 + halfW + 10, boxY);
+    pdf.rect(18 + halfW + 10, boxY + 3, halfW, 80);
+
+    pdf.setFontSize(11);
+    const t2 = pdf.splitTextToSize(
+      secciones.sistema || "",
+      halfW - 6
+    );
+    pdf.text(t2, 21 + halfW + 10, boxY + 10);
   }
 
-  for (const b of bloques2) {
-    const r = drawSalesforceCard({
-      x: marginX,
-      y: yCards,
-      width: cardWidth,
-      title: b.title,
-      body: b.body,
-      doc,
-      maxBodyWidth: cardWidth - 16,
-      minHeight: 45,
-    });
-    yCards = r.bottomY + 8;
-  }
+  // Galería visual (limitada a 10 imágenes)
+  pdf.addPage("landscape");
+  let posY = 25;
+  const gap = 65;
 
-  // ---- Página 4: servicios / infra / otros ----
-  const tieneServicios = secciones.servicios?.trim().length > 0;
-  const tieneInfra = secciones.infraestructura?.trim().length > 0;
-  const tieneOtros = secciones.otros?.trim().length > 0;
+  const all = appState.documentacion.mediaLibrary || [];
+  const images = all.filter((m) => {
+    const mime = (m.mimeType || "").toLowerCase();
+    const url = (m.url || "").toLowerCase();
+    return (
+      mime.startsWith("image/") ||
+      url.match(/\.(png|jpg|jpeg|webp|gif)$/i)
+    );
+  });
 
-  if (tieneServicios || tieneInfra || tieneOtros) {
-    doc.addPage();
-    const dims4 = getDocPageDimensions(doc);
-    const pw4 = dims4.width;
-    let y4 = marginTop;
+  const topImages = images.slice(0, 10); // ← AQUÍ estaba 4, ahora 10
 
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(12);
-    doc.setTextColor(31, 41, 55);
+  for (const m of topImages) {
+    try {
+      const obj = await loadImageAsDataUrl(m.url);
+      const ratio = obj.width / obj.height;
 
-    let tit3 =
-      idioma === "en"
-        ? "Services, operation & infrastructure"
-        : idioma === "pt"
-        ? "Serviços, operação e infraestrutura"
-        : "Servicios, operación e infraestructura";
+      let iw = 100;
+      let ih = iw / ratio;
 
-    doc.text(tit3, marginX, y4);
-    doc.setDrawColor(209, 213, 219);
-    doc.line(marginX, y4 + 2.5, pw4 - marginX, y4 + 2.5);
-    y4 += 10;
-
-    const bloques3 = [];
-
-    if (tieneServicios) {
-      bloques3.push({
-        title:
-          idioma === "en"
-            ? "Cloud services & operation"
-            : idioma === "pt"
-            ? "Serviços cloud e operação"
-            : "Servicios cloud y operación",
-        body: secciones.servicios,
-      });
-    }
-
-    if (tieneInfra) {
-      bloques3.push({
-        title:
-          idioma === "en"
-            ? "Infrastructure & IP network"
-            : idioma === "pt"
-            ? "Infraestrutura e rede IP"
-            : "Infraestructura y red IP",
-        body: secciones.infraestructura,
-      });
-    }
-
-    if (tieneOtros) {
-      bloques3.push({
-        title:
-          idioma === "en"
-            ? "Additional notes & options"
-            : idioma === "pt"
-            ? "Notas adicionais e opções"
-            : "Otros aspectos y opciones",
-        body: secciones.otros,
-      });
-    }
-
-    for (const b of bloques3) {
-      const r = drawSalesforceCard({
-        x: marginX,
-        y: y4,
-        width: pw4 - marginX * 2,
-        title: b.title,
-        body: b.body,
-        doc,
-        maxBodyWidth: pw4 - marginX * 2 - 16,
-        minHeight: 45,
-      });
-
-      y4 = r.bottomY + 8;
-    }
-  }
-
-  // ---- Página 5: galería visual (máx 8 imágenes) ----
-  const galeria = collectSectionImagesWithCaptions();
-
-  if (galeria.length) {
-    doc.addPage();
-
-    const dimsG = getDocPageDimensions(doc);
-    const pwG = dimsG.width;
-    const phG = dimsG.height;
-
-    let yG = marginTop;
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(12);
-    doc.setTextColor(31, 41, 55);
-
-    let tituloGaleria =
-      idioma === "en"
-        ? "Visual gallery of the solution"
-        : idioma === "pt"
-        ? "Galeria visual da solução"
-        : "Galería visual de la solución";
-
-    doc.text(tituloGaleria, marginX, yG);
-    doc.setDrawColor(209, 213, 219);
-    doc.line(marginX, yG + 2.5, pwG - marginX, yG + 2.5);
-
-    yG += 12;
-
-    const maxW = (pwG - marginX * 2 - 10) / 2;
-    const maxH = 38;
-    const rowH = maxH + 20;
-
-    for (let i = 0; i < galeria.length; i++) {
-      const item = galeria[i];
-      const m = item.media;
-      const caption = item.caption || "";
-      const col = i % 2;
-
-      if (i % 2 === 0 && i !== 0) yG += rowH;
-
-      if (yG + rowH > phG - marginBottom) {
-        doc.addPage();
-        yG = marginTop;
-
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(12);
-        doc.setTextColor(31, 41, 55);
-        doc.text(tituloGaleria, marginX, yG);
-        doc.setDrawColor(209, 213, 219);
-        doc.line(
-          marginX,
-          yG + 2.5,
-          pwG - marginX,
-          yG + 2.5
-        );
-        yG += 12;
+      if (ih > 55) {
+        ih = 55;
+        iw = ih * ratio;
       }
 
-      try {
-        const imgObj = await loadImageAsDataUrl(m.url);
+      pdf.addImage(obj.dataUrl, "PNG", 20, posY, iw, ih);
 
-        const ratio = imgObj.width / imgObj.height || 1.5;
-        let w = maxW;
-        let h = w / ratio;
+      pdf.setFont("helvetica", "italic");
+      pdf.setFontSize(9);
+      pdf.setTextColor(80, 80, 80);
 
-        if (h > maxH) {
-          h = maxH;
-          w = h * ratio;
-        }
+      const caption = removeExtension(m.nombre);
+      pdf.text(caption, 20 + iw / 2, posY + ih + 5, {
+        align: "center",
+      });
 
-        const xImg =
-          marginX + col * (maxW + 10) + (maxW - w) / 2;
-
-        doc.addImage(imgObj.dataUrl, "PNG", xImg, yG, w, h);
-
-        const captionLines = doc.splitTextToSize(
-          caption,
-          maxW
-        );
-
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(8.5);
-        doc.setTextColor(75, 85, 99);
-
-        doc.text(
-          captionLines,
-          xImg + w / 2,
-          yG + h + 5,
-          { align: "center" }
-        );
-      } catch (e) {
-        console.warn("Error imagen galería:", e);
+      posY += ih + gap;
+      if (posY > 170) {
+        pdf.addPage("landscape");
+        posY = 25;
       }
-    }
-
-    if (logo?.dataUrl) {
-      const r = logo.width / logo.height || 2.5;
-      const lw = 24;
-      const lh = lw / r;
-
-      const lx = pwG - marginX - lw;
-      const ly = phG - marginBottom - lh + 4;
-
-      try {
-        doc.addImage(logo.dataUrl, "PNG", lx, ly, lw, lh);
-      } catch (e) {
-        console.warn("Logo galería:", e);
-      }
+    } catch (e) {
+      console.warn("Error imagen galería:", e);
     }
   }
 
-  let baseCom =
-    idioma === "en"
-      ? "highlights_access_solution"
-      : idioma === "pt"
-      ? "highlights_acessos"
-      : "highlights_accesos";
-
-  const safeCom = nombreProyecto
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-
-  doc.save(baseCom + "_" + safeCom + ".pdf");
+  pdf.save(
+    "presentacion_comercial_" +
+      removeExtension(nombreProyecto).toLowerCase()
+        .replace(/[^a-z0-9]+/g, "_") +
+      ".pdf"
+  );
 }
 
 // ======================================================
-// HANDLERS UI
+// RENDER PRINCIPAL
 // ======================================================
 
-function attachDocMediaGridHandlers(root) {
-  const container = root || getDocAppContent();
-  if (!container) return;
-
-  // Drag
-  container.querySelectorAll(".doc-media-item").forEach((item) => {
-    item.addEventListener("dragstart", (ev) => {
-      const id = item.getAttribute("data-media-id");
-      if (id && ev.dataTransfer) {
-        ev.dataTransfer.setData("text/plain", id);
-        ev.dataTransfer.effectAllowed = "copy";
-      }
-    });
-  });
-
-  // Ver imagen
-  container.querySelectorAll("[data-media-view-id]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const id = btn.getAttribute("data-media-view-id");
-      if (!id) return;
-
-      const item =
-        (appState.documentacion.mediaLibrary || []).find(
-          (m) => m.id === id
-        );
-
-      if (!item || !item.url) {
-        alert("Imagen no encontrada.");
-        return;
-      }
-
-      const mime = (item.mimeType || "").toLowerCase();
-      const url = (item.url || "").toLowerCase();
-
-      const isImg =
-        mime.startsWith("image/") ||
-        url.endsWith(".png") ||
-        url.endsWith(".jpg") ||
-        url.endsWith(".jpeg") ||
-        url.endsWith(".webp") ||
-        url.endsWith(".gif");
-
-      if (isImg) {
-        openDocImageFloatingPreview(item);
-      } else {
-        window.open(item.url, "_blank");
-      }
-    });
-  });
-
-  // Botones quitar media en chips
-  container
-    .querySelectorAll(".doc-section-media-remove")
-    .forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const id = btn.getAttribute("data-remove-media-id");
-        const zone = btn.closest("[data-doc-section-drop]");
-        const sec = zone
-          ? zone.getAttribute("data-doc-section-drop")
-          : null;
-
-        if (!id || !sec) return;
-        detachMediaFromSection(sec, id);
-      });
-    });
-}
-
-function attachDocSearchHandlers(container) {
-  const inputImg = container.querySelector("#docMediaSearchInput");
-  if (inputImg) {
-    inputImg.addEventListener("input", () => {
-      appState.documentacion.mediaSearchTerm = inputImg.value || "";
-      saveDocStateToLocalStorage();
-      refreshDocMediaGridOnly();
-    });
-  }
-
-  const inputFich = container.querySelector("#docFichasSearchInput");
-  if (inputFich) {
-    inputFich.addEventListener("input", () => {
-      appState.documentacion.fichasSearchTerm = inputFich.value || "";
-      saveDocStateToLocalStorage();
-      renderDocumentacionView();
-    });
-  }
-}
-
-function attachDocSectionHandlers(container) {
-  // Títulos
-  container
-    .querySelectorAll(".doc-section-title-input")
-    .forEach((inp) => {
-      inp.addEventListener("input", () => {
-        const key = inp.getAttribute("data-doc-section-title");
-        if (!key) return;
-
-        appState.documentacion.sectionTitles =
-          appState.documentacion.sectionTitles || {};
-        appState.documentacion.sectionTitles[key] =
-          inp.value || "";
-
-        saveDocStateToLocalStorage();
-      });
-    });
-
-  // Textareas
-  container
-    .querySelectorAll(".doc-section-textarea")
-    .forEach((txt) => {
-      txt.addEventListener("input", () => {
-        const key = txt.getAttribute("data-doc-section-text");
-        if (!key) return;
-
-        appState.documentacion.secciones =
-          appState.documentacion.secciones || {};
-        appState.documentacion.secciones[key] = txt.value;
-
-        saveDocStateToLocalStorage();
-      });
-    });
-
-  // Incluir sección
-  container
-    .querySelectorAll("[data-doc-section-enable]")
-    .forEach((chk) => {
-      chk.addEventListener("change", () => {
-        const key = chk.getAttribute("data-doc-section-enable");
-        if (!key) return;
-
-        appState.documentacion.includedSections =
-          appState.documentacion.includedSections || {};
-        appState.documentacion.includedSections[key] = chk.checked;
-
-        saveDocStateToLocalStorage();
-      });
-    });
-
-  // Botón IA
-  container
-    .querySelectorAll("[data-doc-ai-section]")
-    .forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        const key = btn.getAttribute("data-doc-ai-section");
-        if (!key) return;
-
-        const nuevo = await askAIForSection(key);
-        appState.documentacion.secciones[key] = nuevo;
-        saveDocStateToLocalStorage();
-        renderDocumentacionView();
-      });
-    });
-
-  // Zonas drop de media
-  container
-    .querySelectorAll("[data-doc-section-drop]")
-    .forEach((zone) => {
-      zone.addEventListener("dragover", (ev) => {
-        ev.preventDefault();
-        zone.classList.add("is-drag-over");
-        if (ev.dataTransfer) ev.dataTransfer.dropEffect = "copy";
-      });
-
-      zone.addEventListener("dragleave", () =>
-        zone.classList.remove("is-drag-over")
-      );
-
-      zone.addEventListener("drop", (ev) => {
-        ev.preventDefault();
-        zone.classList.remove("is-drag-over");
-
-        const mediaId = ev.dataTransfer?.getData("text/plain");
-        const sectionKey = zone.getAttribute("data-doc-section-drop");
-
-        if (!mediaId || !sectionKey) return;
-        attachMediaToSection(sectionKey, mediaId);
-      });
-    });
-}
-
-function attachDocCustomModalHandlers(container) {
-  const nuevoBloqueBtn = container.querySelector("#docNuevoBloqueBtn");
-  if (nuevoBloqueBtn) {
-    nuevoBloqueBtn.addEventListener("click", openDocCustomModal);
-  }
-
-  const modal = document.getElementById("docCustomModal");
-  const cancelBtn = modal && modal.querySelector("#docCustomCancelBtn");
-  const saveBtn = modal && modal.querySelector("#docCustomSaveBtn");
-  const backdrop = document.getElementById("docModalBackdrop");
-
-  if (cancelBtn) cancelBtn.addEventListener("click", closeDocCustomModal);
-  if (saveBtn) saveBtn.addEventListener("click", saveDocCustomBlock);
-  if (backdrop) backdrop.addEventListener("click", closeDocCustomModal);
-}
-
-// Handlers superiores (modo, idioma, regenerar, exportar)
-function attachDocumentacionHandlers() {
+function renderDocumentacionView() {
   const container = getDocAppContent();
   if (!container) return;
 
-  // Buscadores
+  const idioma = appState.documentacion.idioma || "es";
+
+  const mediaHtml = renderDocMediaLibraryHTML();
+  const fichasHtml = renderDocFichasHTML();
+  const sectionsHtml = renderDocSectionsHTML();
+
+  container.innerHTML = `
+    <div class="doc-layout">
+      <div class="doc-sidebar">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Documentación gráfica</div>
+          </div>
+          <div class="card-body doc-media-body">
+            <div class="form-group mb-2">
+              <input
+                type="text"
+                id="docMediaSearchInput"
+                class="form-control"
+                placeholder="Buscar imágenes..."
+                value="${docEscapeHtml(
+                  appState.documentacion.mediaSearchTerm || ""
+                )}"
+              >
+            </div>
+            ${mediaHtml}
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Fichas técnicas</div>
+          </div>
+          <div class="card-body">
+            ${fichasHtml}
+          </div>
+        </div>
+      </div>
+
+      <div class="doc-main">
+        <div class="doc-toolbar card mb-3">
+          <div class="card-body doc-toolbar-body">
+            <div class="doc-toolbar-left">
+              <button id="docModoComercialBtn"
+                class="btn btn-sm ${
+                  appState.documentacion.modo === "comercial"
+                    ? "btn-primary"
+                    : "btn-ghost"
+                }">
+                Modo comercial
+              </button>
+              <button id="docModoTecnicoBtn"
+                class="btn btn-sm ${
+                  appState.documentacion.modo === "tecnica"
+                    ? "btn-primary"
+                    : "btn-ghost"
+                }">
+                Modo técnico
+              </button>
+            </div>
+
+            <div class="doc-toolbar-center">
+              ${Object.values(DOC_LANGS)
+                .map(
+                  (l) => `
+                <button
+                  class="btn btn-xs ${
+                    appState.documentacion.idioma === l.code
+                      ? "btn-primary"
+                      : "btn-ghost"
+                  }"
+                  data-doc-lang="${l.code}"
+                >
+                  ${l.label}
+                </button>`
+                )
+                .join("")}
+            </div>
+
+            <div class="doc-toolbar-right">
+              <button id="docRegenerarBtn" class="btn btn-sm btn-outline">
+                🔁 Regenerar texto base
+              </button>
+              <button id="docNuevoBloqueBtn" class="btn btn-sm">
+                ➕ Añadir bloque personalizado
+              </button>
+              <button id="docExportarBtn" class="btn btn-sm btn-primary">
+                📄 Exportar PDF
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="doc-sections-wrapper">
+          ${sectionsHtml}
+        </div>
+      </div>
+    </div>
+  `;
+
   attachDocSearchHandlers(container);
-
-  // Secciones
   attachDocSectionHandlers(container);
-
-  // Grid de imágenes
   attachDocMediaGridHandlers(container);
 
-  // Modal custom
-  attachDocCustomModalHandlers(container);
-
-  // Cambios de idioma
-  container.querySelectorAll("[data-doc-lang]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const lang = btn.getAttribute("data-doc-lang");
-      autoGenerateDocumentacion(lang);
-      renderDocumentacionView();
-    });
-  });
-
-  // Modo comercial / técnico
   const modoComBtn = container.querySelector("#docModoComercialBtn");
   const modoTecBtn = container.querySelector("#docModoTecnicoBtn");
 
@@ -2490,7 +2100,6 @@ function attachDocumentacionHandlers() {
     });
   }
 
-  // Regenerar texto base
   const regenBtn = container.querySelector("#docRegenerarBtn");
   if (regenBtn) {
     regenBtn.addEventListener("click", () => {
@@ -2499,7 +2108,11 @@ function attachDocumentacionHandlers() {
     });
   }
 
-  // Exportar PDF
+  const nuevoBloqueBtn = container.querySelector("#docNuevoBloqueBtn");
+  if (nuevoBloqueBtn) {
+    nuevoBloqueBtn.addEventListener("click", openDocCustomModal);
+  }
+
   const exportBtn = container.querySelector("#docExportarBtn");
   if (exportBtn) {
     exportBtn.addEventListener("click", () => {
@@ -2510,154 +2123,4 @@ function attachDocumentacionHandlers() {
   }
 }
 
-// ======================================================
-// RENDER PRINCIPAL DE LA PÁGINA DE DOCUMENTACIÓN
-// ======================================================
-
-async function renderDocumentacionView() {
-  const container = getDocAppContent();
-  if (!container) return;
-
-  // Primera vez: autogenerar
-  if (!appState.documentacion.ultimaAutoGen) {
-    autoGenerateDocumentacion(appState.documentacion.idioma || "es");
-  }
-
-  // Cargar media una sola vez
-  if (!appState.documentacion.mediaLoaded) {
-    await ensureDocMediaLoaded();
-  }
-
-  const idioma = appState.documentacion.idioma || "es";
-  const modo = appState.documentacion.modo || "comercial";
-
-  const langButtons = Object.values(DOC_LANGS)
-    .map(
-      ({ code, label }) => `
-        <button type="button"
-          class="btn btn-xs ${
-            idioma === code ? "btn-primary" : "btn-outline"
-          }"
-          data-doc-lang="${code}">
-          ${label}
-        </button>`
-    )
-    .join("");
-
-  container.innerHTML = `
-    <div class="doc-page">
-
-      <div class="card doc-header-card">
-        <div class="card-header">
-          <div>
-            <div class="card-title">Documentación del proyecto</div>
-            <div class="card-subtitle">
-              Genera la memoria de calidades y la documentación técnica / comercial.
-            </div>
-          </div>
-
-          <div class="doc-header-actions">
-            <div class="btn-group">
-              ${langButtons}
-            </div>
-
-            <div class="btn-group" style="margin-left:8px;">
-              <button id="docModoComercialBtn"
-                class="btn btn-xs ${
-                  modo === "comercial" ? "btn-primary" : "btn-outline"
-                }">
-                Comercial
-              </button>
-              <button id="docModoTecnicoBtn"
-                class="btn btn-xs ${
-                  modo === "tecnica" ? "btn-primary" : "btn-outline"
-                }">
-                Técnica
-              </button>
-            </div>
-
-            <button id="docRegenerarBtn"
-              class="btn btn-xs btn-outline"
-              style="margin-left:8px;">
-              ♻️ Regenerar texto base
-            </button>
-
-            <button id="docExportarBtn"
-              class="btn btn-xs btn-primary"
-              style="margin-left:8px;">
-              ⬇ Exportar PDF
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div class="doc-layout">
-        <div class="doc-main">
-          ${renderDocSectionsHTML()}
-        </div>
-
-        <div class="doc-sidebar">
-
-          <div class="card">
-            <div class="card-header">
-              <div class="card-title">Documentación gráfica</div>
-            </div>
-            <div class="card-body">
-              <input
-                type="text"
-                id="docMediaSearchInput"
-                class="form-control"
-                placeholder="Buscar imágenes..."
-                value="${docEscapeHtml(
-                  appState.documentacion.mediaSearchTerm || ""
-                )}">
-              <div class="doc-media-body" style="margin-top:8px;">
-                ${renderDocMediaLibraryHTML()}
-              </div>
-            </div>
-          </div>
-
-          <div class="card" style="margin-top:12px;">
-            <div class="card-header">
-              <div class="card-title">Fichas técnicas</div>
-            </div>
-            <div class="card-body">
-              ${renderDocFichasHTML()}
-            </div>
-          </div>
-
-          <div class="card" style="margin-top:12px;">
-            <div class="card-header">
-              <div class="card-title">Bloques personalizados</div>
-            </div>
-            <div class="card-body">
-              <button id="docNuevoBloqueBtn"
-                class="btn btn-xs btn-outline">
-                ➕ Añadir bloque
-              </button>
-            </div>
-          </div>
-
-        </div>
-      </div>
-
-      <!-- Modal custom + backdrop -->
-      <div id="docModalBackdrop" class="doc-modal-backdrop hidden"></div>
-      <div id="docCustomModal" class="doc-modal hidden">
-        <!-- Estructura del modal definida en tu HTML principal -->
-      </div>
-    </div>
-  `;
-
-  attachDocumentacionHandlers();
-}
-
-// ======================================================
-// EXPORTAR FUNCIONES CLAVE EN window
-// ======================================================
-
 window.renderDocumentacionView = renderDocumentacionView;
-window.ensureDocMediaLoaded = ensureDocMediaLoaded;
-window.saveMediaFileToStorageAndFirestore = saveMediaFileToStorageAndFirestore;
-window.deleteMediaById = deleteMediaById;
-window.exportarDocumentacionPDF = exportarDocumentacionPDF;
