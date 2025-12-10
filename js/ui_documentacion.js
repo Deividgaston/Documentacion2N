@@ -1228,6 +1228,49 @@ async function getDocLogoImage() {
     return null;
   }
 }
+// Justifica una línea dentro de un ancho máximo (solo se usa en PDF técnico)
+function drawJustifiedLine(doc, text, x, y, maxWidth) {
+  if (!text) {
+    doc.text("", x, y);
+    return;
+  }
+
+  const str = String(text).trim();
+  if (!str) {
+    doc.text("", x, y);
+    return;
+  }
+
+  const words = str.split(/\s+/);
+  if (words.length <= 1) {
+    doc.text(str, x, y);
+    return;
+  }
+
+  const fullWidth = doc.getTextWidth(str);
+  const extraTotal = maxWidth - fullWidth;
+
+  // Si ya ocupa casi todo el ancho o es más estrecha, no forzamos nada raro
+  if (extraTotal <= 0) {
+    doc.text(str, x, y);
+    return;
+  }
+
+  const spaceCount = words.length - 1;
+  const normalSpaceWidth = doc.getTextWidth(" ");
+  const extraPerSpace = extraTotal / spaceCount;
+
+  let cursorX = x;
+
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i];
+    doc.text(w, cursorX, y);
+    if (i < words.length - 1) {
+      const wWidth = doc.getTextWidth(w);
+      cursorX += wWidth + normalSpaceWidth + extraPerSpace;
+    }
+  }
+}
 
 function getDocPageDimensions(pdf) {
   const size = pdf.internal.pageSize;
