@@ -1710,7 +1710,7 @@ async function exportarPDFTecnico() {
 }
 
 y += 4;
-
+ }
 
     // Imágenes asociadas a la sección (con control de saltos de página)
     y = await insertImagesForSection(doc, key, y, newPage);
