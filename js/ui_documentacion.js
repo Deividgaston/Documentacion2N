@@ -1962,81 +1962,74 @@ async function exportarPDFComercial() {
     }
   }
 
-  // Página 2 – Presentación (título 20 / texto 11)
+   // Página 2 – Presentación (título 20 / texto 11, sin grandes huecos)
   const includePresentacion =
     appState.documentacion.includedSections?.presentacion_empresa !==
     false;
 
   if (includePresentacion) {
     doc.addPage();
-    const dims2 = getDocPageDimensions(doc);
+    let dims2 = getDocPageDimensions(doc);
 
     let y2 = marginTop;
 
-    const tit =
+    const baseTitle =
       idioma === "en"
         ? "Company introduction"
         : idioma === "pt"
         ? "Apresentação de empresa"
         : "Presentación de empresa";
 
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(20);
-    doc.setTextColor(31, 41, 55);
-    doc.text(tit, marginX, y2);
+    function drawIntroHeader(isCont) {
+      dims2 = getDocPageDimensions(doc);
+      y2 = marginTop;
 
-    doc.setDrawColor(209, 213, 219);
-    doc.setLineWidth(0.4);
-    doc.line(
-      marginX,
-      y2 + 3,
-      dims2.width - marginX,
-      y2 + 3
-    );
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(20);
+      doc.setTextColor(31, 41, 55);
+      doc.text(
+        isCont ? baseTitle + " (cont.)" : baseTitle,
+        marginX,
+        y2
+      );
 
-    y2 += 14;
+      doc.setDrawColor(209, 213, 219);
+      doc.setLineWidth(0.4);
+      doc.line(
+        marginX,
+        y2 + 3,
+        dims2.width - marginX,
+        y2 + 3
+      );
+
+      y2 += 14;
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(11);
+      doc.setTextColor(55, 65, 81);
+    }
+
+    drawIntroHeader(false);
 
     const texto = secciones["presentacion_empresa"] || "";
-
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(11);
-    doc.setTextColor(55, 65, 81);
-
     const lines = doc.splitTextToSize(
       texto,
       dims2.width - marginX * 2
     );
 
-    const limit = dims2.height - marginBottom;
-    let block = [];
-    const maxBlock = 30;
-
-    function newPageIntro() {
-      doc.addPage();
-      const d2 = getDocPageDimensions(doc);
-      y2 = marginTop;
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(20);
-      doc.setTextColor(31, 41, 55);
-      doc.text(tit + " (cont.)", marginX, y2);
-      doc.setDrawColor(209, 213, 219);
-      doc.line(marginX, y2 + 3, d2.width - marginX, y2 + 3);
-      y2 += 14;
-    }
+    const lineH = 5.5;
+    const limit = () => getDocPageDimensions(doc).height - marginBottom;
 
     for (let i = 0; i < lines.length; i++) {
-      block.push(lines[i]);
-      if (block.length === maxBlock || i === lines.length - 1) {
-        const need = block.length * 5.5 + 10;
-        if (y2 + need > limit) {
-          newPageIntro();
-        }
-        doc.text(block, marginX, y2);
-        y2 += block.length * 5.5 + 4;
-        block = [];
+      if (y2 + lineH > limit()) {
+        doc.addPage();
+        drawIntroHeader(true);
       }
+      doc.text(lines[i], marginX, y2);
+      y2 += lineH;
     }
   }
+
 
   // Página 3 – Resumen + Sistema
   doc.addPage();
