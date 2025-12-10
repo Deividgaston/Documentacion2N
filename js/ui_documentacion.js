@@ -1713,7 +1713,7 @@ async function exportarPDFTecnico() {
   doc.setTextColor(55, 65, 81);
 
   for (const entry of tocEntries) {
-    if (yToc > pageH - 25) {
+    if (yToc > pageH - 35) {
       doc.addPage();
       yToc = setupTechContentPage(doc, {
         idioma,
