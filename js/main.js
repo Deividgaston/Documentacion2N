@@ -28,7 +28,7 @@ function setCurrentView(viewKey) {
   const navLinks = document.querySelectorAll(".top-nav-link[data-view]");
   navLinks.forEach((link) => {
     const v = link.getAttribute("data-view");
-    // ⭐ compat: considerar equivalencias docs <-> documentacion
+
     const normalized =
       v === "docs"
         ? "documentacion"
@@ -59,26 +59,37 @@ function updateViewSubtitle(viewKey) {
     case "proyecto":
       text = "Importa y gestiona el proyecto base desde Excel / Project Designer.";
       break;
+
     case "presupuesto":
       text = "Edita el presupuesto a partir del proyecto importado.";
       break;
+
     case "simulador":
       text = "Simula tarifas y descuentos sobre el presupuesto actual.";
       break;
+
     case "tarifa":
       text = "Consulta la tarifa PVP de 2N y añade partidas al presupuesto.";
       break;
+
     case "tarifas":
       text = "Gestiona los tipos de tarifa y descuentos avanzados.";
       break;
-    case "documentacion":       // docs normales
-    case "docs":                // ⭐ compat
+
+    case "documentacion":
+    case "docs":
       text = "Genera la memoria de calidades y documentación del proyecto.";
       break;
-    case "docGestion":          // gestión CRUD
-    case "docs-gestion":        // ⭐ compat
+
+    case "prescripcion":
+      text = "Vista de prescripción: resumen inteligente de documentación para memorias.";
+      break;
+
+    case "docGestion":
+    case "docs-gestion":
       text = "Gestiona la documentación subida: fichas, imágenes, certificados y declaraciones.";
       break;
+
     default:
       text = "";
   }
@@ -96,7 +107,7 @@ function callIfFn(fnName) {
 }
 
 function renderViewByKey(viewKey) {
-  // ⭐ compat: normalizar por si llega alguna clave antigua
+  // compat
   if (viewKey === "docs") viewKey = "documentacion";
   if (viewKey === "docs-gestion") viewKey = "docGestion";
 
@@ -114,31 +125,26 @@ function renderViewByKey(viewKey) {
       break;
 
     case "tarifa":
-      // Según cómo se haya definido en ui_tarifa.js
-      if (!callIfFn("renderTarifaView")) {
-        callIfFn("renderTarifa2NView");
-      }
+      if (!callIfFn("renderTarifaView")) callIfFn("renderTarifa2NView");
       break;
 
     case "tarifas":
-      // Según cómo se haya definido en ui_tarifas.js
-      if (!callIfFn("renderTarifasView")) {
-        callIfFn("renderTarifasTiposView");
-      }
+      if (!callIfFn("renderTarifasView")) callIfFn("renderTarifasTiposView");
       break;
 
     case "documentacion":
-      // Página de Documentación (memoria de calidades / PDF)
       callIfFn("renderDocumentacionView");
       break;
 
+    case "prescripcion":         // ⭐ NUEVA PÁGINA
+      callIfFn("renderDocPrescripcionView");
+      break;
+
     case "docGestion":
-      // Nueva página de Gestión de documentación (CRUD ficheros)
       callIfFn("renderDocGestionView");
       break;
 
     default:
-      // Fallback: ir a Proyecto
       appState.currentView = "proyecto";
       callIfFn("renderProyectoView");
       break;
@@ -166,10 +172,8 @@ function initTopbarNavigation() {
 // ==============================
 
 document.addEventListener("DOMContentLoaded", () => {
-  // Inicializar navegación de la barra superior
   initTopbarNavigation();
 
-  // Intentar recuperar la vista anterior desde localStorage
   let initialView = "proyecto";
   try {
     const storedView = window.localStorage.getItem(VIEW_STORAGE_KEY);
@@ -186,6 +190,6 @@ document.addEventListener("DOMContentLoaded", () => {
   setCurrentView(initialView);
 });
 
-// Exponer por si quieres cambiar de vista desde otros módulos
+// Exponer
 window.setCurrentView = setCurrentView;
 window.renderViewByKey = renderViewByKey;
