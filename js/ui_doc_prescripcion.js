@@ -15,6 +15,50 @@ appState.prescripcion = appState.prescripcion || {
 };
 
 // ==============================
+// Modal genérico (usa el HTML global del index)
+// ==============================
+
+function openPrescModal({ title, bodyHTML, onSave }) {
+  const modal = document.getElementById("prescModal");
+  const titleEl = document.getElementById("prescModalTitle");
+  const bodyEl = document.getElementById("prescModalBody");
+  const saveBtn = document.getElementById("prescModalSave");
+  const closeBtn = document.getElementById("prescModalClose");
+  const cancelBtn = document.getElementById("prescModalCancel");
+
+  if (!modal || !titleEl || !bodyEl || !saveBtn || !closeBtn || !cancelBtn) {
+    console.warn("[PRESCRIPCION] Modal global no encontrado, usando prompt fallback.");
+    // fallback mínimo por si falta el HTML
+    if (typeof onSave === "function") {
+      onSave();
+    }
+    return;
+  }
+
+  titleEl.textContent = title || "";
+  bodyEl.innerHTML = bodyHTML || "";
+
+  modal.style.display = "flex";
+
+  const closeModal = () => {
+    modal.style.display = "none";
+    saveBtn.onclick = null;
+    closeBtn.onclick = null;
+    cancelBtn.onclick = null;
+  };
+
+  closeBtn.onclick = closeModal;
+  cancelBtn.onclick = closeModal;
+
+  saveBtn.onclick = async () => {
+    if (typeof onSave === "function") {
+      await onSave();
+    }
+    closeModal();
+  };
+}
+
+// ==============================
 // Helpers de contenedor
 // ==============================
 
@@ -767,7 +811,7 @@ async function renderDocPrescripcionView() {
           type="text"
           id="prescCapituloTituloInput"
           class="form-control"
-          value="${nombreCap.replace(/"/g, "&quot;")}"
+          value="${(nombreCap || "").replace(/"/g, "&quot;")}"
         />
       </div>
 
@@ -1053,39 +1097,61 @@ function attachPrescripcionHandlers() {
 
   const newPlantillaBtn = container.querySelector("#prescNewPlantillaBtn");
   if (newPlantillaBtn) {
-    newPlantillaBtn.addEventListener("click", async () => {
-      const nombre = window.prompt(
-        "Nombre de la plantilla:",
-        ""
-      );
-      if (nombre === null) return;
-
-      const texto = window.prompt(
-        "Texto de la plantilla (puedes editarlo más tarde):",
-        ""
-      );
-      if (texto === null) return;
-
-      await createPrescripcionPlantilla(nombre, texto);
-      renderDocPrescripcionView();
+    newPlantillaBtn.addEventListener("click", () => {
+      openPrescModal({
+        title: "Nueva plantilla",
+        bodyHTML: `
+          <div class="form-group">
+            <label>Nombre</label>
+            <input id="tplNombre" type="text" class="form-control">
+          </div>
+          <div class="form-group">
+            <label>Texto</label>
+            <textarea id="tplTexto" class="form-control" rows="8"></textarea>
+          </div>
+        `,
+        onSave: async () => {
+          const nombre = (document.getElementById("tplNombre").value || "").trim();
+          const texto = document.getElementById("tplTexto").value || "";
+          await createPrescripcionPlantilla(nombre, texto);
+          renderDocPrescripcionView();
+        },
+      });
     });
   }
 
   const newExtraBtn = container.querySelector("#prescNewExtraRefBtn");
   if (newExtraBtn) {
-    newExtraBtn.addEventListener("click", async () => {
-      const codigo = window.prompt("Código de la referencia:", "");
-      if (codigo === null) return;
-      const descripcion = window.prompt("Descripción:", "");
-      if (descripcion === null) return;
-      const unidad = window.prompt("Unidad (Ud, m, h...):", "Ud");
-      if (unidad === null) return;
-      const pvpStr = window.prompt("PVP (número):", "0");
-      if (pvpStr === null) return;
-      const pvp = Number(pvpStr) || 0;
-
-      await createExtraRef(codigo, descripcion, unidad, pvp);
-      renderDocPrescripcionView();
+    newExtraBtn.addEventListener("click", () => {
+      openPrescModal({
+        title: "Nueva referencia extra",
+        bodyHTML: `
+          <div class="form-group">
+            <label>Código</label>
+            <input id="extCodigo" type="text" class="form-control">
+          </div>
+          <div class="form-group">
+            <label>Descripción</label>
+            <textarea id="extDesc" class="form-control" rows="3"></textarea>
+          </div>
+          <div class="form-group">
+            <label>Unidad</label>
+            <input id="extUnidad" type="text" class="form-control" value="Ud">
+          </div>
+          <div class="form-group">
+            <label>PVP</label>
+            <input id="extPvp" type="number" class="form-control" value="0">
+          </div>
+        `,
+        onSave: async () => {
+          const codigo = (document.getElementById("extCodigo").value || "").trim();
+          const descripcion = (document.getElementById("extDesc").value || "").trim();
+          const unidad = (document.getElementById("extUnidad").value || "").trim() || "Ud";
+          const pvp = Number(document.getElementById("extPvp").value || 0);
+          await createExtraRef(codigo, descripcion, unidad, pvp);
+          renderDocPrescripcionView();
+        },
+      });
     });
   }
 
@@ -1235,7 +1301,7 @@ function attachPrescripcionHandlers() {
   container
     .querySelectorAll("[data-presc-plantilla-edit]")
     .forEach((btn) => {
-      btn.addEventListener("click", async () => {
+      btn.addEventListener("click", () => {
         const id = btn.getAttribute(
           "data-presc-plantilla-edit"
         );
@@ -1246,24 +1312,32 @@ function attachPrescripcionHandlers() {
         const tpl = plantillas.find((p) => p.id === id);
         if (!tpl) return;
 
-        const nuevoNombre = window.prompt(
-          "Nuevo nombre de la plantilla:",
-          tpl.nombre || ""
-        );
-        if (nuevoNombre === null) return;
+        const nombreSafe = (tpl.nombre || "").replace(/"/g, "&quot;");
+        const textoSafe = tpl.texto || "";
 
-        const nuevoTexto = window.prompt(
-          "Nuevo texto de la plantilla:",
-          tpl.texto || ""
-        );
-        if (nuevoTexto === null) return;
-
-        await updatePrescripcionPlantilla(
-          id,
-          nuevoNombre,
-          nuevoTexto
-        );
-        renderDocPrescripcionView();
+        openPrescModal({
+          title: "Editar plantilla",
+          bodyHTML: `
+            <div class="form-group">
+              <label>Nombre</label>
+              <input id="tplNombre" type="text" class="form-control" value="${nombreSafe}">
+            </div>
+            <div class="form-group">
+              <label>Texto</label>
+              <textarea id="tplTexto" class="form-control" rows="8">${textoSafe}</textarea>
+            </div>
+          `,
+          onSave: async () => {
+            const nuevoNombre = (document.getElementById("tplNombre").value || "").trim();
+            const nuevoTexto = document.getElementById("tplTexto").value || "";
+            await updatePrescripcionPlantilla(
+              id,
+              nuevoNombre,
+              nuevoTexto
+            );
+            renderDocPrescripcionView();
+          },
+        });
       });
     });
 
@@ -1311,7 +1385,7 @@ function attachPrescripcionHandlers() {
   container
     .querySelectorAll("[data-presc-extra-edit]")
     .forEach((btn) => {
-      btn.addEventListener("click", async () => {
+      btn.addEventListener("click", () => {
         const id = btn.getAttribute(
           "data-presc-extra-edit"
         );
@@ -1321,30 +1395,36 @@ function attachPrescripcionHandlers() {
         const ref = list.find((r) => r.id === id);
         if (!ref) return;
 
-        const codigo = window.prompt(
-          "Código:",
-          ref.codigo || ""
-        );
-        if (codigo === null) return;
-        const descripcion = window.prompt(
-          "Descripción:",
-          ref.descripcion || ""
-        );
-        if (descripcion === null) return;
-        const unidad = window.prompt(
-          "Unidad:",
-          ref.unidad || "Ud"
-        );
-        if (unidad === null) return;
-        const pvpStr = window.prompt(
-          "PVP:",
-          String(ref.pvp || 0)
-        );
-        if (pvpStr === null) return;
-        const pvp = Number(pvpStr) || 0;
+        openPrescModal({
+          title: "Editar referencia extra",
+          bodyHTML: `
+            <div class="form-group">
+              <label>Código</label>
+              <input id="extCodigo" type="text" class="form-control" value="${ref.codigo || ""}">
+            </div>
+            <div class="form-group">
+              <label>Descripción</label>
+              <textarea id="extDesc" class="form-control" rows="3">${ref.descripcion || ""}</textarea>
+            </div>
+            <div class="form-group">
+              <label>Unidad</label>
+              <input id="extUnidad" type="text" class="form-control" value="${ref.unidad || "Ud"}">
+            </div>
+            <div class="form-group">
+              <label>PVP</label>
+              <input id="extPvp" type="number" class="form-control" value="${ref.pvp || 0}">
+            </div>
+          `,
+          onSave: async () => {
+            const codigo = (document.getElementById("extCodigo").value || "").trim();
+            const descripcion = (document.getElementById("extDesc").value || "").trim();
+            const unidad = (document.getElementById("extUnidad").value || "").trim() || "Ud";
+            const pvp = Number(document.getElementById("extPvp").value || 0);
 
-        await updateExtraRef(id, codigo, descripcion, unidad, pvp);
-        renderDocPrescripcionView();
+            await updateExtraRef(id, codigo, descripcion, unidad, pvp);
+            renderDocPrescripcionView();
+          },
+        });
       });
     });
 
