@@ -1484,7 +1484,7 @@ async function exportarPDFTecnico() {
   });
 
   const tocEntries = [];
-  const pageHLimit = pageH - 25;
+  const pageHLimit = pageH - 35;
 
    // Página de Presentación de empresa (si incluida)
   const includePresentacion =
