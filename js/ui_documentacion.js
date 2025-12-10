@@ -1603,12 +1603,23 @@ async function exportarPDFTecnico() {
     }
 
     for (let i = 0; i < lines.length; i++) {
-      if (y + lineH > limitY) {
-        newPagePresentacion();
-      }
-      doc.text(lines[i], 20, y);
-      y += lineH;
-    }
+  if (y + lineH > limitY) {
+    newPagePresentacion();
+  }
+
+  const isLastLine = i === lines.length - 1 || !lines[i + 1];
+
+  if (isLastLine) {
+    // Última línea: alineación normal (no se fuerza la justificación)
+    doc.text(lines[i], 20, y);
+  } else {
+    // Líneas intermedias: justificación completa
+    drawJustifiedLine(doc, lines[i], 20, y, pageW - 40);
+  }
+
+  y += lineH;
+}
+
   }
 
 
@@ -1683,16 +1694,23 @@ async function exportarPDFTecnico() {
       const lineH = 5.5;
 
       for (let i = 0; i < lines.length; i++) {
-        if (y + lineH > pageHLimit) {
-          // Nueva página, preservando encabezado/footers
-          newPage();
-        }
-        doc.text(lines[i], 20, y);
-        y += lineH;
-      }
+  if (y + lineH > pageHLimit) {
+    newPage();
+  }
 
-      y += 4; // pequeño espacio después del texto
-    }
+  const isLastLine = i === lines.length - 1 || !lines[i + 1];
+
+  if (isLastLine) {
+    doc.text(lines[i], 20, y);
+  } else {
+    drawJustifiedLine(doc, lines[i], 20, y, pageW - 40);
+  }
+
+  y += lineH;
+}
+
+y += 4;
+
 
     // Imágenes asociadas a la sección (con control de saltos de página)
     y = await insertImagesForSection(doc, key, y, newPage);
