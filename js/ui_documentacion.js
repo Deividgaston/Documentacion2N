@@ -2496,14 +2496,17 @@ function renderDocumentacionView() {
         </div>
       </div>
 
-      <div class="doc-main-grid">
+        <div class="doc-main-grid"
+           style="display:flex;align-items:flex-start;gap:16px;">
         <!-- Columna izquierda: secciones -->
-        <div class="doc-main-center">
+        <div class="doc-main-center"
+             style="flex:1 1 auto;min-width:0;">
           ${renderDocSectionsHTML()}
         </div>
 
         <!-- Barra derecha: documentación gráfica + fichas técnicas -->
-        <div class="doc-main-right" style="max-width:320px;flex:0 0 300px;">
+        <div class="doc-main-right"
+             style="max-width:320px;flex:0 0 300px;">
           <div class="card mb-3">
             <div class="card-header">
               <div class="doc-right-title">Documentación gráfica</div>
@@ -2527,6 +2530,7 @@ function renderDocumentacionView() {
           </div>
         </div>
       </div>
+
     </div>
 
     <!-- Modal bloques custom -->
