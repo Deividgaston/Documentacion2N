@@ -771,12 +771,12 @@ async function renderDocPrescripcionView() {
         />
       </div>
 
-      <div class="form-group">
+      <div class="form-group" style="flex:1 1 auto; display:flex; flex-direction:column; min-height:0;">
         <label>Texto de mediciones</label>
         <textarea
           id="prescCapituloTexto"
           class="form-control"
-          rows="14"
+          style="flex:1 1 auto; min-height:0; resize:none;"
           placeholder="Arrastra aquí una plantilla o escribe el texto de mediciones..."
         >${textoCap}</textarea>
         <p style="font-size:0.78rem; color:#6b7280; margin-top:0.25rem;">
@@ -785,9 +785,11 @@ async function renderDocPrescripcionView() {
         </p>
       </div>
 
-      <div class="form-group">
+      <div class="form-group" style="margin-top:0.75rem;">
         <label>Referencias incluidas en este capítulo</label>
-        ${refsCapituloHTML}
+        <div style="max-height:30vh; overflow:auto;">
+          ${refsCapituloHTML}
+        </div>
       </div>
     `
     : `
@@ -916,107 +918,111 @@ async function renderDocPrescripcionView() {
   }
 
   container.innerHTML = `
-    <div class="card" style="margin-bottom:0.75rem;">
-      <div class="card-header">
-        <div>
-          <div class="card-title">Prescripción: resumen inteligente de documentación</div>
-          <div class="card-subtitle">
-            Genera mediciones a partir del presupuesto, añade referencias extra y aplica plantillas de texto técnicas.
-          </div>
-        </div>
-        <div style="display:flex; flex-wrap:wrap; gap:0.5rem;">
-          <button type="button" id="prescExportPdfBtn" class="btn btn-xs btn-outline">📄 PDF mediciones</button>
-          <button type="button" id="prescExportBc3Btn" class="btn btn-xs btn-outline">📦 Exportar BC3</button>
-          <button type="button" id="prescNewPlantillaBtn" class="btn btn-xs btn-primary">➕ Nueva plantilla</button>
-          <button type="button" id="prescNewExtraRefBtn" class="btn btn-xs btn-secondary">➕ Nueva referencia extra</button>
-        </div>
-      </div>
-    </div>
-
-    <div
-      class="proyecto-layout"
-      style="
-        display:grid;
-        grid-template-columns: 1fr 1.5fr 1.4fr;
-        gap: 1rem;
-        align-items:flex-start;
-      "
-    >
-      <!-- Columna 1: Capítulos -->
-      <div class="card">
+    <div class="presc-root" style="display:flex; flex-direction:column; height:100%; min-height:calc(100vh - 80px);">
+      <div class="card" style="margin-bottom:0.75rem; flex:0 0 auto;">
         <div class="card-header">
           <div>
-            <div class="card-title">Capítulos de prescripción</div>
+            <div class="card-title">Prescripción: resumen inteligente de documentación</div>
             <div class="card-subtitle">
-              Se generan desde las secciones del presupuesto o como capítulos manuales.
+              Genera mediciones a partir del presupuesto, añade referencias extra y aplica plantillas de texto técnicas.
             </div>
           </div>
-          <div style="display:flex; gap:0.5rem; align-items:center;">
-            <button
-              type="button"
-              id="prescReloadFromBudgetBtn"
-              class="btn btn-xs btn-outline"
-              title="Regenerar capítulos desde el presupuesto actual"
-            >
-              🔄 Regenerar
-            </button>
-            <button
-              type="button"
-              id="prescNewManualCapBtn"
-              class="btn btn-xs btn-primary"
-              title="Crear un capítulo manual solo con referencias extra"
-            >
-              ➕ Capítulo manual
-            </button>
+          <div style="display:flex; flex-wrap:wrap; gap:0.5rem;">
+            <button type="button" id="prescExportPdfBtn" class="btn btn-xs btn-outline">📄 PDF mediciones</button>
+            <button type="button" id="prescExportBc3Btn" class="btn btn-xs btn-outline">📦 Exportar BC3</button>
+            <button type="button" id="prescNewPlantillaBtn" class="btn btn-xs btn-primary">➕ Nueva plantilla</button>
+            <button type="button" id="prescNewExtraRefBtn" class="btn btn-xs btn-secondary">➕ Nueva referencia extra</button>
           </div>
-        </div>
-        <div class="card-body presc-capitulos-list">
-          ${capitulosHTML}
         </div>
       </div>
 
-      <!-- Columna 2: Texto del capítulo -->
-      <div class="card">
-        <div class="card-header">
-          <div>
-            <div class="card-title">Texto del capítulo</div>
-            <div class="card-subtitle">
-              Define el texto de mediciones y visualiza todas las referencias asociadas (2N + extras).
-            </div>
-          </div>
-        </div>
-        <div class="card-body">
-          ${columnaCentralHTML}
-        </div>
-      </div>
-
-      <!-- Columna 3: Plantillas + referencias extra -->
-      <div style="display:flex; flex-direction:column; gap:0.75rem;">
-        <div class="card">
+      <div
+        class="proyecto-layout"
+        style="
+          display:grid;
+          grid-template-columns: 1fr 1.5fr 1.4fr;
+          gap: 1rem;
+          align-items:stretch;
+          flex:1 1 auto;
+          min-height:0;
+        "
+      >
+        <!-- Columna 1: Capítulos -->
+        <div class="card" style="display:flex; flex-direction:column; min-height:0;">
           <div class="card-header">
             <div>
-              <div class="card-title">Plantillas de texto</div>
+              <div class="card-title">Capítulos de prescripción</div>
               <div class="card-subtitle">
-                Textos estándar por tipo de sistema (videoportero, accesos, monitores, etc.).
+                Se generan desde las secciones del presupuesto o como capítulos manuales.
+              </div>
+            </div>
+            <div style="display:flex; gap:0.5rem; align-items:center;">
+              <button
+                type="button"
+                id="prescReloadFromBudgetBtn"
+                class="btn btn-xs btn-outline"
+                title="Regenerar capítulos desde el presupuesto actual"
+              >
+                🔄 Regenerar
+              </button>
+              <button
+                type="button"
+                id="prescNewManualCapBtn"
+                class="btn btn-xs btn-primary"
+                title="Crear un capítulo manual solo con referencias extra"
+              >
+                ➕ Capítulo manual
+              </button>
+            </div>
+          </div>
+          <div class="card-body presc-capitulos-list" style="flex:1 1 auto; overflow:auto;">
+            ${capitulosHTML}
+          </div>
+        </div>
+
+        <!-- Columna 2: Texto del capítulo -->
+        <div class="card" style="display:flex; flex-direction:column; min-height:0;">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Texto del capítulo</div>
+              <div class="card-subtitle">
+                Define el texto de mediciones y visualiza todas las referencias asociadas (2N + extras).
               </div>
             </div>
           </div>
-          <div class="card-body presc-plantillas-list">
-            ${plantillasHTML}
+          <div class="card-body" style="flex:1 1 auto; display:flex; flex-direction:column; min-height:0;">
+            ${columnaCentralHTML}
           </div>
         </div>
 
-        <div class="card">
-          <div class="card-header">
-            <div>
-              <div class="card-title">Referencias extra (no 2N)</div>
-              <div class="card-subtitle">
-                Switches, cableado, mano de obra, etc. Añádelas a cualquier capítulo o crea capítulos solo con ellas.
+        <!-- Columna 3: Plantillas + referencias extra -->
+        <div style="display:flex; flex-direction:column; gap:0.75rem; min-height:0;">
+          <div class="card" style="flex:1 1 55%; min-height:0; display:flex; flex-direction:column;">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Plantillas de texto</div>
+                <div class="card-subtitle">
+                  Textos estándar por tipo de sistema (videoportero, accesos, monitores, etc.).
+                </div>
               </div>
             </div>
+            <div class="card-body presc-plantillas-list" style="flex:1 1 auto; overflow:auto;">
+              ${plantillasHTML}
+            </div>
           </div>
-          <div class="card-body presc-extra-list">
-            ${extraRefsHTML}
+
+          <div class="card" style="flex:1 1 45%; min-height:0; display:flex; flex-direction:column;">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Referencias extra (no 2N)</div>
+                <div class="card-subtitle">
+                  Switches, cableado, mano de obra, etc. Añádelas a cualquier capítulo o crea capítulos solo con ellas.
+                </div>
+              </div>
+            </div>
+            <div class="card-body presc-extra-list" style="flex:1 1 auto; overflow:auto;">
+              ${extraRefsHTML}
+            </div>
           </div>
         </div>
       </div>
