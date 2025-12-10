@@ -945,10 +945,11 @@ async function renderDocPrescripcionView() {
           align-items:stretch;
           flex:1 1 auto;
           min-height:0;
+          height:100%;
         "
       >
         <!-- Columna 1: Capítulos -->
-        <div class="card" style="display:flex; flex-direction:column; min-height:0;">
+        <div class="card" style="display:flex; flex-direction:column; min-height:0; height:100%;">
           <div class="card-header">
             <div>
               <div class="card-title">Capítulos de prescripción</div>
@@ -981,7 +982,7 @@ async function renderDocPrescripcionView() {
         </div>
 
         <!-- Columna 2: Texto del capítulo -->
-        <div class="card" style="display:flex; flex-direction:column; min-height:0;">
+        <div class="card" style="display:flex; flex-direction:column; min-height:0; height:100%;">
           <div class="card-header">
             <div>
               <div class="card-title">Texto del capítulo</div>
@@ -996,7 +997,7 @@ async function renderDocPrescripcionView() {
         </div>
 
         <!-- Columna 3: Plantillas + referencias extra -->
-        <div style="display:flex; flex-direction:column; gap:0.75rem; min-height:0;">
+        <div style="display:flex; flex-direction:column; gap:0.75rem; min-height:0; height:100%;">
           <div class="card" style="flex:1 1 55%; min-height:0; display:flex; flex-direction:column;">
             <div class="card-header">
               <div>
