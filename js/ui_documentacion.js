@@ -2531,25 +2531,27 @@ function renderDocumentacionView() {
         <div class="doc-main-right"
              style="max-width:320px;flex:0 0 300px;">
 <div class="card mb-3">
-  <div class="card-header">
-    <div class="doc-fichas-title">Documentación gráfica</div>
-    <p class="doc-fichas-help">
-      Arrastra las imágenes que quieras usar en cada sección del documento.
-    </p>
-  </div>
-
   <div class="card-body doc-media-body">
-    <div class="form-group mb-2">
-      <input
-        type="text"
-        id="docMediaSearchInput"
-        class="form-control form-control-sm"
-        placeholder="Buscar imágenes..."
-        value="${docEscapeHtml(d.mediaSearchTerm || "")}"
-      >
-    </div>
+    <div class="doc-fichas-section">
+      <div class="doc-fichas-block">
+        <div class="doc-fichas-title">Documentación gráfica</div>
+        <p class="doc-fichas-help">
+          Arrastra las imágenes que quieras usar en cada sección del documento.
+        </p>
 
-    ${renderDocMediaLibraryHTML()}
+        <div class="form-group mb-2">
+          <input
+            type="text"
+            id="docMediaSearchInput"
+            class="form-control form-control-sm"
+            placeholder="Buscar imágenes..."
+            value="${docEscapeHtml(d.mediaSearchTerm || "")}"
+          >
+        </div>
+
+        ${renderDocMediaLibraryHTML()}
+      </div>
+    </div>
   </div>
 </div>
 
