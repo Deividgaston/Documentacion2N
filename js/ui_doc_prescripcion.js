@@ -1742,7 +1742,6 @@ function renderPrescPreview() {
     .map((cap) => {
       const lineas = cap.lineas || [];
 
-      // calcular total del capítulo
       let totalCap = 0;
       lineas.forEach((l) => {
         const cant = Number(l.cantidad) || 0;
@@ -1753,7 +1752,6 @@ function renderPrescPreview() {
 
       const isExpanded = !!expanded[cap.id];
 
-      // detalles (refs) si está desplegado
       let detailsHTML = "";
       if (isExpanded && lineas.length) {
         const detailRows = lineas
@@ -1764,7 +1762,6 @@ function renderPrescPreview() {
             const pvp = Number(l.pvp) || 0;
             const importe = cant * pvp;
 
-            // unidad: si viene de extra, respetamos su unidad; si no, la de la línea
             let unidad = l.unidad || "Ud";
             if (l.tipo === "extra" && l.extraRefId && extraRefs.length) {
               const ref = extraRefs.find((r) => r.id === l.extraRefId);
@@ -1786,7 +1783,7 @@ function renderPrescPreview() {
 
         detailsHTML = `
           <tr class="presc-preview-cap-details-row" data-cap-id="${cap.id}">
-            <td colspan="4" style="padding:0.4rem 0.6rem 0.6rem 2.2rem;">
+            <td colspan="5" style="padding:0.4rem 0.6rem 0.6rem 2.2rem;">
               <div style="max-height:24vh; overflow:auto;">
                 <table class="table table-compact" 
                        style="width:100%; font-size:0.78rem; border-collapse:collapse; border-top:1px solid #e5e7eb;">
@@ -1820,6 +1817,14 @@ function renderPrescPreview() {
           </td>
           <td style="text-align:right;">${lineas.length}</td>
           <td style="text-align:right;">${totalCap.toFixed(2)} €</td>
+          <td style="text-align:center;">
+            <button type="button"
+                    class="btn btn-xs btn-outline presc-preview-cap-del"
+                    data-cap-id="${cap.id}"
+                    title="Eliminar capítulo">
+              🗑️
+            </button>
+          </td>
         </tr>
         ${detailsHTML}
       `;
@@ -1845,6 +1850,7 @@ function renderPrescPreview() {
             <th style="text-align:left;">Capítulo</th>
             <th style="text-align:right;">Nº refs</th>
             <th style="text-align:right;">Total capítulo</th>
+            <th style="width:3rem;"></th>
           </tr>
         </thead>
         <tbody>
@@ -1854,7 +1860,7 @@ function renderPrescPreview() {
     </div>
   `;
 
-  // Doble clic para expandir/contraer
+  // Doble clic: expandir/contraer
   container
     .querySelectorAll(".presc-preview-cap-row")
     .forEach((row) => {
@@ -1870,7 +1876,20 @@ function renderPrescPreview() {
         renderPrescPreview();
       });
     });
+
+  // Click en borrar capítulo
+  container
+    .querySelectorAll(".presc-preview-cap-del")
+    .forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const capId = btn.getAttribute("data-cap-id");
+        if (!capId) return;
+        deleteCapituloById(capId);
+        renderDocPrescripcionView();
+      });
+    });
 }
+
 
 // Estilos ligeros para la tabla de preview (opcional)
 (function injectPrescPreviewStyles() {
