@@ -10,7 +10,7 @@ appState.documentacion = appState.documentacion || {
   mediaLoaded: false,
 };
 
-// Helper: para GESTIÓN usamos SIEMPRE el contenedor ancho general
+// Helper: para GESTIÓN usamos el contenedor general
 function getDocGestionAppContent() {
   if (typeof window.getAppContent === "function") {
     return window.getAppContent();
@@ -185,7 +185,7 @@ async function deleteDocMediaById(mediaId) {
     console.log("[DOC-GESTION] Documento borrado en Firestore:", mediaId);
   } catch (e) {
     console.error(
-      "[DOC-GESTION] Error borrando documento en Firestore:",
+      "Error borrando documento en Firestore:",
       mediaId,
       e
     );
@@ -436,18 +436,11 @@ async function renderDocGestionView() {
     }
   `;
 
-  // Layout tipo Tarifas: izquierda fija, derecha ocupa todo el ancho
+  // 🔹 Layout en UNA columna, cards ocupan 100% del ancho del contenedor
   container.innerHTML = `
-    <div
-      class="proyecto-layout"
-      style="
-        display:flex;
-        gap:1rem;
-        align-items:flex-start;
-      "
-    >
-      <!-- Card de gestión / subida (IZQUIERDA) -->
-      <div class="card" style="flex:0 0 380px; max-width:390px; min-width:300px;">
+    <div class="proyecto-layout" style="display:block;">
+      <!-- Card de gestión / subida -->
+      <div class="card" style="width:100%; max-width:none; margin:0 0 1rem 0;">
         <div class="card-header">
           <div>
             <div class="card-title">Gestión de documentación</div>
@@ -514,8 +507,8 @@ async function renderDocGestionView() {
         </div>
       </div>
 
-      <!-- Card de listado (DERECHA) -->
-      <div class="card" style="flex:1 1 auto; min-width:0;">
+      <!-- Card de listado -->
+      <div class="card" style="width:100%; max-width:none; margin:0;">
         <div class="card-header">
           <div>
             <div class="card-title">Documentos subidos</div>
@@ -531,7 +524,7 @@ async function renderDocGestionView() {
               ? gruposHTML
               : `
             <p class="text-muted" style="font-size:0.85rem;">
-              Todavía no hay documentos subidos. Usa el formulario de la izquierda para añadirlos.
+              Todavía no hay documentos subidos. Usa el formulario de la parte superior para añadirlos.
             </p>
           `
           }
