@@ -950,6 +950,16 @@ function renderPrescCapituloContent() {
         <label>Referencias del capítulo</label>
         ${refsHTML}
       </div>
+
+      <!-- Botones de acción del capítulo -->
+      <div class="form-group" style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:0.5rem;">
+        <button type="button" id="prescCapNuevoBtn" class="btn btn-xs btn-outline">
+          ➕ Añadir capítulo
+        </button>
+        <button type="button" id="prescCapGuardarBtn" class="btn btn-xs btn-primary">
+          💾 Guardar
+        </button>
+      </div>
     </div>
   `;
 
@@ -982,7 +992,7 @@ function renderPrescCapituloContent() {
       if (qtyInput) {
         qtyInput.addEventListener("input", () => {
           linea.cantidad = Number(qtyInput.value) || 0;
-          // No re-render inmediato para no marear, el total final se recalcula en preview
+          // El total se recalcula en la preview
         });
       }
 
@@ -994,6 +1004,31 @@ function renderPrescCapituloContent() {
       }
     }
   });
+
+  // Botón "Añadir capítulo" dentro del cuadro central
+  const btnNuevoCap = container.querySelector("#prescCapNuevoBtn");
+  if (btnNuevoCap) {
+    btnNuevoCap.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      createManualCapitulo();
+      renderDocPrescripcionView();
+    });
+  }
+
+  // Botón "Guardar": deja el capítulo actual en la preview
+  // y crea uno nuevo en blanco para trabajar el siguiente
+  const btnGuardarCap = container.querySelector("#prescCapGuardarBtn");
+  if (btnGuardarCap) {
+    btnGuardarCap.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      // El capítulo ya está enlazado al estado global, así que
+      // simplemente creamos uno nuevo y re-renderizamos todo.
+      createManualCapitulo();
+      renderDocPrescripcionView();
+    });
+  }
 }
 
 // ========================================================
