@@ -1849,14 +1849,12 @@ async function exportarPDFComercial() {
 
   const idioma = appState.documentacion.idioma || "es";
   const secciones = appState.documentacion.secciones || {};
+  const included = appState.documentacion.includedSections || {};
   const proyecto = appState.proyecto || {};
   const presupuesto =
     typeof window.getPresupuestoActual === "function"
       ? window.getPresupuestoActual()
       : null;
-
-  // 🔹 Mapa de secciones incluidas (Incluir en PDF)
-  const included = appState.documentacion.includedSections || {};
 
   const nombreProyecto =
     proyecto.nombre ||
@@ -1932,8 +1930,8 @@ async function exportarPDFComercial() {
       y + paddingTop + 7 + titleLines.length * 7 + 3;
 
     if (lines.length) {
-      // 🔹 Sin "align: justify" para evitar problemas de render en Adobe
-      doc.text(lines, x + paddingX, yBody, { maxWidth: bodyW });
+      // Texto simple alineado a la izquierda (sin opciones avanzadas)
+      doc.text(lines, x + paddingX, yBody);
     }
 
     return {
@@ -1942,7 +1940,48 @@ async function exportarPDFComercial() {
     };
   }
 
-  // ---------- Portada ----------
+  function collectSectionImagesWithCaptions() {
+    const map = appState.documentacion.sectionMedia || {};
+    const media = appState.documentacion.mediaLibrary || [];
+    const byId = {};
+    media.forEach((m) => (byId[m.id] = m));
+
+    const used = new Set();
+    const out = [];
+
+    for (const key of Object.keys(map)) {
+      for (const id of map[key]) {
+        if (used.has(id)) continue;
+        const m = byId[id];
+        if (!m?.url) continue;
+
+        const mime = (m.mimeType || "").toLowerCase();
+        const type = (m.type || "").toLowerCase();
+        const url = m.url.toLowerCase();
+
+        const isImg =
+          mime.startsWith("image/") ||
+          type === "image" ||
+          url.endsWith(".png") ||
+          url.endsWith(".jpg") ||
+          url.endsWith(".jpeg") ||
+          url.endsWith(".webp") ||
+          url.endsWith(".gif");
+
+        if (!isImg) continue;
+
+        used.add(id);
+        out.push({
+          media: m,
+          caption: (m.nombre || "").replace(/\.[^/.]+$/, ""),
+        });
+      }
+    }
+
+    return out.slice(0, 8);
+  }
+
+  // -------- Portada --------
   try {
     const cover = await loadImageAsDataUrl(DOC_TECH_COVER_URL);
     if (cover?.dataUrl) {
@@ -2049,9 +2088,8 @@ async function exportarPDFComercial() {
     }
   }
 
-  // ---------- Página 2 – Presentación de empresa ----------
-  const includePresentacion =
-    included["presentacion_empresa"] !== false;
+  // Página 2 – Presentación de empresa como ficha Salesforce
+  const includePresentacion = included.presentacion_empresa !== false;
 
   if (includePresentacion) {
     doc.addPage();
@@ -2094,7 +2132,7 @@ async function exportarPDFComercial() {
     });
   }
 
-  // ---------- Página 3 – Resumen + Sistema ----------
+  // Página 3 – Resumen + Sistema
   doc.addPage();
 
   const dims3 = getDocPageDimensions(doc);
@@ -2123,10 +2161,7 @@ async function exportarPDFComercial() {
 
   const bloques2 = [];
 
-  if (
-    secciones.resumen?.trim() &&
-    included["resumen"] !== false
-  ) {
+  if (secciones.resumen?.trim() && included.resumen !== false) {
     bloques2.push({
       title:
         idioma === "en"
@@ -2138,10 +2173,7 @@ async function exportarPDFComercial() {
     });
   }
 
-  if (
-    secciones.sistema?.trim() &&
-    included["sistema"] !== false
-  ) {
+  if (secciones.sistema?.trim() && included.sistema !== false) {
     bloques2.push({
       title:
         idioma === "en"
@@ -2169,17 +2201,18 @@ async function exportarPDFComercial() {
     yCards = r.bottomY + 8;
   }
 
-  // ---------- Página 4 – Servicios / Infraestructura / Otros ----------
-  const tieneServicios = secciones.servicios?.trim().length > 0;
-  const tieneInfra = secciones.infraestructura?.trim().length > 0;
-  const tieneOtros = secciones.otros?.trim().length > 0;
+  // Página 4 – Servicios / Infraestructura / Otros
+  const tieneServicios =
+    (secciones.servicios || "").trim().length > 0 &&
+    included.servicios !== false;
+  const tieneInfra =
+    (secciones.infraestructura || "").trim().length > 0 &&
+    included.infraestructura !== false;
+  const tieneOtros =
+    (secciones.otros || "").trim().length > 0 &&
+    included.otros !== false;
 
-  const hayAlgunoServicios =
-    (tieneServicios && included["servicios"] !== false) ||
-    (tieneInfra && included["infraestructura"] !== false) ||
-    (tieneOtros && included["otros"] !== false);
-
-  if (hayAlgunoServicios) {
+  if (tieneServicios || tieneInfra || tieneOtros) {
     doc.addPage();
     const dims4 = getDocPageDimensions(doc);
     const pw4 = dims4.width;
@@ -2205,7 +2238,7 @@ async function exportarPDFComercial() {
 
     const bloques3 = [];
 
-    if (tieneServicios && included["servicios"] !== false) {
+    if (tieneServicios) {
       bloques3.push({
         title:
           idioma === "en"
@@ -2217,7 +2250,7 @@ async function exportarPDFComercial() {
       });
     }
 
-    if (tieneInfra && included["infraestructura"] !== false) {
+    if (tieneInfra) {
       bloques3.push({
         title:
           idioma === "en"
@@ -2229,7 +2262,7 @@ async function exportarPDFComercial() {
       });
     }
 
-    if (tieneOtros && included["otros"] !== false) {
+    if (tieneOtros) {
       bloques3.push({
         title:
           idioma === "en"
@@ -2259,8 +2292,8 @@ async function exportarPDFComercial() {
     }
   }
 
-  // ---------- Página 5 – Galería visual ----------
-  const galeria = collectSectionImagesWithCaptions(included);
+  // Página 5 – Galería visual
+  const galeria = collectSectionImagesWithCaptions();
 
   if (galeria.length) {
     doc.addPage();
@@ -2388,6 +2421,7 @@ async function exportarPDFComercial() {
 
   doc.save(baseCom + "_" + safeCom + ".pdf");
 }
+
 
 
 // ======================================================
