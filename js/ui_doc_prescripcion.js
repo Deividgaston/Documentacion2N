@@ -234,7 +234,6 @@ function ensurePrescSectionsFromBudget() {
   }
   return appState.prescripcion.sectionsFromBudget;
 }
-
 // ========================================================
 // BLOQUE 3 - Render básico de la vista Prescripción
 // ========================================================
@@ -278,9 +277,6 @@ function renderDocPrescripcionView() {
             <div style="display:flex; gap:0.35rem; flex-wrap:wrap; justify-content:flex-end;">
               <button id="prescReloadSectionsBtn" class="btn btn-outline btn-sm">
                 🔄 Regenerar secciones
-              </button>
-              <button id="prescAddManualCapBtn" class="btn btn-primary btn-sm">
-                ➕ Añadir capítulo
               </button>
               <button id="prescExportExcelBtn" class="btn btn-sm btn-outline">
                 ⬇️ Excel
@@ -372,16 +368,6 @@ function renderDocPrescripcionView() {
   `;
 
   // Handlers cabecera global
-  const btnAddCap = container.querySelector("#prescAddManualCapBtn");
-  if (btnAddCap) {
-    btnAddCap.addEventListener("click", (ev) => {
-      ev.preventDefault();
-      ev.stopPropagation();
-      createManualCapitulo();
-      renderDocPrescripcionView();
-    });
-  }
-
   const btnReloadSections = container.querySelector("#prescReloadSectionsBtn");
   if (btnReloadSections) {
     btnReloadSections.addEventListener("click", (ev) => {
@@ -408,7 +394,7 @@ function renderDocPrescripcionView() {
     btnCapGuardar.addEventListener("click", (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
-      // Igual lógica que antes: mantiene estado actual y crea uno nuevo en blanco
+      // Mantiene el capítulo actual en estado y crea uno nuevo en blanco
       createManualCapitulo();
       renderDocPrescripcionView();
     });
@@ -454,7 +440,6 @@ function renderDocPrescripcionView() {
   renderPrescExtraRefsList();
   renderPrescPreview();
 }
-
 // ========================================================
 // BLOQUE 4 - Secciones Notion Premium (arrastrables)
 // ========================================================
@@ -702,7 +687,6 @@ function appendSectionToChapter(cap, sec) {
 
   observer.observe(document.body, { childList: true, subtree: true });
 })();
-
 // ========================================================
 // BLOQUE 6 - Capítulos: helpers + render columna central
 // ========================================================
@@ -940,7 +924,6 @@ function renderPrescCapituloContent() {
     }
   });
 }
-
 // ========================================================
 // BLOQUE 7 - Plantillas + Referencias extra
 // ========================================================
@@ -1244,7 +1227,6 @@ function addExtraRefToCurrentCap(extraId) {
     extraRefId: extraId
   });
 }
-
 // ========================================================
 // Render PLANTILLAS (con buscador)
 // ========================================================
@@ -1516,7 +1498,7 @@ async function renderPrescExtraRefsList() {
                placeholder="Buscar referencia..."
                value="${appState.prescripcion.extraRefsSearchTerm || ""}"
                style="font-size:0.75rem; max-width:60%;">
-        <button id="prescNewExtraRefBtn" class="btn btn-xs btn-secondary" title="Nueva referencia extra">➕</button>
+        <button id="prescNewExtraRefBtn" class="btn btn-xs btnSecondary" title="Nueva referencia extra">➕</button>
       </div>
       <div>
         ${filtered
