@@ -1008,8 +1008,11 @@ textarea {
 /* Layout de dos columnas para Gestión de documentación */
 .doc-gestion-layout {
   display: flex !important;
+  flex-direction: row; /* 👈 fuerza columnas izquierda/derecha */
   gap: 1.25rem;
   align-items: flex-start;
+  max-width: 1200px;   /* 👈 más ancho, similar a otras páginas */
+  margin: 0 auto;      /* centrado */
 }
 
 /* Columna izquierda: card fija */
@@ -1023,4 +1026,3 @@ textarea {
   flex: 1 1 auto;
   min-width: 0;
 }
-
