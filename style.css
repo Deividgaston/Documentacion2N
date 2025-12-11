@@ -1005,16 +1005,22 @@ textarea {
 .doc-backdrop.hidden {
   display: none;
 }
-/* Layout específico para Gestión de documentación */
+/* Layout de dos columnas para Gestión de documentación */
 .doc-gestion-layout {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
+  display: flex !important;
+  gap: 1.25rem;
+  align-items: flex-start;
 }
 
-/* Aquí forzamos que las cards ocupen todo el ancho del layout */
-.doc-gestion-layout .card {
-  width: 100%;
-  max-width: 100%;
-  margin: 0;              /* quita el centrado si hay margin:auto */
+/* Columna izquierda: card fija */
+.doc-gestion-layout .doc-gestion-card:first-child {
+  flex: 0 0 380px;
+  max-width: 380px;
 }
+
+/* Columna derecha: ocupa el resto */
+.doc-gestion-layout .doc-gestion-card:last-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
