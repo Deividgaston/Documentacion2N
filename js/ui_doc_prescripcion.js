@@ -384,7 +384,7 @@ function renderDocPrescripcionView() {
   renderPrescPreview();
 }
 
-  }
+  
 
   // En los siguientes bloques (4-8) rellenaremos:
   // - Secciones Notion (drag)
