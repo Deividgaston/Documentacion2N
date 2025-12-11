@@ -1878,67 +1878,72 @@ async function exportarPDFComercial() {
   const marginBottom = 20;
 
   // Tarjeta tipo Salesforce (no se corta entre páginas)
-  function drawSalesforceCard({
-    x,
-    y,
-    width,
-    title,
-    body,
-    doc,
-    maxBodyWidth,
-    minHeight,
-    marginTop = 20,
-    marginBottom = 20,
-  }) {
-    const paddingX = 8;
-    const paddingTop = 8;
-    const paddingBottom = 8;
+function drawSalesforceCard({
+  x,
+  y,
+  width,
+  title,
+  body,
+  doc,
+  maxBodyWidth,
+  minHeight,
+  marginTop = 20,
+  marginBottom = 20,
+}) {
+  const paddingX = 8;
+  const paddingTop = 8;
+  const paddingBottom = 8;
 
-    const bodyW = maxBodyWidth || width - paddingX * 2;
-    const lines = body ? doc.splitTextToSize(body, bodyW) : [];
-    const bodyH = lines.length * 5.0;
+  // 🔹 Ancho efectivo del texto más estrecho (~78% del ancho disponible)
+  const bodyW = Math.floor(
+    (maxBodyWidth || width - paddingX * 2) * 0.78
+  );
 
-    let cardH = paddingTop + 8 + 4 + bodyH + paddingBottom;
-    if (minHeight && cardH < minHeight) cardH = minHeight;
+  const lines = body ? doc.splitTextToSize(body, bodyW) : [];
+  const bodyH = lines.length * 5.0;
 
-    const dimsLocal = getDocPageDimensions(doc);
-    const pageHLocal = dimsLocal.height;
+  let cardH = paddingTop + 8 + 4 + bodyH + paddingBottom;
+  if (minHeight && cardH < minHeight) cardH = minHeight;
 
-    if (y + cardH > pageHLocal - marginBottom) {
-      doc.addPage();
-      y = marginTop;
-    }
+  const dimsLocal = getDocPageDimensions(doc);
+  const pageHLocal = dimsLocal.height;
 
-    doc.setFillColor(229, 231, 235);
-    doc.roundedRect(x + 1.2, y + 1.8, width, cardH, 3, 3, "F");
-
-    doc.setFillColor(255, 255, 255);
-    doc.setDrawColor(209, 213, 219);
-    doc.roundedRect(x, y, width, cardH, 3, 3, "FD");
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(20);
-    doc.setTextColor(31, 41, 55);
-    const titleLines = doc.splitTextToSize(title, width - paddingX * 2);
-    doc.text(titleLines, x + paddingX, y + paddingTop + 7);
-
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(11);
-    doc.setTextColor(75, 85, 99);
-
-    const yBody =
-      y + paddingTop + 7 + titleLines.length * 7 + 3;
-
-    if (lines.length) {
-      // Texto simple alineado a la izquierda (sin opciones avanzadas)
-      doc.text(lines, x + paddingX, yBody);
-    }
-
-    return {
-      bottomY: y + cardH,
-      height: cardH,
-    };
+  if (y + cardH > pageHLocal - marginBottom) {
+    doc.addPage();
+    y = marginTop;
   }
+
+  doc.setFillColor(229, 231, 235);
+  doc.roundedRect(x + 1.2, y + 1.8, width, cardH, 3, 3, "F");
+
+  doc.setFillColor(255, 255, 255);
+  doc.setDrawColor(209, 213, 219);
+  doc.roundedRect(x, y, width, cardH, 3, 3, "FD");
+
+  // Título
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(20);
+  doc.setTextColor(31, 41, 55);
+  const titleLines = doc.splitTextToSize(title, width - paddingX * 2);
+  doc.text(titleLines, x + paddingX, y + paddingTop + 7);
+
+  // Texto del cuerpo
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(11);
+  doc.setTextColor(75, 85, 99);
+
+  const yBody = y + paddingTop + 7 + titleLines.length * 7 + 3;
+
+  if (lines.length) {
+    // 🔹 Sin justificar → alineado a la izquierda, usando bodyW más estrecho
+    doc.text(lines, x + paddingX, yBody);
+  }
+
+  return {
+    bottomY: y + cardH,
+    height: cardH,
+  };
+}
 
   function collectSectionImagesWithCaptions() {
     const map = appState.documentacion.sectionMedia || {};
