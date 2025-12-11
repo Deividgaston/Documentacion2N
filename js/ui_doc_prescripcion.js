@@ -764,6 +764,7 @@ function deleteCapituloById(capId) {
 }
 
 // Render columna central
+// Render columna central
 function renderPrescCapituloContent() {
   const container = document.getElementById("prescCapituloContent");
   if (!container) return;
@@ -792,7 +793,6 @@ function renderPrescCapituloContent() {
       </p>
     `;
   } else {
-    // Sin scroll interno, el scroll lo lleva el card-body de la columna
     refsHTML = `
       <div>
         <table class="table table-compact" style="width:100%; font-size:0.8rem; border-collapse:collapse;">
@@ -857,8 +857,8 @@ function renderPrescCapituloContent() {
   }
 
   container.innerHTML = `
-    <div style="display:flex; flex-direction:column; gap:0.75rem; height:100%;">
-      
+    <div style="display:flex; flex-direction:column; gap:0.75rem;">
+
       <!-- Título del capítulo -->
       <div class="form-group">
         <label>Título del capítulo</label>
@@ -869,11 +869,11 @@ function renderPrescCapituloContent() {
       </div>
 
       <!-- Texto descriptivo -->
-      <div class="form-group" style="flex:1; display:flex; flex-direction:column; min-height:0;">
+      <div class="form-group">
         <label>Texto descriptivo (mediciones)</label>
         <textarea id="prescCapTexto"
                   class="form-control"
-                  style="flex:1; min-height:120px; resize:none;"
+                  style="width:100%; min-height:130px; resize:vertical;"
                   placeholder="Aquí puedes escribir o pegar el texto técnico de mediciones del capítulo...">${cap.texto || ""}</textarea>
       </div>
 
@@ -924,6 +924,7 @@ function renderPrescCapituloContent() {
     }
   });
 }
+
 // ========================================================
 // BLOQUE 7 - Plantillas + Referencias extra
 // ========================================================
