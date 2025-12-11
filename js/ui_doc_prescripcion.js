@@ -366,16 +366,29 @@ function renderDocPrescripcionView() {
   // ----------------------------------------------------
   // Handlers iniciales
   // ----------------------------------------------------
-   const btnReloadSections = container.querySelector("#prescReloadSectionsBtn");
-  if (btnReloadSections) {
-    btnReloadSections.addEventListener("click", () => {
-      buildPrescSectionsFromPresupuesto(); // recalcula secciones desde el presupuesto actual
+    const btnAddCap = container.querySelector("#prescAddManualCapBtn");
+  if (btnAddCap) {
+    btnAddCap.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      console.log("[PRESCRIPCIÓN] Click en Añadir capítulo");
+      createManualCapitulo();
       renderDocPrescripcionView();
     });
   }
 
+  const btnReloadSections = container.querySelector("#prescReloadSectionsBtn");
+  if (btnReloadSections) {
+    btnReloadSections.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      console.log("[PRESCRIPCIÓN] Regenerar secciones desde presupuesto");
+      buildPrescSectionsFromPresupuesto();
+      renderDocPrescripcionView();
+    });
+  }
 
-      // Rellenar sub-vistas
+  // Rellenar sub-vistas
   renderPrescSectionsList();
   renderPrescCapituloContent();
   attachPrescDropZone();
@@ -383,6 +396,7 @@ function renderDocPrescripcionView() {
   renderPrescExtraRefsList();
   renderPrescPreview();
 }
+
 
   
 
