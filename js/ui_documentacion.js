@@ -1929,8 +1929,9 @@ async function exportarPDFComercial() {
       y + paddingTop + 7 + titleLines.length * 7 + 3;
 
     if (lines.length) {
-      doc.text(lines, x + paddingX, yBody, { maxWidth: bodyW, align: "justify" });
+      doc.text(lines, x + paddingX, yBody, { maxWidth: bodyW });
     }
+
 
     return {
       bottomY: y + cardH,
