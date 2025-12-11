@@ -1855,6 +1855,9 @@ async function exportarPDFComercial() {
       ? window.getPresupuestoActual()
       : null;
 
+  // 🔹 Mapa de secciones incluidas (Incluir en PDF)
+  const included = appState.documentacion.includedSections || {};
+
   const nombreProyecto =
     proyecto.nombre ||
     proyecto.nombreProyecto ||
@@ -1929,9 +1932,9 @@ async function exportarPDFComercial() {
       y + paddingTop + 7 + titleLines.length * 7 + 3;
 
     if (lines.length) {
+      // 🔹 Sin "align: justify" para evitar problemas de render en Adobe
       doc.text(lines, x + paddingX, yBody, { maxWidth: bodyW });
     }
-
 
     return {
       bottomY: y + cardH,
@@ -1939,53 +1942,7 @@ async function exportarPDFComercial() {
     };
   }
 
-   function collectSectionImagesWithCaptions(includedMap) {
-    const map = appState.documentacion.sectionMedia || {};
-    const media = appState.documentacion.mediaLibrary || [];
-    const byId = {};
-    media.forEach((m) => (byId[m.id] = m));
-
-    const used = new Set();
-    const out = [];
-
-    for (const key of Object.keys(map)) {
-      // 🔹 Si la sección está desmarcada en "Incluir en PDF", no usamos sus imágenes
-      if (includedMap && includedMap[key] === false) continue;
-
-      for (const id of map[key]) {
-        if (used.has(id)) continue;
-        const m = byId[id];
-        if (!m?.url) continue;
-
-        const mime = (m.mimeType || "").toLowerCase();
-        const type = (m.type || "").toLowerCase();
-        const url = m.url.toLowerCase();
-
-        const isImg =
-          mime.startsWith("image/") ||
-          type === "image" ||
-          url.endsWith(".png") ||
-          url.endsWith(".jpg") ||
-          url.endsWith(".jpeg") ||
-          url.endsWith(".webp") ||
-          url.endsWith(".gif");
-
-        if (!isImg) continue;
-
-        used.add(id);
-        out.push({
-          media: m,
-          caption: (m.nombre || "").replace(/\.[^/.]+$/, ""),
-        });
-      }
-    }
-
-    // Máx. 8 imágenes para la galería
-    return out.slice(0, 8);
-  }
-
-
-  // Portada
+  // ---------- Portada ----------
   try {
     const cover = await loadImageAsDataUrl(DOC_TECH_COVER_URL);
     if (cover?.dataUrl) {
@@ -2092,10 +2049,9 @@ async function exportarPDFComercial() {
     }
   }
 
-  // Página 2 – Presentación de empresa como ficha Salesforce
+  // ---------- Página 2 – Presentación de empresa ----------
   const includePresentacion =
-    appState.documentacion.includedSections?.presentacion_empresa !==
-    false;
+    included["presentacion_empresa"] !== false;
 
   if (includePresentacion) {
     doc.addPage();
@@ -2104,7 +2060,6 @@ async function exportarPDFComercial() {
 
     let y2 = marginTop;
 
-    // Título de sección (como "Project overview")
     const sectionLabel =
       idioma === "en"
         ? "Company introduction"
@@ -2123,14 +2078,13 @@ async function exportarPDFComercial() {
 
     y2 += 10;
 
-    // Contenido de la presentación como UNA FICHA tipo Salesforce
     const bodyText = secciones["presentacion_empresa"] || "";
 
     drawSalesforceCard({
       x: marginX,
       y: y2,
       width: pw2 - marginX * 2,
-      title: sectionLabel, // título dentro de la tarjeta
+      title: sectionLabel,
       body: bodyText,
       doc,
       maxBodyWidth: pw2 - marginX * 2 - 16,
@@ -2140,7 +2094,7 @@ async function exportarPDFComercial() {
     });
   }
 
-  // Página 3 – Resumen + Sistema
+  // ---------- Página 3 – Resumen + Sistema ----------
   doc.addPage();
 
   const dims3 = getDocPageDimensions(doc);
@@ -2169,7 +2123,10 @@ async function exportarPDFComercial() {
 
   const bloques2 = [];
 
-  if (secciones.resumen?.trim()) {
+  if (
+    secciones.resumen?.trim() &&
+    included["resumen"] !== false
+  ) {
     bloques2.push({
       title:
         idioma === "en"
@@ -2181,7 +2138,10 @@ async function exportarPDFComercial() {
     });
   }
 
-  if (secciones.sistema?.trim()) {
+  if (
+    secciones.sistema?.trim() &&
+    included["sistema"] !== false
+  ) {
     bloques2.push({
       title:
         idioma === "en"
@@ -2209,12 +2169,17 @@ async function exportarPDFComercial() {
     yCards = r.bottomY + 8;
   }
 
-  // Página 4 – Servicios / Infraestructura / Otros
+  // ---------- Página 4 – Servicios / Infraestructura / Otros ----------
   const tieneServicios = secciones.servicios?.trim().length > 0;
   const tieneInfra = secciones.infraestructura?.trim().length > 0;
   const tieneOtros = secciones.otros?.trim().length > 0;
 
-  if (tieneServicios || tieneInfra || tieneOtros) {
+  const hayAlgunoServicios =
+    (tieneServicios && included["servicios"] !== false) ||
+    (tieneInfra && included["infraestructura"] !== false) ||
+    (tieneOtros && included["otros"] !== false);
+
+  if (hayAlgunoServicios) {
     doc.addPage();
     const dims4 = getDocPageDimensions(doc);
     const pw4 = dims4.width;
@@ -2240,7 +2205,7 @@ async function exportarPDFComercial() {
 
     const bloques3 = [];
 
-    if (tieneServicios) {
+    if (tieneServicios && included["servicios"] !== false) {
       bloques3.push({
         title:
           idioma === "en"
@@ -2252,7 +2217,7 @@ async function exportarPDFComercial() {
       });
     }
 
-    if (tieneInfra) {
+    if (tieneInfra && included["infraestructura"] !== false) {
       bloques3.push({
         title:
           idioma === "en"
@@ -2264,7 +2229,7 @@ async function exportarPDFComercial() {
       });
     }
 
-    if (tieneOtros) {
+    if (tieneOtros && included["otros"] !== false) {
       bloques3.push({
         title:
           idioma === "en"
@@ -2294,8 +2259,8 @@ async function exportarPDFComercial() {
     }
   }
 
-  // Página 5 – Galería visual
-  const galeria = collectSectionImagesWithCaptions();
+  // ---------- Página 5 – Galería visual ----------
+  const galeria = collectSectionImagesWithCaptions(included);
 
   if (galeria.length) {
     doc.addPage();
@@ -2423,6 +2388,7 @@ async function exportarPDFComercial() {
 
   doc.save(baseCom + "_" + safeCom + ".pdf");
 }
+
 
 // ======================================================
 // EXPORTAR PDF SEGÚN MODO
