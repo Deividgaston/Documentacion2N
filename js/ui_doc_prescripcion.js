@@ -1908,11 +1908,13 @@ function renderPrescPreview() {
       });
     });
 
-  // Click en borrar capítulo
+   // Click en borrar capítulo
   container
     .querySelectorAll(".presc-preview-cap-del")
     .forEach((btn) => {
-      btn.addEventListener("click", () => {
+      btn.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation(); // para que no cuente como doble clic en la fila
         const capId = btn.getAttribute("data-cap-id");
         if (!capId) return;
         deleteCapituloById(capId);
@@ -1920,6 +1922,7 @@ function renderPrescPreview() {
       });
     });
 }
+
 
 
 // Estilos ligeros para la tabla de preview (opcional)
