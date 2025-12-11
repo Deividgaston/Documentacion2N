@@ -1896,7 +1896,7 @@ function drawSalesforceCard({
 
   // 🔹 Ancho efectivo del texto más estrecho (~78% del ancho disponible)
   const bodyW = Math.floor(
-    (maxBodyWidth || width - paddingX * 2) * 0.9
+    (maxBodyWidth || width - paddingX * 2) * 1.2
   );
 
   const lines = body ? doc.splitTextToSize(body, bodyW) : [];
