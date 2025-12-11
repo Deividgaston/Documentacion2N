@@ -272,7 +272,7 @@ function renderDocPrescripcionView() {
     <div class="presc-root" style="display:flex; flex-direction:column; height:100%;">
 
       <!-- ========== CABECERA SUPERIOR ========== -->
-      <div class="card" style="margin-bottom:1rem;">
+          <div class="card" style="margin-bottom:1rem;">
         <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
           <div>
             <div class="card-title">Prescripción técnica del proyecto</div>
@@ -282,10 +282,16 @@ function renderDocPrescripcionView() {
           </div>
 
           <div style="display:flex; gap:0.5rem;">
-            <button id="prescAddManualCapBtn" class="btn btn-primary btn-sm">➕ Añadir capítulo</button>
+            <button id="prescReloadSectionsBtn" class="btn btn-outline btn-sm">
+              🔄 Regenerar secciones
+            </button>
+            <button id="prescAddManualCapBtn" class="btn btn-primary btn-sm">
+              ➕ Añadir capítulo
+            </button>
           </div>
         </div>
       </div>
+
 
       <!-- ========== LAYOUT 3 COLUMNAS ========== -->
       <div class="presc-layout" 
@@ -360,12 +366,14 @@ function renderDocPrescripcionView() {
   // ----------------------------------------------------
   // Handlers iniciales
   // ----------------------------------------------------
-  const btnAddCap = container.querySelector("#prescAddManualCapBtn");
-  if (btnAddCap) {
-    btnAddCap.addEventListener("click", () => {
-      createManualCapitulo();
+   const btnReloadSections = container.querySelector("#prescReloadSectionsBtn");
+  if (btnReloadSections) {
+    btnReloadSections.addEventListener("click", () => {
+      buildPrescSectionsFromPresupuesto(); // recalcula secciones desde el presupuesto actual
       renderDocPrescripcionView();
     });
+  }
+
 
       // Rellenar sub-vistas
   renderPrescSectionsList();
