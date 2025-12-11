@@ -312,9 +312,19 @@ function renderDocPrescripcionView() {
 
         <!-- COLUMNA 2: Capítulo seleccionado -->
         <div class="card" style="display:flex; flex-direction:column; overflow:hidden;">
-          <div class="card-header">
-            <div class="card-title">Capítulo seleccionado</div>
-            <div class="card-subtitle">Nombre, texto descriptivo y referencias del capítulo</div>
+          <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; gap:0.75rem;">
+            <div>
+              <div class="card-title">Capítulo seleccionado</div>
+              <div class="card-subtitle">Nombre, texto descriptivo y referencias del capítulo</div>
+            </div>
+            <div style="display:flex; gap:0.25rem;">
+              <button type="button" id="prescCapNuevoBtn" class="btn btn-xs btn-secondary" title="Añadir capítulo">
+                ＋
+              </button>
+              <button type="button" id="prescCapGuardarBtn" class="btn btn-xs btn-secondary" title="Guardar y crear nuevo capítulo">
+                💾
+              </button>
+            </div>
           </div>
 
           <div id="prescCapituloContent" class="card-body" 
@@ -361,7 +371,7 @@ function renderDocPrescripcionView() {
     </div>
   `;
 
-  // Handlers cabecera
+  // Handlers cabecera global
   const btnAddCap = container.querySelector("#prescAddManualCapBtn");
   if (btnAddCap) {
     btnAddCap.addEventListener("click", (ev) => {
@@ -378,6 +388,28 @@ function renderDocPrescripcionView() {
       ev.preventDefault();
       ev.stopPropagation();
       buildPrescSectionsFromPresupuesto();
+      renderDocPrescripcionView();
+    });
+  }
+
+  // Botones del capítulo seleccionado (iconos en cabecera)
+  const btnCapNuevo = container.querySelector("#prescCapNuevoBtn");
+  if (btnCapNuevo) {
+    btnCapNuevo.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      createManualCapitulo();
+      renderDocPrescripcionView();
+    });
+  }
+
+  const btnCapGuardar = container.querySelector("#prescCapGuardarBtn");
+  if (btnCapGuardar) {
+    btnCapGuardar.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      // Igual lógica que antes: mantiene estado actual y crea uno nuevo en blanco
+      createManualCapitulo();
       renderDocPrescripcionView();
     });
   }
@@ -776,7 +808,7 @@ function renderPrescCapituloContent() {
       </p>
     `;
   } else {
-    // CAMBIO: sin scroll interno, el scroll lo lleva el card-body de la columna
+    // Sin scroll interno, el scroll lo lleva el card-body de la columna
     refsHTML = `
       <div>
         <table class="table table-compact" style="width:100%; font-size:0.8rem; border-collapse:collapse;">
@@ -866,16 +898,6 @@ function renderPrescCapituloContent() {
         <label>Referencias del capítulo</label>
         ${refsHTML}
       </div>
-
-      <!-- Botones de acción del capítulo -->
-      <div class="form-group" style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:0.5rem;">
-        <button type="button" id="prescCapNuevoBtn" class="btn btn-xs btn-outline">
-          ➕ Añadir capítulo
-        </button>
-        <button type="button" id="prescCapGuardarBtn" class="btn btn-xs btn-primary">
-          💾 Guardar
-        </button>
-      </div>
     </div>
   `;
 
@@ -917,27 +939,6 @@ function renderPrescCapituloContent() {
       }
     }
   });
-
-  const btnNuevoCap = container.querySelector("#prescCapNuevoBtn");
-  if (btnNuevoCap) {
-    btnNuevoCap.addEventListener("click", (ev) => {
-      ev.preventDefault();
-      ev.stopPropagation();
-      createManualCapitulo();
-      renderDocPrescripcionView();
-    });
-  }
-
-  const btnGuardarCap = container.querySelector("#prescCapGuardarBtn");
-  if (btnGuardarCap) {
-    btnGuardarCap.addEventListener("click", (ev) => {
-      ev.preventDefault();
-      ev.stopPropagation();
-      // Ya está guardado en estado; creamos uno nuevo en blanco
-      createManualCapitulo();
-      renderDocPrescripcionView();
-    });
-  }
 }
 
 // ========================================================
@@ -1272,7 +1273,7 @@ async function renderPrescPlantillasList() {
                placeholder="Buscar plantilla..."
                value="${appState.prescripcion.plantillasSearchTerm || ""}"
                style="font-size:0.75rem; max-width:60%;">
-        <button id="prescNewPlantillaBtn" class="btn btn-xs btn-primary" title="Nueva plantilla">➕</button>
+        <button id="prescNewPlantillaBtn" class="btn btn-xs btn-secondary" title="Nueva plantilla">＋</button>
       </div>
       <p class="text-muted" style="font-size:0.8rem;">
         Aún no tienes plantillas. Crea tu primera plantilla de texto técnico.
@@ -1287,7 +1288,7 @@ async function renderPrescPlantillasList() {
                placeholder="Buscar plantilla..."
                value="${appState.prescripcion.plantillasSearchTerm || ""}"
                style="font-size:0.75rem; max-width:60%;">
-        <button id="prescNewPlantillaBtn" class="btn btn-xs btn-primary" title="Nueva plantilla">➕</button>
+        <button id="prescNewPlantillaBtn" class="btn btn-xs btn-secondary" title="Nueva plantilla">＋</button>
       </div>
       <div>
         ${filtered
@@ -2002,6 +2003,7 @@ const PRESC_EXPORT_LABELS = {
     amount: "Importe",
     title: "Prescripción técnica del proyecto",
     total: "Total capítulo",
+    grandTotal: "Total prescripción",
     project: "Proyecto"
   },
   en: {
@@ -2014,6 +2016,7 @@ const PRESC_EXPORT_LABELS = {
     amount: "Amount",
     title: "Project technical specification",
     total: "Chapter total",
+    grandTotal: "Specification total",
     project: "Project"
   },
   pt: {
@@ -2026,6 +2029,7 @@ const PRESC_EXPORT_LABELS = {
     amount: "Montante",
     title: "Especificação técnica do projeto",
     total: "Total capítulo",
+    grandTotal: "Total da especificação",
     project: "Projeto"
   }
 };
@@ -2037,7 +2041,8 @@ function buildPrescExportModel(lang) {
 
   const result = {
     language,
-    capitulos: []
+    capitulos: [],
+    totalGlobal: 0
   };
 
   caps.forEach((cap, idx) => {
@@ -2047,12 +2052,15 @@ function buildPrescExportModel(lang) {
       id: cap.id,
       nombre: cap.nombre || "",
       texto: cap.texto || "",
-      lineas: []
+      lineas: [],
+      subtotal: 0
     };
 
     lineas.forEach((l) => {
       const cant = Number(l.cantidad) || 0;
       const pvp = Number(l.pvp) || 0;
+      const importe = cant * pvp;
+
       capData.lineas.push({
         id: l.id,
         tipo: l.tipo || "budget",
@@ -2061,10 +2069,13 @@ function buildPrescExportModel(lang) {
         unidad: l.unidad || "Ud",
         cantidad: cant,
         pvp,
-        importe: cant * pvp
+        importe
       });
+
+      capData.subtotal += importe;
     });
 
+    result.totalGlobal += capData.subtotal;
     result.capitulos.push(capData);
   });
 
@@ -2133,7 +2144,30 @@ function prescExportToCSV(model, lang) {
       ].join(sep);
       lines.push(row);
     });
+
+    // Subtotal de capítulo
+    lines.push([
+      (cap.nombre || "").replace(/;/g, ","),
+      "",
+      labels.total,
+      "",
+      "",
+      "",
+      (cap.subtotal || 0).toFixed(2)
+    ].join(sep));
   });
+
+  // Total global
+  lines.push("");
+  lines.push([
+    "",
+    "",
+    labels.grandTotal || labels.total,
+    "",
+    "",
+    "",
+    (model.totalGlobal || 0).toFixed(2)
+  ].join(sep));
 
   return lines.join("\n");
 }
@@ -2187,6 +2221,17 @@ function openPrescPrintWindow(model, lang) {
     </style>
   `;
 
+  const totalGlobal =
+    typeof model.totalGlobal === "number"
+      ? model.totalGlobal
+      : (model.capitulos || []).reduce((acc, cap) => {
+          const sub = (cap.lineas || []).reduce(
+            (s, l) => s + (l.importe != null ? l.importe : (l.cantidad || 0) * (l.pvp || 0)),
+            0
+          );
+          return acc + sub;
+        }, 0);
+
   let html = `
     <html>
       <head>
@@ -2222,7 +2267,13 @@ function openPrescPrintWindow(model, lang) {
           <tbody>
       `;
 
+      let subtotal = 0;
+
       cap.lineas.forEach((l) => {
+        const importe =
+          l.importe != null ? l.importe : (l.cantidad || 0) * (l.pvp || 0);
+        subtotal += importe;
+
         html += `
           <tr>
             <td>${l.codigo || ""}</td>
@@ -2230,12 +2281,16 @@ function openPrescPrintWindow(model, lang) {
             <td>${l.unidad || ""}</td>
             <td style="text-align:right;">${(l.cantidad || 0)}</td>
             <td style="text-align:right;">${(l.pvp || 0).toFixed(2)}</td>
-            <td style="text-align:right;">${(l.importe || 0).toFixed(2)}</td>
+            <td style="text-align:right;">${importe.toFixed(2)}</td>
           </tr>
         `;
       });
 
       html += `
+          <tr>
+            <td colspan="5" style="text-align:right; font-weight:600;">${labels.total}</td>
+            <td style="text-align:right; font-weight:600;">${subtotal.toFixed(2)}</td>
+          </tr>
           </tbody>
         </table>
       `;
@@ -2243,6 +2298,9 @@ function openPrescPrintWindow(model, lang) {
   });
 
   html += `
+        <p style="text-align:right; font-weight:600; margin-top:12px;">
+          ${labels.grandTotal}: ${totalGlobal.toFixed(2)} €
+        </p>
         <p class="small">
           Generado desde CRM Prescripción 2N · Idioma: ${lang.toUpperCase()}
         </p>
