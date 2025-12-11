@@ -297,6 +297,7 @@ function renderPresupuestoView() {
   }
 
   precargarDatosProyecto();
+  bindPresupuestoMetaInputs(); // <<< NUEVO: sincroniza nombre/cliente/fecha/notas al escribir
 
   // Si ya había un presupuesto en memoria, pintar directamente
   const presu = appState.presupuesto || {};
@@ -562,6 +563,33 @@ function precargarDatosProyecto() {
     fecha: document.getElementById("presuFecha").value || "",
     notas: document.getElementById("presuNotas").value || "",
   });
+}
+
+// ===============================================
+// Sincronizar nombre/cliente/fecha/notas al escribir
+// ===============================================
+function bindPresupuestoMetaInputs() { // <<< NUEVO
+  const nombreEl = document.getElementById("presuNombre");
+  const clienteEl = document.getElementById("presuCliente");
+  const fechaEl = document.getElementById("presuFecha");
+  const notasEl = document.getElementById("presuNotas");
+
+  function sync() {
+    const p = normalizarPresupuesto(appState.presupuesto);
+    if (nombreEl) p.nombre = nombreEl.value || "";
+    if (clienteEl) p.cliente = clienteEl.value || "";
+    if (fechaEl) p.fecha = fechaEl.value || "";
+    if (notasEl) p.notas = notasEl.value || "";
+    appState.presupuesto = p;
+    savePresupuestoToStorage();
+  }
+
+  if (nombreEl) nombreEl.addEventListener("input", sync);
+  if (clienteEl) clienteEl.addEventListener("input", sync);
+  if (fechaEl) fechaEl.addEventListener("change", sync);
+  if (notasEl) notasEl.addEventListener("input", sync);
+
+  sync(); // guarda el estado inicial coherente
 }
 
 // ===============================================
@@ -1353,7 +1381,7 @@ async function exportarPresupuestoExcel() {
   Object.keys(sectionNotes || {}).forEach((sec) => {
     if (sectionOrder && sectionOrder.includes && sectionOrder.includes(sec))
       return;
-    const txt = (sectionNotes[sec] || "").trim();
+  const txt = (sectionNotes[sec] || "").trim();
     if (txt) {
       notasSecciones.push({ seccion: sec, nota: txt });
     }
@@ -2042,4 +2070,17 @@ window.setPresupuestoActual = function (nuevo) {
   if (!nuevo) return;
   appState.presupuesto = normalizarPresupuesto(nuevo);
   savePresupuestoToStorage();
+};
+
+// <<< NUEVO: helper global para que otras pantallas cojan siempre el nombre correcto
+window.getNombreProyectoActual = function () {
+  const presu =
+    typeof window.getPresupuestoActual === "function"
+      ? window.getPresupuestoActual()
+      : normalizarPresupuesto(appState.presupuesto);
+
+  if (presu && presu.nombre) return presu.nombre;
+
+  const p = appState.proyecto || {};
+  return p.nombre || "Proyecto sin nombre";
 };
