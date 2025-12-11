@@ -444,15 +444,26 @@ async function recalcularSimulador() {
 
     const cantidad = Number(lBase.cantidad || 0) || 0;
 
-    const cfg = configPrev[key] || {};
-    const tarifaId = cfg.tarifaId || tarifaDefecto;
+   const cfg = configPrev[key] || {};
 
-    let dtoLinea;
-    if (editedMap[key]) {
-      dtoLinea = Number(cfg.dtoLinea || 0) || 0;
-    } else {
-      dtoLinea = dtoGlobal;
-    }
+// 🔥 Si la línea NO ha sido editada → SIEMPRE seguir tarifa global
+let tarifaId;
+if (editedMap[key]) {
+  // El usuario tocó esta línea → usar su tarifa manual
+  tarifaId = cfg.tarifaId || tarifaDefecto;
+} else {
+  // No tocada → usar tarifa global SIEMPRE
+  tarifaId = tarifaDefecto;
+}
+
+// Dto línea: igual que antes
+let dtoLinea;
+if (editedMap[key]) {
+  dtoLinea = Number(cfg.dtoLinea || 0) || 0;
+} else {
+  dtoLinea = dtoGlobal;
+}
+
 
     const objTarifa = TARIFAS_MAP[tarifaId] || TARIFAS_MAP["DIST_PRICE"];
     const dtoTarifa = objTarifa ? objTarifa.dto || 0 : 0;
