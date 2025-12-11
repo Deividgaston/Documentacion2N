@@ -10,11 +10,8 @@ appState.documentacion = appState.documentacion || {
   mediaLoaded: false,
 };
 
-// Helper común del proyecto: usamos el mismo contenedor que el resto de vistas
+// Helper: para GESTIÓN usamos SIEMPRE el contenedor ancho general
 function getDocGestionAppContent() {
-  if (typeof window.getDocAppContent === "function") {
-    return window.getDocAppContent();
-  }
   if (typeof window.getAppContent === "function") {
     return window.getAppContent();
   }
@@ -439,7 +436,7 @@ async function renderDocGestionView() {
     }
   `;
 
-  // 🔹 CAMBIO DE LAYOUT: ahora es flex, izquierda fija (~380px) y derecha ocupa todo el ancho
+  // Layout tipo Tarifas: izquierda fija, derecha ocupa todo el ancho
   container.innerHTML = `
     <div
       class="proyecto-layout"
