@@ -12,7 +12,8 @@ appState.prescripcion = appState.prescripcion || {
   plantillas: [],            // [{ id, nombre, texto }]
   plantillasLoaded: false,
   extraRefs: [],             // [{ id, codigo, descripcion, unidad, pvp }]
-  extraRefsLoaded: false
+  extraRefsLoaded: false,
+  exportLang: "es" // NUEVO: idioma de exportación ("es" | "en" | "pt")
 };
 
 // ========================================================
@@ -265,6 +266,8 @@ function renderDocPrescripcionView() {
   appState.prescripcion.plantillas = appState.prescripcion.plantillas || [];
   appState.prescripcion.extraRefs = appState.prescripcion.extraRefs || [];
 
+  const currentLang = appState.prescripcion.exportLang || "es";
+
   // ======================================================
   // Estructura visual general
   // ======================================================
@@ -272,8 +275,8 @@ function renderDocPrescripcionView() {
     <div class="presc-root" style="display:flex; flex-direction:column; height:100%;">
 
       <!-- ========== CABECERA SUPERIOR ========== -->
-          <div class="card" style="margin-bottom:1rem;">
-        <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+      <div class="card" style="margin-bottom:1rem;">
+        <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; gap:1rem;">
           <div>
             <div class="card-title">Prescripción técnica del proyecto</div>
             <div class="card-subtitle">
@@ -281,13 +284,34 @@ function renderDocPrescripcionView() {
             </div>
           </div>
 
-          <div style="display:flex; gap:0.5rem;">
-            <button id="prescReloadSectionsBtn" class="btn btn-outline btn-sm">
-              🔄 Regenerar secciones
-            </button>
-            <button id="prescAddManualCapBtn" class="btn btn-primary btn-sm">
-              ➕ Añadir capítulo
-            </button>
+          <div style="display:flex; flex-direction:column; gap:0.35rem; align-items:flex-end;">
+            <div style="display:flex; gap:0.35rem; align-items:center; flex-wrap:wrap; justify-content:flex-end;">
+              <span style="font-size:0.75rem; color:#6b7280;">Idioma exportación</span>
+              <select id="prescExportLang" class="form-control form-control-sm" style="min-width:140px; font-size:0.75rem;">
+                <option value="es" ${currentLang === "es" ? "selected" : ""}>Castellano</option>
+                <option value="en" ${currentLang === "en" ? "selected" : ""}>English</option>
+                <option value="pt" ${currentLang === "pt" ? "selected" : ""}>Português</option>
+              </select>
+            </div>
+
+            <div style="display:flex; gap:0.35rem; flex-wrap:wrap; justify-content:flex-end;">
+              <button id="prescReloadSectionsBtn" class="btn btn-outline btn-sm">
+                🔄 Regenerar secciones
+              </button>
+              <button id="prescAddManualCapBtn" class="btn btn-primary btn-sm">
+                ➕ Añadir capítulo
+              </button>
+              <!-- NUEVOS BOTONES EXPORTACIÓN -->
+              <button id="prescExportExcelBtn" class="btn btn-sm btn-outline">
+                ⬇️ Excel
+              </button>
+              <button id="prescExportPdfBtn" class="btn btn-sm btn-outline">
+                ⬇️ PDF
+              </button>
+              <button id="prescExportBc3Btn" class="btn btn-sm btn-outline">
+                ⬇️ BC3
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -366,7 +390,7 @@ function renderDocPrescripcionView() {
   // ----------------------------------------------------
   // Handlers iniciales
   // ----------------------------------------------------
-    const btnAddCap = container.querySelector("#prescAddManualCapBtn");
+  const btnAddCap = container.querySelector("#prescAddManualCapBtn");
   if (btnAddCap) {
     btnAddCap.addEventListener("click", (ev) => {
       ev.preventDefault();
@@ -388,6 +412,38 @@ function renderDocPrescripcionView() {
     });
   }
 
+  // NUEVO: selector de idioma export
+  const langSelect = container.querySelector("#prescExportLang");
+  if (langSelect) {
+    langSelect.value = appState.prescripcion.exportLang || "es";
+    langSelect.addEventListener("change", () => {
+      appState.prescripcion.exportLang = langSelect.value || "es";
+      console.log("[PRESCRIPCIÓN] Idioma exportación:", appState.prescripcion.exportLang);
+    });
+  }
+
+  // NUEVO: botones exportación
+  const btnExportExcel = container.querySelector("#prescExportExcelBtn");
+  if (btnExportExcel) {
+    btnExportExcel.addEventListener("click", () => {
+      handlePrescExport("excel");
+    });
+  }
+
+  const btnExportPdf = container.querySelector("#prescExportPdfBtn");
+  if (btnExportPdf) {
+    btnExportPdf.addEventListener("click", () => {
+      handlePrescExport("pdf");
+    });
+  }
+
+  const btnExportBc3 = container.querySelector("#prescExportBc3Btn");
+  if (btnExportBc3) {
+    btnExportBc3.addEventListener("click", () => {
+      handlePrescExport("bc3");
+    });
+  }
+
   // Rellenar sub-vistas
   renderPrescSectionsList();
   renderPrescCapituloContent();
@@ -398,14 +454,12 @@ function renderDocPrescripcionView() {
 }
 
 
-  
-
-  // En los siguientes bloques (4-8) rellenaremos:
-  // - Secciones Notion (drag)
-  // - Capítulo seleccionado
-  // - Plantillas
-  // - Referencias extra
-  // - Previsualización final
+// En los siguientes bloques (4-8) rellenaremos:
+// - Secciones Notion (drag)
+// - Capítulo seleccionado
+// - Plantillas
+// - Referencias extra
+// - Previsualización final
 
 // ========================================================
 // BLOQUE 4 - Render de SECCIONES Notion Premium (arrastrables)
@@ -942,39 +996,6 @@ function renderPrescCapituloContent() {
   });
 }
 
-// ========================================================
-// STUBS TEMPORALES (se sobrescribirán en bloques 7 y 8)
-// ========================================================
-
-function renderPrescPlantillasList() {
-  const container = document.getElementById("prescPlantillasList");
-  if (!container) return;
-  container.innerHTML = `
-    <p class="text-muted" style="font-size:0.8rem;">
-      Las plantillas se configurarán en el siguiente hito.
-    </p>
-  `;
-}
-
-function renderPrescExtraRefsList() {
-  const container = document.getElementById("prescExtraRefsList");
-  if (!container) return;
-  container.innerHTML = `
-    <p class="text-muted" style="font-size:0.8rem;">
-      Las referencias extra se configurarán en el siguiente hito.
-    </p>
-  `;
-}
-
-function renderPrescPreview() {
-  const container = document.getElementById("prescPreview");
-  if (!container) return;
-  container.innerHTML = `
-    <p class="text-muted" style="font-size:0.8rem;">
-      La previsualización final de capítulos se implementará en el siguiente hito.
-    </p>
-  `;
-}
 // ========================================================
 // BLOQUE 7 - Plantillas + Referencias extra (modales, Firestore, UI)
 // ========================================================
@@ -1743,6 +1764,7 @@ async function renderPrescExtraRefsList() {
   `;
   document.head.appendChild(style);
 })();
+
 // ========================================================
 // BLOQUE 8 - Previsualización de capítulos (doble clic para desplegar refs)
 // ========================================================
@@ -1940,3 +1962,306 @@ function renderPrescPreview() {
   `;
   document.head.appendChild(style);
 })();
+
+// ========================================================
+// BLOQUE 9 - Exportación Excel / PDF / BC3 con idioma
+// ========================================================
+
+// Etiquetas por idioma
+const PRESC_EXPORT_LABELS = {
+  es: {
+    chapter: "Capítulo",
+    code: "Código",
+    description: "Descripción",
+    unit: "Ud",
+    qty: "Cant.",
+    price: "PVP",
+    amount: "Importe",
+    title: "Prescripción técnica del proyecto",
+    total: "Total capítulo",
+    project: "Proyecto"
+  },
+  en: {
+    chapter: "Chapter",
+    code: "Code",
+    description: "Description",
+    unit: "Unit",
+    qty: "Qty",
+    price: "Price",
+    amount: "Amount",
+    title: "Project technical specification",
+    total: "Chapter total",
+    project: "Project"
+  },
+  pt: {
+    chapter: "Capítulo",
+    code: "Código",
+    description: "Descrição",
+    unit: "Unid",
+    qty: "Qtd.",
+    price: "PVP",
+    amount: "Montante",
+    title: "Especificação técnica do projeto",
+    total: "Total capítulo",
+    project: "Projeto"
+  }
+};
+
+// Modelo neutro a partir del estado
+function buildPrescExportModel(lang) {
+  ensurePrescCapitulosArray();
+  const caps = appState.prescripcion.capitulos || [];
+  const language = lang || appState.prescripcion.exportLang || "es";
+
+  const result = {
+    language,
+    capitulos: []
+  };
+
+  caps.forEach((cap, idx) => {
+    const lineas = cap.lineas || [];
+    const capData = {
+      index: idx + 1,
+      id: cap.id,
+      nombre: cap.nombre || "",
+      texto: cap.texto || "",
+      lineas: []
+    };
+
+    lineas.forEach((l) => {
+      const cant = Number(l.cantidad) || 0;
+      const pvp = Number(l.pvp) || 0;
+      capData.lineas.push({
+        id: l.id,
+        tipo: l.tipo || "budget",
+        codigo: l.codigo || "",
+        descripcion: l.descripcion || "",
+        unidad: l.unidad || "Ud",
+        cantidad: cant,
+        pvp,
+        importe: cant * pvp
+      });
+    });
+
+    result.capitulos.push(capData);
+  });
+
+  return result;
+}
+
+// Handler central de exportación
+function handlePrescExport(format) {
+  const lang = appState.prescripcion.exportLang || "es";
+  const model = buildPrescExportModel(lang);
+
+  if (!model || !model.capitulos || !model.capitulos.length) {
+    alert("No hay capítulos para exportar.");
+    return;
+  }
+
+  // Hooks opcionales por si los defines en otro archivo
+  if (format === "excel" && typeof window.exportPrescripcionToExcel === "function") {
+    window.exportPrescripcionToExcel(model, lang);
+    return;
+  }
+  if (format === "pdf" && typeof window.exportPrescripcionToPdf === "function") {
+    window.exportPrescripcionToPdf(model, lang);
+    return;
+  }
+  if (format === "bc3" && typeof window.exportPrescripcionToBc3 === "function") {
+    window.exportPrescripcionToBc3(model, lang);
+    return;
+  }
+
+  // Fallback interno
+  if (format === "excel") {
+    const csv = prescExportToCSV(model, lang);
+    downloadTextFile(csv, `prescripcion_${lang}.csv`, "text/csv;charset=utf-8;");
+  } else if (format === "bc3") {
+    const bc3 = prescExportToBC3(model, lang);
+    downloadTextFile(bc3, `prescripcion_${lang}.bc3`, "text/plain;charset=utf-8;");
+  } else if (format === "pdf") {
+    openPrescPrintWindow(model, lang);
+  }
+}
+
+// Export simple a CSV (Excel lo abre sin problema)
+function prescExportToCSV(model, lang) {
+  const labels = PRESC_EXPORT_LABELS[lang] || PRESC_EXPORT_LABELS.es;
+  const sep = ";";
+
+  const header = [
+    labels.chapter,
+    labels.code,
+    labels.description,
+    labels.unit,
+    labels.qty,
+    labels.price,
+    labels.amount
+  ].join(sep);
+
+  const lines = [header];
+
+  model.capitulos.forEach((cap) => {
+    cap.lineas.forEach((l) => {
+      const row = [
+        (cap.nombre || "").replace(/;/g, ","),
+        (l.codigo || "").replace(/;/g, ","),
+        (l.descripcion || "").replace(/;/g, ","),
+        l.unidad || "",
+        String(l.cantidad || 0),
+        String(l.pvp || 0),
+        String(l.importe || 0)
+      ].join(sep);
+      lines.push(row);
+    });
+  });
+
+  return lines.join("\n");
+}
+
+// Export muy simplificado a BC3 (formato texto aproximado)
+function prescExportToBC3(model, lang) {
+  // Esto no es un FIEBDC-3 completo, pero deja toda la info estructurada.
+  const labels = PRESC_EXPORT_LABELS[lang] || PRESC_EXPORT_LABELS.es;
+  const lines = [];
+
+  lines.push("~V|FIEBDC-3|PRESCRIPCION2N||");
+  lines.push(`~K|PRESCRIPCION|${labels.project}||`);
+
+  model.capitulos.forEach((cap, idx) => {
+    const capCode = `CAP${String(idx + 1).padStart(3, "0")}`;
+    const capDesc = (cap.nombre || "").replace(/\|/g, " ");
+
+    // Concepto capítulo
+    lines.push(`~C|${capCode}|${capDesc}|1||`);
+
+    cap.lineas.forEach((l, i) => {
+      const refCode = (l.codigo || `REF${String(i + 1).padStart(4, "0")}`).replace(/\|/g, " ");
+      const desc = (l.descripcion || "").replace(/\|/g, " ");
+      const unit = (l.unidad || "Ud").replace(/\|/g, " ");
+      const qty = l.cantidad || 0;
+      const price = l.pvp || 0;
+
+      // Línea de medición/coste muy simple
+      lines.push(`~L|${refCode}|${desc}|${unit}|${qty}|${price}||`);
+    });
+  });
+
+  return lines.join("\n");
+}
+
+// "PDF" vía ventana de impresión (el usuario puede guardar como PDF)
+function openPrescPrintWindow(model, lang) {
+  const labels = PRESC_EXPORT_LABELS[lang] || PRESC_EXPORT_LABELS.es;
+
+  const win = window.open("", "_blank");
+  if (!win) {
+    alert("No se pudo abrir la ventana de impresión. Revisa el bloqueador de ventanas emergentes.");
+    return;
+  }
+
+  const style = `
+    <style>
+      body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; padding: 16px; }
+      h1 { font-size: 18px; margin-bottom: 8px; }
+      h2 { font-size: 14px; margin-top: 16px; margin-bottom: 4px; }
+      table { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 12px; }
+      th, td { border: 1px solid #ccc; padding: 4px 6px; }
+      th { background: #f3f4f6; text-align: left; }
+      .cap-title { margin-top: 16px; font-weight: 600; }
+      .small { font-size: 10px; color: #6b7280; }
+    </style>
+  `;
+
+  let html = `
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        ${style}
+      </head>
+      <body>
+        <h1>${labels.title}</h1>
+        <p class="small">${labels.project}: ${document.title || ""}</p>
+  `;
+
+  model.capitulos.forEach((cap, idx) => {
+    html += `
+      <h2>${labels.chapter} ${idx + 1} - ${cap.nombre || ""}</h2>
+    `;
+
+    if (cap.texto) {
+      html += `<p>${(cap.texto || "").replace(/\n/g, "<br>")}</p>`;
+    }
+
+    if (cap.lineas && cap.lineas.length) {
+      html += `
+        <table>
+          <thead>
+            <tr>
+              <th>${labels.code}</th>
+              <th>${labels.description}</th>
+              <th>${labels.unit}</th>
+              <th style="text-align:right;">${labels.qty}</th>
+              <th style="text-align:right;">${labels.price}</th>
+              <th style="text-align:right;">${labels.amount}</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+
+      cap.lineas.forEach((l) => {
+        html += `
+          <tr>
+            <td>${l.codigo || ""}</td>
+            <td>${l.descripcion || ""}</td>
+            <td>${l.unidad || ""}</td>
+            <td style="text-align:right;">${(l.cantidad || 0)}</td>
+            <td style="text-align:right;">${(l.pvp || 0).toFixed(2)}</td>
+            <td style="text-align:right;">${(l.importe || 0).toFixed(2)}</td>
+          </tr>
+        `;
+      });
+
+      html += `
+          </tbody>
+        </table>
+      `;
+    }
+  });
+
+  html += `
+        <p class="small">
+          Generado desde CRM Prescripción 2N · Idioma: ${lang.toUpperCase()}
+        </p>
+      </body>
+    </html>
+  `;
+
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+
+  // Opcional: lanzar imprimir (el usuario elegirá "Guardar como PDF")
+  try {
+    setTimeout(() => {
+      win.focus();
+      win.print();
+    }, 500);
+  } catch (e) {
+    console.warn("[PRESCRIPCIÓN] No se pudo lanzar print automáticamente:", e);
+  }
+}
+
+// Utilidad para descargar un blob de texto
+function downloadTextFile(content, filename, mimeType) {
+  const blob = new Blob([content], { type: mimeType || "text/plain;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename || "export.txt";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
