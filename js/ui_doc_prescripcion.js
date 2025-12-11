@@ -1890,6 +1890,9 @@ function renderPrescPreview() {
                   </tbody>
                 </table>
               </div>
+              <div style="text-align:right; margin-top:4px; font-weight:600;">
+                Subtotal capítulo: ${totalCap.toFixed(2)} €
+              </div>
             </td>
           </tr>
         `;
@@ -1905,7 +1908,13 @@ function renderPrescPreview() {
           </td>
           <td style="text-align:right;">${lineas.length}</td>
           <td style="text-align:right;">${totalCap.toFixed(2)} €</td>
-          <td style="text-align:center;">
+          <td style="text-align:center; white-space:nowrap;">
+            <button type="button"
+                    class="btn btn-xs btn-outline presc-preview-cap-edit"
+                    data-cap-id="${cap.id}"
+                    title="Editar capítulo">
+              ✏️
+            </button>
             <button type="button"
                     class="btn btn-xs btn-outline presc-preview-cap-del"
                     data-cap-id="${cap.id}"
@@ -1924,9 +1933,6 @@ function renderPrescPreview() {
       <div style="font-size:0.8rem; color:#6b7280;">
         Doble clic sobre un capítulo para desplegar u ocultar sus referencias.
       </div>
-      <div style="font-weight:600; font-size:0.9rem;">
-        Total prescripción: ${totalGlobal.toFixed(2)} €
-      </div>
     </div>
 
     <div style="max-height:32vh; overflow:auto;">
@@ -1938,13 +1944,17 @@ function renderPrescPreview() {
             <th style="text-align:left;">Capítulo</th>
             <th style="text-align:right;">Nº refs</th>
             <th style="text-align:right;">Total capítulo</th>
-            <th style="width:3rem;"></th>
+            <th style="width:4.5rem;"></th>
           </tr>
         </thead>
         <tbody>
           ${rowsHTML}
         </tbody>
       </table>
+    </div>
+
+    <div style="text-align:right; margin-top:0.4rem; font-weight:600;">
+      Total prescripción: ${totalGlobal.toFixed(2)} €
     </div>
   `;
 
@@ -1965,7 +1975,21 @@ function renderPrescPreview() {
       });
     });
 
-   // Click en borrar capítulo
+  // Click en EDITAR capítulo → cargarlo en "Capítulo seleccionado"
+  container
+    .querySelectorAll(".presc-preview-cap-edit")
+    .forEach((btn) => {
+      btn.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const capId = btn.getAttribute("data-cap-id");
+        if (!capId) return;
+        setSelectedCapitulo(capId);
+        renderPrescCapituloContent();
+      });
+    });
+
+  // Click en BORRAR capítulo
   container
     .querySelectorAll(".presc-preview-cap-del")
     .forEach((btn) => {
@@ -1979,7 +2003,6 @@ function renderPrescPreview() {
       });
     });
 }
-
 
 
 // Estilos ligeros para la tabla de preview (opcional)
