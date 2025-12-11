@@ -13,7 +13,10 @@ appState.prescripcion = appState.prescripcion || {
   plantillasLoaded: false,
   extraRefs: [],             // [{ id, codigo, descripcion, unidad, pvp }]
   extraRefsLoaded: false,
-  exportLang: "es" // NUEVO: idioma de exportación ("es" | "en" | "pt")
+  exportLang: "es", // idioma de exportación ("es" | "en" | "pt")
+  // NUEVO: términos de búsqueda
+  plantillasSearchTerm: "",
+  extraRefsSearchTerm: ""
 };
 
 // ========================================================
@@ -111,11 +114,9 @@ function getPresupuestoActualSafe() {
   console.warn("[PRESCRIPCIÓN] getPresupuestoActual no existe");
   return null;
 }
+
 // ========================================================
 // BLOQUE 2 - Secciones del presupuesto para Prescripción
-// --------------------------------------------------------
-// Construye secciones agregadas a partir del presupuesto actual
-// Cada sección será un "bloque Notion premium" arrastrable
 // ========================================================
 
 // Añadimos estructura para secciones si no existe
@@ -124,20 +125,6 @@ appState.prescripcion.sectionsFromBudget =
 
 /**
  * Convierte las líneas del presupuesto en secciones agregadas
- * Estructura de salida:
- * [
- *   {
- *     id: "sec-XXX",
- *     rawId: <id original de la sección>,
- *     nombre: "Videoportero principal",
- *     totalRefs: 3,
- *     totalImporte: 3525,
- *     refs: [
- *       { codigo, descripcion, unidad, cantidad, pvp, importe }
- *     ]
- *   },
- *   ...
- * ]
  */
 function buildPrescSectionsFromPresupuesto() {
   const presu = getPresupuestoActualSafe();
@@ -223,7 +210,6 @@ function buildPrescSectionsFromPresupuesto() {
     bySection[secId].totalImporte += importe;
   });
 
-  // Pasamos a array y ordenamos por nombre de sección
   const sectionsArr = Object.values(bySection).sort((a, b) =>
     (a.nombre || "").toString().localeCompare((b.nombre || "").toString(), "es")
   );
@@ -240,7 +226,6 @@ function buildPrescSectionsFromPresupuesto() {
 
 /**
  * Helper para asegurar que las secciones están construidas
- * Devuelve siempre el array de secciones actuales
  */
 function ensurePrescSectionsFromBudget() {
   if (!appState.prescripcion.sectionsFromBudget ||
@@ -249,10 +234,9 @@ function ensurePrescSectionsFromBudget() {
   }
   return appState.prescripcion.sectionsFromBudget;
 }
+
 // ========================================================
 // BLOQUE 3 - Render básico de la vista Prescripción
-// --------------------------------------------------------
-// Crea la cabecera, layout 3 columnas y placeholders
 // ========================================================
 
 function renderDocPrescripcionView() {
@@ -260,21 +244,18 @@ function renderDocPrescripcionView() {
   if (!container) return;
 
   // Aseguramos secciones cargadas
-  const sections = ensurePrescSectionsFromBudget();
+  ensurePrescSectionsFromBudget();
 
-  // Aseguramos plantillas / referencias extra (si luego se usan)
+  // Aseguramos plantillas / referencias extra
   appState.prescripcion.plantillas = appState.prescripcion.plantillas || [];
   appState.prescripcion.extraRefs = appState.prescripcion.extraRefs || [];
 
   const currentLang = appState.prescripcion.exportLang || "es";
 
-  // ======================================================
-  // Estructura visual general
-  // ======================================================
   container.innerHTML = `
     <div class="presc-root" style="display:flex; flex-direction:column; height:100%;">
 
-      <!-- ========== CABECERA SUPERIOR ========== -->
+      <!-- CABECERA SUPERIOR -->
       <div class="card" style="margin-bottom:1rem;">
         <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; gap:1rem;">
           <div>
@@ -301,7 +282,6 @@ function renderDocPrescripcionView() {
               <button id="prescAddManualCapBtn" class="btn btn-primary btn-sm">
                 ➕ Añadir capítulo
               </button>
-              <!-- NUEVOS BOTONES EXPORTACIÓN -->
               <button id="prescExportExcelBtn" class="btn btn-sm btn-outline">
                 ⬇️ Excel
               </button>
@@ -316,24 +296,22 @@ function renderDocPrescripcionView() {
         </div>
       </div>
 
-
-      <!-- ========== LAYOUT 3 COLUMNAS ========== -->
+      <!-- LAYOUT 3 COLUMNAS -->
       <div class="presc-layout" 
            style="display:grid; grid-template-columns:1fr 1.4fr 1.2fr; gap:1rem; height:60vh; min-height:400px;">
 
-        <!-- COLUMNA 1: Secciones del presupuesto (cards Notion premium draggable) -->
+        <!-- COLUMNA 1: Secciones del presupuesto -->
         <div class="card" style="display:flex; flex-direction:column; overflow:hidden;">
           <div class="card-header">
             <div class="card-title">Secciones del presupuesto</div>
             <div class="card-subtitle">Arrastra una sección para crear o actualizar un capítulo</div>
           </div>
-          <div id="prescSectionsList" class="card-body" style="overflow:auto; padding:0.75rem;">
-            <!-- Aquí se pintarán las Notion-cards en Bloque 4 -->
+          <div id="prescSectionsList" class="card-body" style="flex:1; overflow:auto; padding:0.75rem;">
           </div>
         </div>
 
         <!-- COLUMNA 2: Capítulo seleccionado -->
-        <div class="card" style="display:flex; flex-direction:column;">
+        <div class="card" style="display:flex; flex-direction:column; overflow:hidden;">
           <div class="card-header">
             <div class="card-title">Capítulo seleccionado</div>
             <div class="card-subtitle">Nombre, texto descriptivo y referencias del capítulo</div>
@@ -341,38 +319,35 @@ function renderDocPrescripcionView() {
 
           <div id="prescCapituloContent" class="card-body" 
                style="flex:1; overflow:auto;">
-            <!-- Aquí irá el contenido dinámico del capítulo (Bloque 5 y 6) -->
           </div>
         </div>
 
         <!-- COLUMNA 3: Plantillas + Referencias extra -->
-        <div style="display:flex; flex-direction:column; gap:1rem;">
+        <div style="display:flex; flex-direction:column; gap:1rem; height:100%;">
           
           <!-- Plantillas -->
-          <div class="card" style="flex:1; overflow:hidden;">
+          <div class="card" style="flex:1; display:flex; flex-direction:column; overflow:hidden;">
             <div class="card-header">
               <div class="card-title">Plantillas</div>
               <div class="card-subtitle">Arrastra y suelta para rellenar texto técnico</div>
             </div>
-            <div id="prescPlantillasList" class="card-body" style="overflow:auto;">
-              <!-- Bloque 6 -->
+            <div id="prescPlantillasList" class="card-body" style="flex:1; overflow:auto;">
             </div>
           </div>
 
           <!-- Referencias extra -->
-          <div class="card" style="flex:1; overflow:hidden;">
+          <div class="card" style="flex:1; display:flex; flex-direction:column; overflow:hidden;">
             <div class="card-header">
               <div class="card-title">Referencias extra</div>
               <div class="card-subtitle">Switches, cable, mano de obra…</div>
             </div>
-            <div id="prescExtraRefsList" class="card-body" style="overflow:auto;">
-              <!-- Bloque 7 -->
+            <div id="prescExtraRefsList" class="card-body" style="flex:1; overflow:auto;">
             </div>
           </div>
         </div>
       </div>
 
-      <!-- ========== PREVISUALIZACIÓN inferior ========== -->
+      <!-- PREVISUALIZACIÓN inferior -->
       <div class="card" style="margin-top:1rem;">
         <div class="card-header">
           <div class="card-title">Previsualización de la prescripción</div>
@@ -380,22 +355,18 @@ function renderDocPrescripcionView() {
         </div>
 
         <div id="prescPreview" class="card-body">
-          <!-- Bloque 8 -->
         </div>
       </div>
 
     </div>
   `;
 
-  // ----------------------------------------------------
-  // Handlers iniciales
-  // ----------------------------------------------------
+  // Handlers cabecera
   const btnAddCap = container.querySelector("#prescAddManualCapBtn");
   if (btnAddCap) {
     btnAddCap.addEventListener("click", (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
-      console.log("[PRESCRIPCIÓN] Click en Añadir capítulo");
       createManualCapitulo();
       renderDocPrescripcionView();
     });
@@ -406,13 +377,12 @@ function renderDocPrescripcionView() {
     btnReloadSections.addEventListener("click", (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
-      console.log("[PRESCRIPCIÓN] Regenerar secciones desde presupuesto");
       buildPrescSectionsFromPresupuesto();
       renderDocPrescripcionView();
     });
   }
 
-  // NUEVO: selector de idioma export
+  // Selector idioma
   const langSelect = container.querySelector("#prescExportLang");
   if (langSelect) {
     langSelect.value = appState.prescripcion.exportLang || "es";
@@ -422,7 +392,7 @@ function renderDocPrescripcionView() {
     });
   }
 
-  // NUEVO: botones exportación
+  // Botones exportación
   const btnExportExcel = container.querySelector("#prescExportExcelBtn");
   if (btnExportExcel) {
     btnExportExcel.addEventListener("click", () => {
@@ -453,16 +423,8 @@ function renderDocPrescripcionView() {
   renderPrescPreview();
 }
 
-
-// En los siguientes bloques (4-8) rellenaremos:
-// - Secciones Notion (drag)
-// - Capítulo seleccionado
-// - Plantillas
-// - Referencias extra
-// - Previsualización final
-
 // ========================================================
-// BLOQUE 4 - Render de SECCIONES Notion Premium (arrastrables)
+// BLOQUE 4 - Secciones Notion Premium (arrastrables)
 // ========================================================
 
 function renderPrescSectionsList() {
@@ -472,7 +434,7 @@ function renderPrescSectionsList() {
   const sections = ensurePrescSectionsFromBudget();
   if (!sections.length) {
     container.innerHTML = `
-      <p class="text-muted" style="padding:0.5rem;">
+      <p class="text-muted" style="padding:0.5rem; font-size:0.8rem;">
         No hay secciones en el presupuesto actual.
       </p>
     `;
@@ -481,13 +443,9 @@ function renderPrescSectionsList() {
 
   container.innerHTML = sections
     .map((sec) => {
-      // Previsualización de las primeras 3 referencias
       const preview = sec.refs
         .slice(0, 3)
-        .map(
-          (r) =>
-            `${r.descripcion || ""} x${r.cantidad}`
-        )
+        .map((r) => `${r.descripcion || ""} x${r.cantidad}`)
         .join(" • ");
 
       return `
@@ -495,9 +453,7 @@ function renderPrescSectionsList() {
              draggable="true"
              data-section-id="${sec.id}"
              title="Arrastra esta sección para crear o actualizar un capítulo">
-
           <div class="presc-section-title">${sec.nombre}</div>
-
           <div class="presc-section-preview">
             ${preview ? preview : "<i>Sin referencias</i>"}
           </div>
@@ -509,10 +465,7 @@ function renderPrescSectionsList() {
   attachPrescSectionsDragHandlers();
 }
 
-// ========================================================
-// Estilos de las cards NOTION PREMIUM (B3)
-// ========================================================
-
+// Estilos cards secciones
 (function injectPrescSectionStyles() {
   if (document.getElementById("presc-section-styles")) return;
 
@@ -558,10 +511,7 @@ function renderPrescSectionsList() {
   document.head.appendChild(style);
 })();
 
-// ========================================================
-// DRAG HANDLERS de las secciones del presupuesto
-// ========================================================
-
+// Drag handlers secciones
 function attachPrescSectionsDragHandlers() {
   document
     .querySelectorAll(".presc-section-card[draggable='true']")
@@ -569,21 +519,19 @@ function attachPrescSectionsDragHandlers() {
       el.addEventListener("dragstart", (ev) => {
         const secId = el.getAttribute("data-section-id");
         ev.dataTransfer.setData("text/presc-section-id", secId);
-
-        // Efecto visual
         el.style.opacity = "0.6";
       });
 
-      el.addEventListener("dragend", (ev) => {
+      el.addEventListener("dragend", () => {
         el.style.opacity = "1";
       });
     });
 }
+
 // ========================================================
-// BLOQUE 5 - Lógica DROP: arrastrar sección → capítulo
+// BLOQUE 5 - Lógica DROP sección → capítulo
 // ========================================================
 
-// Zona drop: el contenedor del capítulo
 function attachPrescDropZone() {
   const dropZone = document.getElementById("prescCapituloContent");
   if (!dropZone) return;
@@ -608,9 +556,6 @@ function attachPrescDropZone() {
   });
 }
 
-// ========================================================
-// Paso 1: Resolver la sección droppeada
-// ========================================================
 function handleSectionDrop(secId) {
   const sections = ensurePrescSectionsFromBudget();
   const sec = sections.find((s) => s.id === secId);
@@ -622,19 +567,14 @@ function handleSectionDrop(secId) {
 
   const capActual = getSelectedCapitulo();
 
-  // 1) Si NO hay capítulo actual → crear uno automáticamente
   if (!capActual) {
     createChapterFromSection(sec);
     return;
   }
 
-  // 2) Si hay capítulo → preguntar (Sobrescribir / Añadir)
   askOverwriteOrAppend(sec, capActual);
 }
 
-// ========================================================
-// Crear capítulo automático desde sección
-// ========================================================
 function createChapterFromSection(sec) {
   const newId = "cap-" + Date.now();
 
@@ -650,13 +590,10 @@ function createChapterFromSection(sec) {
   renderDocPrescripcionView();
 }
 
-// ========================================================
-// Clonar referencias de la sección
-// ========================================================
 function cloneSectionRefs(sec) {
   return sec.refs.map((r) => ({
     id: "sec-ref-" + Date.now() + "-" + Math.random().toString(36).slice(2),
-    tipo: "budget",  // vienen del presupuesto
+    tipo: "budget",
     codigo: r.codigo,
     descripcion: r.descripcion,
     unidad: r.unidad,
@@ -667,9 +604,6 @@ function cloneSectionRefs(sec) {
   }));
 }
 
-// ========================================================
-// Modal para SOBRESCRIBIR / AÑADIR
-// ========================================================
 function askOverwriteOrAppend(sec, cap) {
   openPrescModal({
     title: "¿Qué quieres hacer?",
@@ -703,18 +637,12 @@ function askOverwriteOrAppend(sec, cap) {
   });
 }
 
-// ========================================================
-// Sobrescribir capítulo actual
-// ========================================================
 function overwriteChapterWithSection(cap, sec) {
   cap.nombre = sec.nombre;
   cap.texto = "";
   cap.lineas = cloneSectionRefs(sec);
 }
 
-// ========================================================
-// Añadir referencias evitando duplicados exactos
-// ========================================================
 function appendSectionToChapter(cap, sec) {
   const existing = cap.lineas || [];
   const newOnes = cloneSectionRefs(sec);
@@ -734,24 +662,19 @@ function appendSectionToChapter(cap, sec) {
   cap.lineas = existing;
 }
 
-// ========================================================
-// Llamamos a la dropzone cuando renderizamos
-// ========================================================
+// Observador para que la dropzone siempre esté conectada
 (function setupDropZoneInterval() {
-  // Intentamos conectar la dropzone cuando la página cambia
   const observer = new MutationObserver(() => {
     attachPrescDropZone();
   });
 
   observer.observe(document.body, { childList: true, subtree: true });
 })();
+
 // ========================================================
 // BLOQUE 6 - Capítulos: helpers + render columna central
 // ========================================================
 
-// ========================================================
-// Capítulos: helpers
-// ========================================================
 function ensurePrescCapitulosArray() {
   if (!appState.prescripcion) appState.prescripcion = {};
   if (!Array.isArray(appState.prescripcion.capitulos)) {
@@ -808,10 +731,8 @@ function deleteCapituloById(capId) {
 
   console.log("[PRESCRIPCIÓN] Borrando capítulo:", caps[idx]);
 
-  // eliminar del array
   caps.splice(idx, 1);
 
-  // reajustar capítulo seleccionado
   if (appState.prescripcion.selectedCapituloId === capId) {
     if (caps.length) {
       appState.prescripcion.selectedCapituloId = caps[0].id;
@@ -820,18 +741,13 @@ function deleteCapituloById(capId) {
     }
   }
 
-  // limpiar estado de expandido en preview
   if (appState.prescripcion.previewExpanded &&
       appState.prescripcion.previewExpanded[capId]) {
     delete appState.prescripcion.previewExpanded[capId];
   }
 }
 
-
-// ========================================================
-// Render de la columna central: capítulo seleccionado
-// ========================================================
-
+// Render columna central
 function renderPrescCapituloContent() {
   const container = document.getElementById("prescCapituloContent");
   if (!container) return;
@@ -852,7 +768,6 @@ function renderPrescCapituloContent() {
 
   const lineas = cap.lineas || [];
 
-  // Construimos tabla de referencias
   let refsHTML = "";
   if (!lineas.length) {
     refsHTML = `
@@ -963,7 +878,6 @@ function renderPrescCapituloContent() {
     </div>
   `;
 
-  // Handlers: título + texto + edición de cantidades extra
   const tituloInput = container.querySelector("#prescCapTitulo");
   if (tituloInput) {
     tituloInput.addEventListener("input", (ev) => {
@@ -978,7 +892,6 @@ function renderPrescCapituloContent() {
     });
   }
 
-  // Cantidades y borrar para líneas extra
   const rows = container.querySelectorAll("tr[data-presc-line-id]");
   rows.forEach((row) => {
     const lineId = row.getAttribute("data-presc-line-id");
@@ -992,7 +905,6 @@ function renderPrescCapituloContent() {
       if (qtyInput) {
         qtyInput.addEventListener("input", () => {
           linea.cantidad = Number(qtyInput.value) || 0;
-          // El total se recalcula en la preview
         });
       }
 
@@ -1005,7 +917,6 @@ function renderPrescCapituloContent() {
     }
   });
 
-  // Botón "Añadir capítulo" dentro del cuadro central
   const btnNuevoCap = container.querySelector("#prescCapNuevoBtn");
   if (btnNuevoCap) {
     btnNuevoCap.addEventListener("click", (ev) => {
@@ -1016,15 +927,12 @@ function renderPrescCapituloContent() {
     });
   }
 
-  // Botón "Guardar": deja el capítulo actual en la preview
-  // y crea uno nuevo en blanco para trabajar el siguiente
   const btnGuardarCap = container.querySelector("#prescCapGuardarBtn");
   if (btnGuardarCap) {
     btnGuardarCap.addEventListener("click", (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
-      // El capítulo ya está enlazado al estado global, así que
-      // simplemente creamos uno nuevo y re-renderizamos todo.
+      // Ya está guardado en estado; creamos uno nuevo en blanco
       createManualCapitulo();
       renderDocPrescripcionView();
     });
@@ -1032,12 +940,10 @@ function renderPrescCapituloContent() {
 }
 
 // ========================================================
-// BLOQUE 7 - Plantillas + Referencias extra (modales, Firestore, UI)
+// BLOQUE 7 - Plantillas + Referencias extra
 // ========================================================
 
-// -----------------------------
 // Firestore: PLANTILLAS
-// -----------------------------
 async function ensurePrescPlantillasLoaded() {
   appState.prescripcion.plantillas = appState.prescripcion.plantillas || [];
   if (appState.prescripcion.plantillasLoaded) return;
@@ -1164,9 +1070,7 @@ async function deletePrescPlantilla(id) {
   }
 }
 
-// -----------------------------
 // Firestore: REFERENCIAS EXTRA
-// -----------------------------
 async function ensureExtraRefsLoaded() {
   appState.prescripcion.extraRefs = appState.prescripcion.extraRefs || [];
   if (appState.prescripcion.extraRefsLoaded) return;
@@ -1315,7 +1219,6 @@ async function duplicateExtraRef(id) {
   await createExtraRef(nuevoCodigo, r.descripcion, r.unidad, r.pvp);
 }
 
-// Añadir ref extra al capítulo actual
 function addExtraRefToCurrentCap(extraId) {
   const cap = getSelectedCapitulo();
   if (!cap) {
@@ -1341,7 +1244,7 @@ function addExtraRefToCurrentCap(extraId) {
 }
 
 // ========================================================
-// Render PLANTILLAS (sobrescribe stub anterior)
+// Render PLANTILLAS (con buscador)
 // ========================================================
 async function renderPrescPlantillasList() {
   const container = document.getElementById("prescPlantillasList");
@@ -1349,10 +1252,25 @@ async function renderPrescPlantillasList() {
 
   await ensurePrescPlantillasLoaded();
   const plantillas = appState.prescripcion.plantillas || [];
+  const searchTerm = (appState.prescripcion.plantillasSearchTerm || "").toLowerCase();
+
+  const filtered = plantillas.filter((p) => {
+    if (!searchTerm) return true;
+    const base =
+      (p.nombre || "") + " " +
+      (p.texto || "");
+    return base.toLowerCase().includes(searchTerm);
+  });
 
   if (!plantillas.length) {
     container.innerHTML = `
-      <div style="display:flex; justify-content:flex-end; margin-bottom:0.5rem;">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem; margin-bottom:0.5rem; flex-wrap:wrap;">
+        <input id="prescPlantillasSearch" 
+               type="text" 
+               class="form-control form-control-sm" 
+               placeholder="Buscar plantilla..."
+               value="${appState.prescripcion.plantillasSearchTerm || ""}"
+               style="font-size:0.75rem; max-width:60%;">
         <button id="prescNewPlantillaBtn" class="btn btn-xs btn-primary">➕ Nueva plantilla</button>
       </div>
       <p class="text-muted" style="font-size:0.8rem;">
@@ -1361,11 +1279,17 @@ async function renderPrescPlantillasList() {
     `;
   } else {
     container.innerHTML = `
-      <div style="display:flex; justify-content:flex-end; margin-bottom:0.5rem;">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem; margin-bottom:0.5rem; flex-wrap:wrap;">
+        <input id="prescPlantillasSearch" 
+               type="text" 
+               class="form-control form-control-sm" 
+               placeholder="Buscar plantilla..."
+               value="${appState.prescripcion.plantillasSearchTerm || ""}"
+               style="font-size:0.75rem; max-width:60%;">
         <button id="prescNewPlantillaBtn" class="btn btn-xs btn-primary">➕ Nueva plantilla</button>
       </div>
       <div>
-        ${plantillas
+        ${filtered
           .map((p) => {
             const preview =
               (p.texto || "")
@@ -1397,9 +1321,22 @@ async function renderPrescPlantillasList() {
               </div>
             `;
           })
-          .join("")}
+          .join("") || `
+            <p class="text-muted" style="font-size:0.8rem;">
+              No hay plantillas que coincidan con la búsqueda.
+            </p>
+          `}
       </div>
     `;
+  }
+
+  // Buscador plantillas
+  const searchInput = container.querySelector("#prescPlantillasSearch");
+  if (searchInput) {
+    searchInput.addEventListener("input", (e) => {
+      appState.prescripcion.plantillasSearchTerm = e.target.value || "";
+      renderPrescPlantillasList();
+    });
   }
 
   // Botón nueva plantilla
@@ -1428,7 +1365,7 @@ async function renderPrescPlantillasList() {
     });
   }
 
-  // Drag para plantillas
+  // Drag plantillas
   container
     .querySelectorAll(".presc-plantilla-item[draggable='true']")
     .forEach((el) => {
@@ -1448,8 +1385,8 @@ async function renderPrescPlantillasList() {
     .forEach((btn) => {
       btn.addEventListener("click", () => {
         const id = btn.getAttribute("data-presc-plantilla-apply");
-        const plantillas = appState.prescripcion.plantillas || [];
-        const tpl = plantillas.find((p) => p.id === id);
+        const plantillasList = appState.prescripcion.plantillas || [];
+        const tpl = plantillasList.find((p) => p.id === id);
         if (!tpl) return;
 
         const cap = getSelectedCapitulo();
@@ -1464,14 +1401,14 @@ async function renderPrescPlantillasList() {
       });
     });
 
-  // Editar
+  // Editar plantilla
   container
     .querySelectorAll("[data-presc-plantilla-edit]")
     .forEach((btn) => {
       btn.addEventListener("click", () => {
         const id = btn.getAttribute("data-presc-plantilla-edit");
-        const plantillas = appState.prescripcion.plantillas || [];
-        const tpl = plantillas.find((p) => p.id === id);
+        const plantillasList = appState.prescripcion.plantillas || [];
+        const tpl = plantillasList.find((p) => p.id === id);
         if (!tpl) return;
 
         openPrescModal({
@@ -1496,7 +1433,7 @@ async function renderPrescPlantillasList() {
       });
     });
 
-  // Borrar
+  // Borrar plantilla
   container
     .querySelectorAll("[data-presc-plantilla-del]")
     .forEach((btn) => {
@@ -1521,8 +1458,8 @@ async function renderPrescPlantillasList() {
       const id = ev.dataTransfer.getData("text/presc-plantilla-id");
       if (!id) return;
 
-      const plantillas = appState.prescripcion.plantillas || [];
-      const tpl = plantillas.find((p) => p.id === id);
+      const plantillasList = appState.prescripcion.plantillas || [];
+      const tpl = plantillasList.find((p) => p.id === id);
       if (!tpl) return;
 
       const cap = getSelectedCapitulo();
@@ -1535,7 +1472,7 @@ async function renderPrescPlantillasList() {
 }
 
 // ========================================================
-// Render REFERENCIAS EXTRA (sobrescribe stub anterior)
+// Render REFERENCIAS EXTRA (con buscador)
 // ========================================================
 async function renderPrescExtraRefsList() {
   const container = document.getElementById("prescExtraRefsList");
@@ -1543,10 +1480,25 @@ async function renderPrescExtraRefsList() {
 
   await ensureExtraRefsLoaded();
   const refs = appState.prescripcion.extraRefs || [];
+  const searchTerm = (appState.prescripcion.extraRefsSearchTerm || "").toLowerCase();
+
+  const filtered = refs.filter((r) => {
+    if (!searchTerm) return true;
+    const base =
+      (r.codigo || "") + " " +
+      (r.descripcion || "");
+    return base.toLowerCase().includes(searchTerm);
+  });
 
   if (!refs.length) {
     container.innerHTML = `
-      <div style="display:flex; justify-content:flex-end; margin-bottom:0.5rem;">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem; margin-bottom:0.5rem; flex-wrap:wrap;">
+        <input id="prescExtraRefsSearch" 
+               type="text" 
+               class="form-control form-control-sm" 
+               placeholder="Buscar referencia..."
+               value="${appState.prescripcion.extraRefsSearchTerm || ""}"
+               style="font-size:0.75rem; max-width:60%;">
         <button id="prescNewExtraRefBtn" class="btn btn-xs btn-secondary">➕ Nueva referencia extra</button>
       </div>
       <p class="text-muted" style="font-size:0.8rem;">
@@ -1555,11 +1507,17 @@ async function renderPrescExtraRefsList() {
     `;
   } else {
     container.innerHTML = `
-      <div style="display:flex; justify-content:flex-end; margin-bottom:0.5rem;">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem; margin-bottom:0.5rem; flex-wrap:wrap;">
+        <input id="prescExtraRefsSearch" 
+               type="text" 
+               class="form-control form-control-sm" 
+               placeholder="Buscar referencia..."
+               value="${appState.prescripcion.extraRefsSearchTerm || ""}"
+               style="font-size:0.75rem; max-width:60%;">
         <button id="prescNewExtraRefBtn" class="btn btn-xs btn-secondary">➕ Nueva referencia extra</button>
       </div>
       <div>
-        ${refs
+        ${filtered
           .map((r) => {
             const cod = r.codigo || "";
             const desc = r.descripcion || "";
@@ -1587,9 +1545,22 @@ async function renderPrescExtraRefsList() {
               </div>
             `;
           })
-          .join("")}
+          .join("") || `
+            <p class="text-muted" style="font-size:0.8rem;">
+              No hay referencias que coincidan con la búsqueda.
+            </p>
+          `}
       </div>
     `;
+  }
+
+  // Buscador refs extra
+  const searchInput = container.querySelector("#prescExtraRefsSearch");
+  if (searchInput) {
+    searchInput.addEventListener("input", (e) => {
+      appState.prescripcion.extraRefsSearchTerm = e.target.value || "";
+      renderPrescExtraRefsList();
+    });
   }
 
   // Botón nueva ref extra
@@ -1716,9 +1687,7 @@ async function renderPrescExtraRefsList() {
     });
 }
 
-// ========================================================
-// Estilos para plantillas y refs extra
-// ========================================================
+// Estilos plantillas y refs extra
 (function injectPrescTemplatesAndExtraStyles() {
   if (document.getElementById("presc-templates-extra-styles")) return;
   const style = document.createElement("style");
@@ -1801,7 +1770,7 @@ async function renderPrescExtraRefsList() {
 })();
 
 // ========================================================
-// BLOQUE 8 - Previsualización de capítulos (doble clic para desplegar refs)
+// BLOQUE 8 - Previsualización de capítulos
 // ========================================================
 
 function renderPrescPreview() {
@@ -1958,7 +1927,6 @@ function renderPrescPreview() {
     </div>
   `;
 
-  // Doble clic: expandir/contraer
   container
     .querySelectorAll(".presc-preview-cap-row")
     .forEach((row) => {
@@ -1975,7 +1943,6 @@ function renderPrescPreview() {
       });
     });
 
-  // Click en EDITAR capítulo → cargarlo en "Capítulo seleccionado"
   container
     .querySelectorAll(".presc-preview-cap-edit")
     .forEach((btn) => {
@@ -1989,13 +1956,12 @@ function renderPrescPreview() {
       });
     });
 
-  // Click en BORRAR capítulo
   container
     .querySelectorAll(".presc-preview-cap-del")
     .forEach((btn) => {
       btn.addEventListener("click", (ev) => {
         ev.preventDefault();
-        ev.stopPropagation(); // para que no cuente como doble clic en la fila
+        ev.stopPropagation();
         const capId = btn.getAttribute("data-cap-id");
         if (!capId) return;
         deleteCapituloById(capId);
@@ -2004,8 +1970,7 @@ function renderPrescPreview() {
     });
 }
 
-
-// Estilos ligeros para la tabla de preview (opcional)
+// Estilos tabla preview
 (function injectPrescPreviewStyles() {
   if (document.getElementById("presc-preview-styles")) return;
   const style = document.createElement("style");
@@ -2025,7 +1990,6 @@ function renderPrescPreview() {
 // BLOQUE 9 - Exportación Excel / PDF / BC3 con idioma
 // ========================================================
 
-// Etiquetas por idioma
 const PRESC_EXPORT_LABELS = {
   es: {
     chapter: "Capítulo",
@@ -2065,7 +2029,6 @@ const PRESC_EXPORT_LABELS = {
   }
 };
 
-// Modelo neutro a partir del estado
 function buildPrescExportModel(lang) {
   ensurePrescCapitulosArray();
   const caps = appState.prescripcion.capitulos || [];
@@ -2107,7 +2070,6 @@ function buildPrescExportModel(lang) {
   return result;
 }
 
-// Handler central de exportación
 function handlePrescExport(format) {
   const lang = appState.prescripcion.exportLang || "es";
   const model = buildPrescExportModel(lang);
@@ -2117,7 +2079,6 @@ function handlePrescExport(format) {
     return;
   }
 
-  // Hooks opcionales por si los defines en otro archivo
   if (format === "excel" && typeof window.exportPrescripcionToExcel === "function") {
     window.exportPrescripcionToExcel(model, lang);
     return;
@@ -2131,7 +2092,6 @@ function handlePrescExport(format) {
     return;
   }
 
-  // Fallback interno
   if (format === "excel") {
     const csv = prescExportToCSV(model, lang);
     downloadTextFile(csv, `prescripcion_${lang}.csv`, "text/csv;charset=utf-8;");
@@ -2143,7 +2103,6 @@ function handlePrescExport(format) {
   }
 }
 
-// Export simple a CSV (Excel lo abre sin problema)
 function prescExportToCSV(model, lang) {
   const labels = PRESC_EXPORT_LABELS[lang] || PRESC_EXPORT_LABELS.es;
   const sep = ";";
@@ -2178,9 +2137,7 @@ function prescExportToCSV(model, lang) {
   return lines.join("\n");
 }
 
-// Export muy simplificado a BC3 (formato texto aproximado)
 function prescExportToBC3(model, lang) {
-  // Esto no es un FIEBDC-3 completo, pero deja toda la info estructurada.
   const labels = PRESC_EXPORT_LABELS[lang] || PRESC_EXPORT_LABELS.es;
   const lines = [];
 
@@ -2191,7 +2148,6 @@ function prescExportToBC3(model, lang) {
     const capCode = `CAP${String(idx + 1).padStart(3, "0")}`;
     const capDesc = (cap.nombre || "").replace(/\|/g, " ");
 
-    // Concepto capítulo
     lines.push(`~C|${capCode}|${capDesc}|1||`);
 
     cap.lineas.forEach((l, i) => {
@@ -2201,7 +2157,6 @@ function prescExportToBC3(model, lang) {
       const qty = l.cantidad || 0;
       const price = l.pvp || 0;
 
-      // Línea de medición/coste muy simple
       lines.push(`~L|${refCode}|${desc}|${unit}|${qty}|${price}||`);
     });
   });
@@ -2209,7 +2164,6 @@ function prescExportToBC3(model, lang) {
   return lines.join("\n");
 }
 
-// "PDF" vía ventana de impresión (el usuario puede guardar como PDF)
 function openPrescPrintWindow(model, lang) {
   const labels = PRESC_EXPORT_LABELS[lang] || PRESC_EXPORT_LABELS.es;
 
@@ -2242,7 +2196,6 @@ function openPrescPrintWindow(model, lang) {
         <h1>${labels.title}</h1>
         <p class="small">${labels.project}: ${document.title || ""}</p>
   `;
-
   model.capitulos.forEach((cap, idx) => {
     html += `
       <h2>${labels.chapter} ${idx + 1} - ${cap.nombre || ""}</h2>
@@ -2300,7 +2253,6 @@ function openPrescPrintWindow(model, lang) {
   win.document.write(html);
   win.document.close();
 
-  // Opcional: lanzar imprimir (el usuario elegirá "Guardar como PDF")
   try {
     setTimeout(() => {
       win.focus();
@@ -2311,7 +2263,6 @@ function openPrescPrintWindow(model, lang) {
   }
 }
 
-// Utilidad para descargar un blob de texto
 function downloadTextFile(content, filename, mimeType) {
   const blob = new Blob([content], { type: mimeType || "text/plain;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
