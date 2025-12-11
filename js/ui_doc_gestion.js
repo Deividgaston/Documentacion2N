@@ -439,18 +439,18 @@ async function renderDocGestionView() {
     }
   `;
 
+  // 🔹 CAMBIO DE LAYOUT: ahora es flex, izquierda fija (~380px) y derecha ocupa todo el ancho
   container.innerHTML = `
     <div
       class="proyecto-layout"
       style="
-        display:grid;
-        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        display:flex;
         gap:1rem;
         align-items:flex-start;
       "
     >
       <!-- Card de gestión / subida (IZQUIERDA) -->
-      <div class="card" style="min-width:300px;">
+      <div class="card" style="flex:0 0 380px; max-width:390px; min-width:300px;">
         <div class="card-header">
           <div>
             <div class="card-title">Gestión de documentación</div>
@@ -518,7 +518,7 @@ async function renderDocGestionView() {
       </div>
 
       <!-- Card de listado (DERECHA) -->
-      <div class="card" style="min-width:300px;">
+      <div class="card" style="flex:1 1 auto; min-width:0;">
         <div class="card-header">
           <div>
             <div class="card-title">Documentos subidos</div>
