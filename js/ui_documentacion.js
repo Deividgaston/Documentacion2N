@@ -1938,7 +1938,7 @@ async function exportarPDFComercial() {
     };
   }
 
-  function collectSectionImagesWithCaptions() {
+   function collectSectionImagesWithCaptions(includedMap) {
     const map = appState.documentacion.sectionMedia || {};
     const media = appState.documentacion.mediaLibrary || [];
     const byId = {};
@@ -1948,6 +1948,9 @@ async function exportarPDFComercial() {
     const out = [];
 
     for (const key of Object.keys(map)) {
+      // 🔹 Si la sección está desmarcada en "Incluir en PDF", no usamos sus imágenes
+      if (includedMap && includedMap[key] === false) continue;
+
       for (const id of map[key]) {
         if (used.has(id)) continue;
         const m = byId[id];
@@ -1976,8 +1979,10 @@ async function exportarPDFComercial() {
       }
     }
 
+    // Máx. 8 imágenes para la galería
     return out.slice(0, 8);
   }
+
 
   // Portada
   try {
