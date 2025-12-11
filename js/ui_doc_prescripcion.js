@@ -776,8 +776,9 @@ function renderPrescCapituloContent() {
       </p>
     `;
   } else {
+    // CAMBIO: sin scroll interno, el scroll lo lleva el card-body de la columna
     refsHTML = `
-      <div style="max-height:28vh; overflow:auto;">
+      <div>
         <table class="table table-compact" style="width:100%; font-size:0.8rem; border-collapse:collapse;">
           <thead>
             <tr>
@@ -1271,7 +1272,7 @@ async function renderPrescPlantillasList() {
                placeholder="Buscar plantilla..."
                value="${appState.prescripcion.plantillasSearchTerm || ""}"
                style="font-size:0.75rem; max-width:60%;">
-        <button id="prescNewPlantillaBtn" class="btn btn-xs btn-primary">➕ Nueva plantilla</button>
+        <button id="prescNewPlantillaBtn" class="btn btn-xs btn-primary" title="Nueva plantilla">➕</button>
       </div>
       <p class="text-muted" style="font-size:0.8rem;">
         Aún no tienes plantillas. Crea tu primera plantilla de texto técnico.
@@ -1286,7 +1287,7 @@ async function renderPrescPlantillasList() {
                placeholder="Buscar plantilla..."
                value="${appState.prescripcion.plantillasSearchTerm || ""}"
                style="font-size:0.75rem; max-width:60%;">
-        <button id="prescNewPlantillaBtn" class="btn btn-xs btn-primary">➕ Nueva plantilla</button>
+        <button id="prescNewPlantillaBtn" class="btn btn-xs btn-primary" title="Nueva plantilla">➕</button>
       </div>
       <div>
         ${filtered
@@ -1339,7 +1340,7 @@ async function renderPrescPlantillasList() {
     });
   }
 
-  // Botón nueva plantilla
+  // Botón nueva plantilla (icono)
   const btnNew = container.querySelector("#prescNewPlantillaBtn");
   if (btnNew) {
     btnNew.addEventListener("click", () => {
@@ -1499,7 +1500,7 @@ async function renderPrescExtraRefsList() {
                placeholder="Buscar referencia..."
                value="${appState.prescripcion.extraRefsSearchTerm || ""}"
                style="font-size:0.75rem; max-width:60%;">
-        <button id="prescNewExtraRefBtn" class="btn btn-xs btn-secondary">➕ Nueva referencia extra</button>
+        <button id="prescNewExtraRefBtn" class="btn btn-xs btn-secondary" title="Nueva referencia extra">➕</button>
       </div>
       <p class="text-muted" style="font-size:0.8rem;">
         Aún no tienes referencias extra. Crea materiales, mano de obra, etc.
@@ -1514,7 +1515,7 @@ async function renderPrescExtraRefsList() {
                placeholder="Buscar referencia..."
                value="${appState.prescripcion.extraRefsSearchTerm || ""}"
                style="font-size:0.75rem; max-width:60%;">
-        <button id="prescNewExtraRefBtn" class="btn btn-xs btn-secondary">➕ Nueva referencia extra</button>
+        <button id="prescNewExtraRefBtn" class="btn btn-xs btn-secondary" title="Nueva referencia extra">➕</button>
       </div>
       <div>
         ${filtered
@@ -1563,7 +1564,7 @@ async function renderPrescExtraRefsList() {
     });
   }
 
-  // Botón nueva ref extra
+  // Botón nueva ref extra (icono)
   const btnNew = container.querySelector("#prescNewExtraRefBtn");
   if (btnNew) {
     btnNew.addEventListener("click", () => {
