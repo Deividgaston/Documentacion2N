@@ -740,6 +740,39 @@ function createManualCapitulo() {
   console.log("[PRESCRIPCIÓN] Capítulo manual creado:", nuevo);
 }
 
+function deleteCapituloById(capId) {
+  ensurePrescCapitulosArray();
+  const caps = appState.prescripcion.capitulos || [];
+  const idx = caps.findIndex((c) => c.id === capId);
+  if (idx === -1) {
+    console.warn("[PRESCRIPCIÓN] No se encontró el capítulo a borrar:", capId);
+    return;
+  }
+
+  const ok = window.confirm("¿Seguro que quieres eliminar este capítulo de la prescripción?");
+  if (!ok) return;
+
+  console.log("[PRESCRIPCIÓN] Borrando capítulo:", caps[idx]);
+
+  // eliminar del array
+  caps.splice(idx, 1);
+
+  // reajustar capítulo seleccionado
+  if (appState.prescripcion.selectedCapituloId === capId) {
+    if (caps.length) {
+      appState.prescripcion.selectedCapituloId = caps[0].id;
+    } else {
+      appState.prescripcion.selectedCapituloId = null;
+    }
+  }
+
+  // limpiar estado de expandido en preview
+  if (appState.prescripcion.previewExpanded &&
+      appState.prescripcion.previewExpanded[capId]) {
+    delete appState.prescripcion.previewExpanded[capId];
+  }
+}
+
 
 // ========================================================
 // Render de la columna central: capítulo seleccionado
