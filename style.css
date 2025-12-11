@@ -1005,3 +1005,16 @@ textarea {
 .doc-backdrop.hidden {
   display: none;
 }
+/* Layout específico para Gestión de documentación */
+.doc-gestion-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* Aquí forzamos que las cards ocupen todo el ancho del layout */
+.doc-gestion-layout .card {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;              /* quita el centrado si hay margin:auto */
+}
