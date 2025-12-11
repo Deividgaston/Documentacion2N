@@ -1005,24 +1005,35 @@ textarea {
 .doc-backdrop.hidden {
   display: none;
 }
-/* Layout de dos columnas para Gestión de documentación */
-.doc-gestion-layout {
+/* =========================================================
+   GESTIÓN DE DOCUMENTACIÓN — LAYOUT A PANTALLA COMPLETA
+   ========================================================= */
+
+/* Forzar que esta vista ignore el max-width del layout general */
+.proyecto-layout.doc-gestion-layout {
+  max-width: 100% !important;
+  width: 100% !important;
   display: flex !important;
-  flex-direction: row; /* 👈 fuerza columnas izquierda/derecha */
+  flex-direction: row !important;
   gap: 1.25rem;
   align-items: flex-start;
-  max-width: 1200px;   /* 👈 más ancho, similar a otras páginas */
-  margin: 0 auto;      /* centrado */
 }
 
-/* Columna izquierda: card fija */
-.doc-gestion-layout .doc-gestion-card:first-child {
+/* Columna izquierda (Gestión) — ancho fijo */
+.proyecto-layout.doc-gestion-layout .doc-gestion-card:first-child {
   flex: 0 0 380px;
   max-width: 380px;
 }
 
-/* Columna derecha: ocupa el resto */
-.doc-gestion-layout .doc-gestion-card:last-child {
+/* Columna derecha (Documentos subidos) — ocupar el resto */
+.proyecto-layout.doc-gestion-layout .doc-gestion-card:last-child {
   flex: 1 1 auto;
+  width: 100%;
   min-width: 0;
 }
+
+/* Asegurar que ambas cards usan todo el ancho posible dentro del layout */
+.doc-gestion-layout .doc-gestion-card {
+  width: 100%;
+}
+
