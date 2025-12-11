@@ -384,7 +384,7 @@ function renderDocPrescripcionView() {
   // - Plantillas
   // - Referencias extra
   // - Previsualización final
-}
+
 // ========================================================
 // BLOQUE 4 - Render de SECCIONES Notion Premium (arrastrables)
 // ========================================================
