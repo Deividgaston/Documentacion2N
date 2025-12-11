@@ -700,6 +700,28 @@ function getSelectedCapitulo() {
 
   return caps.find((c) => c.id === selId) || caps[0] || null;
 }
+// borrar capítulo seleccionado
+function deleteCapituloById(capId) {
+  ensurePrescCapitulosArray();
+  const caps = appState.prescripcion.capitulos;
+  const idx = caps.findIndex((c) => c.id === capId);
+  if (idx === -1) return;
+
+  const ok = window.confirm("¿Seguro que quieres eliminar este capítulo de la prescripción?");
+  if (!ok) return;
+
+  caps.splice(idx, 1);
+
+  if (appState.prescripcion.selectedCapituloId === capId) {
+    if (caps.length) {
+      appState.prescripcion.selectedCapituloId = caps[0].id;
+    } else {
+      appState.prescripcion.selectedCapituloId = null;
+    }
+  }
+}
+
+
 
 // Cambiar capítulo seleccionado
 function setSelectedCapitulo(id) {
