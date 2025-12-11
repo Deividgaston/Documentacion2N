@@ -10,8 +10,11 @@ appState.documentacion = appState.documentacion || {
   mediaLoaded: false,
 };
 
-// Helper: para GESTIÓN usamos el contenedor general
+// Helper común del proyecto: usamos el mismo contenedor que el resto de vistas
 function getDocGestionAppContent() {
+  if (typeof window.getDocAppContent === "function") {
+    return window.getDocAppContent();
+  }
   if (typeof window.getAppContent === "function") {
     return window.getAppContent();
   }
@@ -185,7 +188,7 @@ async function deleteDocMediaById(mediaId) {
     console.log("[DOC-GESTION] Documento borrado en Firestore:", mediaId);
   } catch (e) {
     console.error(
-      "Error borrando documento en Firestore:",
+      "[DOC-GESTION] Error borrando documento en Firestore:",
       mediaId,
       e
     );
@@ -436,11 +439,10 @@ async function renderDocGestionView() {
     }
   `;
 
-  // 🔹 Layout en UNA columna, cards ocupan 100% del ancho del contenedor
   container.innerHTML = `
-    <div class="proyecto-layout" style="display:block;">
-      <!-- Card de gestión / subida -->
-      <div class="card" style="width:100%; max-width:none; margin:0 0 1rem 0;">
+    <div class="proyecto-layout doc-gestion-layout">
+      <!-- Card de gestión / subida (IZQUIERDA) -->
+      <div class="card doc-gestion-card">
         <div class="card-header">
           <div>
             <div class="card-title">Gestión de documentación</div>
@@ -507,8 +509,8 @@ async function renderDocGestionView() {
         </div>
       </div>
 
-      <!-- Card de listado -->
-      <div class="card" style="width:100%; max-width:none; margin:0;">
+      <!-- Card de listado (DERECHA) -->
+      <div class="card doc-gestion-card">
         <div class="card-header">
           <div>
             <div class="card-title">Documentos subidos</div>
@@ -524,7 +526,7 @@ async function renderDocGestionView() {
               ? gruposHTML
               : `
             <p class="text-muted" style="font-size:0.85rem;">
-              Todavía no hay documentos subidos. Usa el formulario de la parte superior para añadirlos.
+              Todavía no hay documentos subidos. Usa el formulario de la izquierda para añadirlos.
             </p>
           `
           }
