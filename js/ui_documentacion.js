@@ -1903,7 +1903,22 @@ function drawSalesforceCard({
 
   
 
-  const lines = body ? doc.splitTextToSize(body, bodyW) : [];
+  const raw = (body || "").replace(/\r/g, "").trim();
+
+  // Mantener párrafos (doble salto), pero "desenrollar" saltos dentro de cada párrafo
+  const paragraphs = raw
+    .split(/\n\s*\n+/g)
+    .map(p => p.replace(/\n+/g, " ").replace(/[ \t]+/g, " ").trim())
+    .filter(Boolean);
+
+  // Generar líneas por párrafo y meter una línea en blanco entre párrafos
+  const lines = [];
+  for (let i = 0; i < paragraphs.length; i++) {
+    const chunk = doc.splitTextToSize(paragraphs[i], bodyW);
+    lines.push(...chunk);
+    if (i < paragraphs.length - 1) lines.push(""); // separación entre párrafos
+  }
+
   const bodyH = lines.length * 5.0;
 
   let cardH = paddingTop + 8 + 4 + bodyH + paddingBottom;
