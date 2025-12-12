@@ -1898,7 +1898,7 @@ function drawSalesforceCard({
   const innerW = width - paddingX * 2;
   const bodyW = Math.min(maxBodyWidth || innerW, innerW);
 
-  );
+  
 
   const lines = body ? doc.splitTextToSize(body, bodyW) : [];
   const bodyH = lines.length * 5.0;
