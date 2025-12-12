@@ -1522,26 +1522,41 @@ async function renderPrescPlantillasList() {
   const container = document.getElementById("prescPlantillasList");
   if (!container) return;
 
+  // Escapes mínimos para evitar que el HTML se rompa con texto de plantillas
+  const escHtml = (s) =>
+    String(s ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+
+  const escAttr = (s) =>
+    escHtml(s).replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+
+  // Dentro de <textarea> basta con evitar que meta tags / cierre textarea
+  const escTextarea = (s) =>
+    String(s ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+
   await ensurePrescPlantillasLoaded();
   const plantillas = appState.prescripcion.plantillas || [];
   const searchTerm = (appState.prescripcion.plantillasSearchTerm || "").toLowerCase();
 
   const filtered = plantillas.filter((p) => {
     if (!searchTerm) return true;
-    const base =
-      (p.nombre || "") + " " +
-      (p.texto || "");
+    const base = (p.nombre || "") + " " + (p.texto || "");
     return base.toLowerCase().includes(searchTerm);
   });
 
   if (!plantillas.length) {
     container.innerHTML = `
       <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem; margin-bottom:0.5rem; flex-wrap:wrap;">
-        <input id="prescPlantillasSearch" 
-               type="text" 
-               class="form-control form-control-sm" 
+        <input id="prescPlantillasSearch"
+               type="text"
+               class="form-control form-control-sm"
                placeholder="Buscar plantilla..."
-               value="${appState.prescripcion.plantillasSearchTerm || ""}"
+               value="${escAttr(appState.prescripcion.plantillasSearchTerm || "")}"
                style="font-size:0.75rem; max-width:60%;">
         <button id="prescNewPlantillaBtn" class="btn btn-xs btn-secondary" title="Nueva plantilla">＋</button>
       </div>
@@ -1552,52 +1567,59 @@ async function renderPrescPlantillasList() {
   } else {
     container.innerHTML = `
       <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem; margin-bottom:0.5rem; flex-wrap:wrap;">
-        <input id="prescPlantillasSearch" 
-               type="text" 
-               class="form-control form-control-sm" 
+        <input id="prescPlantillasSearch"
+               type="text"
+               class="form-control form-control-sm"
                placeholder="Buscar plantilla..."
-               value="${appState.prescripcion.plantillasSearchTerm || ""}"
+               value="${escAttr(appState.prescripcion.plantillasSearchTerm || "")}"
                style="font-size:0.75rem; max-width:60%;">
         <button id="prescNewPlantillaBtn" class="btn btn-xs btn-secondary" title="Nueva plantilla">＋</button>
       </div>
       <div>
-        ${filtered
-          .map((p) => {
-            const preview =
-              (p.texto || "")
-                .split("\n")
-                .slice(0, 3)
-                .join(" ")
-                .slice(0, 220) +
-              (p.texto && p.texto.length > 220 ? "..." : "");
+        ${
+          filtered
+            .map((p) => {
+              const raw = (p.texto || "");
+              const preview =
+                raw
+                  .split("\n")
+                  .slice(0, 3)
+                  .join(" ")
+                  .slice(0, 220) +
+                (raw && raw.length > 220 ? "..." : "");
 
-            return `
-              <div class="presc-plantilla-item"
-                   draggable="true"
-                   data-presc-plantilla-id="${p.id}">
-                <div class="presc-plantilla-header">
-                  <span class="presc-plantilla-name">📄 ${p.nombre}</span>
-                  <span class="presc-plantilla-actions">
-                    <button class="btn btn-xs btn-outline" data-presc-plantilla-edit="${p.id}">✏️</button>
-                    <button class="btn btn-xs" data-presc-plantilla-del="${p.id}">🗑️</button>
-                  </span>
+              const safeName = escHtml(p.nombre || "");
+              const safePreview = preview ? escHtml(preview) : "";
+
+              return `
+                <div class="presc-plantilla-item"
+                     draggable="true"
+                     data-presc-plantilla-id="${escAttr(p.id)}">
+                  <div class="presc-plantilla-header">
+                    <span class="presc-plantilla-name">📄 ${safeName}</span>
+                    <span class="presc-plantilla-actions">
+                      <button class="btn btn-xs btn-outline" data-presc-plantilla-edit="${escAttr(p.id)}">✏️</button>
+                      <button class="btn btn-xs" data-presc-plantilla-del="${escAttr(p.id)}">🗑️</button>
+                    </span>
+                  </div>
+                  <div class="presc-plantilla-preview">
+                    ${safePreview || "<i>(sin texto)</i>"}
+                  </div>
+                  <div class="presc-plantilla-footer">
+                    <button class="btn btn-xs" data-presc-plantilla-apply="${escAttr(p.id)}">
+                      ➕ Aplicar al capítulo
+                    </button>
+                  </div>
                 </div>
-                <div class="presc-plantilla-preview">
-                  ${preview || "<i>(sin texto)</i>"}
-                </div>
-                <div class="presc-plantilla-footer">
-                  <button class="btn btn-xs" data-presc-plantilla-apply="${p.id}">
-                    ➕ Aplicar al capítulo
-                  </button>
-                </div>
-              </div>
-            `;
-          })
-          .join("") || `
+              `;
+            })
+            .join("") ||
+          `
             <p class="text-muted" style="font-size:0.8rem;">
               No hay plantillas que coincidan con la búsqueda.
             </p>
-          `}
+          `
+        }
       </div>
     `;
   }
@@ -1622,7 +1644,6 @@ async function renderPrescPlantillasList() {
       });
     });
   }
-
 
   // Botón nueva plantilla (icono)
   const btnNew = container.querySelector("#prescNewPlantillaBtn");
@@ -1656,6 +1677,7 @@ async function renderPrescPlantillasList() {
     .forEach((el) => {
       el.addEventListener("dragstart", (ev) => {
         const id = el.getAttribute("data-presc-plantilla-id");
+        if (!id || !ev.dataTransfer) return;
         ev.dataTransfer.setData("text/presc-plantilla-id", id);
         el.style.opacity = "0.6";
       });
@@ -1701,11 +1723,12 @@ async function renderPrescPlantillasList() {
           bodyHTML: `
             <div class="form-group">
               <label>Nombre</label>
-              <input id="tplNombre" type="text" class="form-control" value="${(tpl.nombre || "").replace(/"/g, "&quot;")}" />
+              <input id="tplNombre" type="text" class="form-control"
+                     value="${escAttr(tpl.nombre || "")}" />
             </div>
             <div class="form-group">
               <label>Texto</label>
-              <textarea id="tplTexto" rows="8" class="form-control">${tpl.texto || ""}</textarea>
+              <textarea id="tplTexto" rows="8" class="form-control">${escTextarea(tpl.texto || "")}</textarea>
             </div>
           `,
           onSave: async () => {
@@ -1733,14 +1756,14 @@ async function renderPrescPlantillasList() {
   const capTextarea = document.getElementById("prescCapTexto");
   if (capTextarea) {
     capTextarea.addEventListener("dragover", (ev) => {
-      if (ev.dataTransfer.types.includes("text/presc-plantilla-id")) {
+      if (ev.dataTransfer && ev.dataTransfer.types.includes("text/presc-plantilla-id")) {
         ev.preventDefault();
       }
     });
 
     capTextarea.addEventListener("drop", (ev) => {
       ev.preventDefault();
-      const id = ev.dataTransfer.getData("text/presc-plantilla-id");
+      const id = ev.dataTransfer?.getData("text/presc-plantilla-id");
       if (!id) return;
 
       const plantillasList = appState.prescripcion.plantillas || [];
@@ -1755,6 +1778,7 @@ async function renderPrescPlantillasList() {
     });
   }
 }
+
 
 // ========================================================
 // Render REFERENCIAS EXTRA (con buscador)
