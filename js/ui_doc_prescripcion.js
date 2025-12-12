@@ -335,7 +335,8 @@ function renderDocPrescripcionView() {
 
       <!-- LAYOUT 3 COLUMNAS -->
       <div class="presc-layout" 
-           style="display:grid; grid-template-columns:1fr 1.4fr 1.2fr; gap:1rem; height:60vh; min-height:400px;">
+     style="display:grid; grid-template-columns:1fr 1.4fr 1.2fr; gap:1rem; flex:1; min-height:0;">
+
 
         <!-- COLUMNA 1: Secciones del presupuesto -->
         <div class="card" style="display:flex; flex-direction:column; overflow:hidden;">
