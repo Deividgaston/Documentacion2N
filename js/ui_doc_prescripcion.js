@@ -547,6 +547,9 @@ async function setPrescLanguageAll(lang) {
   await ensureExtraRefsLoaded();
   ensurePrescSectionsFromBudget();
 
+  // ✅ clave: capturar base cuando YA está todo cargado
+  capturePrescBaseIfNeeded();
+
   await translatePrescAllContentTo(appState.prescripcion.exportLang);
 
   renderDocPrescripcionView();
