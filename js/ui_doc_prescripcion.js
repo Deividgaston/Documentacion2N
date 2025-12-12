@@ -1592,13 +1592,27 @@ async function renderPrescPlantillasList() {
           (filtered.length
             ? filtered
                 .map((p) => {
-                  const raw = p.texto || "";
-                  const preview =
-                    raw.split("\n").slice(0, 3).join(" ").slice(0, 220) +
-                    (raw && raw.length > 220 ? "..." : "");
+                  const rawName = String(p.nombre || "");
+const rawText = String(p.texto || "");
 
-                  const safeName = escHtml(p.nombre || "");
-                  const safePreview = preview ? escHtml(preview) : "";
+// si el nombre parece un tocho, lo tratamos como texto
+const nameLooksLikeText = rawName.length > 80 || rawName.includes("\n");
+
+// nombre mostrado (corto)
+const displayName = nameLooksLikeText
+  ? (rawName.trim().split("\n")[0].slice(0, 60) + "…")
+  : rawName;
+
+// texto real para preview (si texto vacío y nombre era tocho, usamos nombre)
+const effectiveText = rawText.trim() ? rawText : (nameLooksLikeText ? rawName : "");
+
+const preview =
+  effectiveText
+    ? effectiveText.split("\n").slice(0, 3).join(" ").slice(0, 220) + (effectiveText.length > 220 ? "..." : "")
+    : "";
+
+const safeName = escHtml(displayName || "(sin nombre)");
+const safePreview = preview ? escHtml(preview) : "";
 
                   return `
                     <div class="presc-plantilla-item"
