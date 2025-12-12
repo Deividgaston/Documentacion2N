@@ -1520,7 +1520,7 @@ async function renderPrescExtraRefsList() {
                placeholder="Buscar referencia..."
                value="${appState.prescripcion.extraRefsSearchTerm || ""}"
                style="font-size:0.75rem; max-width:60%;">
-        <button id="prescNewExtraRefBtn" class="btn btn-xs btn-secondary" title="Nueva referencia extra">➕</button>
+        <button id="prescNewExtraRefBtn" class="btn btn-xs btn-secondary" ...>➕</button>
       </div>
       <p class="text-muted" style="font-size:0.8rem;">
         Aún no tienes referencias extra. Crea materiales, mano de obra, etc.
