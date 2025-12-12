@@ -1752,7 +1752,8 @@ const safePreview = preview ? escHtml(preview) : "";
         return;
       }
 
-      cap.texto = tpl.texto || "";
+      cap.texto = getPrescPlantillaEffectiveText(tpl) || "";
+
       const ta = document.getElementById("prescCapTexto");
       if (ta) ta.value = cap.texto;
     });
