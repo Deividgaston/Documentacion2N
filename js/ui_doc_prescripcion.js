@@ -2546,11 +2546,4 @@ window.handlePrescExport = handlePrescExport;
 window.setPrescLanguageAll = setPrescLanguageAll;
 window.translatePrescAllContentTo = translatePrescAllContentTo;
 window.prescTranslateWithGemini = prescTranslateWithGemini;
-// ========================================================
-// Exponer funciones clave de Prescripción (i18n)
-// ========================================================
-try {
-  window.setPrescLanguageAll = setPrescLanguageAll;
-  window.translatePrescAllContentTo = translatePrescAllContentTo;
-  window.prescTranslateWithGemini = prescTranslateWithGemini;
-} catch (_) {}
+
