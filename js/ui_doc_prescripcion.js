@@ -2159,28 +2159,44 @@ function prescExportToBC3(model, lang) {
   const labels = PRESC_EXPORT_LABELS[lang] || PRESC_EXPORT_LABELS.es;
   const lines = [];
 
-  lines.push("~V|FIEBDC-3|PRESCRIPCION2N||");
+  // Cabecera FIEBDC-3 (más estándar para Presto)
+  lines.push("~V|FIEBDC-3/2012|PRESCRIPCION2N||");
   lines.push(`~K|PRESCRIPCION|${labels.project}||`);
 
+  // Por cada capítulo de la prescripción
   model.capitulos.forEach((cap, idx) => {
     const capCode = `CAP${String(idx + 1).padStart(3, "0")}`;
     const capDesc = (cap.nombre || "").replace(/\|/g, " ");
 
-    lines.push(`~C|${capCode}|${capDesc}|1||`);
+    // Concepto capítulo (precio 0, solo jerarquía)
+    lines.push(`~C|${capCode}|${capDesc}|0||`);
 
-    cap.lineas.forEach((l, i) => {
-      const refCode = (l.codigo || `REF${String(i + 1).padStart(4, "0")}`).replace(/\|/g, " ");
+    (cap.lineas || []).forEach((l, i) => {
+      // Código de la partida
+      let refCode = (l.codigo || `REF${String(i + 1).padStart(4, "0")}`).replace(/\|/g, " ");
+      // Presto suele tolerar códigos largos, pero por seguridad limitamos
+      refCode = refCode.substring(0, 30);
+
       const desc = (l.descripcion || "").replace(/\|/g, " ");
       const unit = (l.unidad || "Ud").replace(/\|/g, " ");
-      const qty = l.cantidad || 0;
-      const price = l.pvp || 0;
+      const qty = Number(l.cantidad || 0);
+      const price = Number(l.pvp || 0);
 
-      lines.push(`~L|${refCode}|${desc}|${unit}|${qty}|${price}||`);
+      // 1) Definimos el concepto básico (partida) con su precio
+      // ~C|CODIGO|DESCRIPCION|UNIDAD|PRECIO||
+      lines.push(`~C|${refCode}|${desc}|${unit}|${price}||`);
+
+      // 2) Lo colgamos del capítulo con su cantidad medida
+      // ~D|CAPITULO|COD_HIJO|CANTIDAD||
+      lines.push(`~D|${capCode}|${refCode}|${qty}||`);
     });
   });
 
-  return lines.join("\n");
+  // Usamos CRLF porque muchos programas de mediciones (incluido Presto en Windows)
+  // trabajan mejor con saltos de línea tipo Windows.
+  return lines.join("\r\n");
 }
+
 
 function openPrescPrintWindow(model, lang) {
   const labels = PRESC_EXPORT_LABELS[lang] || PRESC_EXPORT_LABELS.es;
