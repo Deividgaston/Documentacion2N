@@ -527,10 +527,18 @@ async function translatePrescAllContentTo(lang) {
   }
 
   // ✅ AQUÍ lo importante: si una plantilla falla, no aborta
-  for (const p of appState.prescripcion.plantillas || []) {
-    p.nombre = await safeT(p.nombre);
+ for (const p of appState.prescripcion.plantillas || []) {
+  // traducimos ambos campos, pero priorizamos el texto efectivo
+  const eff = getPrescPlantillaEffectiveText(p);
+  if (eff && (!p.texto || !String(p.texto).trim())) {
+    // si el texto estaba vacío pero el nombre era "tocho", traducimos el eff al texto
+    p.texto = await safeT(eff);
+  } else {
     p.texto = await safeT(p.texto);
   }
+  p.nombre = await safeT(p.nombre);
+}
+
 
   for (const r of appState.prescripcion.extraRefs || []) {
     r.descripcion = await safeT(r.descripcion);
