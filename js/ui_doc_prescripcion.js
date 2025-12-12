@@ -420,8 +420,16 @@ async function prescTranslateWithGemini(text, targetLang) {
   if (!s) return s;
   if (targetLang === "es") return s;
 
-  // cache key estable
-  const key = `presc_i18n_v2|${targetLang}|${s.length}|` + s.slice(0, 80);
+  // hash estable (para evitar colisiones de cache por prefijos iguales)
+  const hash = (str) => {
+    let h = 5381;
+    for (let i = 0; i < str.length; i++) h = ((h << 5) + h) + str.charCodeAt(i);
+    return (h >>> 0).toString(36);
+  };
+
+  // ✅ cache key SIN colisiones: depende del contenido completo
+  const key = `presc_i18n_v3|${targetLang}|${hash(s)}`;
+
   const st = appState.prescripcion._i18n || (appState.prescripcion._i18n = { cacheMem: {} });
 
   if (st.cacheMem && st.cacheMem[key]) return st.cacheMem[key];
@@ -435,16 +443,9 @@ async function prescTranslateWithGemini(text, targetLang) {
     }
   } catch (_) {}
 
-  // hash simple para sectionKey único
-  const hash = (str) => {
-    let h = 5381;
-    for (let i = 0; i < str.length; i++) h = ((h << 5) + h) + str.charCodeAt(i);
-    return (h >>> 0).toString(36);
-  };
-
   let out = null;
 
-  // 1) Hooks directos (si algún día los tienes)
+  // 1) Hooks directos
   if (typeof window.geminiTranslate === "function") {
     out = await window.geminiTranslate(s, targetLang);
   } else if (typeof window.translateWithGemini === "function") {
@@ -452,11 +453,10 @@ async function prescTranslateWithGemini(text, targetLang) {
   } else if (typeof window.aiTranslateText === "function") {
     out = await window.aiTranslateText(s, targetLang);
 
-  // 2) ✅ TU CASO REAL: handleDocSectionAI
+  // 2) TU CASO REAL: handleDocSectionAI
   } else if (typeof window.handleDocSectionAI === "function") {
     const sectionKey = `presc_i18n_${targetLang}_${hash(s)}`;
 
-    // Llamada (no asumimos formato de retorno)
     const res = await window.handleDocSectionAI({
       sectionKey,
       idioma: targetLang,
@@ -467,13 +467,11 @@ async function prescTranslateWithGemini(text, targetLang) {
       modo: "tecnica",
     });
 
-    // Intentar obtener texto traducido de distintas formas
     if (typeof res === "string") out = res;
     else if (res && typeof res.text === "string") out = res.text;
     else if (res && typeof res.result === "string") out = res.result;
     else if (res && typeof res.output === "string") out = res.output;
 
-    // Si handleDocSectionAI guarda en appState.documentacion.secciones[sectionKey]
     if (!out) {
       try {
         const saved =
@@ -483,7 +481,7 @@ async function prescTranslateWithGemini(text, targetLang) {
       } catch (_) {}
     }
   } else {
-    return s; // sin IA disponible
+    return s;
   }
 
   const translated = String(out || "").trim();
