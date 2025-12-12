@@ -2467,3 +2467,31 @@ function downloadTextFileWin1252(content, filename) {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
+function formatBc3Date(d) {
+  // ddmmyy (como en tu BC3 manual)
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yy = String(d.getFullYear()).slice(-2);
+  return `${dd}${mm}${yy}`;
+}
+
+// Descarga “ANSI/latin1 safe” (Presto 8.8 suele llevarse peor con UTF-8)
+function downloadBc3File(content, filename) {
+  const s = (content || "").toString();
+
+  // Forzamos bytes 0..255 (latin1). Como ya “safeText” deja ASCII, esto queda estable.
+  const bytes = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) {
+    bytes[i] = s.charCodeAt(i) & 0xff;
+  }
+
+  const blob = new Blob([bytes], { type: "text/plain" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename || "export.bc3";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
