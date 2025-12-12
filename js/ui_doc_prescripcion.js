@@ -2894,3 +2894,42 @@ function ensurePrescUidReady(timeoutMs = 15000) {
   });
 }
 
+/* ========================================================
+   ADAPTADOR IA PRESCRIPCIÓN → REUTILIZA DOCUMENTACIÓN
+   ======================================================== */
+
+// Traducción de texto usando la IA ya existente en Documentación
+async function prescTranslateWithGemini(text, targetLang) {
+  if (!text || !text.trim()) return text;
+
+  // Si estamos en castellano, no traducimos
+  if (targetLang === "es") return text;
+
+  // Reutilizamos EXACTAMENTE la misma IA
+  if (typeof window.handleDocSectionAI !== "function") {
+    console.warn("[PRESC] handleDocSectionAI no disponible");
+    return text;
+  }
+
+  try {
+    const translated = await window.handleDocSectionAI({
+      sectionKey: "prescripcion",
+      idioma: targetLang,
+      titulo: "Technical prescription",
+      texto: text,
+      proyecto: appState.proyecto || {},
+      presupuesto:
+        typeof window.getPresupuestoActual === "function"
+          ? window.getPresupuestoActual()
+          : null,
+      modo: "tecnica",
+    });
+
+    return typeof translated === "string" && translated.trim()
+      ? translated
+      : text;
+  } catch (e) {
+    console.error("[PRESC] Error traduciendo con IA:", e);
+    return text;
+  }
+}
