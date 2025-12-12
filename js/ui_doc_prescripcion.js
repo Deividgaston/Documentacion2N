@@ -497,6 +497,7 @@ async function prescTranslateWithGemini(text, targetLang) {
 
 // Traduce TODO el CONTENIDO visible (capítulos + secciones + plantillas + refs extra)
 async function translatePrescAllContentTo(lang) {
+  // Asegura snapshot ES completo
   capturePrescBaseIfNeeded();
 
   if (lang === "es") {
@@ -504,24 +505,35 @@ async function translatePrescAllContentTo(lang) {
     return;
   }
 
+  // Siempre partimos de ES limpio
   restorePrescBaseEs();
 
+  const safeT = async (txt) => {
+    try {
+      return await prescTranslateWithGemini(txt, lang);
+    } catch (e) {
+      console.warn("[PRESC] Traducción falló, dejo original:", e);
+      return txt; // no rompas el resto
+    }
+  };
+
   for (const c of appState.prescripcion.capitulos || []) {
-    c.nombre = await prescTranslateWithGemini(c.nombre, lang);
-    c.texto = await prescTranslateWithGemini(c.texto, lang);
+    c.nombre = await safeT(c.nombre);
+    c.texto = await safeT(c.texto);
   }
 
   for (const s of appState.prescripcion.sectionsFromBudget || []) {
-    s.nombre = await prescTranslateWithGemini(s.nombre, lang);
+    s.nombre = await safeT(s.nombre);
   }
 
+  // ✅ AQUÍ lo importante: si una plantilla falla, no aborta
   for (const p of appState.prescripcion.plantillas || []) {
-    p.nombre = await prescTranslateWithGemini(p.nombre, lang);
-    p.texto = await prescTranslateWithGemini(p.texto, lang);
+    p.nombre = await safeT(p.nombre);
+    p.texto = await safeT(p.texto);
   }
 
   for (const r of appState.prescripcion.extraRefs || []) {
-    r.descripcion = await prescTranslateWithGemini(r.descripcion, lang);
+    r.descripcion = await safeT(r.descripcion);
   }
 }
 // ✅ Exponer por si algún bloque la usa vía window
