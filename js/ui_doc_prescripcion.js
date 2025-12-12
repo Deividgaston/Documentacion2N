@@ -1442,6 +1442,13 @@ async function ensureExtraRefsLoaded() {
 
 async function createExtraRef(codigo, descripcion, unidad, pvp) {
   await ensurePrescUidReady();
+    const uid = getCurrentUidPresc();
+  if (!uid) {
+    console.warn("[PRESCRIPCIÓN] Sin UID: plantilla guardada solo en local.");
+    // opcional: alert suave
+    // alert("No hay sesión iniciada todavía. Esta plantilla se guardó solo en local.");
+  }
+
   codigo = (codigo || "").trim();
   descripcion = (descripcion || "").trim();
   unidad = (unidad || "Ud").trim() || "Ud";
