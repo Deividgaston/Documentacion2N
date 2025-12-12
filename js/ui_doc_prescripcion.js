@@ -1546,6 +1546,22 @@ function addExtraRefToCurrentCap(extraId) {
   });
 }
 
+// ===============================================
+// Helper: texto efectivo de plantilla
+// (si texto está vacío y el nombre parece "tocho",
+// usamos el nombre como texto)
+// ===============================================
+function getPrescPlantillaEffectiveText(tpl) {
+  const rawName = String(tpl?.nombre || "");
+  const rawText = String(tpl?.texto || "");
+
+  const nameLooksLikeText = rawName.length > 80 || rawName.includes("\n");
+  const effectiveText = rawText.trim() ? rawText : (nameLooksLikeText ? rawName : "");
+  return effectiveText;
+}
+
+
+
 // ========================================================
 // Render PLANTILLAS (con buscador) - FIX: no recargar + debounce + escapes
 // ========================================================
