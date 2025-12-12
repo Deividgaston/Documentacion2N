@@ -2162,67 +2162,90 @@ function prescExportToBC3(model, lang) {
   const dd = String(now.getDate()).padStart(2, "0");
   const mm = String(now.getMonth() + 1).padStart(2, "0");
   const yy = String(now.getFullYear()).slice(-2);
-  const dateStr = `${dd}${mm}${yy}`;
+  const dateStr = `${dd}${mm}${yy}`; // ddmmyy (como tu BC3 manual)
 
   const lines = [];
-  const obraCode = "OBRA_2N";
-  const rootCode = "PRESCRIPCION2N##";
-  const mainGroup = "PRESC.01#";
 
-  // --- Helpers ---
+  // ==============================
+  // HELPERS
+  // ==============================
   const sanitize = (s) => {
     s = String(s ?? "");
-    // quita acentos/diacríticos -> más compatible Presto/ANSI
+    // quitar diacríticos (más compatible con ANSI/Presto)
     try { s = s.normalize("NFD").replace(/[\u0300-\u036f]/g, ""); } catch (_) {}
-    s = s.replace(/\|/g, " ").replace(/\r?\n/g, " ").trim();
+    // BC3 separa por |
+    s = s.replace(/\|/g, " ");
     return s;
   };
+
+  const sanitizeOneLine = (s) => sanitize(s).replace(/\r?\n/g, " ").trim();
 
   const fmtNum = (n) => {
     const x = Number(n);
     if (!isFinite(x)) return "0";
+    // punto decimal (no coma)
     return String(Math.round(x * 1000000) / 1000000);
   };
 
-  // ✅ NUEVO: evitar que Presto "pise" conceptos con el mismo código
-  const usedCodes = new Map(); // code -> count
-  const makeUniqueCode = (base, maxLen = 20) => {
-    let b = sanitize(base).replace(/\s+/g, "_");
-    if (!b) b = "REF";
-    b = b.slice(0, maxLen);
+  // Presto suele ir fino con códigos <= 8 (en tu manual hay muchos de 7-8)
+  // y sin caracteres raros. Si hay colisión, forzamos uniqueness.
+  const usedCodes = new Set();
+  const makeCode8 = (raw, fallbackPrefix) => {
+    let base = sanitizeOneLine(raw || "").replace(/\s+/g, "");
+    // deja solo A-Z 0-9 y algunos separadores comunes; luego quitamos separadores
+    base = base.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (!base) base = fallbackPrefix || "REF";
 
-    const prev = usedCodes.get(b) || 0;
-    if (prev === 0) {
-      usedCodes.set(b, 1);
-      return b;
+    // intenta quedarte con los ÚLTIMOS 8 (suele conservar mejor el “identificador” numérico)
+    let code = base.length > 8 ? base.slice(-8) : base;
+
+    // si sigue vacío
+    if (!code) code = (fallbackPrefix || "REF").slice(0, 3) + "00000";
+
+    // asegurar único (si colisiona, variamos últimos 2-3 dígitos)
+    if (!usedCodes.has(code)) {
+      usedCodes.add(code);
+      return code;
     }
 
-    // ya existe => añadimos sufijo _02, _03...
-    const n = prev + 1;
-    usedCodes.set(b, n);
+    // fallback incremental manteniendo 8 chars
+    const prefix = code.slice(0, Math.max(0, 6)); // deja hueco para 2 dígitos
+    for (let i = 1; i < 100; i++) {
+      const suffix = String(i).padStart(8 - prefix.length, "0").slice(-(8 - prefix.length));
+      const c2 = (prefix + suffix).slice(-8);
+      if (!usedCodes.has(c2)) {
+        usedCodes.add(c2);
+        return c2;
+      }
+    }
 
-    const suffix = "_" + String(n).padStart(2, "0");
-    const trimmed = b.slice(0, Math.max(1, maxLen - suffix.length));
-    return (trimmed + suffix).slice(0, maxLen);
+    // último recurso: timestamp
+    const ts = String(Date.now()).slice(-8);
+    if (!usedCodes.has(ts)) usedCodes.add(ts);
+    return ts;
   };
 
-  // =====================================================
-  // CABECERA FIEBDC-3
-  // =====================================================
-  lines.push("~V|FIEBDC-3|PRESCRIPCION2N|1|");
-  lines.push(`~K|PRESCRIPCION2N|${sanitize(labels.project)}|${dateStr}|`);
+  // ==============================
+  // ESTRUCTURA “COMO TU MANUAL”
+  // ==============================
+  // Root / grupo principal
+  const rootCode = "PRESC2N##";     // ## raíz
+  const mainGroup = "PRESC2N#";     // # grupo principal
 
-  // =====================================================
-  // OBRA
-  // =====================================================
-  lines.push(`~O|${obraCode}|${sanitize(labels.title)}|${dateStr}|`);
+  // Cabecera EXACTA estilo Presto 8.8 (como tu bc3 manual)
+  lines.push("~V|SOFT S.A.|FIEBDC-3/2002|Presto 8.8||ANSI|");
+  // el bloque de 2\2... lo dejamos como en tu ejemplo manual
+  lines.push(`~K|${rootCode}|${sanitizeOneLine(labels.project)}|${dateStr}|2\\2\\2\\2\\2\\2\\2\\2\\2\\2|`);
 
-  // =====================================================
-  // Precalcular totales (clave para que Presto “lo pinte”)
-  // =====================================================
-  const caps = model.capitulos || [];
-  let totalGlobal = 0;
+  // ==============================
+  // CONCEPTOS (~C)
+  // Formato que se ve en tu manual:
+  // ~C|COD|UD|RESUMEN|PRECIO|FECHA||TIPO|
+  // ==============================
+  const caps = (model && Array.isArray(model.capitulos)) ? model.capitulos : [];
+  if (!caps.length) return lines.join("\r\n");
 
+  // Totales por capítulo (para que Presto “pinte” bien)
   const capTotals = caps.map((cap) => {
     let t = 0;
     (cap.lineas || []).forEach((l) => {
@@ -2230,80 +2253,101 @@ function prescExportToBC3(model, lang) {
       const price = Number(l.pvp) || 0;
       t += qty * price;
     });
-    totalGlobal += t;
     return t;
   });
 
-  // =====================================================
-  // CONCEPTOS
-  // =====================================================
-  lines.push(`~C|${rootCode}||${sanitize(labels.title)}|${fmtNum(totalGlobal)}|${dateStr}|0|`);
-  lines.push(`~C|${mainGroup}||${sanitize(labels.title)}|${fmtNum(totalGlobal)}|${dateStr}|0|`);
+  const totalGlobal = capTotals.reduce((a, b) => a + (Number(b) || 0), 0);
 
+  // Root y grupo
+  lines.push(`~C|${rootCode}||${sanitizeOneLine(labels.title)}|${fmtNum(totalGlobal)}|${dateStr}||0|`);
+  lines.push(`~C|${mainGroup}||${sanitizeOneLine(labels.title)}|${fmtNum(totalGlobal)}|${dateStr}||0|`);
+
+  // ==============================
+  // DESCOMPOSICIÓN (~D)
+  // ==============================
   const dLines = [];
-  const mLines = [];
 
-  // Obra -> raíz
-  dLines.push(`~D|${obraCode}|${rootCode}\\1\\1\\|`);
-  // Raíz -> grupo
+  // Root -> grupo principal
   dLines.push(`~D|${rootCode}|${mainGroup}\\1\\1\\|`);
 
-  // =====================================================
-  // Capítulos
-  // =====================================================
+  // Para cada capítulo creamos un código tipo 2N.0001 (como tu manual usa 2N.0111, etc.)
+  // Importante: el capítulo NO acaba en # (en tu manual, el # es para el grupo).
+  const chapCodes = [];
+
   caps.forEach((cap, idx) => {
-    const capIdx = String(idx + 1).padStart(3, "0");
+    const chapIdx = String(idx + 1).padStart(4, "0"); // 0001..9999
+    const chapCode = `2N.${chapIdx}`;                // estilo “manual”
+    chapCodes.push(chapCode);
 
-    const capGroupCode = `CAP${capIdx}#`;
-    const capContainer = `CAP${capIdx}.0000`;
+    const chapName = sanitizeOneLine(cap.nombre || `${labels.chapter} ${idx + 1}`);
+    const chapTotal = Number(capTotals[idx]) || 0;
 
-    const capName = sanitize(cap.nombre || `${labels.chapter} ${idx + 1}`);
-    const capTotal = capTotals[idx] || 0;
+    // Capítulo como concepto tipo 0 y Ud (como en tu manual)
+    lines.push(`~C|${chapCode}|Ud|${chapName}|${fmtNum(chapTotal)}|${dateStr}||0|`);
 
-    // Capítulo (grupo) + contenedor con TOTAL
-    lines.push(`~C|${capGroupCode}||${capName}|${fmtNum(capTotal)}|${dateStr}|0|`);
-    lines.push(`~C|${capContainer}|Ud|${capName}|${fmtNum(capTotal)}|${dateStr}|3|`);
+    // Textos largos del capítulo con ~T (como tu manual)
+    // OJO: Permitimos saltos de línea reales: Presto los traga bien en ~T
+    const rawText = (cap.texto || "").toString();
+    const textClean = sanitize(rawText).trim();
+    if (textClean) {
+      lines.push(`~T|${chapCode}|${textClean}`);
+    }
 
-    // Grupo principal -> capítulo
-    dLines.push(`~D|${mainGroup}|${capGroupCode}\\1\\1\\|`);
-    // Capítulo -> contenedor
-    dLines.push(`~D|${capGroupCode}|${capContainer}\\1\\1\\|`);
-
-    // Hijos (partidas)
-    (cap.lineas || []).forEach((l, i) => {
-      const base =
-        sanitize(l.codigo) ||
-        `REF${capIdx}${String(i + 1).padStart(4, "0")}`;
-
-      // ✅ CLAVE: código único para no pisar líneas con mismo SKU
-      const refCode = makeUniqueCode(base, 20);
-
-      const desc = sanitize(l.descripcion || refCode);
-      const unit = sanitize(l.unidad || "Ud") || "Ud";
-      const qty = Number(l.cantidad) || 0;
-      const price = Number(l.pvp) || 0;
-
-      // Partida
-      lines.push(`~C|${refCode}|${unit}|${desc}|${fmtNum(price)}|${dateStr}|3|`);
-
-      // Descomposición: contenedor -> partida
-      dLines.push(`~D|${capContainer}|${refCode}\\1\\1\\|`);
-
-      // Medición: colgar de la PARTIDA (refCode)
-      const textoMed = cap.texto ? sanitize(cap.texto).slice(0, 120) : "";
-      mLines.push(`~M|${refCode}|1\\1\\|${fmtNum(qty)}|${textoMed}|`);
-    });
+    // Grupo principal -> capítulos
+    // (lo completamos luego en una sola línea, como el manual)
   });
 
-  // =====================================================
-  // DESCOMPOSICIÓN + MEDICIONES
-  // =====================================================
+  // Grupo principal -> todos los capítulos en una sola ~D (como tu manual)
+  if (chapCodes.length) {
+    const packed = chapCodes.map((c) => `${c}\\1\\1\\`).join("");
+    dLines.push(`~D|${mainGroup}|${packed}|`);
+  }
+
+  // Capítulo -> sus referencias (también como tu manual: refs sin medición propia)
+  // Las refs van como tipo 3
+  const mLines = []; // mediciones (ponemos 1 por capítulo, como tu manual)
+
+  caps.forEach((cap, idx) => {
+    const chapCode = chapCodes[idx];
+    const lineas = cap.lineas || [];
+
+    // Medición del capítulo: 1 ud (igual que tu ejemplo manual)
+    // Formato de tu manual: ~M|GRUPO#\CAP|1\2\|1.000||
+    mLines.push(`~M|${mainGroup}\\${chapCode}|1\\2\\|1.000||`);
+
+    if (!lineas.length) return;
+
+    const refCodes = [];
+    lineas.forEach((l, i) => {
+      // Código ref <= 8 y único (CLAVE para que no “pise” y te quede solo la última)
+      const raw = l.codigo || "";
+      const refCode = makeCode8(raw, "REF" + String(i + 1).padStart(2, "0"));
+
+      const desc = sanitizeOneLine(l.descripcion || refCode);
+      const unit = sanitizeOneLine(l.unidad || "Ud") || "Ud";
+      const price = Number(l.pvp) || 0;
+
+      // Concepto de partida (tipo 3)
+      lines.push(`~C|${refCode}|${unit}|${desc}|${fmtNum(price)}|${dateStr}||3|`);
+
+      refCodes.push(refCode);
+    });
+
+    // Descomposición capítulo -> refs (en una ~D como tu manual)
+    if (refCodes.length) {
+      const packedRefs = refCodes.map((c) => `${c}\\1\\1\\`).join("");
+      dLines.push(`~D|${chapCode}|${packedRefs}|`);
+    }
+  });
+
+  // Añadimos D y M al final
   lines.push(...dLines);
   lines.push(...mLines);
 
   // CRLF para Windows/Presto
   return lines.join("\r\n");
 }
+
 
 
 
