@@ -2432,3 +2432,37 @@ function downloadTextFile(content, filename, mimeType) {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
+function downloadTextFileWin1252(content, filename) {
+  // Encoder Win-1252 básico (suficiente para ES/PT + €)
+  const map = {
+    "€": 0x80, "‚": 0x82, "ƒ": 0x83, "„": 0x84, "…": 0x85, "†": 0x86, "‡": 0x87,
+    "ˆ": 0x88, "‰": 0x89, "Š": 0x8A, "‹": 0x8B, "Œ": 0x8C, "Ž": 0x8E,
+    "‘": 0x91, "’": 0x92, "“": 0x93, "”": 0x94, "•": 0x95, "–": 0x96, "—": 0x97,
+    "˜": 0x98, "™": 0x99, "š": 0x9A, "›": 0x9B, "œ": 0x9C, "ž": 0x9E, "Ÿ": 0x9F
+  };
+
+  const bytes = [];
+  for (let i = 0; i < content.length; i++) {
+    const ch = content[i];
+    const code = content.charCodeAt(i);
+
+    if (map[ch] != null) {
+      bytes.push(map[ch]);
+    } else if (code <= 0xFF) {
+      bytes.push(code);
+    } else {
+      // fuera de win1252 → reemplazo
+      bytes.push(0x3F); // '?'
+    }
+  }
+
+  const blob = new Blob([new Uint8Array(bytes)], { type: "text/plain" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename || "export.bc3";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
