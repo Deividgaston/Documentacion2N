@@ -413,46 +413,7 @@ function restorePrescBaseEs() {
   });
 }
 
-// Adapter: usa TU Gemini si existe en window
-async function prescTranslateWithGemini(text, targetLang) {
-  const s = String(text || "").trim();
-  if (!s) return s;
 
-  const key = `presc_i18n_v1|${targetLang}|${s.length}|` + s.slice(0, 60);
-  const st = appState.prescripcion._i18n;
-
-  if (st.cacheMem[key]) return st.cacheMem[key];
-
-  try {
-    const lsKey = "PRESC_TCACHE_" + key;
-    const fromLS = localStorage.getItem(lsKey);
-    if (fromLS) {
-      st.cacheMem[key] = fromLS;
-      return fromLS;
-    }
-  } catch (_) {}
-
-  let out = null;
-
-  if (typeof window.geminiTranslate === "function") {
-    out = await window.geminiTranslate(s, targetLang);
-  } else if (typeof window.translateWithGemini === "function") {
-    out = await window.translateWithGemini(s, { to: targetLang });
-  } else if (typeof window.aiTranslateText === "function") {
-    out = await window.aiTranslateText(s, targetLang);
-  } else {
-    return s; // fallback
-  }
-
-  const translated = String(out || "").trim() || s;
-
-  st.cacheMem[key] = translated;
-  try {
-    localStorage.setItem("PRESC_TCACHE_" + key, translated);
-  } catch (_) {}
-
-  return translated;
-}
 // Traduce TODO el CONTENIDO visible (capítulos + secciones + plantillas + refs extra)
 async function translatePrescAllContentTo(lang) {
   capturePrescBaseIfNeeded();
@@ -2514,3 +2475,10 @@ window.handlePrescExport = handlePrescExport;
 // Si tu app llama directamente a renderDocPrescripcionView desde el router,
 // no auto-ejecutamos init. Pero si quieres auto-cargar al entrar, puedes llamar:
 // initPrescripcionView();
+// ========================================================
+// EXPORTS a window (necesario para que el select dispare traducción real)
+// ========================================================
+
+window.setPrescLanguageAll = setPrescLanguageAll;
+window.translatePrescAllContentTo = translatePrescAllContentTo;
+window.prescTranslateWithGemini = prescTranslateWithGemini;
