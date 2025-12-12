@@ -413,6 +413,59 @@ function restorePrescBaseEs() {
   });
 }
 
+// Adapter: traducción con Gemini (reutiliza tus hooks si existen) + caché
+async function prescTranslateWithGemini(text, targetLang) {
+  const s = String(text || "").trim();
+  if (!s) return s;
+  if (targetLang === "es") return s;
+
+  // cache key estable
+  const key = `presc_i18n_v1|${targetLang}|${s.length}|` + s.slice(0, 60);
+  const st = appState.prescripcion._i18n || (appState.prescripcion._i18n = { cacheMem: {} });
+
+  if (st.cacheMem && st.cacheMem[key]) return st.cacheMem[key];
+
+  try {
+    const lsKey = "PRESC_TCACHE_" + key;
+    const fromLS = localStorage.getItem(lsKey);
+    if (fromLS) {
+      st.cacheMem[key] = fromLS;
+      return fromLS;
+    }
+  } catch (_) {}
+
+  let out = null;
+
+  // 1) Tus hooks directos de traducción
+  if (typeof window.geminiTranslate === "function") {
+    out = await window.geminiTranslate(s, targetLang);
+  } else if (typeof window.translateWithGemini === "function") {
+    out = await window.translateWithGemini(s, { to: targetLang });
+  } else if (typeof window.aiTranslateText === "function") {
+    out = await window.aiTranslateText(s, targetLang);
+
+  // 2) Fallback: si solo tienes handleDocSectionAI en Documentación
+  } else if (typeof window.handleDocSectionAI === "function") {
+    out = await window.handleDocSectionAI({
+      sectionKey: "prescripcion_i18n",
+      idioma: targetLang,
+      titulo: "Prescripcion",
+      texto: s,
+      proyecto: appState.proyecto || {},
+      presupuesto: (typeof window.getPresupuestoActual === "function") ? window.getPresupuestoActual() : null,
+      modo: "tecnica",
+    });
+  } else {
+    return s; // sin IA disponible
+  }
+
+  const translated = String(out || "").trim() || s;
+
+  if (st.cacheMem) st.cacheMem[key] = translated;
+  try { localStorage.setItem("PRESC_TCACHE_" + key, translated); } catch (_) {}
+
+  return translated;
+}
 
 // Traduce TODO el CONTENIDO visible (capítulos + secciones + plantillas + refs extra)
 async function translatePrescAllContentTo(lang) {
