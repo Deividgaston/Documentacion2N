@@ -2626,6 +2626,31 @@ function attachDocSearchHandlers(container) {
     });
   }
 }
+// ======================================================
+// CARGA MEDIA (una sola vez por entrada en la vista)
+// ======================================================
+
+let __docMediaLoadPromise = null;
+
+function ensureDocMediaLoadedOnce() {
+  const d = appState.documentacion;
+
+  if (d.mediaLoaded) return Promise.resolve(true);
+  if (__docMediaLoadPromise) return __docMediaLoadPromise;
+
+  __docMediaLoadPromise = Promise.resolve()
+    .then(() => ensureDocMediaLoaded())
+    .then(() => true)
+    .catch((e) => {
+      console.error("[DOC] Error en carga inicial de media:", e);
+      return false;
+    })
+    .finally(() => {
+      __docMediaLoadPromise = null;
+    });
+
+  return __docMediaLoadPromise;
+}
 
 // ======================================================
 // RENDER PRINCIPAL
