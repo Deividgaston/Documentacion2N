@@ -1501,8 +1501,22 @@ async function exportarPDFTecnico() {
   const panelH = 55;
   const panelY = pageH - panelH;
 
-  doc.setFillColor(255, 255, 255);
-  doc.rect(0, panelY, pageW, panelH, "F");
+  // Panel blanco inferior
+doc.setFillColor(255, 255, 255);
+doc.rect(0, panelY, pageW, panelH, "F");
+
+// LOGO 2N – PORTADA TÉCNICA (SOLO UNA VEZ)
+if (logo?.dataUrl) {
+  const ratio = logo.width / logo.height || 2.5;
+  const lw = 32;
+  const lh = lw / ratio;
+
+  const lx = pageW - 20 - lw;
+  const ly = panelY + panelH - lh - 8;
+
+  doc.addImage(logo.dataUrl, "PNG", lx, ly, lw, lh);
+}
+
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(22);
