@@ -1300,8 +1300,10 @@ async function ensurePrescPlantillasLoaded() {
     appState.prescripcion.plantillasLoaded = true;
     console.log("[PRESCRIPCIÓN] Plantillas cargadas:", list.length);
   } catch (e) {
+     
     console.error("[PRESCRIPCIÓN] Error cargando plantillas:", e);
-    appState.prescripcion.plantillasLoaded = true;
+    // ❗ NO marques como loaded si ha fallado; así se reintenta
+    appState.prescripcion.plantillasLoaded = false;
   }
 }
 
