@@ -2661,6 +2661,20 @@ function renderDocumentacionView() {
   if (!container) return;
 
   const d = appState.documentacion;
+
+    // 🔥 Al entrar en la vista: cargar media automáticamente (fichas + gráfica)
+  if (!d.mediaLoaded && !d._mediaLoadTried) {
+    d._mediaLoadTried = true; // evitar bucle si falla
+    ensureDocMediaLoadedOnce().then(() => {
+      // Re-render cuando ya esté cargado
+      if (typeof window.renderDocumentacionView === "function") {
+        window.renderDocumentacionView();
+      }
+    });
+  }
+
+
+  
   const idioma = d.idioma || "es";
 
   const langButtons = Object.values(DOC_LANGS)
