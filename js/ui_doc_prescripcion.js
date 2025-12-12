@@ -1429,7 +1429,7 @@ async function ensureExtraRefsLoaded() {
     console.log("[PRESCRIPCIÓN] Refs extra cargadas:", list.length);
   } catch (e) {
     console.error("[PRESCRIPCIÓN] Error cargando refs extra:", e);
-    appState.prescripcion.extraRefsLoaded = true;
+    appState.prescripcion.extraRefsLoaded = false; // ❗ reintentar
   }
 }
 
