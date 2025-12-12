@@ -1903,7 +1903,12 @@ function drawSalesforceCard({
 
   
 
-  const raw = (body || "").replace(/\r/g, "").trim();
+  const raw = (body || "")
+  .replace(/\r\n/g, "\n")
+  .replace(/\r/g, "\n")
+  .replace(/\u2028|\u2029/g, "\n") // 👈 clave: saltos Unicode
+  .trim();
+
 
   // Mantener párrafos (doble salto), pero "desenrollar" saltos dentro de cada párrafo
   const paragraphs = raw
