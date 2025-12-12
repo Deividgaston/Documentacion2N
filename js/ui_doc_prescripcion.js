@@ -420,7 +420,7 @@ async function prescTranslateWithGemini(text, targetLang) {
   if (targetLang === "es") return s;
 
   // cache key estable
-  const key = `presc_i18n_v1|${targetLang}|${s.length}|` + s.slice(0, 60);
+  const key = `presc_i18n_v2|${targetLang}|${s.length}|` + s.slice(0, 80);
   const st = appState.prescripcion._i18n || (appState.prescripcion._i18n = { cacheMem: {} });
 
   if (st.cacheMem && st.cacheMem[key]) return st.cacheMem[key];
@@ -434,9 +434,16 @@ async function prescTranslateWithGemini(text, targetLang) {
     }
   } catch (_) {}
 
+  // hash simple para sectionKey único
+  const hash = (str) => {
+    let h = 5381;
+    for (let i = 0; i < str.length; i++) h = ((h << 5) + h) + str.charCodeAt(i);
+    return (h >>> 0).toString(36);
+  };
+
   let out = null;
 
-  // 1) Tus hooks directos de traducción
+  // 1) Hooks directos (si algún día los tienes)
   if (typeof window.geminiTranslate === "function") {
     out = await window.geminiTranslate(s, targetLang);
   } else if (typeof window.translateWithGemini === "function") {
@@ -444,10 +451,13 @@ async function prescTranslateWithGemini(text, targetLang) {
   } else if (typeof window.aiTranslateText === "function") {
     out = await window.aiTranslateText(s, targetLang);
 
-  // 2) Fallback: si solo tienes handleDocSectionAI en Documentación
+  // 2) ✅ TU CASO REAL: handleDocSectionAI
   } else if (typeof window.handleDocSectionAI === "function") {
-    out = await window.handleDocSectionAI({
-      sectionKey: "prescripcion_i18n",
+    const sectionKey = `presc_i18n_${targetLang}_${hash(s)}`;
+
+    // Llamada (no asumimos formato de retorno)
+    const res = await window.handleDocSectionAI({
+      sectionKey,
       idioma: targetLang,
       titulo: "Prescripcion",
       texto: s,
@@ -455,16 +465,33 @@ async function prescTranslateWithGemini(text, targetLang) {
       presupuesto: (typeof window.getPresupuestoActual === "function") ? window.getPresupuestoActual() : null,
       modo: "tecnica",
     });
+
+    // Intentar obtener texto traducido de distintas formas
+    if (typeof res === "string") out = res;
+    else if (res && typeof res.text === "string") out = res.text;
+    else if (res && typeof res.result === "string") out = res.result;
+    else if (res && typeof res.output === "string") out = res.output;
+
+    // Si handleDocSectionAI guarda en appState.documentacion.secciones[sectionKey]
+    if (!out) {
+      try {
+        const saved =
+          window.appState?.documentacion?.secciones?.[sectionKey] ??
+          window.appState?.documentacion?.sections?.[sectionKey];
+        if (typeof saved === "string") out = saved;
+      } catch (_) {}
+    }
   } else {
     return s; // sin IA disponible
   }
 
-  const translated = String(out || "").trim() || s;
+  const translated = String(out || "").trim();
+  const finalText = translated || s;
 
-  if (st.cacheMem) st.cacheMem[key] = translated;
-  try { localStorage.setItem("PRESC_TCACHE_" + key, translated); } catch (_) {}
+  if (st.cacheMem) st.cacheMem[key] = finalText;
+  try { localStorage.setItem("PRESC_TCACHE_" + key, finalText); } catch (_) {}
 
-  return translated;
+  return finalText;
 }
 
 // Traduce TODO el CONTENIDO visible (capítulos + secciones + plantillas + refs extra)
