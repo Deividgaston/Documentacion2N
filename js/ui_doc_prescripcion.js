@@ -2156,144 +2156,122 @@ function prescExportToCSV(model, lang) {
 }
 
 function prescExportToBC3(model, lang) {
-  // Estructura “tipo Presto 8.8” (similar a tu BC3 manual):
-  // ~V, ~K, ~C (raíz + grupo + capítulos + conceptos), ~D (descomposición),
-  // ~T (texto de capítulo), ~M (mediciones por línea)
+  const labels = PRESC_EXPORT_LABELS[lang] || PRESC_EXPORT_LABELS.es;
 
-  const safeText = (s) => {
-    const t = (s || "").toString();
-    // quita acentos/ñ y caracteres raros (para evitar UTF-8 multibyte en Presto 8.8)
-    return t
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/\|/g, " ")
-      .replace(/\r/g, "")
-      .replace(/[^\x09\x0A\x0D\x20-\x7E]/g, " ")
-      .trim();
-  };
-
-  const safeCode = (s) => {
-    return safeText(s)
-      .replace(/\s+/g, "")
-      .replace(/[^\w\.\-#]/g, "")
-      .slice(0, 40);
-  };
-
-  const num = (n) => {
-    const x = Number(n) || 0;
-    // Presto admite decimales con punto. Máx 3 decimales suele ir bien.
-    const fixed = x.toFixed(3);
-    return fixed.replace(/\.?0+$/g, "");
-  };
-
-  const dateStr = formatBc3Date(new Date());
-
-  // Códigos “tipo tu manual”
-  const ROOT = "PRESCRIPCION2N##";     // raíz con ##
-  const GROUP_HASH = "PRESC.01#";      // grupo con #
-  const GROUP_NOHASH = "PRESC.01";     // para ~D (como en tu fichero: 2N.01)
-
-  const projectName = safeText((document.title || "PROYECTO").trim()) || "PROYECTO";
-  const groupName = safeText("PRESCRIPCION") || "PRESCRIPCION";
+  const now = new Date();
+  const dd = String(now.getDate()).padStart(2, "0");
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const yy = String(now.getFullYear()).slice(-2);
+  const dateStr = `${dd}${mm}${yy}`;
 
   const lines = [];
-  lines.push(`~V|FIEBDC-3/2002|PRESCRIPCION2N|PRESTO|${dateStr}|ANSI|`);
-  lines.push(`~K|\\2\\2\\3\\2\\2\\2\\2\\EUR\\|0|`);
+  const obraCode = "OBRA_2N";
+  const rootCode = "PRESCRIPCION2N##"; // raíz tipo “capítulo” (## suele funcionar bien)
+  const mainGroup = "PRESC.01#";       // grupo principal (capítulo)
 
-  // ---- Calcula totales
-  const caps = (model && model.capitulos) ? model.capitulos : [];
-  const capTotals = caps.map((cap) =>
-    (cap.lineas || []).reduce((acc, l) => acc + (Number(l.cantidad) || 0) * (Number(l.pvp) || 0), 0)
-  );
-  const groupTotal = capTotals.reduce((a, b) => a + b, 0);
-  const rootTotal = groupTotal;
+  // --- Helpers ---
+  const esc = (s) =>
+    String(s ?? "")
+      .replace(/\|/g, " ")  // BC3 separa por |
+      .replace(/\r?\n/g, " ")
+      .trim();
 
-  // ---- ~C raíz y grupo
-  // Formato similar a tu manual: ~C|COD||DESC|IMP|FECHA|0|
-  lines.push(`~C|${ROOT}||${projectName}|${num(rootTotal)}|${dateStr}|0|`);
-  lines.push(`~C|${GROUP_HASH}||${groupName}|${num(groupTotal)}|${dateStr}|0|`);
+  const fmtNum = (n) => {
+    const x = Number(n);
+    if (!isFinite(x)) return "0";
+    // OJO: muchas apps esperan punto como separador decimal
+    return String(Math.round(x * 1000000) / 1000000);
+  };
 
-  // ---- ~C capítulos + conceptos
-  const allConcepts = new Map(); // code -> {unit, desc, price}
-  const chapterCodes = [];       // [{cap, code}]
+  // =====================================================
+  // CABECERA FIEBDC-3
+  // =====================================================
+  lines.push("~V|FIEBDC-3|PRESCRIPCION2N|1|");
+  lines.push(`~K|PRESCRIPCION2N|${esc(labels.project)}|${dateStr}|`);
 
-  caps.forEach((cap, idx) => {
-    const chapterCode = `PRESC.01${String(idx + 1).padStart(2, "0")}`; // PRESC.0101, 0102...
-    chapterCodes.push({ cap, code: chapterCode });
+  // =====================================================
+  // OBRA (clave para Presto: si falta, puede “importar” y verse vacío)
+  // =====================================================
+  lines.push(`~O|${obraCode}|${esc(labels.title)}|${dateStr}|`);
 
-    const capName = safeText(cap.nombre || `CAPITULO ${idx + 1}`) || `CAPITULO ${idx + 1}`;
-    const capSubtotal = capTotals[idx] || 0;
+  // =====================================================
+  // CONCEPTOS (C): raíz + grupo principal + capítulos + partidas
+  // Formato usado: ~C|COD|UD|RESUMEN|PRECIO|FECHA|TIPO|
+  // TIPO suele ser: 0/1/2/3 (depende software). Dejamos 0 en capítulos, 3 en partidas.
+  // =====================================================
+  lines.push(`~C|${rootCode}||${esc(labels.title)}|0|${dateStr}|0|`);
+  lines.push(`~C|${mainGroup}||${esc(labels.title)}|0|${dateStr}|0|`);
 
-    // OJO: en tu manual los capítulos llevan unidad "Ud" aunque sean capítulos.
-    lines.push(`~C|${chapterCode}|Ud|${capName}|${num(capSubtotal)}|${dateStr}|0|`);
+  // Guardamos para montar descomposición y mediciones
+  const dLines = [];
+  const mLines = [];
 
+  // Obra -> raíz
+  dLines.push(`~D|${obraCode}|${rootCode}\\1\\1\\|`);
+  // Raíz -> grupo
+  dLines.push(`~D|${rootCode}|${mainGroup}\\1\\1\\|`);
+
+  // =====================================================
+  // Por cada capítulo del modelo:
+  // - Creamos un “capítulo” (grupo) CAPxxx#
+  // - Creamos una “partida contenedora” CAPxxx.0000 (Ud) opcional (pero ayuda en TCQ/Presto)
+  // - Las referencias van como partidas hijas
+  // - Medición: la cantidad total por partida
+  // =====================================================
+  (model.capitulos || []).forEach((cap, idx) => {
+    const capIdx = String(idx + 1).padStart(3, "0");
+
+    const capGroupCode = `CAP${capIdx}#`;         // capítulo/grupo
+    const capContainer = `CAP${capIdx}.0000`;     // partida “contenedor” (opcional)
+
+    const capName = esc(cap.nombre || `${labels.chapter} ${idx + 1}`);
+
+    // Capítulo (grupo) + contenedor
+    lines.push(`~C|${capGroupCode}||${capName}|0|${dateStr}|0|`);
+    lines.push(`~C|${capContainer}|Ud|${capName}|0|${dateStr}|3|`);
+
+    // Grupo principal -> capítulo
+    dLines.push(`~D|${mainGroup}|${capGroupCode}\\1\\1\\|`);
+    // Capítulo -> contenedor
+    dLines.push(`~D|${capGroupCode}|${capContainer}\\1\\1\\|`);
+
+    // Referencias como partidas hijas del contenedor
     (cap.lineas || []).forEach((l, i) => {
-      const rawCode = l.codigo || `REF${String(i + 1).padStart(4, "0")}`;
-      const code = safeCode(rawCode) || `REF${String(i + 1).padStart(4, "0")}`;
+      const codBase =
+        esc(l.codigo) ||
+        `REF${capIdx}${String(i + 1).padStart(4, "0")}`;
 
-      // unidad / desc
-      const unit = safeText(l.unidad || "Ud") || "Ud";
-      const desc = safeText(l.descripcion || "") || code;
+      // En BC3 conviene evitar códigos raros (espacios, barras…)
+      const refCode = codBase.replace(/\s+/g, "_").slice(0, 20);
+
+      const desc = esc(l.descripcion || "");
+      const unit = esc(l.unidad || "Ud") || "Ud";
+      const qty = Number(l.cantidad) || 0;
       const price = Number(l.pvp) || 0;
 
-      // guarda concepto único
-      if (!allConcepts.has(code)) {
-        // Formato manual: ~C|COD|Ud|DESC|PVP|FECHA|3|
-        lines.push(`~C|${code}|${unit}|${desc}|${num(price)}|${dateStr}|3|`);
-        allConcepts.set(code, { unit, desc, price });
-      }
+      // Partida
+      lines.push(`~C|${refCode}|${unit}|${desc}|${fmtNum(price)}|${dateStr}|3|`);
+
+      // Descomposición: contenedor -> partida
+      dLines.push(`~D|${capContainer}|${refCode}\\1\\1\\|`);
+
+      // Medición:
+      // Formato bastante tolerante: ~M|PADRE\HIJO|LIN\PAR\|CANT|TEXTO|
+      // Aquí usamos: Padre\Hijo = capítulo\partida contenedor  (o contenedor\partida)
+      // Para maximizar compatibilidad, colgamos medición del contenedor.
+      //
+      // Nota: algunos importadores aceptan ~M|PARTIDA|...; otros piden ruta.
+      // Esta forma suele ir bien en Presto/TCQ y Arquímedes suele aceptarla.
+      const textoMed = cap.texto ? esc(cap.texto).slice(0, 120) : "";
+      mLines.push(`~M|${capContainer}\\${refCode}|1\\1\\|${fmtNum(qty)}|${textoMed}|`);
     });
   });
 
-  // ---- ~D descomposición
-  // raíz -> grupo (en tu manual usa el código sin #)
-  lines.push(`~D|${ROOT}|${GROUP_NOHASH}\\1\\1\\|`);
-
-  // grupo -> capítulos
-  if (chapterCodes.length) {
-    const groupChildren = chapterCodes.map(({ code }) => `${code}\\1\\1\\`).join("");
-    lines.push(`~D|${GROUP_HASH}|${groupChildren}|`);
-  } else {
-    lines.push(`~D|${GROUP_HASH}||`);
-  }
-
-  // capítulo -> conceptos (sin cantidades; las cantidades irán en ~M)
-  chapterCodes.forEach(({ cap, code }) => {
-    const capLines = cap.lineas || [];
-    if (!capLines.length) {
-      lines.push(`~D|${code}||`);
-      return;
-    }
-    const children = capLines.map((l, i) => {
-      const rawCode = l.codigo || `REF${String(i + 1).padStart(4, "0")}`;
-      const c = safeCode(rawCode) || `REF${String(i + 1).padStart(4, "0")}`;
-      return `${c}\\1\\1\\`;
-    }).join("");
-    lines.push(`~D|${code}|${children}|`);
-  });
-
-  // ---- ~T textos de capítulo (tu “texto descriptivo / mediciones”)
-  chapterCodes.forEach(({ cap, code }) => {
-    const txt = (cap.texto || "").toString().trim();
-    if (!txt) return;
-
-    // En tu manual usan \P para saltos de párrafo
-    const t = safeText(txt).replace(/\n+/g, "\\P");
-    // Formato manual: ~T|CAP| |TEXTO...|
-    lines.push(`~T|${code}| |${t}|`);
-  });
-
-  // ---- ~M mediciones por línea (aquí es donde Presto suele “ver” cantidades)
-  // Patrón de tu manual: ~M|GRUPO#\CAP|1\1\|CANT||
-  chapterCodes.forEach(({ cap, code }) => {
-    const capLines = cap.lineas || [];
-    capLines.forEach((l, idx) => {
-      const qty = Number(l.cantidad) || 0;
-      // índice de línea dentro del capítulo: 1\1\, 2\1\...
-      const lineRef = `${idx + 1}\\1\\`;
-      lines.push(`~M|${GROUP_HASH}\\${code}|${lineRef}|${num(qty)}||`);
-    });
-  });
+  // =====================================================
+  // DESCOMPOSICIÓN + MEDICIONES
+  // =====================================================
+  lines.push(...dLines);
+  lines.push(...mLines);
 
   return lines.join("\n");
 }
