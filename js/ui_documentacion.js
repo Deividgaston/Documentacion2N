@@ -1959,9 +1959,34 @@ function drawSalesforceCard({
   const yBody = y + paddingTop + 7 + titleLines.length * 7 + 3;
 
   if (lines.length) {
-    // 🔹 Sin justificar → alineado a la izquierda, usando bodyW más estrecho
-    doc.text(lines, x + paddingX, yBody);
+  const xBody = x + paddingX;
+  const maxW = bodyW;
+  const lh = 5.0;
+  let yy = yBody;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i] || "";
+
+    // línea en blanco entre párrafos
+    if (!line.trim()) {
+      yy += lh;
+      continue;
+    }
+
+    // si la siguiente es "" => esta es última línea de párrafo (NO justificar)
+    const next = lines[i + 1] || "";
+    const isLastOfParagraph = !next.trim();
+
+    if (isLastOfParagraph) {
+      doc.text(line, xBody, yy);
+    } else {
+      drawJustifiedLine(doc, line, xBody, yy, maxW);
+    }
+
+    yy += lh;
   }
+}
+
 
   return {
     bottomY: y + cardH,
