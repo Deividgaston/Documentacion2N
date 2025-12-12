@@ -292,7 +292,8 @@ function renderDocPrescripcionView() {
   const currentLang = appState.prescripcion.exportLang || "es";
 
   container.innerHTML = `
-    <div class="presc-root" style="display:flex; flex-direction:column; height:100%;">
+   <div class="presc-root" style="display:flex; flex-direction:column; height:calc(100vh - 1.5rem);">
+
 
       <!-- CABECERA SUPERIOR -->
       <div class="card" style="margin-bottom:1rem;">
