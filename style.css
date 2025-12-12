@@ -1074,16 +1074,35 @@ textarea {
   width: 100%;
 }
 
-/* FIX: en la memoria comercial, evitar que el texto se salga de las cards */
-.pdf-page, .pdf-page * {
+/* ===============================
+   FIX PDF/Preview: texto no se sale
+   (overflow + flex min-width)
+================================ */
+
+/* Si tienes contenedor de preview típico */
+#pdfPreview, #pdfContainer, .pdf-preview, .pdf-page {
+  overflow: hidden;
+}
+
+/* Cualquier "card" dentro del PDF/preview */
+#pdfPreview .card, #pdfPreview .pdf-card, #pdfPreview .doc-card, #pdfPreview .doc-section,
+#pdfContainer .card, #pdfContainer .pdf-card, #pdfContainer .doc-card, #pdfContainer .doc-section,
+.pdf-preview .card, .pdf-preview .pdf-card, .pdf-preview .doc-card, .pdf-preview .doc-section,
+.pdf-page .card, .pdf-page .pdf-card, .pdf-page .doc-card, .pdf-page .doc-section {
+  overflow: hidden;          /* clave: que no pinte fuera */
+}
+
+/* Clave en layouts flex: permitir que el texto reduzca ancho */
+#pdfPreview * , #pdfContainer * , .pdf-preview * , .pdf-page * {
+  min-width: 0;
+  max-width: 100%;
   box-sizing: border-box;
 }
 
-.pdf-card, .doc-card, .doc-section-card,
-.pdf-card p, .doc-card p, .doc-section-card p,
-.pdf-card li, .doc-card li, .doc-section-card li,
-.pdf-card div, .doc-card div, .doc-section-card div {
-  max-width: 100%;
+/* Forzar wrapping real en texto */
+#pdfPreview p, #pdfContainer p, .pdf-preview p, .pdf-page p,
+#pdfPreview div, #pdfContainer div, .pdf-preview div, .pdf-page div,
+#pdfPreview span, #pdfContainer span, .pdf-preview span, .pdf-page span {
   white-space: normal;
   overflow-wrap: anywhere;
   word-break: break-word;
