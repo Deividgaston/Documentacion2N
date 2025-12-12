@@ -555,6 +555,9 @@ function renderDocPrescripcionView() {
   const container = getPrescripcionAppContent();
   if (!container) return;
 
+  // helpers UI i18n
+  const ui = (k) => prescUI(k);
+
   // Aseguramos secciones cargadas
   ensurePrescSectionsFromBudget();
 
@@ -565,212 +568,149 @@ function renderDocPrescripcionView() {
   const currentLang = appState.prescripcion.exportLang || "es";
 
   container.innerHTML = `
-    <!-- FIX: root cerrado al final + altura estable -->
     <div class="presc-root" style="display:flex; flex-direction:column; height:100%; min-height:0;">
 
-      <!-- CABECERA SUPERIOR -->
+      <!-- CABECERA -->
       <div class="card" style="margin-bottom:1rem;">
         <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; gap:1rem;">
           <div>
-            <div class="card-title">Prescripción técnica del proyecto</div>
-            <div class="card-subtitle">
-              Arrastra secciones del presupuesto para generar capítulos. Usa referencias extra o plantillas si lo necesitas.
-            </div>
+            <div class="card-title">${ui("title")}</div>
+            <div class="card-subtitle">${ui("subtitle")}</div>
           </div>
 
           <div style="display:flex; flex-direction:column; gap:0.35rem; align-items:flex-end;">
-            <div style="display:flex; gap:0.35rem; align-items:center; flex-wrap:wrap; justify-content:flex-end;">
-              <span style="font-size:0.75rem; color:#6b7280;">Idioma exportación</span>
-              <select id="prescExportLang" class="form-control form-control-sm" style="min-width:140px; font-size:0.75rem;">
+            <div style="display:flex; gap:0.35rem; align-items:center; flex-wrap:wrap;">
+              <span style="font-size:0.75rem; color:#6b7280;">
+                ${ui("exportLang")}
+              </span>
+              <select id="prescExportLang"
+                      class="form-control form-control-sm"
+                      style="min-width:140px; font-size:0.75rem;">
                 <option value="es" ${currentLang === "es" ? "selected" : ""}>Castellano</option>
                 <option value="en" ${currentLang === "en" ? "selected" : ""}>English</option>
                 <option value="pt" ${currentLang === "pt" ? "selected" : ""}>Português</option>
               </select>
             </div>
 
-            <div style="display:flex; gap:0.35rem; flex-wrap:wrap; justify-content:flex-end;">
+            <div style="display:flex; gap:0.35rem; flex-wrap:wrap;">
               <button id="prescReloadSectionsBtn" class="btn btn-outline btn-sm">
-                🔄 Regenerar secciones
+                ${ui("regen")}
               </button>
               <button id="prescExportExcelBtn" class="btn btn-sm btn-outline">
-                ⬇️ Excel
+                ${ui("excel")}
               </button>
               <button id="prescExportPdfBtn" class="btn btn-sm btn-outline">
-                ⬇️ PDF
+                ${ui("pdf")}
               </button>
               <button id="prescExportBc3Btn" class="btn btn-sm btn-outline">
-                ⬇️ BC3
+                ${ui("bc3")}
               </button>
             </div>
           </div>
         </div>
       </div>
 
+      <!-- CUERPO -->
       <div class="presc-main" style="flex:1; min-height:0; display:flex; flex-direction:column; gap:1rem;">
 
-        <!-- LAYOUT 3 COLUMNAS -->
-        <!-- FIX: min-height:0 para que el scroll interno NO solape -->
         <div class="presc-layout"
              style="display:grid; grid-template-columns:1fr 1.4fr 1.2fr; gap:1rem; flex:1; min-height:0;">
 
-          <!-- COLUMNA 1: Secciones del presupuesto -->
+          <!-- COLUMNA 1 -->
           <div class="card" style="display:flex; flex-direction:column; overflow:hidden;">
             <div class="card-header">
-              <div class="card-title">Secciones del presupuesto</div>
-              <div class="card-subtitle">Arrastra una sección para crear o actualizar un capítulo</div>
+              <div class="card-title">${ui("col1Title")}</div>
+              <div class="card-subtitle">${ui("col1Sub")}</div>
             </div>
-            <div id="prescSectionsList" class="card-body" style="flex:1; overflow:auto; padding:0.75rem;">
-            </div>
+            <div id="prescSectionsList" class="card-body" style="flex:1; overflow:auto; padding:0.75rem;"></div>
           </div>
 
-          <!-- COLUMNA 2: Capítulo seleccionado -->
+          <!-- COLUMNA 2 -->
           <div class="card" style="display:flex; flex-direction:column; overflow:hidden;">
-            <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; gap:0.75rem;">
+            <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
               <div>
-                <div class="card-title">Capítulo seleccionado</div>
-                <div class="card-subtitle">Nombre, texto descriptivo y referencias del capítulo</div>
+                <div class="card-title">${ui("col2Title")}</div>
+                <div class="card-subtitle">${ui("col2Sub")}</div>
               </div>
               <div style="display:flex; gap:0.25rem;">
-                <button type="button" id="prescCapNuevoBtn" class="btn btn-xs btn-secondary" title="Añadir capítulo">
-                  ＋
-                </button>
-                <button type="button" id="prescCapGuardarBtn" class="btn btn-xs btn-secondary" title="Guardar y crear nuevo capítulo">
-                  💾
-                </button>
+                <button id="prescCapNuevoBtn" class="btn btn-xs btn-secondary">＋</button>
+                <button id="prescCapGuardarBtn" class="btn btn-xs btn-secondary">💾</button>
               </div>
             </div>
-
-            <div id="prescCapituloContent" class="card-body" style="flex:1; overflow:auto;">
-            </div>
+            <div id="prescCapituloContent" class="card-body" style="flex:1; overflow:auto;"></div>
           </div>
 
-          <!-- COLUMNA 3: Plantillas + Referencias extra -->
-          <!-- FIX: min-height:0 para que sus cards internas no se desborden -->
-          <div style="display:flex; flex-direction:column; gap:1rem; height:100%; min-height:0;">
+          <!-- COLUMNA 3 -->
+          <div style="display:flex; flex-direction:column; gap:1rem; min-height:0;">
 
-            <!-- Plantillas -->
-            <div class="card" style="flex:1; display:flex; flex-direction:column; overflow:hidden; min-height:0;">
+            <div class="card" style="flex:1; display:flex; flex-direction:column; overflow:hidden;">
               <div class="card-header">
-                <div class="card-title">Plantillas</div>
-                <div class="card-subtitle">Arrastra y suelta para rellenar texto técnico</div>
+                <div class="card-title">${ui("tplTitle")}</div>
+                <div class="card-subtitle">${ui("tplSub")}</div>
               </div>
-              <div id="prescPlantillasList" class="card-body" style="flex:1; overflow:auto;">
-              </div>
+              <div id="prescPlantillasList" class="card-body" style="flex:1; overflow:auto;"></div>
             </div>
 
-            <!-- Referencias extra -->
-            <div class="card" style="flex:1; display:flex; flex-direction:column; overflow:hidden; min-height:0;">
+            <div class="card" style="flex:1; display:flex; flex-direction:column; overflow:hidden;">
               <div class="card-header">
-                <div class="card-title">Referencias extra</div>
-                <div class="card-subtitle">Switches, cable, mano de obra…</div>
+                <div class="card-title">${ui("extraTitle")}</div>
+                <div class="card-subtitle">${ui("extraSub")}</div>
               </div>
-              <div id="prescExtraRefsList" class="card-body" style="flex:1; overflow:auto;">
-              </div>
+              <div id="prescExtraRefsList" class="card-body" style="flex:1; overflow:auto;"></div>
             </div>
 
           </div>
         </div>
-
       </div>
 
-      <!-- PREVISUALIZACIÓN inferior (FIJA) -->
-      <!-- FIX: el body ocupa el alto del card; scroll interno -->
+      <!-- PREVIEW -->
       <div class="card presc-preview-card" style="flex:0 0 32vh; min-height:240px; overflow:hidden;">
         <div class="card-header">
-          <div class="card-title">Previsualización de la prescripción</div>
-          <div class="card-subtitle">Capítulos añadidos, totales y desglose desplegable</div>
+          <div class="card-title">${ui("previewTitle")}</div>
+          <div class="card-subtitle">${ui("previewSub")}</div>
         </div>
-
-        <div id="prescPreview" class="card-body" style="height:100%; overflow:auto;">
-        </div>
+        <div id="prescPreview" class="card-body" style="height:100%; overflow:auto;"></div>
       </div>
 
     </div>
   `;
 
-  // Handlers cabecera global
-  const btnReloadSections = container.querySelector("#prescReloadSectionsBtn");
-  if (btnReloadSections) {
-    btnReloadSections.addEventListener("click", (ev) => {
-      ev.preventDefault();
-      ev.stopPropagation();
-      buildPrescSectionsFromPresupuesto();
-      renderDocPrescripcionView();
-    });
-  }
+  // ===== Handlers =====
 
-  // Botones del capítulo seleccionado (iconos en cabecera)
-  const btnCapNuevo = container.querySelector("#prescCapNuevoBtn");
-  if (btnCapNuevo) {
-    btnCapNuevo.addEventListener("click", (ev) => {
-      ev.preventDefault();
-      ev.stopPropagation();
-      createManualCapitulo();
-      renderDocPrescripcionView();
-    });
-  }
+  container.querySelector("#prescReloadSectionsBtn")?.addEventListener("click", () => {
+    buildPrescSectionsFromPresupuesto();
+    renderDocPrescripcionView();
+  });
 
-  const btnCapGuardar = container.querySelector("#prescCapGuardarBtn");
-  if (btnCapGuardar) {
-    btnCapGuardar.addEventListener("click", (ev) => {
-      ev.preventDefault();
-      ev.stopPropagation();
-      // Mantiene el capítulo actual en estado y crea uno nuevo en blanco
-      createManualCapitulo();
-      renderDocPrescripcionView();
-    });
-  }
+  container.querySelector("#prescCapNuevoBtn")?.addEventListener("click", () => {
+    createManualCapitulo();
+    renderDocPrescripcionView();
+  });
 
-  // =========================
-  // Selector idioma (UI + contenido)
-  // =========================
+  container.querySelector("#prescCapGuardarBtn")?.addEventListener("click", () => {
+    createManualCapitulo();
+    renderDocPrescripcionView();
+  });
+
   const langSelect = container.querySelector("#prescExportLang");
   if (langSelect) {
-    langSelect.value = appState.prescripcion.exportLang || "es";
+    langSelect.value = currentLang;
     langSelect.addEventListener("change", async () => {
       const lang = langSelect.value || "es";
-      appState.prescripcion.exportLang = lang;
-      console.log("[PRESCRIPCIÓN] Idioma exportación:", lang);
-
-      // Asegurar datos antes de traducir (si el helper existe)
-      try { await ensurePrescPlantillasLoaded(); } catch (_) {}
-      try { await ensureExtraRefsLoaded(); } catch (_) {}
-      try { ensurePrescSectionsFromBudget(); } catch (_) {}
-
-      // Si existe el traductor global, traduce TODO y re-renderiza desde ahí
       if (typeof window.setPrescLanguageAll === "function") {
         await window.setPrescLanguageAll(lang);
-        return;
+      } else {
+        appState.prescripcion.exportLang = lang;
+        renderDocPrescripcionView();
       }
-
-      // Fallback (sin traductor aún): al menos refresca la UI
-      renderDocPrescripcionView();
     });
   }
 
-  // Botones exportación
-  const btnExportExcel = container.querySelector("#prescExportExcelBtn");
-  if (btnExportExcel) {
-    btnExportExcel.addEventListener("click", () => {
-      handlePrescExport("excel");
-    });
-  }
+  container.querySelector("#prescExportExcelBtn")?.addEventListener("click", () => handlePrescExport("excel"));
+  container.querySelector("#prescExportPdfBtn")?.addEventListener("click", () => handlePrescExport("pdf"));
+  container.querySelector("#prescExportBc3Btn")?.addEventListener("click", () => handlePrescExport("bc3"));
 
-  const btnExportPdf = container.querySelector("#prescExportPdfBtn");
-  if (btnExportPdf) {
-    btnExportPdf.addEventListener("click", () => {
-      handlePrescExport("pdf");
-    });
-  }
-
-  const btnExportBc3 = container.querySelector("#prescExportBc3Btn");
-  if (btnExportBc3) {
-    btnExportBc3.addEventListener("click", () => {
-      handlePrescExport("bc3");
-    });
-  }
-
-  // Rellenar sub-vistas
+  // ===== Subrenders =====
   renderPrescSectionsList();
   renderPrescCapituloContent();
   attachPrescDropZone();
@@ -778,7 +718,6 @@ function renderDocPrescripcionView() {
   renderPrescExtraRefsList();
   renderPrescPreview();
 }
-
 
 // ========================================================
 // BLOQUE 4 - Secciones Notion Premium (arrastrables)
