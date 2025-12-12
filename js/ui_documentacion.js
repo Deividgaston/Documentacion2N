@@ -1896,7 +1896,10 @@ function drawSalesforceCard({
 
   // 🔹 Ancho efectivo: NUNCA mayor que el ancho interior de la tarjeta
   const innerW = width - paddingX * 2;
-  const bodyW = Math.min(maxBodyWidth || innerW, innerW);
+
+  // 🔹 En comercial queremos que el texto ocupe igual en todas las cards
+  const bodyW = innerW;
+
 
   
 
