@@ -1360,9 +1360,9 @@ async function renderPrescPlantillasList() {
   const searchInput = container.querySelector("#prescPlantillasSearch");
   if (searchInput) {
     searchInput.addEventListener("input", (e) => {
-      appState.prescripcion.plantillasSearchTerm = e.target.value || "";
-      prescDebouncedRerenderWithRefocus(renderPrescPlantillasList, "prescPlantillasSearch");
-    });
+  appState.prescripcion.plantillasSearchTerm = e.target.value || "";
+  prescDebouncedRerenderWithRefocus(renderPrescPlantillasList, "prescPlantillasSearch");
+});
   }
 
   // Botón nueva plantilla (icono)
