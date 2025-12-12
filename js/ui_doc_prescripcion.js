@@ -2156,145 +2156,146 @@ function prescExportToCSV(model, lang) {
 }
 
 function prescExportToBC3(model, lang) {
-  const labels = PRESC_EXPORT_LABELS[lang] || PRESC_EXPORT_LABELS.es;
+  // Estructura “tipo Presto 8.8” (similar a tu BC3 manual):
+  // ~V, ~K, ~C (raíz + grupo + capítulos + conceptos), ~D (descomposición),
+  // ~T (texto de capítulo), ~M (mediciones por línea)
 
-  // === Helpers ===
-  const sanitize = (s) =>
-    String(s || "")
-      .replace(/\|/g, " ")   // BC3 usa | como separador
-      .replace(/\\/g, "/")   // BC3 usa \ en ~D
+  const safeText = (s) => {
+    const t = (s || "").toString();
+    // quita acentos/ñ y caracteres raros (para evitar UTF-8 multibyte en Presto 8.8)
+    return t
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/\|/g, " ")
+      .replace(/\r/g, "")
+      .replace(/[^\x09\x0A\x0D\x20-\x7E]/g, " ")
       .trim();
-
-  const fmtDateDDMMYY = (d) => {
-    const dd = String(d.getDate()).padStart(2, "0");
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const yy = String(d.getFullYear()).slice(-2);
-    return `${dd}${mm}${yy}`;
   };
 
-  const fmtNum = (n, decimals = 2) => {
+  const safeCode = (s) => {
+    return safeText(s)
+      .replace(/\s+/g, "")
+      .replace(/[^\w\.\-#]/g, "")
+      .slice(0, 40);
+  };
+
+  const num = (n) => {
     const x = Number(n) || 0;
-    // Presto suele tragar punto decimal; mantenemos formato simple
-    const s = x.toFixed(decimals);
-    // quita decimales si es entero exacto
-    if (Number(s) === Math.trunc(Number(s))) return String(Math.trunc(Number(s)));
-    return s;
+    // Presto admite decimales con punto. Máx 3 decimales suele ir bien.
+    const fixed = x.toFixed(3);
+    return fixed.replace(/\.?0+$/g, "");
   };
 
-  const today = fmtDateDDMMYY(new Date());
+  const dateStr = formatBc3Date(new Date());
 
-  // === Códigos tipo “manual” ===
-  const PROJECT_CODE = "PRESCRIPCION2N##";
+  // Códigos “tipo tu manual”
+  const ROOT = "PRESCRIPCION2N##";     // raíz con ##
+  const GROUP_HASH = "PRESC.01#";      // grupo con #
+  const GROUP_NOHASH = "PRESC.01";     // para ~D (como en tu fichero: 2N.01)
 
-  // === Calcula totales si no vienen ===
-  const totalGlobal =
-    typeof model.totalGlobal === "number"
-      ? model.totalGlobal
-      : (model.capitulos || []).reduce(
-          (acc, c) => acc + (Number(c.subtotal) || 0),
-          0
-        );
+  const projectName = safeText((document.title || "PROYECTO").trim()) || "PROYECTO";
+  const groupName = safeText("PRESCRIPCION") || "PRESCRIPCION";
 
-  // === Construcción ===
-  const out = [];
+  const lines = [];
+  lines.push(`~V|FIEBDC-3/2002|PRESCRIPCION2N|PRESTO|${dateStr}|ANSI|`);
+  lines.push(`~K|\\2\\2\\3\\2\\2\\2\\2\\EUR\\|0|`);
 
-  // Header como tu ejemplo (Presto 8.8 + ANSI)
-  out.push("~V|SOFT S.A.|FIEBDC-3/2002|Presto 8.8||ANSI|");
-  // Línea de moneda como tu ejemplo (EUR)
-  out.push("~K|\\2\\2\\3\\2\\2\\2\\2\\EUR\\|0|");
+  // ---- Calcula totales
+  const caps = (model && model.capitulos) ? model.capitulos : [];
+  const capTotals = caps.map((cap) =>
+    (cap.lineas || []).reduce((acc, l) => acc + (Number(l.cantidad) || 0) * (Number(l.pvp) || 0), 0)
+  );
+  const groupTotal = capTotals.reduce((a, b) => a + b, 0);
+  const rootTotal = groupTotal;
 
-  // 1) Definir TODOS los conceptos (~C) primero: items, capítulos, proyecto
-  // -------------------------------------------------------------
+  // ---- ~C raíz y grupo
+  // Formato similar a tu manual: ~C|COD||DESC|IMP|FECHA|0|
+  lines.push(`~C|${ROOT}||${projectName}|${num(rootTotal)}|${dateStr}|0|`);
+  lines.push(`~C|${GROUP_HASH}||${groupName}|${num(groupTotal)}|${dateStr}|0|`);
 
-  // Items (tipo 3)
-  const itemDefs = []; // { code, unit, desc, price, date, type }
-  const capDefs = [];  // { capCode, unit, desc, price, date, type, items: [...] }
+  // ---- ~C capítulos + conceptos
+  const allConcepts = new Map(); // code -> {unit, desc, price}
+  const chapterCodes = [];       // [{cap, code}]
 
-  (model.capitulos || []).forEach((cap, idx) => {
-    const capCode = `CAP${String(idx + 1).padStart(3, "0")}`;
-    const capDesc = sanitize(cap.nombre || `${labels.chapter} ${idx + 1}`);
+  caps.forEach((cap, idx) => {
+    const chapterCode = `PRESC.01${String(idx + 1).padStart(2, "0")}`; // PRESC.0101, 0102...
+    chapterCodes.push({ cap, code: chapterCode });
 
-    const capItems = [];
+    const capName = safeText(cap.nombre || `CAPITULO ${idx + 1}`) || `CAPITULO ${idx + 1}`;
+    const capSubtotal = capTotals[idx] || 0;
+
+    // OJO: en tu manual los capítulos llevan unidad "Ud" aunque sean capítulos.
+    lines.push(`~C|${chapterCode}|Ud|${capName}|${num(capSubtotal)}|${dateStr}|0|`);
 
     (cap.lineas || []).forEach((l, i) => {
-      const rawCode = (l.codigo || "").trim();
-      const code = sanitize(
-        rawCode ? rawCode : `REF${String(i + 1).padStart(4, "0")}_${String(idx + 1).padStart(3, "0")}`
-      );
+      const rawCode = l.codigo || `REF${String(i + 1).padStart(4, "0")}`;
+      const code = safeCode(rawCode) || `REF${String(i + 1).padStart(4, "0")}`;
 
-      const desc = sanitize(l.descripcion || "");
-      const unit = sanitize(l.unidad || "Ud");
+      // unidad / desc
+      const unit = safeText(l.unidad || "Ud") || "Ud";
+      const desc = safeText(l.descripcion || "") || code;
       const price = Number(l.pvp) || 0;
 
-      itemDefs.push({
-        code,
-        unit,
-        desc,
-        price,
-        date: today,
-        type: 3
-      });
-
-      capItems.push({
-        code,
-        qty: Number(l.cantidad) || 0
-      });
-    });
-
-    capDefs.push({
-      capCode,
-      unit: "Ud",
-      desc: capDesc,
-      price: Number(cap.subtotal) || 0,
-      date: today,
-      type: 0,
-      items: capItems
+      // guarda concepto único
+      if (!allConcepts.has(code)) {
+        // Formato manual: ~C|COD|Ud|DESC|PVP|FECHA|3|
+        lines.push(`~C|${code}|${unit}|${desc}|${num(price)}|${dateStr}|3|`);
+        allConcepts.set(code, { unit, desc, price });
+      }
     });
   });
 
-  // ---- Emitir items (~C) ----
-  itemDefs.forEach((it) => {
-    out.push(
-      `~C|${it.code}|${it.unit}|${it.desc}|${fmtNum(it.price, 2)}|${it.date}|${it.type}|`
-    );
-  });
+  // ---- ~D descomposición
+  // raíz -> grupo (en tu manual usa el código sin #)
+  lines.push(`~D|${ROOT}|${GROUP_NOHASH}\\1\\1\\|`);
 
-  // ---- Emitir capítulos (~C tipo 0) ----
-  capDefs.forEach((c) => {
-    out.push(
-      `~C|${c.capCode}|${c.unit}|${c.desc}|${fmtNum(c.price, 2)}|${c.date}|${c.type}|`
-    );
-  });
-
-  // ---- Emitir proyecto raíz (~C tipo 0) ----
-  out.push(
-    `~C|${PROJECT_CODE}||${sanitize(labels.title || "Prescripción")}|${fmtNum(totalGlobal, 2)}|${today}|0|`
-  );
-
-  // 2) Descomposición (~D) como tu BC3 manual
-  // -------------------------------------------------------------
-
-  // Proyecto -> capítulos
-  if (capDefs.length) {
-    const parts = capDefs
-      .map((c) => `${c.capCode}\\1\\1\\`)
-      .join("");
-    out.push(`~D|${PROJECT_CODE}|${parts}|`);
+  // grupo -> capítulos
+  if (chapterCodes.length) {
+    const groupChildren = chapterCodes.map(({ code }) => `${code}\\1\\1\\`).join("");
+    lines.push(`~D|${GROUP_HASH}|${groupChildren}|`);
+  } else {
+    lines.push(`~D|${GROUP_HASH}||`);
   }
 
-  // Capítulo -> items (aquí metemos la CANTIDAD REAL)
-  capDefs.forEach((c) => {
-    if (!c.items || !c.items.length) return;
-
-    const parts = c.items
-      .filter((x) => x.code)
-      .map((x) => `${x.code}\\${fmtNum(x.qty, 3)}\\1\\`)
-      .join("");
-
-    out.push(`~D|${c.capCode}|${parts}|`);
+  // capítulo -> conceptos (sin cantidades; las cantidades irán en ~M)
+  chapterCodes.forEach(({ cap, code }) => {
+    const capLines = cap.lineas || [];
+    if (!capLines.length) {
+      lines.push(`~D|${code}||`);
+      return;
+    }
+    const children = capLines.map((l, i) => {
+      const rawCode = l.codigo || `REF${String(i + 1).padStart(4, "0")}`;
+      const c = safeCode(rawCode) || `REF${String(i + 1).padStart(4, "0")}`;
+      return `${c}\\1\\1\\`;
+    }).join("");
+    lines.push(`~D|${code}|${children}|`);
   });
 
-  return out.join("\n");
+  // ---- ~T textos de capítulo (tu “texto descriptivo / mediciones”)
+  chapterCodes.forEach(({ cap, code }) => {
+    const txt = (cap.texto || "").toString().trim();
+    if (!txt) return;
+
+    // En tu manual usan \P para saltos de párrafo
+    const t = safeText(txt).replace(/\n+/g, "\\P");
+    // Formato manual: ~T|CAP| |TEXTO...|
+    lines.push(`~T|${code}| |${t}|`);
+  });
+
+  // ---- ~M mediciones por línea (aquí es donde Presto suele “ver” cantidades)
+  // Patrón de tu manual: ~M|GRUPO#\CAP|1\1\|CANT||
+  chapterCodes.forEach(({ cap, code }) => {
+    const capLines = cap.lineas || [];
+    capLines.forEach((l, idx) => {
+      const qty = Number(l.cantidad) || 0;
+      // índice de línea dentro del capítulo: 1\1\, 2\1\...
+      const lineRef = `${idx + 1}\\1\\`;
+      lines.push(`~M|${GROUP_HASH}\\${code}|${lineRef}|${num(qty)}||`);
+    });
+  });
+
+  return lines.join("\n");
 }
 
 
