@@ -1543,7 +1543,7 @@ function addExtraRefToCurrentCap(extraId) {
   });
 }
 // ========================================================
-// Render PLANTILLAS (con buscador)
+// Render PLANTILLAS (con buscador) - FIX: no recargar + debounce + escapes
 // ========================================================
 async function renderPrescPlantillasList() {
   const container = document.getElementById("prescPlantillasList");
@@ -1559,14 +1559,18 @@ async function renderPrescPlantillasList() {
   const escAttr = (s) =>
     escHtml(s).replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
-  // Dentro de <textarea> basta con evitar que meta tags / cierre textarea
+  // Dentro de <textarea> basta con evitar tags / cierre accidental
   const escTextarea = (s) =>
     String(s ?? "")
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;");
 
-  await ensurePrescPlantillasLoaded();
+  // ✅ CLAVE: no vuelvas a cargar en cada render/tecla
+  if (!appState.prescripcion.plantillasLoaded) {
+    await ensurePrescPlantillasLoaded();
+  }
+
   const plantillas = appState.prescripcion.plantillas || [];
   const searchTerm = (appState.prescripcion.plantillasSearchTerm || "").toLowerCase();
 
@@ -1604,48 +1608,49 @@ async function renderPrescPlantillasList() {
       </div>
       <div>
         ${
-          filtered
-            .map((p) => {
-              const raw = (p.texto || "");
-              const preview =
-                raw
-                  .split("\n")
-                  .slice(0, 3)
-                  .join(" ")
-                  .slice(0, 220) +
-                (raw && raw.length > 220 ? "..." : "");
+          (filtered.length
+            ? filtered
+                .map((p) => {
+                  const raw = (p.texto || "");
+                  const preview =
+                    raw
+                      .split("\n")
+                      .slice(0, 3)
+                      .join(" ")
+                      .slice(0, 220) +
+                    (raw && raw.length > 220 ? "..." : "");
 
-              const safeName = escHtml(p.nombre || "");
-              const safePreview = preview ? escHtml(preview) : "";
+                  const safeName = escHtml(p.nombre || "");
+                  const safePreview = preview ? escHtml(preview) : "";
 
-              return `
-                <div class="presc-plantilla-item"
-                     draggable="true"
-                     data-presc-plantilla-id="${escAttr(p.id)}">
-                  <div class="presc-plantilla-header">
-                    <span class="presc-plantilla-name">📄 ${safeName}</span>
-                    <span class="presc-plantilla-actions">
-                      <button class="btn btn-xs btn-outline" data-presc-plantilla-edit="${escAttr(p.id)}">✏️</button>
-                      <button class="btn btn-xs" data-presc-plantilla-del="${escAttr(p.id)}">🗑️</button>
-                    </span>
-                  </div>
-                  <div class="presc-plantilla-preview">
-                    ${safePreview || "<i>(sin texto)</i>"}
-                  </div>
-                  <div class="presc-plantilla-footer">
-                    <button class="btn btn-xs" data-presc-plantilla-apply="${escAttr(p.id)}">
-                      ➕ Aplicar al capítulo
-                    </button>
-                  </div>
-                </div>
-              `;
-            })
-            .join("") ||
-          `
-            <p class="text-muted" style="font-size:0.8rem;">
-              No hay plantillas que coincidan con la búsqueda.
-            </p>
-          `
+                  return `
+                    <div class="presc-plantilla-item"
+                         draggable="true"
+                         data-presc-plantilla-id="${escAttr(p.id)}">
+                      <div class="presc-plantilla-header">
+                        <span class="presc-plantilla-name">📄 ${safeName}</span>
+                        <span class="presc-plantilla-actions">
+                          <button class="btn btn-xs btn-outline" data-presc-plantilla-edit="${escAttr(p.id)}">✏️</button>
+                          <button class="btn btn-xs" data-presc-plantilla-del="${escAttr(p.id)}">🗑️</button>
+                        </span>
+                      </div>
+                      <div class="presc-plantilla-preview">
+                        ${safePreview || "<i>(sin texto)</i>"}
+                      </div>
+                      <div class="presc-plantilla-footer">
+                        <button class="btn btn-xs" data-presc-plantilla-apply="${escAttr(p.id)}">
+                          ➕ Aplicar al capítulo
+                        </button>
+                      </div>
+                    </div>
+                  `;
+                })
+                .join("")
+            : `
+                <p class="text-muted" style="font-size:0.8rem;">
+                  No hay plantillas que coincidan con la búsqueda.
+                </p>
+              `)
         }
       </div>
     `;
@@ -1656,23 +1661,32 @@ async function renderPrescPlantillasList() {
   if (searchInput) {
     searchInput.addEventListener("input", (e) => {
       const val = e.target.value || "";
-      const pos = typeof e.target.selectionStart === "number" ? e.target.selectionStart : val.length;
+      const pos =
+        typeof e.target.selectionStart === "number"
+          ? e.target.selectionStart
+          : val.length;
 
       appState.prescripcion.plantillasSearchTerm = val;
 
-      // Re-render + restaurar foco/cursor (evita “solo 1 carácter”)
-      Promise.resolve(renderPrescPlantillasList()).then(() => {
-        requestAnimationFrame(() => {
-          const again = document.getElementById("prescPlantillasSearch");
-          if (!again) return;
-          again.focus();
-          try { again.setSelectionRange(pos, pos); } catch (_) {}
+      // ✅ Debounce ligero para evitar re-render por cada tecla y perder el foco
+      if (appState.prescripcion._tplSearchDebounce) {
+        clearTimeout(appState.prescripcion._tplSearchDebounce);
+      }
+
+      appState.prescripcion._tplSearchDebounce = setTimeout(() => {
+        Promise.resolve(renderPrescPlantillasList()).then(() => {
+          requestAnimationFrame(() => {
+            const again = document.getElementById("prescPlantillasSearch");
+            if (!again) return;
+            again.focus();
+            try { again.setSelectionRange(pos, pos); } catch (_) {}
+          });
         });
-      });
+      }, 60);
     });
   }
 
-  // Botón nueva plantilla (icono)
+  // Botón nueva plantilla
   const btnNew = container.querySelector("#prescNewPlantillaBtn");
   if (btnNew) {
     btnNew.addEventListener("click", () => {
