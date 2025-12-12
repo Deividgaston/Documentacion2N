@@ -559,9 +559,14 @@ function renderDocPrescripcionView() {
   const ui = (k) => prescUI(k);
 
   // Aseguramos secciones cargadas
-  ensurePrescSectionsFromBudget();
+  try {
+    ensurePrescSectionsFromBudget();
+  } catch (e) {
+    console.warn("[PRESC] ensurePrescSectionsFromBudget error:", e);
+  }
 
   // Aseguramos plantillas / referencias extra
+  appState.prescripcion = appState.prescripcion || {};
   appState.prescripcion.plantillas = appState.prescripcion.plantillas || [];
   appState.prescripcion.extraRefs = appState.prescripcion.extraRefs || [];
 
@@ -678,17 +683,29 @@ function renderDocPrescripcionView() {
   // ===== Handlers =====
 
   container.querySelector("#prescReloadSectionsBtn")?.addEventListener("click", () => {
-    buildPrescSectionsFromPresupuesto();
+    try {
+      buildPrescSectionsFromPresupuesto();
+    } catch (e) {
+      console.error("[PRESC] buildPrescSectionsFromPresupuesto error:", e);
+    }
     renderDocPrescripcionView();
   });
 
   container.querySelector("#prescCapNuevoBtn")?.addEventListener("click", () => {
-    createManualCapitulo();
+    try {
+      createManualCapitulo();
+    } catch (e) {
+      console.error("[PRESC] createManualCapitulo error:", e);
+    }
     renderDocPrescripcionView();
   });
 
   container.querySelector("#prescCapGuardarBtn")?.addEventListener("click", () => {
-    createManualCapitulo();
+    try {
+      createManualCapitulo();
+    } catch (e) {
+      console.error("[PRESC] createManualCapitulo (guardar) error:", e);
+    }
     renderDocPrescripcionView();
   });
 
@@ -697,27 +714,37 @@ function renderDocPrescripcionView() {
     langSelect.value = currentLang;
     langSelect.addEventListener("change", async () => {
       const lang = langSelect.value || "es";
-      if (typeof window.setPrescLanguageAll === "function") {
-        await window.setPrescLanguageAll(lang);
-      } else {
-        appState.prescripcion.exportLang = lang;
-        renderDocPrescripcionView();
+      try {
+        if (typeof window.setPrescLanguageAll === "function") {
+          await window.setPrescLanguageAll(lang);
+        } else {
+          appState.prescripcion.exportLang = lang;
+        }
+      } catch (e) {
+        console.error("[PRESC] setPrescLanguageAll error:", e);
       }
+      renderDocPrescripcionView();
     });
   }
 
+  // (NO cambio tu lógica, solo la dejo tal cual)
   container.querySelector("#prescExportExcelBtn")?.addEventListener("click", () => handlePrescExport("excel"));
   container.querySelector("#prescExportPdfBtn")?.addEventListener("click", () => handlePrescExport("pdf"));
   container.querySelector("#prescExportBc3Btn")?.addEventListener("click", () => handlePrescExport("bc3"));
 
   // ===== Subrenders =====
-  renderPrescSectionsList();
-  renderPrescCapituloContent();
-  attachPrescDropZone();
-  renderPrescPlantillasList();
-  renderPrescExtraRefsList();
-  renderPrescPreview();
+  // ✅ Cambio mínimo clave: defer a siguiente frame + try/catch por subrender
+  // para que no se “pisen” los inputs (y evitar el bug de escribir 1 carácter).
+  requestAnimationFrame(() => {
+    try { renderPrescSectionsList(); } catch (e) { console.error("[PRESC] renderPrescSectionsList", e); }
+    try { renderPrescCapituloContent(); } catch (e) { console.error("[PRESC] renderPrescCapituloContent", e); }
+    try { attachPrescDropZone(); } catch (e) { console.error("[PRESC] attachPrescDropZone", e); }
+    try { renderPrescPlantillasList(); } catch (e) { console.error("[PRESC] renderPrescPlantillasList", e); }
+    try { renderPrescExtraRefsList(); } catch (e) { console.error("[PRESC] renderPrescExtraRefsList", e); }
+    try { renderPrescPreview(); } catch (e) { console.error("[PRESC] renderPrescPreview", e); }
+  });
 }
+
 
 // ========================================================
 // BLOQUE 4 - Secciones Notion Premium (arrastrables)
