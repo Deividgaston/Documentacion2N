@@ -715,7 +715,7 @@ if (langSelect) {
     } catch (e) {
       console.error("[PRESC] setPrescLanguageAll error:", e);
     }
-    renderDocPrescripcionView();
+    
   });
 }
 
