@@ -615,19 +615,26 @@ function renderDocPrescripcionView() {
     renderDocPrescripcionView();
   });
 
-  const langSelect = container.querySelector("#prescExportLang");
-  if (langSelect) {
-    langSelect.value = currentLang;
-    langSelect.addEventListener("change", async () => {
-      const lang = langSelect.value || "es";
-      try {
+ const langSelect = container.querySelector("#prescExportLang");
+if (langSelect) {
+  langSelect.value = currentLang;
+  langSelect.addEventListener("change", async () => {
+    const lang = langSelect.value || "es";
+    try {
+      if (typeof setPrescLanguageAll === "function") {
         await setPrescLanguageAll(lang);
-      } catch (e) {
-        console.error("[PRESC] setPrescLanguageAll error:", e);
+      } else if (typeof window.setPrescLanguageAll === "function") {
+        await window.setPrescLanguageAll(lang);
+      } else {
+        appState.prescripcion.exportLang = lang;
       }
-      renderDocPrescripcionView();
-    });
-  }
+    } catch (e) {
+      console.error("[PRESC] setPrescLanguageAll error:", e);
+    }
+    renderDocPrescripcionView();
+  });
+}
+
 
   container.querySelector("#prescExportExcelBtn")?.addEventListener("click", () => handlePrescExport("excel"));
   container.querySelector("#prescExportPdfBtn")?.addEventListener("click", () => handlePrescExport("pdf"));
