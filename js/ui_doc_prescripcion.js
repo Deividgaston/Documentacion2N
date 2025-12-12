@@ -2166,43 +2166,59 @@ function prescExportToBC3(model, lang) {
 
   const lines = [];
   const obraCode = "OBRA_2N";
-  const rootCode = "PRESCRIPCION2N##"; // raíz tipo “capítulo” (## suele funcionar bien)
-  const mainGroup = "PRESC.01#";       // grupo principal (capítulo)
+  const rootCode = "PRESCRIPCION2N##";
+  const mainGroup = "PRESC.01#";
 
   // --- Helpers ---
-  const esc = (s) =>
-    String(s ?? "")
-      .replace(/\|/g, " ")  // BC3 separa por |
-      .replace(/\r?\n/g, " ")
-      .trim();
+  const sanitize = (s) => {
+    s = String(s ?? "");
+    // quita acentos/diacríticos -> más compatible Presto/ANSI
+    try { s = s.normalize("NFD").replace(/[\u0300-\u036f]/g, ""); } catch (_) {}
+    s = s.replace(/\|/g, " ").replace(/\r?\n/g, " ").trim();
+    return s;
+  };
 
   const fmtNum = (n) => {
     const x = Number(n);
     if (!isFinite(x)) return "0";
-    // OJO: muchas apps esperan punto como separador decimal
     return String(Math.round(x * 1000000) / 1000000);
   };
 
   // =====================================================
-  // CABECERA FIEBDC-3
+  // CABECERA FIEBDC-3 (dejamos la tuya)
   // =====================================================
   lines.push("~V|FIEBDC-3|PRESCRIPCION2N|1|");
-  lines.push(`~K|PRESCRIPCION2N|${esc(labels.project)}|${dateStr}|`);
+  lines.push(`~K|PRESCRIPCION2N|${sanitize(labels.project)}|${dateStr}|`);
 
   // =====================================================
-  // OBRA (clave para Presto: si falta, puede “importar” y verse vacío)
+  // OBRA
   // =====================================================
-  lines.push(`~O|${obraCode}|${esc(labels.title)}|${dateStr}|`);
+  lines.push(`~O|${obraCode}|${sanitize(labels.title)}|${dateStr}|`);
 
   // =====================================================
-  // CONCEPTOS (C): raíz + grupo principal + capítulos + partidas
-  // Formato usado: ~C|COD|UD|RESUMEN|PRECIO|FECHA|TIPO|
-  // TIPO suele ser: 0/1/2/3 (depende software). Dejamos 0 en capítulos, 3 en partidas.
+  // Precalcular totales (CLAVE para que Presto “lo pinte”)
   // =====================================================
-  lines.push(`~C|${rootCode}||${esc(labels.title)}|0|${dateStr}|0|`);
-  lines.push(`~C|${mainGroup}||${esc(labels.title)}|0|${dateStr}|0|`);
+  const caps = model.capitulos || [];
+  let totalGlobal = 0;
 
-  // Guardamos para montar descomposición y mediciones
+  const capTotals = caps.map((cap) => {
+    let t = 0;
+    (cap.lineas || []).forEach((l) => {
+      const qty = Number(l.cantidad) || 0;
+      const price = Number(l.pvp) || 0;
+      t += qty * price;
+    });
+    totalGlobal += t;
+    return t;
+  });
+
+  // =====================================================
+  // CONCEPTOS
+  // =====================================================
+  // root y grupo principal con TOTAL (en vez de 0)
+  lines.push(`~C|${rootCode}||${sanitize(labels.title)}|${fmtNum(totalGlobal)}|${dateStr}|0|`);
+  lines.push(`~C|${mainGroup}||${sanitize(labels.title)}|${fmtNum(totalGlobal)}|${dateStr}|0|`);
+
   const dLines = [];
   const mLines = [];
 
@@ -2212,40 +2228,33 @@ function prescExportToBC3(model, lang) {
   dLines.push(`~D|${rootCode}|${mainGroup}\\1\\1\\|`);
 
   // =====================================================
-  // Por cada capítulo del modelo:
-  // - Creamos un “capítulo” (grupo) CAPxxx#
-  // - Creamos una “partida contenedora” CAPxxx.0000 (Ud) opcional (pero ayuda en TCQ/Presto)
-  // - Las referencias van como partidas hijas
-  // - Medición: la cantidad total por partida
+  // Capítulos
   // =====================================================
-  (model.capitulos || []).forEach((cap, idx) => {
+  caps.forEach((cap, idx) => {
     const capIdx = String(idx + 1).padStart(3, "0");
 
-    const capGroupCode = `CAP${capIdx}#`;         // capítulo/grupo
-    const capContainer = `CAP${capIdx}.0000`;     // partida “contenedor” (opcional)
+    const capGroupCode = `CAP${capIdx}#`;
+    const capContainer = `CAP${capIdx}.0000`;
 
-    const capName = esc(cap.nombre || `${labels.chapter} ${idx + 1}`);
+    const capName = sanitize(cap.nombre || `${labels.chapter} ${idx + 1}`);
+    const capTotal = capTotals[idx] || 0;
 
-    // Capítulo (grupo) + contenedor
-    lines.push(`~C|${capGroupCode}||${capName}|0|${dateStr}|0|`);
-    lines.push(`~C|${capContainer}|Ud|${capName}|0|${dateStr}|3|`);
+    // Capítulo (grupo) + contenedor con TOTAL (en vez de 0)
+    lines.push(`~C|${capGroupCode}||${capName}|${fmtNum(capTotal)}|${dateStr}|0|`);
+    lines.push(`~C|${capContainer}|Ud|${capName}|${fmtNum(capTotal)}|${dateStr}|3|`);
 
     // Grupo principal -> capítulo
     dLines.push(`~D|${mainGroup}|${capGroupCode}\\1\\1\\|`);
     // Capítulo -> contenedor
     dLines.push(`~D|${capGroupCode}|${capContainer}\\1\\1\\|`);
 
-    // Referencias como partidas hijas del contenedor
+    // Hijos (partidas)
     (cap.lineas || []).forEach((l, i) => {
-      const codBase =
-        esc(l.codigo) ||
-        `REF${capIdx}${String(i + 1).padStart(4, "0")}`;
-
-      // En BC3 conviene evitar códigos raros (espacios, barras…)
+      const codBase = sanitize(l.codigo) || `REF${capIdx}${String(i + 1).padStart(4, "0")}`;
       const refCode = codBase.replace(/\s+/g, "_").slice(0, 20);
 
-      const desc = esc(l.descripcion || "");
-      const unit = esc(l.unidad || "Ud") || "Ud";
+      const desc = sanitize(l.descripcion || refCode);
+      const unit = sanitize(l.unidad || "Ud") || "Ud";
       const qty = Number(l.cantidad) || 0;
       const price = Number(l.pvp) || 0;
 
@@ -2255,15 +2264,10 @@ function prescExportToBC3(model, lang) {
       // Descomposición: contenedor -> partida
       dLines.push(`~D|${capContainer}|${refCode}\\1\\1\\|`);
 
-      // Medición:
-      // Formato bastante tolerante: ~M|PADRE\HIJO|LIN\PAR\|CANT|TEXTO|
-      // Aquí usamos: Padre\Hijo = capítulo\partida contenedor  (o contenedor\partida)
-      // Para maximizar compatibilidad, colgamos medición del contenedor.
-      //
-      // Nota: algunos importadores aceptan ~M|PARTIDA|...; otros piden ruta.
-      // Esta forma suele ir bien en Presto/TCQ y Arquímedes suele aceptarla.
-      const textoMed = cap.texto ? esc(cap.texto).slice(0, 120) : "";
-      mLines.push(`~M|${capContainer}\\${refCode}|1\\1\\|${fmtNum(qty)}|${textoMed}|`);
+      // Medición (más compatible): colgar de la PARTIDA (refCode)
+      const textoMed = cap.texto ? sanitize(cap.texto).slice(0, 120) : "";
+      // formato tolerante: ~M|CODIGO|linea\\parcial\\|CANT|TEXTO|
+      mLines.push(`~M|${refCode}|1\\1\\|${fmtNum(qty)}|${textoMed}|`);
     });
   });
 
@@ -2273,7 +2277,8 @@ function prescExportToBC3(model, lang) {
   lines.push(...dLines);
   lines.push(...mLines);
 
-  return lines.join("\n");
+  // CRLF para Windows/Presto
+  return lines.join("\r\n");
 }
 
 
