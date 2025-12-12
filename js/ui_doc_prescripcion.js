@@ -1579,9 +1579,9 @@ async function renderPrescExtraRefsList() {
   const searchInput = container.querySelector("#prescExtraRefsSearch");
   if (searchInput) {
     searchInput.addEventListener("input", (e) => {
-      appState.prescripcion.extraRefsSearchTerm = e.target.value || "";
-      prescDebouncedRerenderWithRefocus(renderPrescExtraRefsList, "prescExtraRefsSearch");
-    });
+  appState.prescripcion.extraRefsSearchTerm = e.target.value || "";
+  prescDebouncedRerenderWithRefocus(renderPrescExtraRefsList, "prescExtraRefsSearch");
+});
   }
 
   // Botón nueva ref extra (icono)
