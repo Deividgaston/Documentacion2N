@@ -23,94 +23,37 @@ appState.prescripcion = appState.prescripcion || {
 // MODAL GENÉRICO (usa el modal global definido en index.html)
 // ========================================================
 
-// ========================================================
-// PANEL INLINE (NO FLOTANTE): sustituye al modal global
-// ========================================================
+function openPrescModal({ title, bodyHTML, onSave }) {
+  const modal = document.getElementById("prescModal");
+  const titleEl = document.getElementById("prescModalTitle");
+  const bodyEl = document.getElementById("prescModalBody");
+  const btnSave = document.getElementById("prescModalSave");
+  const btnClose = document.getElementById("prescModalClose");
+  const btnCancel = document.getElementById("prescModalCancel");
 
-function ensurePrescInlinePanelHost() {
-  // Se inyecta dentro de la vista de Prescripción (no overlay).
-  let host = document.getElementById("prescInlinePanel");
-  if (host) return host;
-
-  const root = document.querySelector(".presc-root");
-  const container = root || getPrescripcionAppContent() || document.body;
-
-  host = document.createElement("div");
-  host.id = "prescInlinePanel";
-  host.className = "card";
-  host.style.display = "none";
-  host.style.marginBottom = "1rem";
-  host.style.border = "1px solid #e5e7eb";
-
-  host.innerHTML = `
-    <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; gap:0.75rem;">
-      <div>
-        <div id="prescInlinePanelTitle" class="card-title" style="margin-bottom:0.1rem;"></div>
-        <div class="card-subtitle" style="font-size:0.78rem;">Panel de edición</div>
-      </div>
-      <div style="display:flex; gap:0.35rem; align-items:center;">
-        <button type="button" id="prescInlinePanelCancel" class="btn btn-sm btn-outline">Cancelar</button>
-        <button type="button" id="prescInlinePanelSave" class="btn btn-sm btn-secondary">Guardar</button>
-      </div>
-    </div>
-    <div id="prescInlinePanelBody" class="card-body" style="max-height:38vh; overflow:auto;"></div>
-  `;
-
-  // Inserta el panel al principio de la vista (debajo del header si existe)
-  if (root) {
-    const headerCard = root.querySelector(":scope > .card");
-    if (headerCard && headerCard.nextSibling) {
-      root.insertBefore(host, headerCard.nextSibling);
-    } else {
-      root.insertBefore(host, root.firstChild);
-    }
-  } else {
-    container.prepend(host);
+  if (!modal) {
+    console.warn("[PRESCRIPCIÓN] Modal no encontrado en index.html");
+    return;
   }
 
-  return host;
-}
-
-function openPrescInlinePanel({ title, bodyHTML, onSave, saveLabel, cancelLabel }) {
-  const host = ensurePrescInlinePanelHost();
-  const titleEl = host.querySelector("#prescInlinePanelTitle");
-  const bodyEl = host.querySelector("#prescInlinePanelBody");
-  const btnSave = host.querySelector("#prescInlinePanelSave");
-  const btnCancel = host.querySelector("#prescInlinePanelCancel");
-
-  if (titleEl) titleEl.textContent = title || "";
-  if (bodyEl) bodyEl.innerHTML = bodyHTML || "";
-
-  if (btnSave) btnSave.textContent = saveLabel || "Guardar";
-  if (btnCancel) btnCancel.textContent = cancelLabel || "Cancelar";
-
-  host.style.display = "block";
+  titleEl.textContent = title || "";
+  bodyEl.innerHTML = bodyHTML || "";
+  modal.style.display = "flex";
 
   const close = () => {
-    host.style.display = "none";
-    if (btnSave) btnSave.onclick = null;
-    if (btnCancel) btnCancel.onclick = null;
-    if (bodyEl) bodyEl.innerHTML = "";
+    modal.style.display = "none";
+    btnSave.onclick = null;
+    btnClose.onclick = null;
+    btnCancel.onclick = null;
   };
 
-  if (btnCancel) btnCancel.onclick = close;
+  btnClose.onclick = close;
+  btnCancel.onclick = close;
 
-  if (btnSave) {
-    btnSave.onclick = async () => {
-      if (typeof onSave === "function") await onSave();
-      close();
-    };
-  }
-
-  // Asegura que el panel quede a la vista (sin overlay)
-  try {
-    host.scrollIntoView({ behavior: "smooth", block: "start" });
-  } catch (_) {}
-}
-
-// Mantengo el nombre antiguo por compatibilidad, pero ya no es flotante.
-function openPrescModal({ title, bodyHTML, onSave }) {
-  return openPrescInlinePanel({ title, bodyHTML, onSave });
+  btnSave.onclick = async () => {
+    if (typeof onSave === "function") await onSave();
+    close();
+  };
 }
 
 // ========================================================
@@ -988,6 +931,7 @@ function renderPrescCapituloContent() {
 
 // Firestore: PLANTILLAS
 async function ensurePrescPlantillasLoaded() {
+  await ensurePrescUidReady();
   appState.prescripcion.plantillas = appState.prescripcion.plantillas || [];
   if (appState.prescripcion.plantillasLoaded) return;
 
@@ -1027,6 +971,7 @@ async function ensurePrescPlantillasLoaded() {
 }
 
 async function createPrescPlantilla(nombre, texto) {
+  await ensurePrescUidReady();
   nombre = (nombre || "").trim();
   texto = texto || "";
   if (!nombre) {
@@ -1070,6 +1015,7 @@ async function createPrescPlantilla(nombre, texto) {
 }
 
 async function updatePrescPlantilla(id, nombre, texto) {
+  await ensurePrescUidReady();
   if (!id) return;
   nombre = (nombre || "").trim();
   texto = texto || "";
@@ -1096,6 +1042,7 @@ async function updatePrescPlantilla(id, nombre, texto) {
 }
 
 async function deletePrescPlantilla(id) {
+  await ensurePrescUidReady();
   if (!id) return;
   const ok = window.confirm("¿Seguro que quieres borrar esta plantilla?");
   if (!ok) return;
@@ -1115,6 +1062,7 @@ async function deletePrescPlantilla(id) {
 
 // Firestore: REFERENCIAS EXTRA
 async function ensureExtraRefsLoaded() {
+  await ensurePrescUidReady();
   appState.prescripcion.extraRefs = appState.prescripcion.extraRefs || [];
   if (appState.prescripcion.extraRefsLoaded) return;
 
@@ -1156,6 +1104,7 @@ async function ensureExtraRefsLoaded() {
 }
 
 async function createExtraRef(codigo, descripcion, unidad, pvp) {
+  await ensurePrescUidReady();
   codigo = (codigo || "").trim();
   descripcion = (descripcion || "").trim();
   unidad = (unidad || "Ud").trim() || "Ud";
@@ -1206,6 +1155,7 @@ async function createExtraRef(codigo, descripcion, unidad, pvp) {
 }
 
 async function updateExtraRef(id, codigo, descripcion, unidad, pvp) {
+  await ensurePrescUidReady();
   if (!id) return;
   codigo = (codigo || "").trim();
   descripcion = (descripcion || "").trim();
@@ -1236,6 +1186,7 @@ async function updateExtraRef(id, codigo, descripcion, unidad, pvp) {
 }
 
 async function deleteExtraRef(id) {
+  await ensurePrescUidReady();
   if (!id) return;
   const ok = window.confirm("¿Seguro que quieres borrar esta referencia extra?");
   if (!ok) return;
@@ -2603,4 +2554,38 @@ function downloadBc3File(content, filename) {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}// ========================================================
+// Auth helper: asegurar UID antes de tocar Firestore (evita "solo local")
+// ========================================================
+
+function ensurePrescUidReady(timeoutMs = 15000) {
+  return new Promise((resolve) => {
+    const uidNow = getCurrentUidPresc();
+    if (uidNow) return resolve(uidNow);
+
+    const auth = getAuthPresc();
+    if (!auth || typeof auth.onAuthStateChanged !== "function") return resolve(null);
+
+    let done = false;
+    const timer = setTimeout(() => {
+      if (done) return;
+      done = true;
+      resolve(getCurrentUidPresc());
+    }, Math.max(0, Number(timeoutMs) || 0));
+
+    try {
+      auth.onAuthStateChanged((user) => {
+        if (done) return;
+        if (user && user.uid) {
+          done = true;
+          clearTimeout(timer);
+          resolve(user.uid);
+        }
+      });
+    } catch (_) {
+      clearTimeout(timer);
+      resolve(getCurrentUidPresc());
+    }
+  });
 }
+
