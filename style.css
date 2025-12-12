@@ -1074,3 +1074,17 @@ textarea {
   width: 100%;
 }
 
+/* FIX: en la memoria comercial, evitar que el texto se salga de las cards */
+.pdf-page, .pdf-page * {
+  box-sizing: border-box;
+}
+
+.pdf-card, .doc-card, .doc-section-card,
+.pdf-card p, .doc-card p, .doc-section-card p,
+.pdf-card li, .doc-card li, .doc-section-card li,
+.pdf-card div, .doc-card div, .doc-section-card div {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
