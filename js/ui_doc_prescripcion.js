@@ -1523,6 +1523,13 @@ async function updateExtraRef(id, codigo, descripcion, unidad, pvp) {
 
 async function deleteExtraRef(id) {
   await ensurePrescUidReady();
+    const uid = getCurrentUidPresc();
+  if (!uid) {
+    console.warn("[PRESCRIPCIÓN] Sin UID: plantilla guardada solo en local.");
+    // opcional: alert suave
+    // alert("No hay sesión iniciada todavía. Esta plantilla se guardó solo en local.");
+  }
+
   if (!id) return;
   const ok = window.confirm("¿Seguro que quieres borrar esta referencia extra?");
   if (!ok) return;
