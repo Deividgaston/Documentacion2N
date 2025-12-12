@@ -1925,7 +1925,7 @@ function drawSalesforceCard({
   doc.setFont("helvetica", "bold");
   doc.setFontSize(20);
   doc.setTextColor(31, 41, 55);
-  const titleLines = doc.splitTextToSize(title, width - paddingX * 2);
+  const titleLines = doc.splitTextToSize(title, innerW);
   doc.text(titleLines, x + paddingX, y + paddingTop + 7);
 
   // Texto del cuerpo
