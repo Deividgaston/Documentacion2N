@@ -1815,8 +1815,9 @@ const safePreview = preview ? escHtml(preview) : "";
       const cap = getSelectedCapitulo();
       if (!cap) return;
 
-      cap.texto = tpl.texto || "";
+      cap.texto = getPrescPlantillaEffectiveText(tpl) || "";
       capTextarea.value = cap.texto;
+
     });
   }
 }
