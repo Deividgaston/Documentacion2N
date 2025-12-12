@@ -2091,8 +2091,8 @@ function handlePrescExport(format) {
     const csv = prescExportToCSV(model, lang);
     downloadTextFile(csv, `prescripcion_${lang}.csv`, "text/csv;charset=utf-8;");
   } else if (format === "bc3") {
-    const bc3 = prescExportToBC3(model, lang);
-    downloadTextFile(bc3, `prescripcion_${lang}.bc3`, "text/plain;charset=utf-8;");
+  const bc3 = prescExportToBC3(model, lang);
+  downloadTextFileWin1252(bc3, `prescripcion_${lang}.bc3`);
   } else if (format === "pdf") {
     openPrescPrintWindow(model, lang);
   }
