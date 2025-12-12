@@ -2184,8 +2184,30 @@ function prescExportToBC3(model, lang) {
     return String(Math.round(x * 1000000) / 1000000);
   };
 
+  // ✅ NUEVO: evitar que Presto "pise" conceptos con el mismo código
+  const usedCodes = new Map(); // code -> count
+  const makeUniqueCode = (base, maxLen = 20) => {
+    let b = sanitize(base).replace(/\s+/g, "_");
+    if (!b) b = "REF";
+    b = b.slice(0, maxLen);
+
+    const prev = usedCodes.get(b) || 0;
+    if (prev === 0) {
+      usedCodes.set(b, 1);
+      return b;
+    }
+
+    // ya existe => añadimos sufijo _02, _03...
+    const n = prev + 1;
+    usedCodes.set(b, n);
+
+    const suffix = "_" + String(n).padStart(2, "0");
+    const trimmed = b.slice(0, Math.max(1, maxLen - suffix.length));
+    return (trimmed + suffix).slice(0, maxLen);
+  };
+
   // =====================================================
-  // CABECERA FIEBDC-3 (dejamos la tuya)
+  // CABECERA FIEBDC-3
   // =====================================================
   lines.push("~V|FIEBDC-3|PRESCRIPCION2N|1|");
   lines.push(`~K|PRESCRIPCION2N|${sanitize(labels.project)}|${dateStr}|`);
@@ -2196,7 +2218,7 @@ function prescExportToBC3(model, lang) {
   lines.push(`~O|${obraCode}|${sanitize(labels.title)}|${dateStr}|`);
 
   // =====================================================
-  // Precalcular totales (CLAVE para que Presto “lo pinte”)
+  // Precalcular totales (clave para que Presto “lo pinte”)
   // =====================================================
   const caps = model.capitulos || [];
   let totalGlobal = 0;
@@ -2215,7 +2237,6 @@ function prescExportToBC3(model, lang) {
   // =====================================================
   // CONCEPTOS
   // =====================================================
-  // root y grupo principal con TOTAL (en vez de 0)
   lines.push(`~C|${rootCode}||${sanitize(labels.title)}|${fmtNum(totalGlobal)}|${dateStr}|0|`);
   lines.push(`~C|${mainGroup}||${sanitize(labels.title)}|${fmtNum(totalGlobal)}|${dateStr}|0|`);
 
@@ -2239,7 +2260,7 @@ function prescExportToBC3(model, lang) {
     const capName = sanitize(cap.nombre || `${labels.chapter} ${idx + 1}`);
     const capTotal = capTotals[idx] || 0;
 
-    // Capítulo (grupo) + contenedor con TOTAL (en vez de 0)
+    // Capítulo (grupo) + contenedor con TOTAL
     lines.push(`~C|${capGroupCode}||${capName}|${fmtNum(capTotal)}|${dateStr}|0|`);
     lines.push(`~C|${capContainer}|Ud|${capName}|${fmtNum(capTotal)}|${dateStr}|3|`);
 
@@ -2250,8 +2271,12 @@ function prescExportToBC3(model, lang) {
 
     // Hijos (partidas)
     (cap.lineas || []).forEach((l, i) => {
-      const codBase = sanitize(l.codigo) || `REF${capIdx}${String(i + 1).padStart(4, "0")}`;
-      const refCode = codBase.replace(/\s+/g, "_").slice(0, 20);
+      const base =
+        sanitize(l.codigo) ||
+        `REF${capIdx}${String(i + 1).padStart(4, "0")}`;
+
+      // ✅ CLAVE: código único para no pisar líneas con mismo SKU
+      const refCode = makeUniqueCode(base, 20);
 
       const desc = sanitize(l.descripcion || refCode);
       const unit = sanitize(l.unidad || "Ud") || "Ud";
@@ -2264,9 +2289,8 @@ function prescExportToBC3(model, lang) {
       // Descomposición: contenedor -> partida
       dLines.push(`~D|${capContainer}|${refCode}\\1\\1\\|`);
 
-      // Medición (más compatible): colgar de la PARTIDA (refCode)
+      // Medición: colgar de la PARTIDA (refCode)
       const textoMed = cap.texto ? sanitize(cap.texto).slice(0, 120) : "";
-      // formato tolerante: ~M|CODIGO|linea\\parcial\\|CANT|TEXTO|
       mLines.push(`~M|${refCode}|1\\1\\|${fmtNum(qty)}|${textoMed}|`);
     });
   });
@@ -2280,6 +2304,7 @@ function prescExportToBC3(model, lang) {
   // CRLF para Windows/Presto
   return lines.join("\r\n");
 }
+
 
 
 function openPrescPrintWindow(model, lang) {
