@@ -341,27 +341,28 @@ appState.prescripcion._i18n = appState.prescripcion._i18n || {
 };
 // Captura ES como “fuente” (solo 1 vez)
 function capturePrescBaseIfNeeded() {
-  const st = appState.prescripcion._i18n;
-  if (st.baseCaptured) return;
+  const st = appState.prescripcion._i18n || (appState.prescripcion._i18n = { cacheMem: {} });
 
-  const caps = (appState.prescripcion.capitulos || []).map((c) => ({
-    id: c.id,
-    nombre: c.nombre || "",
-    texto: c.texto || "",
-  }));
+  const capsNow = appState.prescripcion.capitulos || [];
+  const secsNow = appState.prescripcion.sectionsFromBudget || [];
+  const tplsNow = appState.prescripcion.plantillas || [];
+  const extraNow = appState.prescripcion.extraRefs || [];
 
-  const sections = (appState.prescripcion.sectionsFromBudget || []).map((s) => ({
-    id: s.id,
-    nombre: s.nombre || "",
-  }));
+  // ✅ Si ya capturamos pero ahora hay MÁS cosas, recapturamos
+  const needRecapture =
+    !st.baseCaptured ||
+    !st.base ||
+    (st.base.caps?.length || 0) < capsNow.length ||
+    (st.base.sections?.length || 0) < secsNow.length ||
+    (st.base.plantillas?.length || 0) < tplsNow.length ||
+    (st.base.extraRefs?.length || 0) < extraNow.length;
 
-  const plantillas = (appState.prescripcion.plantillas || []).map((p) => ({
-    id: p.id,
-    nombre: p.nombre || "",
-    texto: p.texto || "",
-  }));
+  if (!needRecapture) return;
 
-  const extraRefs = (appState.prescripcion.extraRefs || []).map((r) => ({
+  const caps = capsNow.map((c) => ({ id: c.id, nombre: c.nombre || "", texto: c.texto || "" }));
+  const sections = secsNow.map((s) => ({ id: s.id, nombre: s.nombre || "" }));
+  const plantillas = tplsNow.map((p) => ({ id: p.id, nombre: p.nombre || "", texto: p.texto || "" }));
+  const extraRefs = extraNow.map((r) => ({
     id: r.id,
     codigo: r.codigo || "",
     descripcion: r.descripcion || "",
