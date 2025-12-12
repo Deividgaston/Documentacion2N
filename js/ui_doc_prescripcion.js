@@ -8,7 +8,7 @@
 window.appState = window.appState || {};
 appState.prescripcion = appState.prescripcion || {
   capitulos: [],             // [{ id, nombre, texto, lineas: [...] }]
-  selectedCapituloId: null,  
+  selectedCapituloId: null,
   plantillas: [],            // [{ id, nombre, texto }]
   plantillasLoaded: false,
   extraRefs: [],             // [{ id, codigo, descripcion, unidad, pvp }]
@@ -87,6 +87,70 @@ function getAuthPresc() {
   } catch {
     return null;
   }
+}
+
+// ========================================================
+// Firestore helpers: compat + modular + esperar usuario
+// (FIX: permite guardar/cargar tanto con compat como con v9 modular)
+// ========================================================
+
+function hasCompatDb(db) {
+  return !!db && typeof db.collection === "function";
+}
+
+function hasModularFns() {
+  return (
+    typeof window.collection === "function" &&
+    typeof window.addDoc === "function" &&
+    typeof window.getDocs === "function" &&
+    typeof window.query === "function" &&
+    typeof window.where === "function" &&
+    typeof window.doc === "function" &&
+    typeof window.updateDoc === "function" &&
+    typeof window.deleteDoc === "function"
+  );
+}
+
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+// Espera a que auth.currentUser exista (evita guardar con uid:null)
+async function waitForAuthUserPresc(auth, maxMs = 2500) {
+  if (!auth) return null;
+  if (auth.currentUser) return auth.currentUser;
+
+  if (typeof auth.onAuthStateChanged === "function") {
+    return await new Promise((resolve) => {
+      let done = false;
+      const t = setTimeout(() => {
+        if (done) return;
+        done = true;
+        resolve(auth.currentUser || null);
+      }, maxMs);
+
+      const unsub = auth.onAuthStateChanged((u) => {
+        if (done) return;
+        done = true;
+        clearTimeout(t);
+        try { if (typeof unsub === "function") unsub(); } catch {}
+        resolve(u || null);
+      });
+    });
+  }
+
+  const t0 = Date.now();
+  while (Date.now() - t0 < maxMs) {
+    if (auth.currentUser) return auth.currentUser;
+    await sleep(120);
+  }
+  return auth.currentUser || null;
+}
+
+async function getUidPrescSafe() {
+  const auth = getAuthPresc();
+  const u = await waitForAuthUserPresc(auth);
+  return u?.uid || null;
 }
 
 // ========================================================
@@ -764,7 +828,6 @@ function deleteCapituloById(capId) {
 }
 
 // Render columna central
-// Render columna central
 function renderPrescCapituloContent() {
   const container = document.getElementById("prescCapituloContent");
   if (!container) return;
@@ -935,34 +998,59 @@ async function ensurePrescPlantillasLoaded() {
   if (appState.prescripcion.plantillasLoaded) return;
 
   const db = getFirestorePresc();
-  const auth = getAuthPresc();
   if (!db) {
     console.warn("[PRESCRIPCIÓN] Firestore no disponible para plantillas, solo local.");
     appState.prescripcion.plantillasLoaded = true;
     return;
   }
 
-  let uid = null;
-  if (auth && auth.currentUser) uid = auth.currentUser.uid;
+  const uid = await getUidPrescSafe();
 
   try {
-    let q = db.collection("prescripcion_plantillas");
-    if (uid) q = q.where("uid", "==", uid);
-
-    const snap = await q.get();
     const list = [];
-    snap.forEach((doc) => {
-      const d = doc.data() || {};
-      list.push({
-        id: doc.id,
-        nombre: d.nombre || "(sin nombre)",
-        texto: d.texto || ""
-      });
-    });
 
-    appState.prescripcion.plantillas = list;
+    // COMPAT
+    if (hasCompatDb(db)) {
+      let q = db.collection("prescripcion_plantillas");
+      if (uid) q = q.where("uid", "==", uid);
+      const snap = await q.get();
+      snap.forEach((doc) => {
+        const d = doc.data() || {};
+        list.push({
+          id: doc.id,
+          nombre: d.nombre || "(sin nombre)",
+          texto: d.texto || ""
+        });
+      });
+
+      appState.prescripcion.plantillas = list;
+      appState.prescripcion.plantillasLoaded = true;
+      console.log("[PRESCRIPCIÓN] Plantillas cargadas:", list.length);
+      return;
+    }
+
+    // MODULAR (v9)
+    if (hasModularFns()) {
+      const colRef = window.collection(db, "prescripcion_plantillas");
+      const q = uid ? window.query(colRef, window.where("uid", "==", uid)) : colRef;
+      const snap = await window.getDocs(q);
+      snap.forEach((docSnap) => {
+        const d = docSnap.data() || {};
+        list.push({
+          id: docSnap.id,
+          nombre: d.nombre || "(sin nombre)",
+          texto: d.texto || ""
+        });
+      });
+
+      appState.prescripcion.plantillas = list;
+      appState.prescripcion.plantillasLoaded = true;
+      console.log("[PRESCRIPCIÓN] Plantillas cargadas:", list.length);
+      return;
+    }
+
+    console.warn("[PRESCRIPCIÓN] Firestore sin API compat ni modular detectada (plantillas).");
     appState.prescripcion.plantillasLoaded = true;
-    console.log("[PRESCRIPCIÓN] Plantillas cargadas:", list.length);
   } catch (e) {
     console.error("[PRESCRIPCIÓN] Error cargando plantillas:", e);
     appState.prescripcion.plantillasLoaded = true;
@@ -978,7 +1066,6 @@ async function createPrescPlantilla(nombre, texto) {
   }
 
   const db = getFirestorePresc();
-  const auth = getAuthPresc();
 
   let newItem = {
     id: "local-" + Date.now(),
@@ -994,19 +1081,33 @@ async function createPrescPlantilla(nombre, texto) {
   if (!db) return;
 
   try {
-    let uid = null;
-    if (auth && auth.currentUser) uid = auth.currentUser.uid;
-
-    const docRef = await db.collection("prescripcion_plantillas").add({
+    const uid = await getUidPrescSafe();
+    const payload = {
       uid: uid || null,
       nombre,
       texto,
       createdAt: Date.now(),
       updatedAt: Date.now()
-    });
+    };
 
-    newItem.id = docRef.id;
-    appState.prescripcion.plantillas[0] = newItem;
+    // COMPAT
+    if (hasCompatDb(db)) {
+      const docRef = await db.collection("prescripcion_plantillas").add(payload);
+      newItem.id = docRef.id;
+      appState.prescripcion.plantillas[0] = newItem;
+      return;
+    }
+
+    // MODULAR (v9)
+    if (hasModularFns()) {
+      const colRef = window.collection(db, "prescripcion_plantillas");
+      const docRef = await window.addDoc(colRef, payload);
+      newItem.id = docRef.id;
+      appState.prescripcion.plantillas[0] = newItem;
+      return;
+    }
+
+    console.warn("[PRESCRIPCIÓN] Firestore sin API compat ni modular detectada (crear plantilla).");
   } catch (e) {
     console.error("[PRESCRIPCIÓN] Error creando plantilla:", e);
   }
@@ -1028,11 +1129,21 @@ async function updatePrescPlantilla(id, nombre, texto) {
   if (!db) return;
 
   try {
-    await db.collection("prescripcion_plantillas").doc(id).update({
-      nombre,
-      texto,
-      updatedAt: Date.now()
-    });
+    const payload = { nombre, texto, updatedAt: Date.now() };
+
+    // COMPAT
+    if (hasCompatDb(db)) {
+      await db.collection("prescripcion_plantillas").doc(id).update(payload);
+      return;
+    }
+
+    // MODULAR (v9)
+    if (hasModularFns()) {
+      await window.updateDoc(window.doc(db, "prescripcion_plantillas", id), payload);
+      return;
+    }
+
+    console.warn("[PRESCRIPCIÓN] Firestore sin API compat ni modular detectada (update plantilla).");
   } catch (e) {
     console.error("[PRESCRIPCIÓN] Error actualizando plantilla:", e);
   }
@@ -1050,7 +1161,19 @@ async function deletePrescPlantilla(id) {
   if (!db) return;
 
   try {
-    await db.collection("prescripcion_plantillas").doc(id).delete();
+    // COMPAT
+    if (hasCompatDb(db)) {
+      await db.collection("prescripcion_plantillas").doc(id).delete();
+      return;
+    }
+
+    // MODULAR (v9)
+    if (hasModularFns()) {
+      await window.deleteDoc(window.doc(db, "prescripcion_plantillas", id));
+      return;
+    }
+
+    console.warn("[PRESCRIPCIÓN] Firestore sin API compat ni modular detectada (delete plantilla).");
   } catch (e) {
     console.error("[PRESCRIPCIÓN] Error borrando plantilla:", e);
   }
@@ -1062,36 +1185,65 @@ async function ensureExtraRefsLoaded() {
   if (appState.prescripcion.extraRefsLoaded) return;
 
   const db = getFirestorePresc();
-  const auth = getAuthPresc();
   if (!db) {
     console.warn("[PRESCRIPCIÓN] Firestore no disponible para refs extra, solo local.");
     appState.prescripcion.extraRefsLoaded = true;
     return;
   }
 
-  let uid = null;
-  if (auth && auth.currentUser) uid = auth.currentUser.uid;
+  const uid = await getUidPrescSafe();
 
   try {
-    let q = db.collection("prescripcion_referencias_extra");
-    if (uid) q = q.where("uid", "==", uid);
-
-    const snap = await q.get();
     const list = [];
-    snap.forEach((doc) => {
-      const d = doc.data() || {};
-      list.push({
-        id: doc.id,
-        codigo: d.codigo || "",
-        descripcion: d.descripcion || "",
-        unidad: d.unidad || "Ud",
-        pvp: typeof d.pvp === "number" ? d.pvp : 0
-      });
-    });
 
-    appState.prescripcion.extraRefs = list;
+    // COMPAT
+    if (hasCompatDb(db)) {
+      let q = db.collection("prescripcion_referencias_extra");
+      if (uid) q = q.where("uid", "==", uid);
+
+      const snap = await q.get();
+      snap.forEach((doc) => {
+        const d = doc.data() || {};
+        list.push({
+          id: doc.id,
+          codigo: d.codigo || "",
+          descripcion: d.descripcion || "",
+          unidad: d.unidad || "Ud",
+          pvp: typeof d.pvp === "number" ? d.pvp : 0
+        });
+      });
+
+      appState.prescripcion.extraRefs = list;
+      appState.prescripcion.extraRefsLoaded = true;
+      console.log("[PRESCRIPCIÓN] Refs extra cargadas:", list.length);
+      return;
+    }
+
+    // MODULAR (v9)
+    if (hasModularFns()) {
+      const colRef = window.collection(db, "prescripcion_referencias_extra");
+      const q = uid ? window.query(colRef, window.where("uid", "==", uid)) : colRef;
+
+      const snap = await window.getDocs(q);
+      snap.forEach((docSnap) => {
+        const d = docSnap.data() || {};
+        list.push({
+          id: docSnap.id,
+          codigo: d.codigo || "",
+          descripcion: d.descripcion || "",
+          unidad: d.unidad || "Ud",
+          pvp: typeof d.pvp === "number" ? d.pvp : 0
+        });
+      });
+
+      appState.prescripcion.extraRefs = list;
+      appState.prescripcion.extraRefsLoaded = true;
+      console.log("[PRESCRIPCIÓN] Refs extra cargadas:", list.length);
+      return;
+    }
+
+    console.warn("[PRESCRIPCIÓN] Firestore sin API compat ni modular detectada (refs extra).");
     appState.prescripcion.extraRefsLoaded = true;
-    console.log("[PRESCRIPCIÓN] Refs extra cargadas:", list.length);
   } catch (e) {
     console.error("[PRESCRIPCIÓN] Error cargando refs extra:", e);
     appState.prescripcion.extraRefsLoaded = true;
@@ -1110,7 +1262,6 @@ async function createExtraRef(codigo, descripcion, unidad, pvp) {
   }
 
   const db = getFirestorePresc();
-  const auth = getAuthPresc();
 
   let newItem = {
     id: "local-" + Date.now(),
@@ -1128,10 +1279,8 @@ async function createExtraRef(codigo, descripcion, unidad, pvp) {
   if (!db) return;
 
   try {
-    let uid = null;
-    if (auth && auth.currentUser) uid = auth.currentUser.uid;
-
-    const docRef = await db.collection("prescripcion_referencias_extra").add({
+    const uid = await getUidPrescSafe();
+    const payload = {
       uid: uid || null,
       codigo,
       descripcion,
@@ -1139,10 +1288,26 @@ async function createExtraRef(codigo, descripcion, unidad, pvp) {
       pvp,
       createdAt: Date.now(),
       updatedAt: Date.now()
-    });
+    };
 
-    newItem.id = docRef.id;
-    appState.prescripcion.extraRefs[0] = newItem;
+    // COMPAT
+    if (hasCompatDb(db)) {
+      const docRef = await db.collection("prescripcion_referencias_extra").add(payload);
+      newItem.id = docRef.id;
+      appState.prescripcion.extraRefs[0] = newItem;
+      return;
+    }
+
+    // MODULAR (v9)
+    if (hasModularFns()) {
+      const colRef = window.collection(db, "prescripcion_referencias_extra");
+      const docRef = await window.addDoc(colRef, payload);
+      newItem.id = docRef.id;
+      appState.prescripcion.extraRefs[0] = newItem;
+      return;
+    }
+
+    console.warn("[PRESCRIPCIÓN] Firestore sin API compat ni modular detectada (crear ref extra).");
   } catch (e) {
     console.error("[PRESCRIPCIÓN] Error creando ref extra:", e);
   }
@@ -1166,13 +1331,21 @@ async function updateExtraRef(id, codigo, descripcion, unidad, pvp) {
   if (!db) return;
 
   try {
-    await db.collection("prescripcion_referencias_extra").doc(id).update({
-      codigo,
-      descripcion,
-      unidad,
-      pvp,
-      updatedAt: Date.now()
-    });
+    const payload = { codigo, descripcion, unidad, pvp, updatedAt: Date.now() };
+
+    // COMPAT
+    if (hasCompatDb(db)) {
+      await db.collection("prescripcion_referencias_extra").doc(id).update(payload);
+      return;
+    }
+
+    // MODULAR (v9)
+    if (hasModularFns()) {
+      await window.updateDoc(window.doc(db, "prescripcion_referencias_extra", id), payload);
+      return;
+    }
+
+    console.warn("[PRESCRIPCIÓN] Firestore sin API compat ni modular detectada (update ref extra).");
   } catch (e) {
     console.error("[PRESCRIPCIÓN] Error actualizando ref extra:", e);
   }
@@ -1190,7 +1363,19 @@ async function deleteExtraRef(id) {
   if (!db) return;
 
   try {
-    await db.collection("prescripcion_referencias_extra").doc(id).delete();
+    // COMPAT
+    if (hasCompatDb(db)) {
+      await db.collection("prescripcion_referencias_extra").doc(id).delete();
+      return;
+    }
+
+    // MODULAR (v9)
+    if (hasModularFns()) {
+      await window.deleteDoc(window.doc(db, "prescripcion_referencias_extra", id));
+      return;
+    }
+
+    console.warn("[PRESCRIPCIÓN] Firestore sin API compat ni modular detectada (delete ref extra).");
   } catch (e) {
     console.error("[PRESCRIPCIÓN] Error borrando ref extra:", e);
   }
@@ -2347,9 +2532,6 @@ function prescExportToBC3(model, lang) {
   // CRLF para Windows/Presto
   return lines.join("\r\n");
 }
-
-
-
 
 function openPrescPrintWindow(model, lang) {
   const labels = PRESC_EXPORT_LABELS[lang] || PRESC_EXPORT_LABELS.es;
