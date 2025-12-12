@@ -496,6 +496,8 @@ async function translatePrescAllContentTo(lang) {
     r.descripcion = await prescTranslateWithGemini(r.descripcion, lang);
   }
 }
+// ✅ Exponer por si algún bloque la usa vía window
+window.prescTranslateWithGemini = prescTranslateWithGemini;
 
 // Cambia idioma “de verdad”: UI + contenido + re-render
 async function setPrescLanguageAll(lang) {
