@@ -1,4 +1,3 @@
-// js/ui_doc_prescripcion.js
 // ========================================================
 // PRESCRIPCIÓN 2N (versión premium Notion B3)
 // --------------------------------------------------------
@@ -97,7 +96,21 @@ function getAuthPresc() {
 
 function getCurrentUidPresc() {
   const auth = getAuthPresc();
-  return auth && auth.currentUser ? auth.currentUser.uid : null;
+
+  // 1) vía Firebase Auth normal
+  if (auth && auth.currentUser && auth.currentUser.uid) return auth.currentUser.uid;
+
+  // 2) fallback: algunos módulos guardan el usuario en appState
+  try {
+    if (window.appState && window.appState.user && window.appState.user.uid) {
+      return window.appState.user.uid;
+    }
+    if (window.appState && window.appState.auth && window.appState.auth.uid) {
+      return window.appState.auth.uid;
+    }
+  } catch (_) {}
+
+  return null;
 }
 
 function getUserSubcollectionRefPresc(subName) {
@@ -231,6 +244,33 @@ function ensurePrescSectionsFromBudget() {
   }
   return appState.prescripcion.sectionsFromBudget;
 }
+// ========================================================
+// WATCHER Auth: cuando llega el usuario, reintenta Firestore
+// ========================================================
+
+function initPrescAuthWatcherOnce() {
+  if (appState.prescripcion._authWatcherReady) return;
+  appState.prescripcion._authWatcherReady = true;
+
+  const auth = getAuthPresc();
+  if (!auth || typeof auth.onAuthStateChanged !== "function") return;
+
+  auth.onAuthStateChanged((user) => {
+    if (!user || !user.uid) return;
+
+    if (appState.prescripcion._didReloadAfterAuth) return;
+    appState.prescripcion._didReloadAfterAuth = true;
+
+    appState.prescripcion.plantillasLoaded = false;
+    appState.prescripcion.extraRefsLoaded = false;
+
+    try {
+      renderDocPrescripcionView();
+    } catch (e) {
+      console.warn("[PRESCRIPCIÓN] No se pudo re-render tras auth:", e);
+    }
+  });
+}
 
 // ========================================================
 // BLOQUE 3 - Render básico de la vista Prescripción
@@ -248,6 +288,9 @@ function renderDocPrescripcionView() {
   appState.prescripcion.extraRefs = appState.prescripcion.extraRefs || [];
 
   const currentLang = appState.prescripcion.exportLang || "es";
+
+  // IMPORTANTE: engancha el auth watcher (para dejar de ir "solo local")
+  initPrescAuthWatcherOnce();
 
   container.innerHTML = `
     <div class="presc-root" style="display:flex; flex-direction:column; height:100%;">
@@ -922,10 +965,33 @@ function renderPrescCapituloContent() {
     }
   });
 }
-
 // ========================================================
 // BLOQUE 7 - Plantillas + Referencias extra
 // ========================================================
+
+// Helper: debounce + re-focus para buscadores (evita perder foco por innerHTML)
+function prescDebouncedRerenderWithRefocus(renderFn, inputId) {
+  appState.prescripcion._searchTimers = appState.prescripcion._searchTimers || {};
+  const key = inputId;
+
+  if (appState.prescripcion._searchTimers[key]) {
+    clearTimeout(appState.prescripcion._searchTimers[key]);
+  }
+
+  appState.prescripcion._searchTimers[key] = setTimeout(() => {
+    renderFn();
+
+    requestAnimationFrame(() => {
+      const el = document.getElementById(inputId);
+      if (!el) return;
+      el.focus();
+      try {
+        const len = (el.value || "").length;
+        el.setSelectionRange(len, len);
+      } catch (_) {}
+    });
+  }, 60);
+}
 
 // Firestore: PLANTILLAS (OPCIÓN B)
 async function ensurePrescPlantillasLoaded() {
@@ -1290,12 +1356,12 @@ async function renderPrescPlantillasList() {
     `;
   }
 
-  // Buscador plantillas
+  // Buscador plantillas (FIX: no perder foco)
   const searchInput = container.querySelector("#prescPlantillasSearch");
   if (searchInput) {
     searchInput.addEventListener("input", (e) => {
       appState.prescripcion.plantillasSearchTerm = e.target.value || "";
-      renderPrescPlantillasList();
+      prescDebouncedRerenderWithRefocus(renderPrescPlantillasList, "prescPlantillasSearch");
     });
   }
 
@@ -1509,12 +1575,12 @@ async function renderPrescExtraRefsList() {
     `;
   }
 
-  // Buscador refs extra
+  // Buscador refs extra (FIX: no perder foco)
   const searchInput = container.querySelector("#prescExtraRefsSearch");
   if (searchInput) {
     searchInput.addEventListener("input", (e) => {
       appState.prescripcion.extraRefsSearchTerm = e.target.value || "";
-      renderPrescExtraRefsList();
+      prescDebouncedRerenderWithRefocus(renderPrescExtraRefsList, "prescExtraRefsSearch");
     });
   }
 
@@ -2115,20 +2181,15 @@ function prescExportToBC3(model, lang) {
   const dd = String(now.getDate()).padStart(2, "0");
   const mm = String(now.getMonth() + 1).padStart(2, "0");
   const yy = String(now.getFullYear()).slice(-2);
-  const dateStr = `${dd}${mm}${yy}`; // ddmmyy (como tu BC3 manual)
+  const dateStr = `${dd}${mm}${yy}`;
 
   const lines = [];
 
-  // ==============================
-  // HELPERS
-  // ==============================
   const sanitize = (s) => {
     s = String(s ?? "");
-    // quitar diacríticos (más compatible con ANSI/Presto)
     try {
       s = s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     } catch (_) {}
-    // BC3 separa por |
     s = s.replace(/\|/g, " ");
     return s;
   };
@@ -2138,22 +2199,16 @@ function prescExportToBC3(model, lang) {
   const fmtNum = (n) => {
     const x = Number(n);
     if (!isFinite(x)) return "0";
-    // punto decimal (no coma)
     return String(Math.round(x * 1000000) / 1000000);
   };
 
-  // Presto suele ir fino con códigos <= 8 (en tu manual hay muchos de 7-8)
-  // y sin caracteres raros. Si hay colisión, forzamos uniqueness.
   const usedCodes = new Set();
   const makeCode8 = (raw, fallbackPrefix) => {
     let base = sanitizeOneLine(raw || "").replace(/\s+/g, "");
-    // deja solo A-Z 0-9; luego quitamos separadores
     base = base.toUpperCase().replace(/[^A-Z0-9]/g, "");
     if (!base) base = fallbackPrefix || "REF";
 
-    // intenta quedarte con los ÚLTIMOS 8
     let code = base.length > 8 ? base.slice(-8) : base;
-
     if (!code) code = (fallbackPrefix || "REF").slice(0, 3) + "00000";
 
     if (!usedCodes.has(code)) {
@@ -2161,7 +2216,7 @@ function prescExportToBC3(model, lang) {
       return code;
     }
 
-    const prefix = code.slice(0, Math.max(0, 6)); // deja hueco para 2 dígitos
+    const prefix = code.slice(0, Math.max(0, 6));
     for (let i = 1; i < 100; i++) {
       const suffix = String(i)
         .padStart(8 - prefix.length, "0")
@@ -2178,11 +2233,8 @@ function prescExportToBC3(model, lang) {
     return ts;
   };
 
-  // ==============================
-  // ESTRUCTURA “COMO TU MANUAL”
-  // ==============================
-  const rootCode = "PRESC2N##"; // ## raíz
-  const mainGroup = "PRESC2N#"; // # grupo principal
+  const rootCode = "PRESC2N##";
+  const mainGroup = "PRESC2N#";
 
   lines.push("~V|SOFT S.A.|FIEBDC-3/2002|Presto 8.8||ANSI|");
   lines.push(`~K|${rootCode}|${sanitizeOneLine(labels.project)}|${dateStr}|2\\2\\2\\2\\2\\2\\2\\2\\2\\2|`);
@@ -2211,7 +2263,7 @@ function prescExportToBC3(model, lang) {
   const chapCodes = [];
 
   caps.forEach((cap, idx) => {
-    const chapIdx = String(idx + 1).padStart(4, "0"); // 0001..9999
+    const chapIdx = String(idx + 1).padStart(4, "0");
     const chapCode = `2N.${chapIdx}`;
     chapCodes.push(chapCode);
 
@@ -2285,7 +2337,6 @@ function openPrescPrintWindow(model, lang) {
       table { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 12px; }
       th, td { border: 1px solid #ccc; padding: 4px 6px; }
       th { background: #f3f4f6; text-align: left; }
-      .cap-title { margin-top: 16px; font-weight: 600; }
       .small { font-size: 10px; color: #6b7280; }
     </style>
   `;
@@ -2444,7 +2495,7 @@ function downloadTextFileWin1252(content, filename) {
     } else if (code <= 0xff) {
       bytes.push(code);
     } else {
-      bytes.push(0x3f); // '?'
+      bytes.push(0x3f);
     }
   }
 
