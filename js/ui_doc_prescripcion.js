@@ -1309,6 +1309,13 @@ async function ensurePrescPlantillasLoaded() {
 
 async function createPrescPlantilla(nombre, texto) {
   await ensurePrescUidReady();
+  const uid = getCurrentUidPresc();
+  if (!uid) {
+    console.warn("[PRESCRIPCIÓN] Sin UID: plantilla guardada solo en local.");
+    // opcional: alert suave
+    // alert("No hay sesión iniciada todavía. Esta plantilla se guardó solo en local.");
+  }
+
   nombre = (nombre || "").trim();
   texto = texto || "";
   if (!nombre) {
