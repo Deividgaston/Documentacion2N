@@ -509,6 +509,8 @@ async function setPrescLanguageAll(lang) {
 
   renderDocPrescripcionView();
 }
+// ✅ Exponer para que el handler del select lo encuentre
+window.setPrescLanguageAll = setPrescLanguageAll;
 
 // ========================================================
 // BLOQUE 3 - Render básico de la vista Prescripción
