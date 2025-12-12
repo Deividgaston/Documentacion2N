@@ -274,6 +274,279 @@ function ensurePrescSectionsFromBudget() {
   }
   return appState.prescripcion.sectionsFromBudget;
 }
+
+// ========================================================
+// i18n UI + Traducción de CONTENIDO (Gemini) con caché
+// ========================================================
+
+const PRESC_UI = {
+  es: {
+    title: "Prescripción técnica del proyecto",
+    subtitle:
+      "Arrastra secciones del presupuesto para generar capítulos. Usa referencias extra o plantillas si lo necesitas.",
+    exportLang: "Idioma exportación",
+    regen: "🔄 Regenerar secciones",
+    excel: "⬇️ Excel",
+    pdf: "⬇️ PDF",
+    bc3: "⬇️ BC3",
+
+    col1Title: "Secciones del presupuesto",
+    col1Sub: "Arrastra una sección para crear o actualizar un capítulo",
+    col2Title: "Capítulo seleccionado",
+    col2Sub: "Nombre, texto descriptivo y referencias del capítulo",
+    addChapter: "＋",
+    saveNew: "💾",
+
+    tplTitle: "Plantillas",
+    tplSub: "Arrastra y suelta para rellenar texto técnico",
+    extraTitle: "Referencias extra",
+    extraSub: "Switches, cable, mano de obra…",
+
+    previewTitle: "Previsualización de la prescripción",
+    previewSub: "Capítulos añadidos, totales y desglose desplegable",
+  },
+  en: {
+    title: "Project technical specification",
+    subtitle:
+      "Drag budget sections to generate chapters. Use extra references or templates if needed.",
+    exportLang: "Export language",
+    regen: "🔄 Rebuild sections",
+    excel: "⬇️ Excel",
+    pdf: "⬇️ PDF",
+    bc3: "⬇️ BC3",
+
+    col1Title: "Budget sections",
+    col1Sub: "Drag a section to create or update a chapter",
+    col2Title: "Selected chapter",
+    col2Sub: "Name, description text and chapter references",
+    addChapter: "＋",
+    saveNew: "💾",
+
+    tplTitle: "Templates",
+    tplSub: "Drag & drop to fill technical text",
+    extraTitle: "Extra references",
+    extraSub: "Switches, cable, labour…",
+
+    previewTitle: "Specification preview",
+    previewSub: "Added chapters, totals and expandable breakdown",
+  },
+  pt: {
+    title: "Especificação técnica do projeto",
+    subtitle:
+      "Arraste seções do orçamento para gerar capítulos. Use referências extra ou modelos se necessário.",
+    exportLang: "Idioma de exportação",
+    regen: "🔄 Regerar seções",
+    excel: "⬇️ Excel",
+    pdf: "⬇️ PDF",
+    bc3: "⬇️ BC3",
+
+    col1Title: "Seções do orçamento",
+    col1Sub: "Arraste uma seção para criar ou atualizar um capítulo",
+    col2Title: "Capítulo selecionado",
+    col2Sub: "Nome, texto descritivo e referências do capítulo",
+    addChapter: "＋",
+    saveNew: "💾",
+
+    tplTitle: "Modelos",
+    tplSub: "Arraste e solte para preencher texto técnico",
+    extraTitle: "Referências extra",
+    extraSub: "Switches, cabo, mão de obra…",
+
+    previewTitle: "Pré-visualização da especificação",
+    previewSub: "Capítulos adicionados, totais e detalhe expansível",
+  },
+};
+
+function prescUI(key) {
+  const lang = appState.prescripcion.exportLang || "es";
+  return (PRESC_UI[lang] && PRESC_UI[lang][key]) || PRESC_UI.es[key] || key;
+}
+
+// ---- Caché de traducciones (local + memoria) ----
+appState.prescripcion._i18n = appState.prescripcion._i18n || {
+  baseCaptured: false,
+  base: null,                 // snapshot ES (fuente)
+  cacheMem: {},               // { cacheKey: translatedText }
+};
+
+// Captura ES como “fuente” (solo 1 vez)
+function capturePrescBaseIfNeeded() {
+  const st = appState.prescripcion._i18n;
+  if (st.baseCaptured) return;
+
+  const caps = (appState.prescripcion.capitulos || []).map((c) => ({
+    id: c.id,
+    nombre: c.nombre || "",
+    texto: c.texto || "",
+  }));
+
+  const sections = (appState.prescripcion.sectionsFromBudget || []).map((s) => ({
+    id: s.id,
+    nombre: s.nombre || "",
+    // NO tocamos refs de presupuesto (descripción viene de línea de presupuesto)
+    // Si quieres traducir esas descripciones también, lo haríamos aparte con más llamadas.
+  }));
+
+  const plantillas = (appState.prescripcion.plantillas || []).map((p) => ({
+    id: p.id,
+    nombre: p.nombre || "",
+    texto: p.texto || "",
+  }));
+
+  const extraRefs = (appState.prescripcion.extraRefs || []).map((r) => ({
+    id: r.id,
+    codigo: r.codigo || "",
+    descripcion: r.descripcion || "",
+    unidad: r.unidad || "Ud",
+  }));
+
+  st.base = { caps, sections, plantillas, extraRefs };
+  st.baseCaptured = true;
+}
+
+function restorePrescBaseEs() {
+  const st = appState.prescripcion._i18n;
+  if (!st.baseCaptured || !st.base) return;
+
+  // capítulos
+  const capsById = new Map((st.base.caps || []).map((x) => [x.id, x]));
+  (appState.prescripcion.capitulos || []).forEach((c) => {
+    const b = capsById.get(c.id);
+    if (b) {
+      c.nombre = b.nombre;
+      c.texto = b.texto;
+    }
+  });
+
+  // secciones (solo nombre)
+  const secById = new Map((st.base.sections || []).map((x) => [x.id, x]));
+  (appState.prescripcion.sectionsFromBudget || []).forEach((s) => {
+    const b = secById.get(s.id);
+    if (b) s.nombre = b.nombre;
+  });
+
+  // plantillas
+  const tplById = new Map((st.base.plantillas || []).map((x) => [x.id, x]));
+  (appState.prescripcion.plantillas || []).forEach((p) => {
+    const b = tplById.get(p.id);
+    if (b) {
+      p.nombre = b.nombre;
+      p.texto = b.texto;
+    }
+  });
+
+  // refs extra (solo descripción)
+  const exById = new Map((st.base.extraRefs || []).map((x) => [x.id, x]));
+  (appState.prescripcion.extraRefs || []).forEach((r) => {
+    const b = exById.get(r.id);
+    if (b) {
+      r.descripcion = b.descripcion;
+      // código/unidad NO se traducen
+    }
+  });
+}
+
+// Adapter: usa TU Gemini 2.5 si existe en window (como en Documentación)
+async function prescTranslateWithGemini(text, targetLang) {
+  const s = String(text || "").trim();
+  if (!s) return s;
+
+  // cache key estable
+  const key = `presc_i18n_v1|${targetLang}|${s.length}|` + s.slice(0, 60);
+  const st = appState.prescripcion._i18n;
+
+  if (st.cacheMem[key]) return st.cacheMem[key];
+
+  try {
+    const lsKey = "PRESC_TCACHE_" + key;
+    const fromLS = localStorage.getItem(lsKey);
+    if (fromLS) {
+      st.cacheMem[key] = fromLS;
+      return fromLS;
+    }
+  } catch (_) {}
+
+  // IMPORTANTE: aquí enganchamos tu función real de Gemini.
+  // Ajusta SOLO si tu función se llama distinto:
+  // - window.geminiTranslate(text, lang)
+  // - window.translateWithGemini(text, {to:"en"})
+  // - window.aiTranslateText(text, "en")
+  let out = null;
+
+  if (typeof window.geminiTranslate === "function") {
+    out = await window.geminiTranslate(s, targetLang);
+  } else if (typeof window.translateWithGemini === "function") {
+    out = await window.translateWithGemini(s, { to: targetLang });
+  } else if (typeof window.aiTranslateText === "function") {
+    out = await window.aiTranslateText(s, targetLang);
+  } else {
+    // fallback: si no hay Gemini enganchado, devolvemos original
+    return s;
+  }
+
+  const translated = String(out || "").trim() || s;
+
+  st.cacheMem[key] = translated;
+  try {
+    localStorage.setItem("PRESC_TCACHE_" + key, translated);
+  } catch (_) {}
+
+  return translated;
+}
+
+// Traduce TODO el CONTENIDO visible (capítulos + secciones + plantillas + refs extra)
+async function translatePrescAllContentTo(lang) {
+  capturePrescBaseIfNeeded();
+
+  if (lang === "es") {
+    restorePrescBaseEs();
+    return;
+  }
+
+  // siempre partimos desde ES base para evitar “traducción sobre traducción”
+  restorePrescBaseEs();
+
+  // capítulos
+  for (const c of (appState.prescripcion.capitulos || [])) {
+    c.nombre = await prescTranslateWithGemini(c.nombre, lang);
+    c.texto = await prescTranslateWithGemini(c.texto, lang);
+  }
+
+  // secciones (solo título)
+  for (const s of (appState.prescripcion.sectionsFromBudget || [])) {
+    s.nombre = await prescTranslateWithGemini(s.nombre, lang);
+  }
+
+  // plantillas (nombre + texto)
+  for (const p of (appState.prescripcion.plantillas || [])) {
+    p.nombre = await prescTranslateWithGemini(p.nombre, lang);
+    p.texto = await prescTranslateWithGemini(p.texto, lang);
+  }
+
+  // refs extra (solo descripción)
+  for (const r of (appState.prescripcion.extraRefs || [])) {
+    r.descripcion = await prescTranslateWithGemini(r.descripcion, lang);
+  }
+}
+
+// Cambia idioma “de verdad”: UI + contenido + re-render
+async function setPrescLanguageAll(lang) {
+  appState.prescripcion.exportLang = lang || "es";
+
+  // 1) Asegura datos cargados antes de traducir
+  await ensurePrescPlantillasLoaded();
+  await ensureExtraRefsLoaded();
+  ensurePrescSectionsFromBudget(); // genera secciones
+
+  // 2) Traduce contenido
+  await translatePrescAllContentTo(appState.prescripcion.exportLang);
+
+  // 3) Re-render completo para que la UI también cambie por diccionario
+  renderDocPrescripcionView();
+}
+
+
+
 // ========================================================
 // BLOQUE 3 - Render básico de la vista Prescripción
 // ========================================================
@@ -448,13 +721,30 @@ function renderDocPrescripcionView() {
     });
   }
 
-  // Selector idioma
+  // =========================
+  // Selector idioma (UI + contenido)
+  // =========================
   const langSelect = container.querySelector("#prescExportLang");
   if (langSelect) {
     langSelect.value = appState.prescripcion.exportLang || "es";
-    langSelect.addEventListener("change", () => {
-      appState.prescripcion.exportLang = langSelect.value || "es";
-      console.log("[PRESCRIPCIÓN] Idioma exportación:", appState.prescripcion.exportLang);
+    langSelect.addEventListener("change", async () => {
+      const lang = langSelect.value || "es";
+      appState.prescripcion.exportLang = lang;
+      console.log("[PRESCRIPCIÓN] Idioma exportación:", lang);
+
+      // Asegurar datos antes de traducir (si el helper existe)
+      try { await ensurePrescPlantillasLoaded(); } catch (_) {}
+      try { await ensureExtraRefsLoaded(); } catch (_) {}
+      try { ensurePrescSectionsFromBudget(); } catch (_) {}
+
+      // Si existe el traductor global, traduce TODO y re-renderiza desde ahí
+      if (typeof window.setPrescLanguageAll === "function") {
+        await window.setPrescLanguageAll(lang);
+        return;
+      }
+
+      // Fallback (sin traductor aún): al menos refresca la UI
+      renderDocPrescripcionView();
     });
   }
 
@@ -488,6 +778,7 @@ function renderDocPrescripcionView() {
   renderPrescExtraRefsList();
   renderPrescPreview();
 }
+
 
 // ========================================================
 // BLOQUE 4 - Secciones Notion Premium (arrastrables)
