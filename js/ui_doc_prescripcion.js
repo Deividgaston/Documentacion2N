@@ -292,7 +292,8 @@ function renderDocPrescripcionView() {
   const currentLang = appState.prescripcion.exportLang || "es";
 
   container.innerHTML = `
-   <div class="presc-root" style="display:flex; flex-direction:column; height:calc(100vh - 1.5rem); min-height:0;">
+    <!-- FIX: root cerrado al final + altura estable -->
+    <div class="presc-root" style="display:flex; flex-direction:column; height:100%; min-height:0;">
 
       <!-- CABECERA SUPERIOR -->
       <div class="card" style="margin-bottom:1rem;">
@@ -332,82 +333,86 @@ function renderDocPrescripcionView() {
         </div>
       </div>
 
-<div class="presc-main" style="flex:1; min-height:0; display:flex; flex-direction:column; gap:1rem;">
+      <div class="presc-main" style="flex:1; min-height:0; display:flex; flex-direction:column; gap:1rem;">
 
-      <!-- LAYOUT 3 COLUMNAS -->
-    <div class="presc-layout"
-     style="display:grid; grid-template-columns:1fr 1.4fr 1.2fr; gap:1rem; flex:1; min-height:0;">
+        <!-- LAYOUT 3 COLUMNAS -->
+        <!-- FIX: min-height:0 para que el scroll interno NO solape -->
+        <div class="presc-layout"
+             style="display:grid; grid-template-columns:1fr 1.4fr 1.2fr; gap:1rem; flex:1; min-height:0;">
 
-
-        <!-- COLUMNA 1: Secciones del presupuesto -->
-        <div class="card" style="display:flex; flex-direction:column; overflow:hidden;">
-          <div class="card-header">
-            <div class="card-title">Secciones del presupuesto</div>
-            <div class="card-subtitle">Arrastra una sección para crear o actualizar un capítulo</div>
+          <!-- COLUMNA 1: Secciones del presupuesto -->
+          <div class="card" style="display:flex; flex-direction:column; overflow:hidden;">
+            <div class="card-header">
+              <div class="card-title">Secciones del presupuesto</div>
+              <div class="card-subtitle">Arrastra una sección para crear o actualizar un capítulo</div>
+            </div>
+            <div id="prescSectionsList" class="card-body" style="flex:1; overflow:auto; padding:0.75rem;">
+            </div>
           </div>
-          <div id="prescSectionsList" class="card-body" style="flex:1; overflow:auto; padding:0.75rem;">
+
+          <!-- COLUMNA 2: Capítulo seleccionado -->
+          <div class="card" style="display:flex; flex-direction:column; overflow:hidden;">
+            <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; gap:0.75rem;">
+              <div>
+                <div class="card-title">Capítulo seleccionado</div>
+                <div class="card-subtitle">Nombre, texto descriptivo y referencias del capítulo</div>
+              </div>
+              <div style="display:flex; gap:0.25rem;">
+                <button type="button" id="prescCapNuevoBtn" class="btn btn-xs btn-secondary" title="Añadir capítulo">
+                  ＋
+                </button>
+                <button type="button" id="prescCapGuardarBtn" class="btn btn-xs btn-secondary" title="Guardar y crear nuevo capítulo">
+                  💾
+                </button>
+              </div>
+            </div>
+
+            <div id="prescCapituloContent" class="card-body" style="flex:1; overflow:auto;">
+            </div>
+          </div>
+
+          <!-- COLUMNA 3: Plantillas + Referencias extra -->
+          <!-- FIX: min-height:0 para que sus cards internas no se desborden -->
+          <div style="display:flex; flex-direction:column; gap:1rem; height:100%; min-height:0;">
+
+            <!-- Plantillas -->
+            <div class="card" style="flex:1; display:flex; flex-direction:column; overflow:hidden; min-height:0;">
+              <div class="card-header">
+                <div class="card-title">Plantillas</div>
+                <div class="card-subtitle">Arrastra y suelta para rellenar texto técnico</div>
+              </div>
+              <div id="prescPlantillasList" class="card-body" style="flex:1; overflow:auto;">
+              </div>
+            </div>
+
+            <!-- Referencias extra -->
+            <div class="card" style="flex:1; display:flex; flex-direction:column; overflow:hidden; min-height:0;">
+              <div class="card-header">
+                <div class="card-title">Referencias extra</div>
+                <div class="card-subtitle">Switches, cable, mano de obra…</div>
+              </div>
+              <div id="prescExtraRefsList" class="card-body" style="flex:1; overflow:auto;">
+              </div>
+            </div>
+
           </div>
         </div>
 
-        <!-- COLUMNA 2: Capítulo seleccionado -->
-        <div class="card" style="display:flex; flex-direction:column; overflow:hidden;">
-          <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; gap:0.75rem;">
-            <div>
-              <div class="card-title">Capítulo seleccionado</div>
-              <div class="card-subtitle">Nombre, texto descriptivo y referencias del capítulo</div>
-            </div>
-            <div style="display:flex; gap:0.25rem;">
-              <button type="button" id="prescCapNuevoBtn" class="btn btn-xs btn-secondary" title="Añadir capítulo">
-                ＋
-              </button>
-              <button type="button" id="prescCapGuardarBtn" class="btn btn-xs btn-secondary" title="Guardar y crear nuevo capítulo">
-                💾
-              </button>
-            </div>
-          </div>
+      </div>
 
-          <div id="prescCapituloContent" class="card-body" 
-               style="flex:1; overflow:auto;">
-          </div>
+      <!-- PREVISUALIZACIÓN inferior (FIJA) -->
+      <!-- FIX: el body ocupa el alto del card; scroll interno -->
+      <div class="card presc-preview-card" style="flex:0 0 32vh; min-height:240px; overflow:hidden;">
+        <div class="card-header">
+          <div class="card-title">Previsualización de la prescripción</div>
+          <div class="card-subtitle">Capítulos añadidos, totales y desglose desplegable</div>
         </div>
 
-        <!-- COLUMNA 3: Plantillas + Referencias extra -->
-        <div style="display:flex; flex-direction:column; gap:1rem; height:100%;">
-          
-          <!-- Plantillas -->
-          <div class="card" style="flex:1; display:flex; flex-direction:column; overflow:hidden;">
-            <div class="card-header">
-              <div class="card-title">Plantillas</div>
-              <div class="card-subtitle">Arrastra y suelta para rellenar texto técnico</div>
-            </div>
-            <div id="prescPlantillasList" class="card-body" style="flex:1; overflow:auto;">
-            </div>
-          </div>
-
-          <!-- Referencias extra -->
-          <div class="card" style="flex:1; display:flex; flex-direction:column; overflow:hidden;">
-            <div class="card-header">
-              <div class="card-title">Referencias extra</div>
-              <div class="card-subtitle">Switches, cable, mano de obra…</div>
-            </div>
-            <div id="prescExtraRefsList" class="card-body" style="flex:1; overflow:auto;">
-            </div>
-          </div>
+        <div id="prescPreview" class="card-body" style="height:100%; overflow:auto;">
         </div>
       </div>
-</div>
 
-     <!-- PREVISUALIZACIÓN inferior (FIJA) -->
-<div class="card presc-preview-card" style="flex:0 0 32vh; min-height:240px; overflow:hidden;">
-  <div class="card-header">
-    <div class="card-title">Previsualización de la prescripción</div>
-    <div class="card-subtitle">Capítulos añadidos, totales y desglose desplegable</div>
-  </div>
-
-  <div id="prescPreview" class="card-body" style="height:100%; overflow:auto;">
-  </div>
-</div>
-
+    </div>
   `;
 
   // Handlers cabecera global
@@ -483,6 +488,7 @@ function renderDocPrescripcionView() {
   renderPrescExtraRefsList();
   renderPrescPreview();
 }
+
 // ========================================================
 // BLOQUE 4 - Secciones Notion Premium (arrastrables)
 // ========================================================
