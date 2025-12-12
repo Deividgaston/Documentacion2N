@@ -2157,44 +2157,144 @@ function prescExportToCSV(model, lang) {
 
 function prescExportToBC3(model, lang) {
   const labels = PRESC_EXPORT_LABELS[lang] || PRESC_EXPORT_LABELS.es;
-  const lines = [];
 
-  // Cabecera FIEBDC-3 (más estándar para Presto)
-  lines.push("~V|FIEBDC-3/2012|PRESCRIPCION2N||");
-  lines.push(`~K|PRESCRIPCION|${labels.project}||`);
+  // === Helpers ===
+  const sanitize = (s) =>
+    String(s || "")
+      .replace(/\|/g, " ")   // BC3 usa | como separador
+      .replace(/\\/g, "/")   // BC3 usa \ en ~D
+      .trim();
 
-  // Por cada capítulo de la prescripción
-  model.capitulos.forEach((cap, idx) => {
+  const fmtDateDDMMYY = (d) => {
+    const dd = String(d.getDate()).padStart(2, "0");
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const yy = String(d.getFullYear()).slice(-2);
+    return `${dd}${mm}${yy}`;
+  };
+
+  const fmtNum = (n, decimals = 2) => {
+    const x = Number(n) || 0;
+    // Presto suele tragar punto decimal; mantenemos formato simple
+    const s = x.toFixed(decimals);
+    // quita decimales si es entero exacto
+    if (Number(s) === Math.trunc(Number(s))) return String(Math.trunc(Number(s)));
+    return s;
+  };
+
+  const today = fmtDateDDMMYY(new Date());
+
+  // === Códigos tipo “manual” ===
+  const PROJECT_CODE = "PRESCRIPCION2N##";
+
+  // === Calcula totales si no vienen ===
+  const totalGlobal =
+    typeof model.totalGlobal === "number"
+      ? model.totalGlobal
+      : (model.capitulos || []).reduce(
+          (acc, c) => acc + (Number(c.subtotal) || 0),
+          0
+        );
+
+  // === Construcción ===
+  const out = [];
+
+  // Header como tu ejemplo (Presto 8.8 + ANSI)
+  out.push("~V|SOFT S.A.|FIEBDC-3/2002|Presto 8.8||ANSI|");
+  // Línea de moneda como tu ejemplo (EUR)
+  out.push("~K|\\2\\2\\3\\2\\2\\2\\2\\EUR\\|0|");
+
+  // 1) Definir TODOS los conceptos (~C) primero: items, capítulos, proyecto
+  // -------------------------------------------------------------
+
+  // Items (tipo 3)
+  const itemDefs = []; // { code, unit, desc, price, date, type }
+  const capDefs = [];  // { capCode, unit, desc, price, date, type, items: [...] }
+
+  (model.capitulos || []).forEach((cap, idx) => {
     const capCode = `CAP${String(idx + 1).padStart(3, "0")}`;
-    const capDesc = (cap.nombre || "").replace(/\|/g, " ");
+    const capDesc = sanitize(cap.nombre || `${labels.chapter} ${idx + 1}`);
 
-    // Concepto capítulo (precio 0, solo jerarquía)
-    lines.push(`~C|${capCode}|${capDesc}|0||`);
+    const capItems = [];
 
     (cap.lineas || []).forEach((l, i) => {
-      // Código de la partida
-      let refCode = (l.codigo || `REF${String(i + 1).padStart(4, "0")}`).replace(/\|/g, " ");
-      // Presto suele tolerar códigos largos, pero por seguridad limitamos
-      refCode = refCode.substring(0, 30);
+      const rawCode = (l.codigo || "").trim();
+      const code = sanitize(
+        rawCode ? rawCode : `REF${String(i + 1).padStart(4, "0")}_${String(idx + 1).padStart(3, "0")}`
+      );
 
-      const desc = (l.descripcion || "").replace(/\|/g, " ");
-      const unit = (l.unidad || "Ud").replace(/\|/g, " ");
-      const qty = Number(l.cantidad || 0);
-      const price = Number(l.pvp || 0);
+      const desc = sanitize(l.descripcion || "");
+      const unit = sanitize(l.unidad || "Ud");
+      const price = Number(l.pvp) || 0;
 
-      // 1) Definimos el concepto básico (partida) con su precio
-      // ~C|CODIGO|DESCRIPCION|UNIDAD|PRECIO||
-      lines.push(`~C|${refCode}|${desc}|${unit}|${price}||`);
+      itemDefs.push({
+        code,
+        unit,
+        desc,
+        price,
+        date: today,
+        type: 3
+      });
 
-      // 2) Lo colgamos del capítulo con su cantidad medida
-      // ~D|CAPITULO|COD_HIJO|CANTIDAD||
-      lines.push(`~D|${capCode}|${refCode}|${qty}||`);
+      capItems.push({
+        code,
+        qty: Number(l.cantidad) || 0
+      });
+    });
+
+    capDefs.push({
+      capCode,
+      unit: "Ud",
+      desc: capDesc,
+      price: Number(cap.subtotal) || 0,
+      date: today,
+      type: 0,
+      items: capItems
     });
   });
 
-  // Usamos CRLF porque muchos programas de mediciones (incluido Presto en Windows)
-  // trabajan mejor con saltos de línea tipo Windows.
-  return lines.join("\r\n");
+  // ---- Emitir items (~C) ----
+  itemDefs.forEach((it) => {
+    out.push(
+      `~C|${it.code}|${it.unit}|${it.desc}|${fmtNum(it.price, 2)}|${it.date}|${it.type}|`
+    );
+  });
+
+  // ---- Emitir capítulos (~C tipo 0) ----
+  capDefs.forEach((c) => {
+    out.push(
+      `~C|${c.capCode}|${c.unit}|${c.desc}|${fmtNum(c.price, 2)}|${c.date}|${c.type}|`
+    );
+  });
+
+  // ---- Emitir proyecto raíz (~C tipo 0) ----
+  out.push(
+    `~C|${PROJECT_CODE}||${sanitize(labels.title || "Prescripción")}|${fmtNum(totalGlobal, 2)}|${today}|0|`
+  );
+
+  // 2) Descomposición (~D) como tu BC3 manual
+  // -------------------------------------------------------------
+
+  // Proyecto -> capítulos
+  if (capDefs.length) {
+    const parts = capDefs
+      .map((c) => `${c.capCode}\\1\\1\\`)
+      .join("");
+    out.push(`~D|${PROJECT_CODE}|${parts}|`);
+  }
+
+  // Capítulo -> items (aquí metemos la CANTIDAD REAL)
+  capDefs.forEach((c) => {
+    if (!c.items || !c.items.length) return;
+
+    const parts = c.items
+      .filter((x) => x.code)
+      .map((x) => `${x.code}\\${fmtNum(x.qty, 3)}\\1\\`)
+      .join("");
+
+    out.push(`~D|${c.capCode}|${parts}|`);
+  });
+
+  return out.join("\n");
 }
 
 
