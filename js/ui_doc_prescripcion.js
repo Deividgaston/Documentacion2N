@@ -1367,10 +1367,23 @@ async function renderPrescPlantillasList() {
   const searchInput = container.querySelector("#prescPlantillasSearch");
   if (searchInput) {
     searchInput.addEventListener("input", (e) => {
-      appState.prescripcion.plantillasSearchTerm = e.target.value || "";
-      renderPrescPlantillasList();
+      const val = e.target.value || "";
+      const pos = typeof e.target.selectionStart === "number" ? e.target.selectionStart : val.length;
+
+      appState.prescripcion.plantillasSearchTerm = val;
+
+      // Re-render + restaurar foco/cursor (evita “solo 1 carácter”)
+      Promise.resolve(renderPrescPlantillasList()).then(() => {
+        requestAnimationFrame(() => {
+          const again = document.getElementById("prescPlantillasSearch");
+          if (!again) return;
+          again.focus();
+          try { again.setSelectionRange(pos, pos); } catch (_) {}
+        });
+      });
     });
   }
+
 
   // Botón nueva plantilla (icono)
   const btnNew = container.querySelector("#prescNewPlantillaBtn");
@@ -1591,10 +1604,23 @@ async function renderPrescExtraRefsList() {
   const searchInput = container.querySelector("#prescExtraRefsSearch");
   if (searchInput) {
     searchInput.addEventListener("input", (e) => {
-      appState.prescripcion.extraRefsSearchTerm = e.target.value || "";
-      renderPrescExtraRefsList();
+      const val = e.target.value || "";
+      const pos = typeof e.target.selectionStart === "number" ? e.target.selectionStart : val.length;
+
+      appState.prescripcion.extraRefsSearchTerm = val;
+
+      // Re-render + restaurar foco/cursor
+      Promise.resolve(renderPrescExtraRefsList()).then(() => {
+        requestAnimationFrame(() => {
+          const again = document.getElementById("prescExtraRefsSearch");
+          if (!again) return;
+          again.focus();
+          try { again.setSelectionRange(pos, pos); } catch (_) {}
+        });
+      });
     });
   }
+
 
   // Botón nueva ref extra (icono)
   const btnNew = container.querySelector("#prescNewExtraRefBtn");
