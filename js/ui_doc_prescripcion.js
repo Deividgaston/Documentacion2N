@@ -292,8 +292,7 @@ function renderDocPrescripcionView() {
   const currentLang = appState.prescripcion.exportLang || "es";
 
   container.innerHTML = `
-   <div class="presc-root" style="display:flex; flex-direction:column; height:calc(100vh - 1.5rem);">
-
+   <div class="presc-root" style="display:flex; flex-direction:column; height:calc(100vh - 1.5rem); min-height:0;">
 
       <!-- CABECERA SUPERIOR -->
       <div class="card" style="margin-bottom:1rem;">
@@ -333,8 +332,10 @@ function renderDocPrescripcionView() {
         </div>
       </div>
 
+<div class="presc-main" style="flex:1; min-height:0; display:flex; flex-direction:column; gap:1rem;">
+
       <!-- LAYOUT 3 COLUMNAS -->
-      <div class="presc-layout" 
+    <div class="presc-layout"
      style="display:grid; grid-template-columns:1fr 1.4fr 1.2fr; gap:1rem; flex:1; min-height:0;">
 
 
@@ -394,19 +395,19 @@ function renderDocPrescripcionView() {
           </div>
         </div>
       </div>
+</div>
 
-      <!-- PREVISUALIZACIÓN inferior -->
-      <div class="card" style="margin-top:1rem;">
-        <div class="card-header">
-          <div class="card-title">Previsualización de la prescripción</div>
-          <div class="card-subtitle">Capítulos añadidos, totales y desglose desplegable</div>
-        </div>
+     <!-- PREVISUALIZACIÓN inferior (FIJA) -->
+<div class="card presc-preview-card" style="flex:0 0 32vh; min-height:240px; overflow:hidden;">
+  <div class="card-header">
+    <div class="card-title">Previsualización de la prescripción</div>
+    <div class="card-subtitle">Capítulos añadidos, totales y desglose desplegable</div>
+  </div>
 
-        <div id="prescPreview" class="card-body">
-        </div>
-      </div>
+  <div id="prescPreview" class="card-body" style="height:100%; overflow:auto;">
+  </div>
+</div>
 
-    </div>
   `;
 
   // Handlers cabecera global
