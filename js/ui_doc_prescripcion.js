@@ -90,6 +90,46 @@ function getAuthPresc() {
 }
 
 // ========================================================
+// Rutas por usuario (guardado en Firestore)
+// users/{uid}/prescripcion_plantillas/{id}
+// users/{uid}/prescripcion_referencias_extra/{id}
+// ========================================================
+
+function getCurrentUidPresc() {
+  const auth = getAuthPresc();
+
+  // 1) Firebase Auth estándar
+  if (auth && auth.currentUser && auth.currentUser.uid) return auth.currentUser.uid;
+
+  // 2) Fallbacks: algunos módulos guardan el usuario en appState
+  try {
+    if (window.appState && window.appState.user && window.appState.user.uid) {
+      return window.appState.user.uid;
+    }
+    if (window.appState && window.appState.auth && window.appState.auth.uid) {
+      return window.appState.auth.uid;
+    }
+  } catch (_) {}
+
+  return null;
+}
+
+function getUserSubcollectionRefPresc(subName) {
+  const db = getFirestorePresc();
+  const uid = getCurrentUidPresc();
+  if (!db || !uid) return null;
+
+  // Firestore compat (v8 / compat)
+  if (typeof db.collection === "function") {
+    return db.collection("users").doc(uid).collection(subName);
+  }
+
+  console.warn("[PRESCRIPCIÓN] Firestore instance no soporta .collection(); usa compat o adapta tu getFirestoreInstance().");
+  return null;
+}
+
+
+// ========================================================
 // Obtener el contenedor principal (como en Doc / Gestión Doc)
 // ========================================================
 
@@ -947,7 +987,7 @@ async function ensurePrescPlantillasLoaded() {
   if (auth && auth.currentUser) uid = auth.currentUser.uid;
 
   try {
-    let q = db.collection("prescripcion_plantillas");
+    let q = getUserSubcollectionRefPresc("prescripcion_plantillas");
     if (uid) q = q.where("uid", "==", uid);
 
     const snap = await q.get();
@@ -999,7 +1039,7 @@ async function createPrescPlantilla(nombre, texto) {
     let uid = null;
     if (auth && auth.currentUser) uid = auth.currentUser.uid;
 
-    const docRef = await db.collection("prescripcion_plantillas").add({
+    const docRef = await getUserSubcollectionRefPresc("prescripcion_plantillas").add({
       uid: uid || null,
       nombre,
       texto,
@@ -1031,7 +1071,7 @@ async function updatePrescPlantilla(id, nombre, texto) {
   if (!db) return;
 
   try {
-    await db.collection("prescripcion_plantillas").doc(id).update({
+    await getUserSubcollectionRefPresc("prescripcion_plantillas").doc(id).update({
       nombre,
       texto,
       updatedAt: Date.now()
@@ -1054,7 +1094,7 @@ async function deletePrescPlantilla(id) {
   if (!db) return;
 
   try {
-    await db.collection("prescripcion_plantillas").doc(id).delete();
+    await getUserSubcollectionRefPresc("prescripcion_plantillas").doc(id).delete();
   } catch (e) {
     console.error("[PRESCRIPCIÓN] Error borrando plantilla:", e);
   }
@@ -1078,7 +1118,7 @@ async function ensureExtraRefsLoaded() {
   if (auth && auth.currentUser) uid = auth.currentUser.uid;
 
   try {
-    let q = db.collection("prescripcion_referencias_extra");
+    let q = getUserSubcollectionRefPresc("prescripcion_referencias_extra");
     if (uid) q = q.where("uid", "==", uid);
 
     const snap = await q.get();
@@ -1137,7 +1177,7 @@ async function createExtraRef(codigo, descripcion, unidad, pvp) {
     let uid = null;
     if (auth && auth.currentUser) uid = auth.currentUser.uid;
 
-    const docRef = await db.collection("prescripcion_referencias_extra").add({
+    const docRef = await getUserSubcollectionRefPresc("prescripcion_referencias_extra").add({
       uid: uid || null,
       codigo,
       descripcion,
@@ -1173,7 +1213,7 @@ async function updateExtraRef(id, codigo, descripcion, unidad, pvp) {
   if (!db) return;
 
   try {
-    await db.collection("prescripcion_referencias_extra").doc(id).update({
+    await getUserSubcollectionRefPresc("prescripcion_referencias_extra").doc(id).update({
       codigo,
       descripcion,
       unidad,
@@ -1198,7 +1238,7 @@ async function deleteExtraRef(id) {
   if (!db) return;
 
   try {
-    await db.collection("prescripcion_referencias_extra").doc(id).delete();
+    await getUserSubcollectionRefPresc("prescripcion_referencias_extra").doc(id).delete();
   } catch (e) {
     console.error("[PRESCRIPCIÓN] Error borrando ref extra:", e);
   }
@@ -1507,7 +1547,7 @@ async function renderPrescExtraRefsList() {
                placeholder="Buscar referencia..."
                value="${appState.prescripcion.extraRefsSearchTerm || ""}"
                style="font-size:0.75rem; max-width:60%;">
-        <button id="prescNewExtraRefBtn" class="btn btn-xs btnSecondary" title="Nueva referencia extra">➕</button>
+        <button id="prescNewExtraRefBtn" class="btn btn-xs btn-secondary" title="Nueva referencia extra">➕</button>
       </div>
       <div>
         ${filtered
