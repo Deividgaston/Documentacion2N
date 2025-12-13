@@ -833,6 +833,10 @@ function appendSectionToChapter(cap, sec) {
   });
 
   cap.lineas = existing;
+
+  // ✅ FIX
+  appState.prescripcion.selectedCapituloId = cap.id;
+  renderPrescCapituloContent();
 }
 
 // ========================================================
