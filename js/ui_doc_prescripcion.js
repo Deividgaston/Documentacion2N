@@ -2163,6 +2163,18 @@ async function buildPrescExportModel(lang) {
 // ===============================
 // Gemini: helpers para textos largos
 // ===============================
+
+function prescGeminiLangName(lang) {
+  const l = String(lang || "").toLowerCase();
+  if (l === "en" || l === "eng" || l === "english") return "English";
+  if (l === "pt" || l === "por" || l === "portuguese") return "Portuguese";
+  if (l === "es" || l === "spa" || l === "spanish") return "Spanish";
+  return lang; // fallback
+}
+
+
+
+
 function prescSplitForGemini(text, maxLen = 1500) {
   const s = String(text || "");
   if (s.length <= maxLen) return [s];
