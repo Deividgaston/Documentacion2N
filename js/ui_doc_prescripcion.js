@@ -1524,7 +1524,7 @@ async function renderPrescPlantillasList() {
 // ========================================================
 // Render REFERENCIAS EXTRA (con buscador)
 // ========================================================
-async async function renderPrescExtraRefsList() {
+async function renderPrescExtraRefsList() {
   const container = document.getElementById("prescExtraRefsList");
   if (!container) return;
 
