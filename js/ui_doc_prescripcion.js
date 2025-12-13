@@ -2140,29 +2140,33 @@ async function buildPrescExportModel(lang) {
 
   (appState.prescripcion.capitulos || []).forEach((cap) => {
     let subtotal = 0;
+    const chapterCode = prescAutoChapterCode2N(capIndex);
 
-    const lines = (cap.lineas || []).map((l) => {
-      const qty = safeNumber(l.cantidad);
-      const pvp = safeNumber(l.pvp);
-      const imp = l.importe != null ? safeNumber(l.importe) : qty * pvp;
-      subtotal += imp;
+    const lines = (cap.lineas || []).map((l, lineIndex) => {
+  const qty = safeNumber(l.cantidad);
+  const pvp = safeNumber(l.pvp);
+  const imp = l.importe != null ? safeNumber(l.importe) : qty * pvp;
+  subtotal += imp;
 
-      return {
-        code: l.codigo || "",
-        description: l.descripcion || "",
-        unit: l.unidad || "Ud",
-        qty,
-        price: pvp,
-        amount: imp
-      };
-    });
+  return {
+    code: prescAutoLineCode2N(capIndex, lineIndex), // 👈 AQUÍ
+    description: l.descripcion || "",
+    unit: l.unidad || "Ud",
+    qty,
+    price: pvp,
+    amount: imp
+  };
+});
 
-    model.chapters.push({
-      title: cap.nombre || "",
-      text: cap.texto || "",
-      lines,
-      subtotal
-    });
+
+   model.chapters.push({
+  code: chapterCode,      // 👈 NUEVO
+  title: cap.nombre || "",
+  text: cap.texto || "",
+  lines,
+  subtotal
+});
+
 
     model.total += subtotal;
   });
