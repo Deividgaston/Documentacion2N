@@ -1564,7 +1564,8 @@ async function renderPrescExtraRefsList() {
               const pvp = safeNumber(r.pvp).toFixed(2);
 
               return `
-                <div class="presc-extra-item" data-id="${escapeHtmlAttr(r.id)}">
+                <div class="presc-extra-item" draggable="true" data-id="${escapeHtmlAttr(r.id)}">
+
                   <div class="presc-extra-main">
                     <div class="presc-extra-line1">
                       <span class="presc-extra-code">${escapeHtml(cod)}</span>
