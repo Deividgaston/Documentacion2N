@@ -2,41 +2,40 @@
 // ========================================================
 // PRESCRIPCIÓN 2N (versión premium Notion B3)
 // --------------------------------------------------------
-// BLOQUE 1 - Estado global, helpers, modal genérico
+// PARTE 1
+// Estado global, helpers, modal genérico, Firestore/Auth,
+// helpers de presupuesto y generación de secciones
 // ========================================================
 
 window.appState = window.appState || {};
+
 appState.prescripcion = appState.prescripcion || {
   capitulos: [],             // [{ id, nombre, texto, lineas: [...] }]
-  selectedCapituloId: null,  
+  selectedCapituloId: null,
   plantillas: [],            // [{ id, nombre, texto }]
   plantillasLoaded: false,
   extraRefs: [],             // [{ id, codigo, descripcion, unidad, pvp }]
   extraRefsLoaded: false,
-  exportLang: "es", // idioma de exportación ("es" | "en" | "pt")
-  // NUEVO: términos de búsqueda
+  exportLang: "es",           // "es" | "en" | "pt"
   plantillasSearchTerm: "",
-  extraRefsSearchTerm: ""
+  extraRefsSearchTerm: "",
+  sectionsFromBudget: []
 };
 
 // ========================================================
 // Helpers generales
 // ========================================================
+
 function escapeHtml(str) {
-  return String(str || "")
+  return String(str ?? "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 }
 
-
-
-
-
-// Helpers extra (evita bugs en previsualización / attrs)
 function escapeHtmlAttr(str) {
-  return String(str || "")
+  return String(str ?? "")
     .replace(/&/g, "&amp;")
     .replace(/"/g, "&quot;")
     .replace(/</g, "&lt;")
@@ -48,107 +47,102 @@ function safeNumber(v) {
   return Number.isFinite(n) ? n : 0;
 }
 
-// Re-render mínimo cuando cambia el capítulo seleccionado (sin re-render total)
+// Render mínimo del capítulo seleccionado
 function renderPrescCapituloSelected() {
-  // Solo refresca el panel central para evitar parpadeos y mantener rendimiento
-  renderPrescCapituloContent();
+  if (typeof renderPrescCapituloContent === "function") {
+    renderPrescCapituloContent();
+  }
 }
+
 // ========================================================
-// MODAL GENÉRICO (usa el modal global definido en index.html)
+// MODAL GENÉRICO
 // ========================================================
 
 function openPrescModal({ title, bodyHTML, onSave }) {
   const modal = document.getElementById("prescModal");
+  if (!modal) {
+    console.warn("[PRESCRIPCIÓN] Modal no encontrado");
+    return;
+  }
+
   const titleEl = document.getElementById("prescModalTitle");
   const bodyEl = document.getElementById("prescModalBody");
   const btnSave = document.getElementById("prescModalSave");
   const btnClose = document.getElementById("prescModalClose");
   const btnCancel = document.getElementById("prescModalCancel");
 
-  if (!modal) {
-    console.warn("[PRESCRIPCIÓN] Modal no encontrado en index.html");
-    return;
-  }
+  if (titleEl) titleEl.textContent = title || "";
+  if (bodyEl) bodyEl.innerHTML = bodyHTML || "";
 
-  titleEl.textContent = title || "";
-  bodyEl.innerHTML = bodyHTML || "";
   modal.style.display = "flex";
 
   const close = () => {
     modal.style.display = "none";
-    btnSave.onclick = null;
-    btnClose.onclick = null;
-    btnCancel.onclick = null;
+    if (btnSave) btnSave.onclick = null;
+    if (btnClose) btnClose.onclick = null;
+    if (btnCancel) btnCancel.onclick = null;
   };
 
-  btnClose.onclick = close;
-  btnCancel.onclick = close;
+  if (btnClose) btnClose.onclick = close;
+  if (btnCancel) btnCancel.onclick = close;
 
-  btnSave.onclick = async () => {
-    try {
-      if (typeof onSave === "function") await onSave();
-    } catch (e) {
-      console.error("[PRESCRIPCIÓN] Error en modal onSave:", e);
-      alert("Ha ocurrido un error al guardar. Revisa la consola para más detalle.");
-    } finally {
-      close();
-    }
-  };
+  if (btnSave) {
+    btnSave.onclick = async () => {
+      try {
+        if (typeof onSave === "function") {
+          await onSave();
+        }
+      } catch (e) {
+        console.error("[PRESCRIPCIÓN] Error en modal:", e);
+        alert("Error al guardar. Revisa la consola.");
+      } finally {
+        close();
+      }
+    };
+  }
 }
 
 // ========================================================
-// Helpers de Firestore/Auth (compat con tu arquitectura)
+// Helpers Firestore / Auth (compat v8 / compat)
 // ========================================================
 
 function getFirestorePresc() {
-  if (typeof window.getFirestoreInstance === "function") {
-    const db = window.getFirestoreInstance();
-    if (db) return db;
-  }
-  if (window.db) return window.db;
-
   try {
-    return window.firebase.firestore();
-  } catch {
-    console.warn("[PRESCRIPCIÓN] Firestore no disponible");
-    return null;
+    if (typeof window.getFirestoreInstance === "function") {
+      const db = window.getFirestoreInstance();
+      if (db) return db;
+    }
+    if (window.db) return window.db;
+    if (window.firebase?.firestore) return window.firebase.firestore();
+  } catch (e) {
+    console.warn("[PRESCRIPCIÓN] Firestore no disponible", e);
   }
+  return null;
 }
 
 function getAuthPresc() {
-  if (typeof window.getAuthInstance === "function") {
-    const a = window.getAuthInstance();
-    if (a) return a;
-  }
-  if (window.auth) return window.auth;
-
   try {
-    return window.firebase.auth();
-  } catch {
-    return null;
-  }
+    if (typeof window.getAuthInstance === "function") {
+      const a = window.getAuthInstance();
+      if (a) return a;
+    }
+    if (window.auth) return window.auth;
+    if (window.firebase?.auth) return window.firebase.auth();
+  } catch (_) {}
+  return null;
 }
 
 // ========================================================
-// Rutas por usuario (guardado en Firestore)
-// users/{uid}/prescripcion_plantillas/{id}
-// users/{uid}/prescripcion_referencias_extra/{id}
+// UID actual (robusto)
 // ========================================================
 
 function getCurrentUidPresc() {
   const auth = getAuthPresc();
+  if (auth?.currentUser?.uid) return auth.currentUser.uid;
 
-  // 1) Firebase Auth estándar
-  if (auth && auth.currentUser && auth.currentUser.uid) return auth.currentUser.uid;
-
-  // 2) Fallbacks: algunos módulos guardan el usuario en appState
   try {
-    if (window.appState && window.appState.user && window.appState.user.uid) {
-      return window.appState.user.uid;
-    }
-    if (window.appState && window.appState.auth && window.appState.auth.uid) {
-      return window.appState.auth.uid;
-    }
+    if (window.appState?.user?.uid) return window.appState.user.uid;
+    if (window.appState?.auth?.uid) return window.appState.auth.uid;
   } catch (_) {}
 
   return null;
@@ -157,20 +151,12 @@ function getCurrentUidPresc() {
 function getUserSubcollectionRefPresc(subName) {
   const db = getFirestorePresc();
   const uid = getCurrentUidPresc();
-  if (!db || !uid) return null;
-
-  // Firestore compat (v8 / compat)
-  if (typeof db.collection === "function") {
-    return db.collection("users").doc(uid).collection(subName);
-  }
-
-  console.warn("[PRESCRIPCIÓN] Firestore instance no soporta .collection(); usa compat o adapta tu getFirestoreInstance().");
-  return null;
+  if (!db || !uid || typeof db.collection !== "function") return null;
+  return db.collection("users").doc(uid).collection(subName);
 }
 
-
 // ========================================================
-// Obtener el contenedor principal (como en Doc / Gestión Doc)
+// Contenedor principal
 // ========================================================
 
 function getPrescripcionAppContent() {
@@ -180,36 +166,27 @@ function getPrescripcionAppContent() {
 }
 
 // ========================================================
-// Obtener presupuesto actual (para generar secciones)
+// Presupuesto actual (safe)
 // ========================================================
 
 function getPresupuestoActualSafe() {
   if (typeof window.getPresupuestoActual === "function") {
-    try { return window.getPresupuestoActual(); }
-    catch(e) {
-      console.error("[PRESCRIPCIÓN] Error obteniendo presupuesto:", e);
-      return null;
+    try {
+      return window.getPresupuestoActual();
+    } catch (e) {
+      console.error("[PRESCRIPCIÓN] Error presupuesto:", e);
     }
   }
-  console.warn("[PRESCRIPCIÓN] getPresupuestoActual no existe");
   return null;
 }
 
 // ========================================================
-// BLOQUE 2 - Secciones del presupuesto para Prescripción
+// Generación de secciones desde presupuesto
 // ========================================================
 
-// Añadimos estructura para secciones si no existe
-appState.prescripcion.sectionsFromBudget =
-  appState.prescripcion.sectionsFromBudget || [];
-
-/**
- * Convierte las líneas del presupuesto en secciones agregadas
- */
 function buildPrescSectionsFromPresupuesto() {
   const presu = getPresupuestoActualSafe();
   if (!presu) {
-    console.warn("[PRESCRIPCIÓN] No hay presupuesto cargado para generar secciones.");
     appState.prescripcion.sectionsFromBudget = [];
     return [];
   }
@@ -229,59 +206,38 @@ function buildPrescSectionsFromPresupuesto() {
       "SIN_SECCION";
 
     if (!bySection[secId]) {
-      const def = seccionesMap[secId] || seccionesMap[String(secId)] || {};
-      const nombreSec =
-        def.nombre ||
-        def.name ||
-        def.titulo ||
-        def.title ||
-        (secId === "SIN_SECCION" ? "Sin sección" : String(secId));
-
+      const def = seccionesMap[secId] || {};
       bySection[secId] = {
         id: "sec-" + String(secId),
         rawId: secId,
-        nombre: nombreSec,
+        nombre:
+          def.nombre ||
+          def.name ||
+          def.titulo ||
+          def.title ||
+          (secId === "SIN_SECCION" ? "Sin sección" : String(secId)),
+        refs: [],
         totalRefs: 0,
-        totalImporte: 0,
-        refs: []
+        totalImporte: 0
       };
     }
 
-    const cantidad =
-      l.cantidad ||
-      l.qty ||
-      l.unidades ||
-      l.cant ||
-      1;
-
-    const pvp =
-      typeof l.pvp === "number"
-        ? l.pvp
-        : typeof l.precio === "number"
-        ? l.precio
-        : typeof l.price === "number"
-        ? l.price
-        : 0;
-
-    const unidad =
-      l.unidad ||
-      l.ud ||
-      l.unit ||
-      "Ud";
-
-    const importe = (Number(cantidad) || 0) * (Number(pvp) || 0);
+    const cantidad = safeNumber(l.cantidad ?? l.qty ?? l.unidades ?? 1);
+    const pvp = safeNumber(l.pvp ?? l.precio ?? l.price);
+    const unidad = l.unidad ?? l.ud ?? l.unit ?? "Ud";
+    const importe = cantidad * pvp;
 
     bySection[secId].refs.push({
-      codigo: l.codigo || l.ref || l.sku || "",
+      codigo: l.codigo ?? l.ref ?? l.sku ?? "",
       descripcion:
-        l.descripcion ||
-        l.desc ||
-        l.concepto ||
-        l.nombre ||
-        l.title ||
+        l.descripcion ??
+        l.desc ??
+        l.concepto ??
+        l.nombre ??
+        l.title ??
         "",
       unidad,
-      cantidad: Number(cantidad) || 0,
+      cantidad,
       pvp,
       importe
     });
@@ -290,226 +246,200 @@ function buildPrescSectionsFromPresupuesto() {
     bySection[secId].totalImporte += importe;
   });
 
-  const sectionsArr = Object.values(bySection).sort((a, b) =>
-    (a.nombre || "").toString().localeCompare((b.nombre || "").toString(), "es")
+  const arr = Object.values(bySection).sort((a, b) =>
+    String(a.nombre).localeCompare(String(b.nombre), "es")
   );
 
-  appState.prescripcion.sectionsFromBudget = sectionsArr;
-
-  console.log(
-    "[PRESCRIPCIÓN] Secciones generadas desde presupuesto:",
-    sectionsArr.length
-  );
-
-  return sectionsArr;
+  appState.prescripcion.sectionsFromBudget = arr;
+  return arr;
 }
 
-/**
- * Helper para asegurar que las secciones están construidas
- */
 function ensurePrescSectionsFromBudget() {
-  if (!appState.prescripcion.sectionsFromBudget ||
+  if (!Array.isArray(appState.prescripcion.sectionsFromBudget) ||
       !appState.prescripcion.sectionsFromBudget.length) {
     return buildPrescSectionsFromPresupuesto();
   }
   return appState.prescripcion.sectionsFromBudget;
 }
+
 // ========================================================
-// BLOQUE 3 - Render básico de la vista Prescripción
+// FIN PARTE 1
+// ========================================================
+// ========================================================
+// PARTE 2
+// Render principal de Prescripción + layout base
 // ========================================================
 
 function renderDocPrescripcionView() {
   const container = getPrescripcionAppContent();
   if (!container) return;
 
-  // Aseguramos secciones cargadas
+  // Asegurar datos base
   ensurePrescSectionsFromBudget();
-
-  // Aseguramos plantillas / referencias extra
   appState.prescripcion.plantillas = appState.prescripcion.plantillas || [];
   appState.prescripcion.extraRefs = appState.prescripcion.extraRefs || [];
 
   const currentLang = appState.prescripcion.exportLang || "es";
 
   container.innerHTML = `
-    <div class="presc-root" style="display:flex; flex-direction:column; min-height:100vh; height:auto; overflow:auto;">
+    <div class="presc-root"
+         style="display:flex; flex-direction:column; height:100%; overflow:hidden;">
 
-      <!-- CABECERA SUPERIOR -->
-      <div class="card" style="margin-bottom:1rem;">
-        <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; gap:1rem;">
+      <!-- CABECERA -->
+      <div class="card" style="margin-bottom:0.75rem;">
+        <div class="card-header"
+             style="display:flex; justify-content:space-between; align-items:center; gap:1rem;">
           <div>
             <div class="card-title">Prescripción técnica del proyecto</div>
             <div class="card-subtitle">
-              Arrastra secciones del presupuesto para generar capítulos. Usa referencias extra o plantillas si lo necesitas.
+              Genera capítulos desde el presupuesto y completa con plantillas y referencias extra.
             </div>
           </div>
 
-          <div style="display:flex; flex-direction:column; gap:0.35rem; align-items:flex-end;">
-            <div style="display:flex; gap:0.35rem; align-items:center; flex-wrap:wrap; justify-content:flex-end;">
-              <span style="font-size:0.75rem; color:#6b7280;">Idioma exportación</span>
-              <select id="prescExportLang" class="form-control form-control-sm" style="min-width:140px; font-size:0.75rem;">
+          <div style="display:flex; flex-direction:column; gap:0.4rem; align-items:flex-end;">
+            <div style="display:flex; gap:0.4rem; align-items:center;">
+              <span style="font-size:0.75rem; color:#6b7280;">Idioma</span>
+              <select id="prescExportLang"
+                      class="form-control form-control-sm"
+                      style="min-width:130px; font-size:0.75rem;">
                 <option value="es" ${currentLang === "es" ? "selected" : ""}>Castellano</option>
                 <option value="en" ${currentLang === "en" ? "selected" : ""}>English</option>
                 <option value="pt" ${currentLang === "pt" ? "selected" : ""}>Português</option>
               </select>
             </div>
 
-            <div style="display:flex; gap:0.35rem; flex-wrap:wrap; justify-content:flex-end;">
-              <button id="prescReloadSectionsBtn" class="btn btn-outline btn-sm">
-                🔄 Regenerar secciones
-              </button>
-              <button id="prescExportExcelBtn" class="btn btn-sm btn-outline">
-                ⬇️ Excel
-              </button>
-              <button id="prescExportPdfBtn" class="btn btn-sm btn-outline">
-                ⬇️ PDF
-              </button>
-              <button id="prescExportBc3Btn" class="btn btn-sm btn-outline">
-                ⬇️ BC3
-              </button>
+            <div style="display:flex; gap:0.4rem; flex-wrap:wrap; justify-content:flex-end;">
+              <button id="prescReloadSectionsBtn" class="btn btn-outline btn-sm">🔄 Secciones</button>
+              <button id="prescExportExcelBtn" class="btn btn-sm btn-outline">⬇️ Excel</button>
+              <button id="prescExportPdfBtn" class="btn btn-sm btn-outline">⬇️ PDF</button>
+              <button id="prescExportBc3Btn" class="btn btn-sm btn-outline">⬇️ BC3</button>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- LAYOUT 3 COLUMNAS -->
-      <div class="presc-layout" style="display:grid; grid-template-columns:1fr 1.4fr 1.2fr; gap:1rem; min-height:480px; overflow:visible;">
+      <!-- CUERPO PRINCIPAL -->
+      <div class="presc-layout"
+           style="flex:1; display:grid; grid-template-columns:1fr 1.4fr 1.2fr;
+                  gap:0.75rem; overflow:hidden; min-height:0;">
 
-        <!-- COLUMNA 1: Secciones del presupuesto -->
+        <!-- COLUMNA 1: SECCIONES -->
         <div class="card" style="display:flex; flex-direction:column; overflow:hidden;">
           <div class="card-header">
-            <div class="card-title">Secciones del presupuesto</div>
-            <div class="card-subtitle">Arrastra una sección para crear o actualizar un capítulo</div>
+            <div class="card-title">Secciones</div>
+            <div class="card-subtitle">Arrastra para crear capítulos</div>
           </div>
-          <div id="prescSectionsList" class="card-body" style="flex:1; overflow:auto; padding:0.75rem;">
+          <div id="prescSectionsList"
+               class="card-body"
+               style="flex:1; overflow:auto; padding:0.75rem;">
           </div>
         </div>
 
-        <!-- COLUMNA 2: Capítulo seleccionado -->
+        <!-- COLUMNA 2: CAPÍTULO -->
         <div class="card" style="display:flex; flex-direction:column; overflow:hidden;">
-          <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; gap:0.75rem;">
+          <div class="card-header"
+               style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem;">
             <div>
-              <div class="card-title">Capítulo seleccionado</div>
-              <div class="card-subtitle">Nombre, texto descriptivo y referencias del capítulo</div>
+              <div class="card-title">Capítulo</div>
+              <div class="card-subtitle">Texto y referencias</div>
             </div>
             <div style="display:flex; gap:0.25rem;">
-              <button type="button" id="prescCapNuevoBtn" class="btn btn-xs btn-secondary" title="Añadir capítulo">
-                ＋
-              </button>
-              <button type="button" id="prescCapGuardarBtn" class="btn btn-xs btn-secondary" title="Guardar y crear nuevo capítulo">
-                💾
-              </button>
+              <button id="prescCapNuevoBtn"
+                      class="btn btn-xs btn-secondary"
+                      title="Nuevo capítulo">＋</button>
+              <button id="prescCapGuardarBtn"
+                      class="btn btn-xs btn-secondary"
+                      title="Guardar capítulo">💾</button>
             </div>
           </div>
 
-          <div id="prescCapituloContent" class="card-body" 
-               style="flex:1; overflow:auto;">
+          <div id="prescCapituloContent"
+               class="card-body"
+               style="flex:1; overflow:auto; min-height:0;">
           </div>
         </div>
 
-        <!-- COLUMNA 3: Plantillas -->
-        <div style="display:flex; flex-direction:column; gap:1rem; height:100%; overflow:hidden;">
+        <!-- COLUMNA 3: PLANTILLAS / EXTRAS -->
+        <div style="display:flex; flex-direction:column; gap:0.75rem; overflow:hidden;">
 
-          <!-- Plantillas (altura reducida) -->
-          <div class="card" style="height:42%; min-height:220px; display:flex; flex-direction:column; overflow:hidden;">
+          <div class="card"
+               style="flex:1; min-height:180px; display:flex; flex-direction:column; overflow:hidden;">
             <div class="card-header">
               <div class="card-title">Plantillas</div>
-              <div class="card-subtitle">Arrastra y suelta para rellenar texto técnico</div>
+              <div class="card-subtitle">Texto técnico reutilizable</div>
             </div>
-            <div id="prescPlantillasList" class="card-body" style="flex:1; overflow:auto;"></div>
+            <div id="prescPlantillasList"
+                 class="card-body"
+                 style="flex:1; overflow:auto;">
+            </div>
           </div>
 
-          <!-- Referencias extra (mismo tamaño que Plantillas) -->
-          <div class="card" style="height:42%; min-height:220px; display:flex; flex-direction:column; overflow:hidden;">
+          <div class="card"
+               style="flex:1; min-height:180px; display:flex; flex-direction:column; overflow:hidden;">
             <div class="card-header">
               <div class="card-title">Referencias extra</div>
-              <div class="card-subtitle">Switches, cable, mano de obra…</div>
+              <div class="card-subtitle">Materiales y mano de obra</div>
             </div>
-            <div id="prescExtraRefsList" class="card-body" style="flex:1; overflow:auto;"></div>
+            <div id="prescExtraRefsList"
+                 class="card-body"
+                 style="flex:1; overflow:auto;">
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- PREVISUALIZACIÓN inferior -->
-      <div class="card" style="margin-top:1rem;">
+      <!-- PREVIEW (se trabaja en PARTE 7) -->
+      <div class="card" style="margin-top:0.75rem;">
         <div class="card-header">
-          <div class="card-title">Previsualización de la prescripción</div>
-          <div class="card-subtitle">Capítulos añadidos, totales y desglose desplegable</div>
+          <div class="card-title">Previsualización</div>
+          <div class="card-subtitle">Resumen por capítulos</div>
         </div>
-
-        <div id="prescPreview" class="card-body" style="overflow:visible;">
-        </div>
+        <div id="prescPreview" class="card-body"></div>
       </div>
 
     </div>
   `;
 
-  // Handlers cabecera global
-  const btnReloadSections = container.querySelector("#prescReloadSectionsBtn");
-  if (btnReloadSections) {
-    btnReloadSections.addEventListener("click", (ev) => {
-      ev.preventDefault();
-      ev.stopPropagation();
-      buildPrescSectionsFromPresupuesto();
-      renderDocPrescripcionView();
-    });
-  }
+  // =====================
+  // HANDLERS CABECERA
+  // =====================
 
-  // Botones del capítulo seleccionado (iconos en cabecera)
-  const btnCapNuevo = container.querySelector("#prescCapNuevoBtn");
-  if (btnCapNuevo) {
-    btnCapNuevo.addEventListener("click", (ev) => {
-      ev.preventDefault();
-      ev.stopPropagation();
-      createManualCapitulo();
-      renderDocPrescripcionView();
-    });
-  }
-
-  const btnCapGuardar = container.querySelector("#prescCapGuardarBtn");
-  if (btnCapGuardar) {
-    btnCapGuardar.addEventListener("click", (ev) => {
-      ev.preventDefault();
-      ev.stopPropagation();
-      // Mantiene el capítulo actual en estado y crea uno nuevo en blanco
-      createManualCapitulo();
-      renderDocPrescripcionView();
-    });
-  }
-
-  // Selector idioma
   const langSelect = container.querySelector("#prescExportLang");
   if (langSelect) {
-    langSelect.value = appState.prescripcion.exportLang || "es";
     langSelect.addEventListener("change", () => {
       appState.prescripcion.exportLang = langSelect.value || "es";
-      console.log("[PRESCRIPCIÓN] Idioma exportación:", appState.prescripcion.exportLang);
     });
   }
 
-  // Botones exportación
-  const btnExportExcel = container.querySelector("#prescExportExcelBtn");
-  if (btnExportExcel) {
-    btnExportExcel.addEventListener("click", () => {
-      handlePrescExport("excel");
-    });
-  }
+  container.querySelector("#prescReloadSectionsBtn")?.addEventListener("click", () => {
+    buildPrescSectionsFromPresupuesto();
+    renderDocPrescripcionView();
+  });
 
-  const btnExportPdf = container.querySelector("#prescExportPdfBtn");
-  if (btnExportPdf) {
-    btnExportPdf.addEventListener("click", () => {
-      handlePrescExport("pdf");
-    });
-  }
+  container.querySelector("#prescExportExcelBtn")?.addEventListener("click", () => {
+    handlePrescExport("excel");
+  });
+  container.querySelector("#prescExportPdfBtn")?.addEventListener("click", () => {
+    handlePrescExport("pdf");
+  });
+  container.querySelector("#prescExportBc3Btn")?.addEventListener("click", () => {
+    handlePrescExport("bc3");
+  });
 
-  const btnExportBc3 = container.querySelector("#prescExportBc3Btn");
-  if (btnExportBc3) {
-    btnExportBc3.addEventListener("click", () => {
-      handlePrescExport("bc3");
-    });
-  }
+  container.querySelector("#prescCapNuevoBtn")?.addEventListener("click", () => {
+    createManualCapitulo();
+    renderDocPrescripcionView();
+  });
 
-  // Rellenar sub-vistas
+  container.querySelector("#prescCapGuardarBtn")?.addEventListener("click", () => {
+    createManualCapitulo();
+    renderDocPrescripcionView();
+  });
+
+  // =====================
+  // SUB-RENDERS
+  // =====================
+
   renderPrescSectionsList();
   renderPrescCapituloContent();
   attachPrescDropZone();
@@ -517,8 +447,13 @@ function renderDocPrescripcionView() {
   renderPrescExtraRefsList();
   renderPrescPreview();
 }
+
 // ========================================================
-// BLOQUE 4 - Secciones Notion Premium (arrastrables)
+// FIN PARTE 2
+// ========================================================
+// ========================================================
+// PARTE 3
+// Secciones del presupuesto (columna izquierda) + drag
 // ========================================================
 
 function renderPrescSectionsList() {
@@ -526,7 +461,7 @@ function renderPrescSectionsList() {
   if (!container) return;
 
   const sections = ensurePrescSectionsFromBudget();
-  if (!sections.length) {
+  if (!sections || !sections.length) {
     container.innerHTML = `
       <p class="text-muted" style="padding:0.5rem; font-size:0.8rem;">
         No hay secciones en el presupuesto actual.
@@ -537,17 +472,17 @@ function renderPrescSectionsList() {
 
   container.innerHTML = sections
     .map((sec) => {
-      const preview = sec.refs
+      const preview = (sec.refs || [])
         .slice(0, 3)
-        .map((r) => `${r.descripcion || ""} x${r.cantidad}`)
+        .map((r) => `${escapeHtml(r.descripcion || "")} x${safeNumber(r.cantidad)}`)
         .join(" • ");
 
       return `
         <div class="presc-section-card"
              draggable="true"
-             data-section-id="${sec.id}"
+             data-section-id="${escapeHtmlAttr(sec.id)}"
              title="Arrastra esta sección para crear o actualizar un capítulo">
-          <div class="presc-section-title">${sec.nombre}</div>
+          <div class="presc-section-title">${escapeHtml(sec.nombre || "")}</div>
           <div class="presc-section-preview">
             ${preview ? preview : "<i>Sin referencias</i>"}
           </div>
@@ -559,13 +494,14 @@ function renderPrescSectionsList() {
   attachPrescSectionsDragHandlers();
 }
 
-// Estilos cards secciones
+// ========================================================
+// Estilos cards secciones (inyectado 1 vez)
+// ========================================================
 (function injectPrescSectionStyles() {
   if (document.getElementById("presc-section-styles")) return;
 
   const style = document.createElement("style");
   style.id = "presc-section-styles";
-
   style.innerHTML = `
     .presc-section-card {
       border: 1px solid #e5e7eb;
@@ -576,43 +512,47 @@ function renderPrescSectionsList() {
       cursor: grab;
       box-shadow: 0 1px 3px rgba(0,0,0,0.06);
       transition: all 0.15s ease;
+      user-select: none;
     }
-
     .presc-section-card:hover {
       box-shadow: 0 2px 6px rgba(0,0,0,0.12);
       transform: translateY(-1px);
     }
-
     .presc-section-card:active {
       cursor: grabbing;
       transform: scale(0.98);
     }
-
     .presc-section-title {
       font-size: 0.95rem;
-      font-weight: 600;
+      font-weight: 650;
       margin-bottom: 0.35rem;
       color: #111827;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
-
     .presc-section-preview {
       font-size: 0.78rem;
       color: #6b7280;
       line-height: 1.25;
     }
   `;
-
   document.head.appendChild(style);
 })();
 
+// ========================================================
 // Drag handlers secciones
+// ========================================================
 function attachPrescSectionsDragHandlers() {
   document
     .querySelectorAll(".presc-section-card[draggable='true']")
     .forEach((el) => {
       el.addEventListener("dragstart", (ev) => {
-        const secId = el.getAttribute("data-section-id");
-        ev.dataTransfer.setData("text/presc-section-id", secId);
+        const secId = el.getAttribute("data-section-id") || "";
+        try {
+          ev.dataTransfer.setData("text/presc-section-id", secId);
+          ev.dataTransfer.effectAllowed = "copy";
+        } catch (_) {}
         el.style.opacity = "0.6";
       });
 
@@ -623,7 +563,11 @@ function attachPrescSectionsDragHandlers() {
 }
 
 // ========================================================
-// BLOQUE 5 - Lógica DROP sección → capítulo
+// FIN PARTE 3
+// ========================================================
+// ========================================================
+// PARTE 4
+// Drop de secciones → capítulos
 // ========================================================
 
 function attachPrescDropZone() {
@@ -631,8 +575,10 @@ function attachPrescDropZone() {
   if (!dropZone) return;
 
   dropZone.addEventListener("dragover", (ev) => {
-    ev.preventDefault();
-    dropZone.style.background = "#f9fafb";
+    if (ev.dataTransfer.types.includes("text/presc-section-id")) {
+      ev.preventDefault();
+      dropZone.style.background = "#f9fafb";
+    }
   });
 
   dropZone.addEventListener("dragleave", () => {
@@ -653,14 +599,12 @@ function attachPrescDropZone() {
 function handleSectionDrop(secId) {
   const sections = ensurePrescSectionsFromBudget();
   const sec = sections.find((s) => s.id === secId);
-  
   if (!sec) {
     console.warn("[PRESCRIPCIÓN] Sección no encontrada:", secId);
     return;
   }
 
   const capActual = getSelectedCapitulo();
-
   if (!capActual) {
     createChapterFromSection(sec);
     return;
@@ -670,102 +614,97 @@ function handleSectionDrop(secId) {
 }
 
 function createChapterFromSection(sec) {
-  const newId = "cap-" + Date.now();
+  const id = "cap-" + Date.now();
 
   appState.prescripcion.capitulos.push({
-    id: newId,
-    nombre: sec.nombre,
+    id,
+    nombre: sec.nombre || "Capítulo",
     texto: "",
     lineas: cloneSectionRefs(sec)
   });
 
-  appState.prescripcion.selectedCapituloId = newId;
-
-  renderDocPrescripcionView();
+  appState.prescripcion.selectedCapituloId = id;
 }
 
 function cloneSectionRefs(sec) {
-  return sec.refs.map((r) => ({
+  return (sec.refs || []).map((r) => ({
     id: "sec-ref-" + Date.now() + "-" + Math.random().toString(36).slice(2),
     tipo: "budget",
-    codigo: r.codigo,
-    descripcion: r.descripcion,
-    unidad: r.unidad,
-    cantidad: r.cantidad,
-    pvp: r.pvp,
-    importe: r.importe,
+    codigo: r.codigo || "",
+    descripcion: r.descripcion || "",
+    unidad: r.unidad || "Ud",
+    cantidad: safeNumber(r.cantidad),
+    pvp: safeNumber(r.pvp),
+    importe: safeNumber(r.importe),
     extraRefId: null
   }));
 }
 
+// ========================================================
+// Modal overwrite / append
+// ========================================================
+
 function askOverwriteOrAppend(sec, cap) {
   openPrescModal({
-    title: "¿Qué quieres hacer?",
+    title: "¿Cómo quieres aplicar la sección?",
     bodyHTML: `
       <p style="margin-bottom:0.75rem;">
-        Has soltado la sección <strong>${sec.nombre}</strong> sobre el capítulo 
-        <strong>${cap.nombre || "(sin título)"}</strong>.
+        Sección <strong>${escapeHtml(sec.nombre)}</strong>
+        sobre capítulo <strong>${escapeHtml(cap.nombre || "(sin título)")}</strong>
       </p>
-
-      <div style="display:flex; flex-direction:column; gap:0.5rem;">
-        <label><input type="radio" name="secAction" value="overwrite" checked> 
-          <strong>Sobrescribir capítulo</strong> (renombra y sustituye referencias)
-        </label>
-
-        <label><input type="radio" name="secAction" value="append"> 
-          <strong>Añadir referencias</strong> (mantiene nombre y añade las referencias nuevas)
-        </label>
-      </div>
+      <label style="display:block; margin-bottom:0.35rem;">
+        <input type="radio" name="prescSecAction" value="overwrite" checked>
+        Sobrescribir capítulo
+      </label>
+      <label style="display:block;">
+        <input type="radio" name="prescSecAction" value="append">
+        Añadir referencias
+      </label>
     `,
     onSave: () => {
-      const action = document.querySelector("input[name='secAction']:checked")?.value;
+      const action =
+        document.querySelector("input[name='prescSecAction']:checked")?.value ||
+        "overwrite";
 
       if (action === "overwrite") {
         overwriteChapterWithSection(cap, sec);
       } else {
         appendSectionToChapter(cap, sec);
       }
-
-      renderDocPrescripcionView();
     }
   });
 }
 
 function overwriteChapterWithSection(cap, sec) {
-  cap.nombre = sec.nombre;
+  cap.nombre = sec.nombre || cap.nombre;
   cap.texto = "";
   cap.lineas = cloneSectionRefs(sec);
 }
 
 function appendSectionToChapter(cap, sec) {
   const existing = cap.lineas || [];
-  const newOnes = cloneSectionRefs(sec);
+  const incoming = cloneSectionRefs(sec);
 
-  newOnes.forEach((r) => {
+  incoming.forEach((r) => {
     const dup = existing.find(
       (ex) =>
         ex.codigo === r.codigo &&
         ex.descripcion === r.descripcion &&
         ex.unidad === r.unidad &&
-        ex.pvp === r.pvp
+        safeNumber(ex.pvp) === safeNumber(r.pvp)
     );
-
     if (!dup) existing.push(r);
   });
 
   cap.lineas = existing;
 }
 
-// Observador para que la dropzone siempre esté conectada
-(function setupDropZoneInterval() {
-  const observer = new MutationObserver(() => {
-    attachPrescDropZone();
-  });
-
-  observer.observe(document.body, { childList: true, subtree: true });
-})();
 // ========================================================
-// BLOQUE 6 - Capítulos: helpers + render columna central
+// FIN PARTE 4
+// ========================================================
+// ========================================================
+// PARTE 5
+// Capítulos: helpers + render columna central
 // ========================================================
 
 function ensurePrescCapitulosArray() {
@@ -793,6 +732,7 @@ function setSelectedCapitulo(id) {
   appState.prescripcion.selectedCapituloId = id || null;
 }
 
+// Crea capítulo manual (NO re-render aquí; lo hace el caller)
 function createManualCapitulo() {
   ensurePrescCapitulosArray();
 
@@ -808,6 +748,7 @@ function createManualCapitulo() {
   appState.prescripcion.selectedCapituloId = id;
 
   console.log("[PRESCRIPCIÓN] Capítulo manual creado:", nuevo);
+  return nuevo;
 }
 
 function deleteCapituloById(capId) {
@@ -816,49 +757,70 @@ function deleteCapituloById(capId) {
   const idx = caps.findIndex((c) => c.id === capId);
   if (idx === -1) {
     console.warn("[PRESCRIPCIÓN] No se encontró el capítulo a borrar:", capId);
-    return;
+    return false;
   }
 
   const ok = window.confirm("¿Seguro que quieres eliminar este capítulo de la prescripción?");
-  if (!ok) return;
-
-  console.log("[PRESCRIPCIÓN] Borrando capítulo:", caps[idx]);
+  if (!ok) return false;
 
   caps.splice(idx, 1);
 
   if (appState.prescripcion.selectedCapituloId === capId) {
-    if (caps.length) {
-      appState.prescripcion.selectedCapituloId = caps[0].id;
-    } else {
-      appState.prescripcion.selectedCapituloId = null;
-    }
+    appState.prescripcion.selectedCapituloId = caps.length ? caps[0].id : null;
   }
 
-  if (appState.prescripcion.previewExpanded &&
-      appState.prescripcion.previewExpanded[capId]) {
+  // limpieza estados UI opcionales
+  if (appState.prescripcion.previewExpanded && appState.prescripcion.previewExpanded[capId]) {
     delete appState.prescripcion.previewExpanded[capId];
   }
+
+  return true;
 }
 
-// Render columna central
-// Render columna central
+// ========================================================
+// Render columna central (Capítulo seleccionado)
+// ========================================================
+
+function prescComputeImporte(linea) {
+  const qty = safeNumber(linea?.cantidad);
+  const pvp = safeNumber(linea?.pvp);
+  return qty * pvp;
+}
+
+function prescNormalizeLine(linea) {
+  if (!linea) return linea;
+  if (linea.importe == null || !Number.isFinite(Number(linea.importe))) {
+    linea.importe = prescComputeImporte(linea);
+  } else {
+    // si hay desajuste fuerte, preferimos coherencia qty*pvp
+    const calc = prescComputeImporte(linea);
+    const cur = safeNumber(linea.importe);
+    if (Math.abs(calc - cur) > 0.01) linea.importe = calc;
+  }
+  return linea;
+}
+
 function renderPrescCapituloContent() {
   const container = document.getElementById("prescCapituloContent");
   if (!container) return;
 
   const cap = getSelectedCapitulo();
+
   if (!cap) {
     container.innerHTML = `
       <p class="text-muted" style="font-size:0.85rem;">
         Aún no hay capítulos creados. Puedes:
       </p>
       <ul class="text-muted" style="font-size:0.8rem; padding-left:1.2rem;">
-        <li>Crear un capítulo manual con el botón <strong>"Añadir capítulo"</strong>.</li>
+        <li>Crear un capítulo manual con el botón <strong>"＋"</strong>.</li>
         <li>Arrastrar una sección del presupuesto a esta zona para generar un capítulo automáticamente.</li>
       </ul>
     `;
     return;
   }
+
+  cap.lineas = Array.isArray(cap.lineas) ? cap.lineas : [];
+  cap.lineas.forEach(prescNormalizeLine);
 
   const lineas = cap.lineas || [];
 
@@ -871,8 +833,8 @@ function renderPrescCapituloContent() {
     `;
   } else {
     refsHTML = `
-      <div>
-        <table class="table table-compact" style="width:100%; font-size:0.8rem; border-collapse:collapse;">
+      <div style="overflow:auto;">
+        <table class="table table-compact" style="width:100%; font-size:0.8rem; border-collapse:collapse; min-width:720px;">
           <thead>
             <tr>
               <th style="text-align:left;">Código</th>
@@ -888,34 +850,37 @@ function renderPrescCapituloContent() {
             ${lineas
               .map((l) => {
                 const isExtra = l.tipo === "extra";
-                const cod = l.codigo || "";
-                const desc = l.descripcion || "";
-                const unidad = l.unidad || "Ud";
-                const cant = Number(l.cantidad) || 0;
-                const pvp = typeof l.pvp === "number" ? l.pvp : 0;
-                const importe = cant * pvp;
+                const cod = escapeHtml(l.codigo || "");
+                const desc = escapeHtml(l.descripcion || "");
+                const unidad = escapeHtml(l.unidad || "Ud");
+                const cant = safeNumber(l.cantidad);
+                const pvp = safeNumber(l.pvp);
+                const importe = prescComputeImporte(l);
+
+                // mantenemos importe actualizado en estado
+                l.importe = importe;
 
                 return `
-                  <tr data-presc-line-id="${l.id}">
+                  <tr data-presc-line-id="${escapeHtmlAttr(l.id)}">
                     <td>${cod}</td>
                     <td>${desc}</td>
                     <td style="text-align:center;">${unidad}</td>
                     <td style="text-align:right;">
                       ${
                         isExtra
-                          ? `<input type="number" min="0" step="0.01" 
-                                   class="presc-line-qty-input" 
-                                   value="${cant}" 
-                                   style="width:4rem; text-align:right; font-size:0.78rem;" />`
+                          ? `<input type="number" min="0" step="0.01"
+                                   class="presc-line-qty-input"
+                                   value="${cant}"
+                                   style="width:4.8rem; text-align:right; font-size:0.78rem;" />`
                           : cant
                       }
                     </td>
                     <td style="text-align:right;">${pvp.toFixed(2)} €</td>
-                    <td style="text-align:right;">${importe.toFixed(2)} €</td>
+                    <td class="presc-line-imp" style="text-align:right;">${importe.toFixed(2)} €</td>
                     <td style="text-align:center;">
                       ${
                         isExtra
-                          ? `<button type="button" 
+                          ? `<button type="button"
                                      class="btn btn-xs btn-outline presc-line-del-btn"
                                      title="Quitar referencia extra">
                                ✖
@@ -935,26 +900,22 @@ function renderPrescCapituloContent() {
 
   container.innerHTML = `
     <div style="display:flex; flex-direction:column; gap:0.75rem;">
-
-      <!-- Título del capítulo -->
       <div class="form-group">
         <label>Título del capítulo</label>
-        <input id="prescCapTitulo" 
-               type="text" 
+        <input id="prescCapTitulo"
+               type="text"
                class="form-control"
-               value="${(cap.nombre || "").replace(/"/g, "&quot;")}" />
+               value="${escapeHtmlAttr(cap.nombre || "")}" />
       </div>
 
-      <!-- Texto descriptivo -->
       <div class="form-group">
         <label>Texto descriptivo (mediciones)</label>
         <textarea id="prescCapTexto"
                   class="form-control"
                   style="width:100%; min-height:130px; resize:vertical;"
-                  placeholder="Aquí puedes escribir o pegar el texto técnico de mediciones del capítulo...">${cap.texto || ""}</textarea>
+                  placeholder="Aquí puedes escribir o pegar el texto técnico de mediciones del capítulo...">${escapeHtml(cap.texto || "")}</textarea>
       </div>
 
-      <!-- Tabla de referencias -->
       <div class="form-group">
         <label>Referencias del capítulo</label>
         ${refsHTML}
@@ -962,41 +923,55 @@ function renderPrescCapituloContent() {
     </div>
   `;
 
+  // Título
   const tituloInput = container.querySelector("#prescCapTitulo");
   if (tituloInput) {
     tituloInput.addEventListener("input", (ev) => {
       cap.nombre = ev.target.value || "";
+      // Si existe preview, refrescamos sólo preview para ver título al instante
+      if (typeof renderPrescPreview === "function") renderPrescPreview();
     });
   }
 
+  // Texto
   const textoArea = container.querySelector("#prescCapTexto");
   if (textoArea) {
     textoArea.addEventListener("input", (ev) => {
       cap.texto = ev.target.value || "";
+      // Preview opcional
+      if (typeof renderPrescPreview === "function") renderPrescPreview();
     });
   }
 
-  const rows = container.querySelectorAll("tr[data-presc-line-id]");
-  rows.forEach((row) => {
+  // Qty + delete en líneas extra (sin render completo)
+  container.querySelectorAll("tr[data-presc-line-id]").forEach((row) => {
     const lineId = row.getAttribute("data-presc-line-id");
-    const linea = cap.lineas.find((l) => l.id === lineId);
+    const linea = (cap.lineas || []).find((l) => String(l.id) === String(lineId));
     if (!linea) return;
 
     if (linea.tipo === "extra") {
       const qtyInput = row.querySelector(".presc-line-qty-input");
       const delBtn = row.querySelector(".presc-line-del-btn");
+      const impCell = row.querySelector(".presc-line-imp");
 
       if (qtyInput) {
         qtyInput.addEventListener("input", () => {
-          linea.cantidad = Number(qtyInput.value) || 0;
-          linea.importe = safeNumber(linea.cantidad) * safeNumber(linea.pvp);
+          linea.cantidad = safeNumber(qtyInput.value);
+          linea.importe = prescComputeImporte(linea);
+
+          if (impCell) impCell.textContent = linea.importe.toFixed(2) + " €";
+
+          // refrescar total/preview sin re-render completo si existe
+          if (typeof renderPrescPreview === "function") renderPrescPreview();
         });
       }
 
       if (delBtn) {
         delBtn.addEventListener("click", () => {
-          cap.lineas = cap.lineas.filter((l) => l.id !== lineId);
-          renderDocPrescripcionView();
+          cap.lineas = (cap.lineas || []).filter((l) => l.id !== lineId);
+          // Re-render solo panel central + preview
+          renderPrescCapituloContent();
+          if (typeof renderPrescPreview === "function") renderPrescPreview();
         });
       }
     }
@@ -1004,32 +979,68 @@ function renderPrescCapituloContent() {
 }
 
 // ========================================================
-// BLOQUE 7 - Plantillas + Referencias extra
+// FIN PARTE 5
+// ========================================================
+// ========================================================
+// PARTE 6
+// Plantillas + Referencias extra (Firestore + render)
 // ========================================================
 
-// Firestore: PLANTILLAS
+// ========================================================
+// Auth helper: asegurar UID antes de Firestore
+// ========================================================
+
+function ensurePrescUidReady(timeoutMs = 15000) {
+  return new Promise((resolve) => {
+    const uidNow = getCurrentUidPresc();
+    if (uidNow) return resolve(uidNow);
+
+    const auth = getAuthPresc();
+    if (!auth || typeof auth.onAuthStateChanged !== "function") {
+      return resolve(null);
+    }
+
+    let done = false;
+    const timer = setTimeout(() => {
+      if (done) return;
+      done = true;
+      resolve(getCurrentUidPresc());
+    }, timeoutMs);
+
+    auth.onAuthStateChanged((user) => {
+      if (done) return;
+      if (user?.uid) {
+        done = true;
+        clearTimeout(timer);
+        resolve(user.uid);
+      }
+    });
+  });
+}
+
+// ========================================================
+// PLANTILLAS (Firestore)
+// ========================================================
+
 async function ensurePrescPlantillasLoaded() {
   await ensurePrescUidReady();
-  appState.prescripcion.plantillas = appState.prescripcion.plantillas || [];
   if (appState.prescripcion.plantillasLoaded) return;
 
+  appState.prescripcion.plantillas = appState.prescripcion.plantillas || [];
+
   const db = getFirestorePresc();
-  const auth = getAuthPresc();
   if (!db) {
-    console.warn("[PRESCRIPCIÓN] Firestore no disponible para plantillas, solo local.");
     appState.prescripcion.plantillasLoaded = true;
     return;
   }
 
-  let uid = null;
-  if (auth && auth.currentUser) uid = auth.currentUser.uid;
-
   try {
-    let q = getUserSubcollectionRefPresc("prescripcion_plantillas");
-    if (uid) q = q.where("uid", "==", uid);
+    const ref = getUserSubcollectionRefPresc("prescripcion_plantillas");
+    if (!ref) throw new Error("No subcollection ref");
 
-    const snap = await q.get();
+    const snap = await ref.get();
     const list = [];
+
     snap.forEach((doc) => {
       const d = doc.data() || {};
       list.push({
@@ -1040,10 +1051,9 @@ async function ensurePrescPlantillasLoaded() {
     });
 
     appState.prescripcion.plantillas = list;
-    appState.prescripcion.plantillasLoaded = true;
-    console.log("[PRESCRIPCIÓN] Plantillas cargadas:", list.length);
   } catch (e) {
     console.error("[PRESCRIPCIÓN] Error cargando plantillas:", e);
+  } finally {
     appState.prescripcion.plantillasLoaded = true;
   }
 }
@@ -1052,41 +1062,28 @@ async function createPrescPlantilla(nombre, texto) {
   await ensurePrescUidReady();
   nombre = (nombre || "").trim();
   texto = texto || "";
-  if (!nombre) {
-    alert("La plantilla necesita un nombre.");
-    return;
-  }
+  if (!nombre) return alert("La plantilla necesita un nombre.");
 
-  const db = getFirestorePresc();
-  const auth = getAuthPresc();
-
-  let newItem = {
+  const local = {
     id: "local-" + Date.now(),
     nombre,
     texto
   };
 
-  appState.prescripcion.plantillas = [
-    newItem,
-    ...(appState.prescripcion.plantillas || [])
-  ];
+  appState.prescripcion.plantillas.unshift(local);
 
-  if (!db) return;
+  const db = getFirestorePresc();
+  const ref = getUserSubcollectionRefPresc("prescripcion_plantillas");
+  if (!db || !ref) return;
 
   try {
-    let uid = null;
-    if (auth && auth.currentUser) uid = auth.currentUser.uid;
-
-    const docRef = await getUserSubcollectionRefPresc("prescripcion_plantillas").add({
-      uid: uid || null,
+    const doc = await ref.add({
       nombre,
       texto,
       createdAt: Date.now(),
       updatedAt: Date.now()
     });
-
-    newItem.id = docRef.id;
-    appState.prescripcion.plantillas[0] = newItem;
+    local.id = doc.id;
   } catch (e) {
     console.error("[PRESCRIPCIÓN] Error creando plantilla:", e);
   }
@@ -1094,26 +1091,17 @@ async function createPrescPlantilla(nombre, texto) {
 
 async function updatePrescPlantilla(id, nombre, texto) {
   await ensurePrescUidReady();
-  if (!id) return;
-  nombre = (nombre || "").trim();
-  texto = texto || "";
-
   const list = appState.prescripcion.plantillas || [];
   const idx = list.findIndex((p) => p.id === id);
   if (idx !== -1) {
     list[idx] = { ...list[idx], nombre, texto };
-    appState.prescripcion.plantillas = list;
   }
 
-  const db = getFirestorePresc();
-  if (!db) return;
+  const ref = getUserSubcollectionRefPresc("prescripcion_plantillas");
+  if (!ref) return;
 
   try {
-    await getUserSubcollectionRefPresc("prescripcion_plantillas").doc(id).update({
-      nombre,
-      texto,
-      updatedAt: Date.now()
-    });
+    await ref.doc(id).update({ nombre, texto, updatedAt: Date.now() });
   } catch (e) {
     console.error("[PRESCRIPCIÓN] Error actualizando plantilla:", e);
   }
@@ -1121,45 +1109,146 @@ async function updatePrescPlantilla(id, nombre, texto) {
 
 async function deletePrescPlantilla(id) {
   await ensurePrescUidReady();
-  if (!id) return;
-  const ok = window.confirm("¿Seguro que quieres borrar esta plantilla?");
-  if (!ok) return;
+  if (!confirm("¿Eliminar esta plantilla?")) return;
 
   appState.prescripcion.plantillas =
     (appState.prescripcion.plantillas || []).filter((p) => p.id !== id);
 
-  const db = getFirestorePresc();
-  if (!db) return;
+  const ref = getUserSubcollectionRefPresc("prescripcion_plantillas");
+  if (!ref) return;
 
   try {
-    await getUserSubcollectionRefPresc("prescripcion_plantillas").doc(id).delete();
+    await ref.doc(id).delete();
   } catch (e) {
     console.error("[PRESCRIPCIÓN] Error borrando plantilla:", e);
   }
 }
 
-// Firestore: REFERENCIAS EXTRA
+// ========================================================
+// RENDER PLANTILLAS (fix bug buscador 1 carácter)
+// ========================================================
+
+async function renderPrescPlantillasList() {
+  const container = document.getElementById("prescPlantillasList");
+  if (!container) return;
+
+  await ensurePrescPlantillasLoaded();
+
+  const list = appState.prescripcion.plantillas || [];
+  const term = (appState.prescripcion.plantillasSearchTerm || "").toLowerCase();
+
+  const filtered = list.filter((p) =>
+    !term ||
+    (p.nombre + " " + p.texto).toLowerCase().includes(term)
+  );
+
+  container.innerHTML = `
+    <div style="display:flex; gap:0.5rem; margin-bottom:0.5rem;">
+      <input id="prescPlantillasSearch"
+             class="form-control form-control-sm"
+             placeholder="Buscar plantilla..."
+             value="${escapeHtmlAttr(appState.prescripcion.plantillasSearchTerm || "")}">
+      <button id="prescNewPlantillaBtn" class="btn btn-xs btn-secondary">＋</button>
+    </div>
+    ${filtered.map(p => `
+      <div class="presc-plantilla-item" draggable="true" data-id="${escapeHtmlAttr(p.id)}">
+        <div style="font-weight:600;">📄 ${escapeHtml(p.nombre)}</div>
+        <div style="font-size:0.75rem; color:#6b7280;">
+          ${(p.texto || "").slice(0, 140)}${p.texto.length > 140 ? "…" : ""}
+        </div>
+        <div style="margin-top:0.25rem; text-align:right;">
+          <button class="btn btn-xs" data-apply="${escapeHtmlAttr(p.id)}">➕</button>
+          <button class="btn btn-xs btn-outline" data-edit="${escapeHtmlAttr(p.id)}">✏️</button>
+          <button class="btn btn-xs" data-del="${escapeHtmlAttr(p.id)}">🗑️</button>
+        </div>
+      </div>
+    `).join("")}
+  `;
+
+  const search = container.querySelector("#prescPlantillasSearch");
+  if (search) {
+    search.addEventListener("input", (e) => {
+      appState.prescripcion.plantillasSearchTerm = e.target.value || "";
+      requestAnimationFrame(renderPrescPlantillasList);
+    });
+  }
+
+  container.querySelector("#prescNewPlantillaBtn")?.addEventListener("click", () => {
+    openPrescModal({
+      title: "Nueva plantilla",
+      bodyHTML: `
+        <input id="tplNombre" class="form-control" placeholder="Nombre">
+        <textarea id="tplTexto" class="form-control" rows="6"></textarea>
+      `,
+      onSave: async () => {
+        await createPrescPlantilla(
+          document.getElementById("tplNombre").value,
+          document.getElementById("tplTexto").value
+        );
+        renderPrescPlantillasList();
+      }
+    });
+  });
+
+  container.querySelectorAll("[data-apply]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const cap = getSelectedCapitulo();
+      if (!cap) return;
+      const tpl = list.find(p => p.id === btn.dataset.apply);
+      if (!tpl) return;
+      cap.texto = tpl.texto;
+      renderPrescCapituloContent();
+    });
+  });
+
+  container.querySelectorAll("[data-edit]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const tpl = list.find(p => p.id === btn.dataset.edit);
+      if (!tpl) return;
+      openPrescModal({
+        title: "Editar plantilla",
+        bodyHTML: `
+          <input id="tplNombre" class="form-control" value="${escapeHtmlAttr(tpl.nombre)}">
+          <textarea id="tplTexto" class="form-control" rows="6">${escapeHtml(tpl.texto)}</textarea>
+        `,
+        onSave: async () => {
+          await updatePrescPlantilla(
+            tpl.id,
+            document.getElementById("tplNombre").value,
+            document.getElementById("tplTexto").value
+          );
+          renderPrescPlantillasList();
+        }
+      });
+    });
+  });
+
+  container.querySelectorAll("[data-del]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      await deletePrescPlantilla(btn.dataset.del);
+      renderPrescPlantillasList();
+    });
+  });
+}
+
+// ========================================================
+// REFERENCIAS EXTRA (Firestore + render)
+// ========================================================
+
 async function ensureExtraRefsLoaded() {
   await ensurePrescUidReady();
-  appState.prescripcion.extraRefs = appState.prescripcion.extraRefs || [];
   if (appState.prescripcion.extraRefsLoaded) return;
 
-  const db = getFirestorePresc();
-  const auth = getAuthPresc();
-  if (!db) {
-    console.warn("[PRESCRIPCIÓN] Firestore no disponible para refs extra, solo local.");
+  appState.prescripcion.extraRefs = appState.prescripcion.extraRefs || [];
+
+  const ref = getUserSubcollectionRefPresc("prescripcion_referencias_extra");
+  if (!ref) {
     appState.prescripcion.extraRefsLoaded = true;
     return;
   }
 
-  let uid = null;
-  if (auth && auth.currentUser) uid = auth.currentUser.uid;
-
   try {
-    let q = getUserSubcollectionRefPresc("prescripcion_referencias_extra");
-    if (uid) q = q.where("uid", "==", uid);
-
-    const snap = await q.get();
+    const snap = await ref.get();
     const list = [];
     snap.forEach((doc) => {
       const d = doc.data() || {};
@@ -1168,35 +1257,44 @@ async function ensureExtraRefsLoaded() {
         codigo: d.codigo || "",
         descripcion: d.descripcion || "",
         unidad: d.unidad || "Ud",
-        pvp: typeof d.pvp === "number" ? d.pvp : 0
+        pvp: safeNumber(d.pvp)
       });
     });
-
     appState.prescripcion.extraRefs = list;
-    appState.prescripcion.extraRefsLoaded = true;
-    console.log("[PRESCRIPCIÓN] Refs extra cargadas:", list.length);
   } catch (e) {
-    console.error("[PRESCRIPCIÓN] Error cargando refs extra:", e);
+    console.error("[PRESCRIPCIÓN] Error refs extra:", e);
+  } finally {
     appState.prescripcion.extraRefsLoaded = true;
   }
 }
 
+// El render completo de refs extra sigue en PARTE 7
+// ========================================================
+// FIN PARTE 6
+// ========================================================
+// ========================================================
+// PARTE 7
+// Referencias extra: CRUD + render + buscador + estilos
+// ========================================================
+
+// ========================================================
+// CRUD REFERENCIAS EXTRA
+// ========================================================
+
 async function createExtraRef(codigo, descripcion, unidad, pvp) {
   await ensurePrescUidReady();
+
   codigo = (codigo || "").trim();
   descripcion = (descripcion || "").trim();
   unidad = (unidad || "Ud").trim() || "Ud";
-  pvp = Number(pvp) || 0;
+  pvp = safeNumber(pvp);
 
   if (!codigo && !descripcion) {
     alert("La referencia necesita al menos código o descripción.");
     return;
   }
 
-  const db = getFirestorePresc();
-  const auth = getAuthPresc();
-
-  let newItem = {
+  const local = {
     id: "local-" + Date.now(),
     codigo,
     descripcion,
@@ -1204,19 +1302,14 @@ async function createExtraRef(codigo, descripcion, unidad, pvp) {
     pvp
   };
 
-  appState.prescripcion.extraRefs = [
-    newItem,
-    ...(appState.prescripcion.extraRefs || [])
-  ];
+  appState.prescripcion.extraRefs = appState.prescripcion.extraRefs || [];
+  appState.prescripcion.extraRefs.unshift(local);
 
-  if (!db) return;
+  const ref = getUserSubcollectionRefPresc("prescripcion_referencias_extra");
+  if (!ref) return;
 
   try {
-    let uid = null;
-    if (auth && auth.currentUser) uid = auth.currentUser.uid;
-
-    const docRef = await getUserSubcollectionRefPresc("prescripcion_referencias_extra").add({
-      uid: uid || null,
+    const doc = await ref.add({
       codigo,
       descripcion,
       unidad,
@@ -1224,9 +1317,7 @@ async function createExtraRef(codigo, descripcion, unidad, pvp) {
       createdAt: Date.now(),
       updatedAt: Date.now()
     });
-
-    newItem.id = docRef.id;
-    appState.prescripcion.extraRefs[0] = newItem;
+    local.id = doc.id;
   } catch (e) {
     console.error("[PRESCRIPCIÓN] Error creando ref extra:", e);
   }
@@ -1234,24 +1325,25 @@ async function createExtraRef(codigo, descripcion, unidad, pvp) {
 
 async function updateExtraRef(id, codigo, descripcion, unidad, pvp) {
   await ensurePrescUidReady();
+
   if (!id) return;
+
   codigo = (codigo || "").trim();
   descripcion = (descripcion || "").trim();
   unidad = (unidad || "Ud").trim() || "Ud";
-  pvp = Number(pvp) || 0;
+  pvp = safeNumber(pvp);
 
   const list = appState.prescripcion.extraRefs || [];
   const idx = list.findIndex((r) => r.id === id);
   if (idx !== -1) {
     list[idx] = { ...list[idx], codigo, descripcion, unidad, pvp };
-    appState.prescripcion.extraRefs = list;
   }
 
-  const db = getFirestorePresc();
-  if (!db) return;
+  const ref = getUserSubcollectionRefPresc("prescripcion_referencias_extra");
+  if (!ref) return;
 
   try {
-    await getUserSubcollectionRefPresc("prescripcion_referencias_extra").doc(id).update({
+    await ref.doc(id).update({
       codigo,
       descripcion,
       unidad,
@@ -1266,17 +1358,18 @@ async function updateExtraRef(id, codigo, descripcion, unidad, pvp) {
 async function deleteExtraRef(id) {
   await ensurePrescUidReady();
   if (!id) return;
-  const ok = window.confirm("¿Seguro que quieres borrar esta referencia extra?");
+
+  const ok = confirm("¿Seguro que quieres borrar esta referencia extra?");
   if (!ok) return;
 
   appState.prescripcion.extraRefs =
     (appState.prescripcion.extraRefs || []).filter((r) => r.id !== id);
 
-  const db = getFirestorePresc();
-  if (!db) return;
+  const ref = getUserSubcollectionRefPresc("prescripcion_referencias_extra");
+  if (!ref) return;
 
   try {
-    await getUserSubcollectionRefPresc("prescripcion_referencias_extra").doc(id).delete();
+    await ref.doc(id).delete();
   } catch (e) {
     console.error("[PRESCRIPCIÓN] Error borrando ref extra:", e);
   }
@@ -1297,6 +1390,7 @@ function addExtraRefToCurrentCap(extraId) {
     alert("Selecciona o crea un capítulo primero.");
     return;
   }
+
   const list = appState.prescripcion.extraRefs || [];
   const r = list.find((x) => x.id === extraId);
   if (!r) return;
@@ -1305,569 +1399,264 @@ function addExtraRefToCurrentCap(extraId) {
   cap.lineas.push({
     id: "extra-" + extraId + "-" + Date.now(),
     tipo: "extra",
-    codigo: r.codigo,
-    descripcion: r.descripcion,
+    codigo: r.codigo || "",
+    descripcion: r.descripcion || "",
     unidad: r.unidad || "Ud",
     cantidad: 1,
-    pvp: r.pvp || 0,
-    importe: (r.pvp || 0) * 1,
+    pvp: safeNumber(r.pvp),
+    importe: safeNumber(r.pvp) * 1,
     extraRefId: extraId
   });
 }
-// ========================================================
-// Render PLANTILLAS (con buscador)
-// ========================================================
-async function renderPrescPlantillasList() {
-  const container = document.getElementById("prescPlantillasList");
-  if (!container) return;
-
-  await ensurePrescPlantillasLoaded();
-  const plantillas = appState.prescripcion.plantillas || [];
-  const searchTerm = (appState.prescripcion.plantillasSearchTerm || "").toLowerCase();
-
-  const filtered = plantillas.filter((p) => {
-    if (!searchTerm) return true;
-    const base =
-      (p.nombre || "") + " " +
-      (p.texto || "");
-    return base.toLowerCase().includes(searchTerm);
-  });
-
-  if (!plantillas.length) {
-    container.innerHTML = `
-      <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem; margin-bottom:0.5rem; flex-wrap:wrap;">
-        <input id="prescPlantillasSearch" 
-               type="text" 
-               class="form-control form-control-sm" 
-               placeholder="Buscar plantilla..."
-               value="${appState.prescripcion.plantillasSearchTerm || ""}"
-               style="font-size:0.75rem; max-width:60%;">
-        <button id="prescNewPlantillaBtn" class="btn btn-xs btn-secondary" title="Nueva plantilla">＋</button>
-      </div>
-      <p class="text-muted" style="font-size:0.8rem;">
-        Aún no tienes plantillas. Crea tu primera plantilla de texto técnico.
-      </p>
-    `;
-  } else {
-    container.innerHTML = `
-      <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem; margin-bottom:0.5rem; flex-wrap:wrap;">
-        <input id="prescPlantillasSearch" 
-               type="text" 
-               class="form-control form-control-sm" 
-               placeholder="Buscar plantilla..."
-               value="${appState.prescripcion.plantillasSearchTerm || ""}"
-               style="font-size:0.75rem; max-width:60%;">
-        <button id="prescNewPlantillaBtn" class="btn btn-xs btn-secondary" title="Nueva plantilla">＋</button>
-      </div>
-      <div>
-        ${filtered
-          .map((p) => {
-            const preview =
-              (p.texto || "")
-                .split("\n")
-                .slice(0, 3)
-                .join(" ")
-                .slice(0, 220) +
-              (p.texto && p.texto.length > 220 ? "..." : "");
-
-            return `
-              <div class="presc-plantilla-item"
-                   draggable="true"
-                   data-presc-plantilla-id="${p.id}">
-                <div class="presc-plantilla-header">
-                  <span class="presc-plantilla-name">📄 ${p.nombre}</span>
-                  <span class="presc-plantilla-actions">
-                    <button class="btn btn-xs btn-outline" data-presc-plantilla-edit="${p.id}">✏️</button>
-                    <button class="btn btn-xs" data-presc-plantilla-del="${p.id}">🗑️</button>
-                  </span>
-                </div>
-                <div class="presc-plantilla-preview">
-                  ${preview || "<i>(sin texto)</i>"}
-                </div>
-                <div class="presc-plantilla-footer">
-                  <button class="btn btn-xs" data-presc-plantilla-apply="${p.id}">
-                    ➕ Aplicar al capítulo
-                  </button>
-                </div>
-              </div>
-            `;
-          })
-          .join("") || `
-            <p class="text-muted" style="font-size:0.8rem;">
-              No hay plantillas que coincidan con la búsqueda.
-            </p>
-          `}
-      </div>
-    `;
-  }
-
-  // Buscador plantillas
-  const searchInput = container.querySelector("#prescPlantillasSearch");
-  if (searchInput) {
-    searchInput.addEventListener("input", (e) => {
-      const val = e.target.value || "";
-      const pos = typeof e.target.selectionStart === "number" ? e.target.selectionStart : val.length;
-
-      appState.prescripcion.plantillasSearchTerm = val;
-
-      // Re-render + restaurar foco/cursor (evita “solo 1 carácter”)
-      Promise.resolve(renderPrescPlantillasList()).then(() => {
-        requestAnimationFrame(() => {
-          const again = document.getElementById("prescPlantillasSearch");
-          if (!again) return;
-          again.focus();
-          try { again.setSelectionRange(pos, pos); } catch (_) {}
-        });
-      });
-    });
-  }
-
-
-  // Botón nueva plantilla (icono)
-  const btnNew = container.querySelector("#prescNewPlantillaBtn");
-  if (btnNew) {
-    btnNew.addEventListener("click", () => {
-      openPrescModal({
-        title: "Nueva plantilla de prescripción",
-        bodyHTML: `
-          <div class="form-group">
-            <label>Nombre</label>
-            <input id="tplNombre" type="text" class="form-control" />
-          </div>
-          <div class="form-group">
-            <label>Texto</label>
-            <textarea id="tplTexto" rows="8" class="form-control"></textarea>
-          </div>
-        `,
-        onSave: async () => {
-          const nombre = (document.getElementById("tplNombre").value || "").trim();
-          const texto = document.getElementById("tplTexto").value || "";
-          await createPrescPlantilla(nombre, texto);
-          renderDocPrescripcionView();
-        }
-      });
-    });
-  }
-
-  // Drag plantillas
-  container
-    .querySelectorAll(".presc-plantilla-item[draggable='true']")
-    .forEach((el) => {
-      el.addEventListener("dragstart", (ev) => {
-        const id = el.getAttribute("data-presc-plantilla-id");
-        ev.dataTransfer.setData("text/presc-plantilla-id", id);
-        el.style.opacity = "0.6";
-      });
-      el.addEventListener("dragend", () => {
-        el.style.opacity = "1";
-      });
-    });
-
-  // Aplicar al capítulo
-  container
-    .querySelectorAll("[data-presc-plantilla-apply]")
-    .forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const id = btn.getAttribute("data-presc-plantilla-apply");
-        const plantillasList = appState.prescripcion.plantillas || [];
-        const tpl = plantillasList.find((p) => p.id === id);
-        if (!tpl) return;
-
-        const cap = getSelectedCapitulo();
-        if (!cap) {
-          alert("Selecciona o crea un capítulo primero.");
-          return;
-        }
-
-        cap.texto = tpl.texto || "";
-        const ta = document.getElementById("prescCapTexto");
-        if (ta) ta.value = cap.texto;
-      });
-    });
-
-  // Editar plantilla
-  container
-    .querySelectorAll("[data-presc-plantilla-edit]")
-    .forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const id = btn.getAttribute("data-presc-plantilla-edit");
-        const plantillasList = appState.prescripcion.plantillas || [];
-        const tpl = plantillasList.find((p) => p.id === id);
-        if (!tpl) return;
-
-        openPrescModal({
-          title: "Editar plantilla",
-          bodyHTML: `
-            <div class="form-group">
-              <label>Nombre</label>
-              <input id="tplNombre" type="text" class="form-control" value="${(tpl.nombre || "").replace(/"/g, "&quot;")}" />
-            </div>
-            <div class="form-group">
-              <label>Texto</label>
-              <textarea id="tplTexto" rows="8" class="form-control">${tpl.texto || ""}</textarea>
-            </div>
-          `,
-          onSave: async () => {
-            const nombre = (document.getElementById("tplNombre").value || "").trim();
-            const texto = document.getElementById("tplTexto").value || "";
-            await updatePrescPlantilla(id, nombre, texto);
-            renderDocPrescripcionView();
-          }
-        });
-      });
-    });
-
-  // Borrar plantilla
-  container
-    .querySelectorAll("[data-presc-plantilla-del]")
-    .forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        const id = btn.getAttribute("data-presc-plantilla-del");
-        await deletePrescPlantilla(id);
-        renderDocPrescripcionView();
-      });
-    });
-
-  // Drop desde plantillas al textarea del capítulo
-  const capTextarea = document.getElementById("prescCapTexto");
-  if (capTextarea) {
-    capTextarea.addEventListener("dragover", (ev) => {
-      if (ev.dataTransfer.types.includes("text/presc-plantilla-id")) {
-        ev.preventDefault();
-      }
-    });
-
-    capTextarea.addEventListener("drop", (ev) => {
-      ev.preventDefault();
-      const id = ev.dataTransfer.getData("text/presc-plantilla-id");
-      if (!id) return;
-
-      const plantillasList = appState.prescripcion.plantillas || [];
-      const tpl = plantillasList.find((p) => p.id === id);
-      if (!tpl) return;
-
-      const cap = getSelectedCapitulo();
-      if (!cap) return;
-
-      cap.texto = tpl.texto || "";
-      capTextarea.value = cap.texto;
-    });
-  }
-}
 
 // ========================================================
-// Render REFERENCIAS EXTRA (con buscador)
+// RENDER REFERENCIAS EXTRA (buscador sin bug “1 carácter”)
 // ========================================================
+
 async function renderPrescExtraRefsList() {
   const container = document.getElementById("prescExtraRefsList");
   if (!container) return;
 
   await ensureExtraRefsLoaded();
+
   const refs = appState.prescripcion.extraRefs || [];
-  const searchTerm = (appState.prescripcion.extraRefsSearchTerm || "").toLowerCase();
+  const term = (appState.prescripcion.extraRefsSearchTerm || "").toLowerCase();
 
   const filtered = refs.filter((r) => {
-    if (!searchTerm) return true;
-    const base =
-      (r.codigo || "") + " " +
-      (r.descripcion || "");
-    return base.toLowerCase().includes(searchTerm);
+    if (!term) return true;
+    const base = ((r.codigo || "") + " " + (r.descripcion || "")).toLowerCase();
+    return base.includes(term);
   });
 
-  if (!refs.length) {
-    container.innerHTML = `
-      <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem; margin-bottom:0.5rem; flex-wrap:wrap;">
-        <input id="prescExtraRefsSearch" 
-               type="text" 
-               class="form-control form-control-sm" 
-               placeholder="Buscar referencia..."
-               value="${appState.prescripcion.extraRefsSearchTerm || ""}"
-               style="font-size:0.75rem; max-width:60%;">
-        <button id="prescNewExtraRefBtn" class="btn btn-xs btn-secondary" title="Nueva referencia extra">➕</button>
-      </div>
-      <p class="text-muted" style="font-size:0.8rem;">
-        Aún no tienes referencias extra. Crea materiales, mano de obra, etc.
-      </p>
-    `;
-  } else {
-    container.innerHTML = `
-      <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem; margin-bottom:0.5rem; flex-wrap:wrap;">
-        <input id="prescExtraRefsSearch" 
-               type="text" 
-               class="form-control form-control-sm" 
-               placeholder="Buscar referencia..."
-               value="${appState.prescripcion.extraRefsSearchTerm || ""}"
-               style="font-size:0.75rem; max-width:60%;">
-        <button id="prescNewExtraRefBtn" class="btn btn-xs btn-secondary" title="Nueva referencia extra">➕</button>
-      </div>
-      <div>
-        ${filtered
-          .map((r) => {
-            const cod = r.codigo || "";
-            const desc = r.descripcion || "";
-            const unidad = r.unidad || "Ud";
-            const pvp =
-              typeof r.pvp === "number" ? r.pvp.toFixed(2) : "0.00";
+  container.innerHTML = `
+    <div style="display:flex; gap:0.5rem; margin-bottom:0.5rem; align-items:center;">
+      <input id="prescExtraRefsSearch"
+             class="form-control form-control-sm"
+             placeholder="Buscar referencia..."
+             value="${escapeHtmlAttr(appState.prescripcion.extraRefsSearchTerm || "")}">
+      <button id="prescNewExtraRefBtn" class="btn btn-xs btn-secondary" title="Nueva referencia extra">➕</button>
+    </div>
 
-            return `
-              <div class="presc-extra-item" data-presc-extra-id="${r.id}">
-                <div class="presc-extra-main">
-                  <div class="presc-extra-line1">
-                    <span class="presc-extra-code">${cod}</span>
-                    <span class="presc-extra-price">${pvp} € / ${unidad}</span>
+    ${
+      filtered.length
+        ? filtered
+            .map((r) => {
+              const cod = r.codigo || "";
+              const desc = r.descripcion || "";
+              const unidad = r.unidad || "Ud";
+              const pvp = safeNumber(r.pvp).toFixed(2);
+
+              return `
+                <div class="presc-extra-item" data-id="${escapeHtmlAttr(r.id)}">
+                  <div class="presc-extra-main">
+                    <div class="presc-extra-line1">
+                      <span class="presc-extra-code">${escapeHtml(cod)}</span>
+                      <span class="presc-extra-price">${pvp} € / ${escapeHtml(unidad)}</span>
+                    </div>
+                    <div class="presc-extra-desc">${desc ? escapeHtml(desc) : "<i>(sin descripción)</i>"}</div>
                   </div>
-                  <div class="presc-extra-desc">
-                    ${desc || "<i>(sin descripción)</i>"}
+
+                  <div class="presc-extra-actions">
+                    <button class="btn btn-xs" data-add="${escapeHtmlAttr(r.id)}">➕ Añadir</button>
+                    <button class="btn btn-xs btn-outline" data-dup="${escapeHtmlAttr(r.id)}">⧉</button>
+                    <button class="btn btn-xs btn-outline" data-edit="${escapeHtmlAttr(r.id)}">✏️</button>
+                    <button class="btn btn-xs" data-del="${escapeHtmlAttr(r.id)}">🗑️</button>
                   </div>
                 </div>
-                <div class="presc-extra-actions">
-                  <button class="btn btn-xs" data-presc-extra-add="${r.id}">➕ Añadir al capítulo</button>
-                  <button class="btn btn-xs btn-outline" data-presc-extra-dup="${r.id}">⧉</button>
-                  <button class="btn btn-xs btn-outline" data-presc-extra-edit="${r.id}">✏️</button>
-                  <button class="btn btn-xs" data-presc-extra-del="${r.id}">🗑️</button>
-                </div>
-              </div>
-            `;
-          })
-          .join("") || `
-            <p class="text-muted" style="font-size:0.8rem;">
-              No hay referencias que coincidan con la búsqueda.
-            </p>
-          `}
-      </div>
-    `;
-  }
+              `;
+            })
+            .join("")
+        : `<p class="text-muted" style="font-size:0.8rem;">No hay referencias que coincidan con la búsqueda.</p>`
+    }
+  `;
 
-  // Buscador refs extra
-  const searchInput = container.querySelector("#prescExtraRefsSearch");
-  if (searchInput) {
-    searchInput.addEventListener("input", (e) => {
-      const val = e.target.value || "";
-      const pos = typeof e.target.selectionStart === "number" ? e.target.selectionStart : val.length;
-
-      appState.prescripcion.extraRefsSearchTerm = val;
-
-      // Re-render + restaurar foco/cursor
-      Promise.resolve(renderPrescExtraRefsList()).then(() => {
-        requestAnimationFrame(() => {
-          const again = document.getElementById("prescExtraRefsSearch");
-          if (!again) return;
-          again.focus();
-          try { again.setSelectionRange(pos, pos); } catch (_) {}
-        });
-      });
+  // Buscador (evita bug de 1 carácter: re-render por RAF)
+  const search = container.querySelector("#prescExtraRefsSearch");
+  if (search) {
+    search.addEventListener("input", (e) => {
+      appState.prescripcion.extraRefsSearchTerm = e.target.value || "";
+      requestAnimationFrame(renderPrescExtraRefsList);
     });
   }
 
+  // Nueva referencia
+  container.querySelector("#prescNewExtraRefBtn")?.addEventListener("click", () => {
+    openPrescModal({
+      title: "Nueva referencia extra",
+      bodyHTML: `
+        <div class="form-group">
+          <label>Código</label>
+          <input id="extCodigo" type="text" class="form-control" />
+        </div>
+        <div class="form-group">
+          <label>Descripción</label>
+          <textarea id="extDesc" rows="3" class="form-control"></textarea>
+        </div>
+        <div class="form-group">
+          <label>Unidad</label>
+          <select id="extUnidad" class="form-control">
+            <option value="Ud">Ud</option>
+            <option value="m">m</option>
+            <option value="m²">m²</option>
+            <option value="h">h</option>
+            <option value="m³">m³</option>
+            <option value="kg">kg</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>PVP</label>
+          <input id="extPvp" type="number" class="form-control" value="0" />
+        </div>
+      `,
+      onSave: async () => {
+        const codigo = document.getElementById("extCodigo")?.value || "";
+        const desc = document.getElementById("extDesc")?.value || "";
+        const unidad = document.getElementById("extUnidad")?.value || "Ud";
+        const pvp = document.getElementById("extPvp")?.value || 0;
+        await createExtraRef(codigo, desc, unidad, pvp);
+        renderPrescExtraRefsList();
+      }
+    });
+  });
 
-  // Botón nueva ref extra (icono)
-  const btnNew = container.querySelector("#prescNewExtraRefBtn");
-  if (btnNew) {
-    btnNew.addEventListener("click", () => {
+  // Añadir al capítulo
+  container.querySelectorAll("[data-add]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      addExtraRefToCurrentCap(btn.dataset.add);
+      renderPrescCapituloContent();
+      renderPrescPreview();
+    });
+  });
+
+  // Duplicar
+  container.querySelectorAll("[data-dup]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      await duplicateExtraRef(btn.dataset.dup);
+      renderPrescExtraRefsList();
+    });
+  });
+
+  // Editar
+  container.querySelectorAll("[data-edit]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = btn.dataset.edit;
+      const list = appState.prescripcion.extraRefs || [];
+      const r = list.find((x) => x.id === id);
+      if (!r) return;
+
       openPrescModal({
-        title: "Nueva referencia extra",
+        title: "Editar referencia extra",
         bodyHTML: `
           <div class="form-group">
             <label>Código</label>
-            <input id="extCodigo" type="text" class="form-control" />
+            <input id="extCodigo" type="text" class="form-control" value="${escapeHtmlAttr(r.codigo || "")}" />
           </div>
           <div class="form-group">
             <label>Descripción</label>
-            <textarea id="extDesc" rows="3" class="form-control"></textarea>
+            <textarea id="extDesc" rows="3" class="form-control">${escapeHtml(r.descripcion || "")}</textarea>
           </div>
           <div class="form-group">
-            <label>Unidad de medida</label>
+            <label>Unidad</label>
             <select id="extUnidad" class="form-control">
-              <option value="Ud">Ud (unidad)</option>
-              <option value="m">m (metro)</option>
-              <option value="m²">m² (metro cuadrado)</option>
-              <option value="h">h (hora)</option>
-              <option value="m³">m³ (metro cúbico)</option>
-              <option value="kg">kg</option>
+              <option value="Ud" ${r.unidad === "Ud" ? "selected" : ""}>Ud</option>
+              <option value="m" ${r.unidad === "m" ? "selected" : ""}>m</option>
+              <option value="m²" ${r.unidad === "m²" ? "selected" : ""}>m²</option>
+              <option value="h" ${r.unidad === "h" ? "selected" : ""}>h</option>
+              <option value="m³" ${r.unidad === "m³" ? "selected" : ""}>m³</option>
+              <option value="kg" ${r.unidad === "kg" ? "selected" : ""}>kg</option>
             </select>
           </div>
           <div class="form-group">
             <label>PVP</label>
-            <input id="extPvp" type="number" class="form-control" value="0" />
+            <input id="extPvp" type="number" class="form-control" value="${safeNumber(r.pvp)}" />
           </div>
         `,
         onSave: async () => {
-          const codigo = (document.getElementById("extCodigo").value || "").trim();
-          const descripcion = (document.getElementById("extDesc").value || "").trim();
-          const unidad = (document.getElementById("extUnidad").value || "Ud").trim() || "Ud";
-          const pvp = Number(document.getElementById("extPvp").value || 0);
-          await createExtraRef(codigo, descripcion, unidad, pvp);
-          renderDocPrescripcionView();
+          const codigo = document.getElementById("extCodigo")?.value || "";
+          const desc = document.getElementById("extDesc")?.value || "";
+          const unidad = document.getElementById("extUnidad")?.value || "Ud";
+          const pvp = document.getElementById("extPvp")?.value || 0;
+          await updateExtraRef(id, codigo, desc, unidad, pvp);
+          renderPrescExtraRefsList();
+          renderPrescCapituloContent();
+          renderPrescPreview();
         }
       });
     });
-  }
+  });
 
-  // Acciones sobre cada ref extra
-  container
-    .querySelectorAll("[data-presc-extra-add]")
-    .forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const id = btn.getAttribute("data-presc-extra-add");
-        addExtraRefToCurrentCap(id);
-        renderDocPrescripcionView();
-      });
+  // Borrar
+  container.querySelectorAll("[data-del]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      await deleteExtraRef(btn.dataset.del);
+      renderPrescExtraRefsList();
+      renderPrescCapituloContent();
+      renderPrescPreview();
     });
-
-  container
-    .querySelectorAll("[data-presc-extra-dup]")
-    .forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        const id = btn.getAttribute("data-presc-extra-dup");
-        await duplicateExtraRef(id);
-        renderDocPrescripcionView();
-      });
-    });
-
-  container
-    .querySelectorAll("[data-presc-extra-edit]")
-    .forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const id = btn.getAttribute("data-presc-extra-edit");
-        const list = appState.prescripcion.extraRefs || [];
-        const r = list.find((x) => x.id === id);
-        if (!r) return;
-
-        openPrescModal({
-          title: "Editar referencia extra",
-          bodyHTML: `
-            <div class="form-group">
-              <label>Código</label>
-              <input id="extCodigo" type="text" class="form-control"
-                     value="${(r.codigo || "").replace(/"/g, "&quot;")}" />
-            </div>
-            <div class="form-group">
-              <label>Descripción</label>
-              <textarea id="extDesc" rows="3" class="form-control">${r.descripcion || ""}</textarea>
-            </div>
-            <div class="form-group">
-              <label>Unidad de medida</label>
-              <select id="extUnidad" class="form-control">
-                <option value="Ud" ${r.unidad === "Ud" ? "selected" : ""}>Ud (unidad)</option>
-                <option value="m" ${r.unidad === "m" ? "selected" : ""}>m (metro)</option>
-                <option value="m²" ${r.unidad === "m²" ? "selected" : ""}>m² (metro cuadrado)</option>
-                <option value="h" ${r.unidad === "h" ? "selected" : ""}>h (hora)</option>
-                <option value="m³" ${r.unidad === "m³" ? "selected" : ""}>m³ (metro cúbico)</option>
-                <option value="kg" ${r.unidad === "kg" ? "selected" : ""}>kg</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>PVP</label>
-              <input id="extPvp" type="number" class="form-control" value="${r.pvp || 0}" />
-            </div>
-          `,
-          onSave: async () => {
-            const codigo = (document.getElementById("extCodigo").value || "").trim();
-            const descripcion = (document.getElementById("extDesc").value || "").trim();
-            const unidad = (document.getElementById("extUnidad").value || "Ud").trim() || "Ud";
-            const pvp = Number(document.getElementById("extPvp").value || 0);
-            await updateExtraRef(id, codigo, descripcion, unidad, pvp);
-            renderDocPrescripcionView();
-          }
-        });
-      });
-    });
-
-  container
-    .querySelectorAll("[data-presc-extra-del]")
-    .forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        const id = btn.getAttribute("data-presc-extra-del");
-        await deleteExtraRef(id);
-        renderDocPrescripcionView();
-      });
-    });
+  });
 }
 
-// Estilos plantillas y refs extra
-(function injectPrescTemplatesAndExtraStyles() {
-  if (document.getElementById("presc-templates-extra-styles")) return;
-  const style = document.createElement("style");
-  style.id = "presc-templates-extra-styles";
-  style.innerHTML = `
-    .presc-plantilla-item {
-      border: 1px solid #e5e7eb;
-      border-radius: 8px;
-      padding: 0.5rem 0.75rem;
-      margin-bottom: 0.5rem;
-      background: #ffffff;
-      box-shadow: 0 1px 2px rgba(0,0,0,0.04);
-      font-size: 0.78rem;
-      cursor: grab;
-      transition: box-shadow 0.15s ease, transform 0.15s ease;
-    }
-    .presc-plantilla-item:hover {
-      box-shadow: 0 2px 4px rgba(0,0,0,0.08);
-      transform: translateY(-1px);
-    }
-    .presc-plantilla-header {
-      display:flex;
-      justify-content:space-between;
-      align-items:center;
-      margin-bottom:0.25rem;
-    }
-    .presc-plantilla-name {
-      font-weight:600;
-      color:#111827;
-    }
-    .presc-plantilla-actions button {
-      font-size:0.7rem;
-    }
-    .presc-plantilla-preview {
-      color:#6b7280;
-      margin-bottom:0.35rem;
-    }
-    .presc-plantilla-footer {
-      text-align:right;
-    }
+// ========================================================
+// ESTILOS refs extra (solo si no existen)
+// ========================================================
 
+(function injectPrescExtraStyles() {
+  if (document.getElementById("presc-extra-styles")) return;
+
+  const style = document.createElement("style");
+  style.id = "presc-extra-styles";
+  style.innerHTML = `
     .presc-extra-item {
       border: 1px solid #e5e7eb;
-      border-radius: 8px;
-      padding: 0.5rem 0.75rem;
-      margin-bottom: 0.5rem;
-      background: #ffffff;
-      box-shadow: 0 1px 2px rgba(0,0,0,0.03);
-      font-size:0.78rem;
-    }
-    .presc-extra-main {
-      margin-bottom:0.35rem;
+      border-radius: 10px;
+      padding: 0.6rem 0.75rem;
+      margin-bottom: 0.55rem;
+      background: #fff;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+      font-size: 0.78rem;
     }
     .presc-extra-line1 {
       display:flex;
       justify-content:space-between;
       align-items:center;
-      margin-bottom:0.1rem;
+      margin-bottom:0.15rem;
+      gap:0.5rem;
     }
     .presc-extra-code {
-      font-weight:600;
-      color:#111827;
+      font-weight: 700;
+      color: #111827;
+      max-width: 55%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
     .presc-extra-price {
-      color:#111827;
-      font-weight:500;
+      font-weight: 600;
+      color: #111827;
+      white-space: nowrap;
     }
     .presc-extra-desc {
-      color:#6b7280;
-      font-size:0.76rem;
+      color: #6b7280;
+      font-size: 0.76rem;
+      line-height: 1.25;
     }
     .presc-extra-actions {
       display:flex;
-      flex-wrap:wrap;
-      gap:0.25rem;
       justify-content:flex-end;
+      gap:0.25rem;
+      flex-wrap:wrap;
+      margin-top:0.35rem;
     }
   `;
   document.head.appendChild(style);
 })();
 
 // ========================================================
-// BLOQUE 8 - Previsualización de capítulos
+// FIN PARTE 7
+// ========================================================
+// ========================================================
+// PARTE 8
+// PREVISUALIZACIÓN (compacta, clara, funcional)
 // ========================================================
 
 function renderPrescPreview() {
@@ -1875,147 +1664,150 @@ function renderPrescPreview() {
   if (!container) return;
 
   ensurePrescCapitulosArray();
-
   const caps = appState.prescripcion.capitulos || [];
+
   if (!caps.length) {
-    container.innerHTML = `<div style="color:#6b7280; font-size:0.9rem;">No hay capítulos todavía.</div>`;
+    container.innerHTML = `
+      <p class="text-muted" style="font-size:0.8rem;">
+        No hay capítulos todavía.
+      </p>
+    `;
     return;
   }
 
-  // Cards grandes, como antes: título + resumen + acciones + desplegable
+  // estado expandido por capítulo
+  appState.prescripcion.previewExpanded =
+    appState.prescripcion.previewExpanded || {};
+
   let totalGlobal = 0;
 
-  const cards = caps.map((cap, idx) => {
-    const subtotal = (cap.lineas || []).reduce((acc, l) => acc + safeNumber(l.importe), 0);
-    totalGlobal += subtotal;
+  container.innerHTML = `
+    <div style="display:flex; flex-direction:column; gap:0.5rem;">
+      ${caps.map((cap) => {
+        const subtotal = (cap.lineas || []).reduce((acc, l) => {
+          const imp = l.importe != null
+            ? safeNumber(l.importe)
+            : safeNumber(l.cantidad) * safeNumber(l.pvp);
+          return acc + imp;
+        }, 0);
 
-    const isSelected = appState.prescripcion.selectedCapituloId === cap.id;
+        totalGlobal += subtotal;
 
-    const linesCount = (cap.lineas || []).length;
-    const previewText = String(cap.texto || "").trim();
-    const previewLines = previewText ? previewText.split("\n").slice(0, 3).join("<br/>") : "";
+        const expanded = !!appState.prescripcion.previewExpanded[cap.id];
 
-    return `
-      <div class="presc-preview-card"
-           style="border:1px solid #e5e7eb; border-radius:14px; overflow:hidden; background:#fff;">
-        <div class="presc-preview-head"
-             data-id="${escapeHtmlAttr(cap.id)}"
-             style="display:flex; justify-content:space-between; align-items:center; gap:0.75rem; padding:0.85rem 0.95rem; cursor:pointer;
-                    ${isSelected ? "outline:2px solid #93c5fd;" : ""}">
-          <div style="min-width:0;">
-            <div style="font-weight:900; font-size:1.05rem; text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-              ${escapeHtml(cap.nombre || "Capítulo")}
+        return `
+          <div class="presc-prev-card"
+               style="border:1px solid #e5e7eb; border-radius:10px; background:#fff;">
+
+            <!-- CABECERA CAPÍTULO -->
+            <div class="presc-prev-head"
+                 data-cap-id="${escapeHtmlAttr(cap.id)}"
+                 title="Doble click para desplegar"
+                 style="
+                   display:flex;
+                   justify-content:space-between;
+                   align-items:center;
+                   padding:0.45rem 0.65rem;
+                   cursor:pointer;
+                   font-size:0.8rem;
+                   font-weight:600;
+                   user-select:none;
+                 ">
+              <div style="overflow:hidden; white-space:nowrap; text-overflow:ellipsis;">
+                ${escapeHtml(cap.nombre || "Capítulo")}
+              </div>
+              <div style="font-size:0.78rem;">
+                ${subtotal.toFixed(2)} €
+              </div>
             </div>
-            <div style="font-size:0.82rem; color:#6b7280; margin-top:0.15rem;">
-              ${linesCount} líneas · Total ${subtotal.toFixed(2)} €
-            </div>
-          </div>
 
-          <div style="display:flex; align-items:center; gap:0.35rem;">
-            <button class="btn btn-xs btn-secondary presc-preview-open" data-id="${escapeHtmlAttr(cap.id)}" title="Ver detalle">▾</button>
-            <button class="btn btn-xs btn-secondary presc-preview-del" data-id="${escapeHtmlAttr(cap.id)}" title="Eliminar">🗑️</button>
-          </div>
-        </div>
-
-        <div class="presc-preview-body" id="prescPreviewBody_${escapeHtmlAttr(cap.id)}" style="display:none; border-top:1px solid #e5e7eb; padding:0.85rem 0.95rem; background:#fafafa;">
-          ${previewText ? `<div style="font-size:0.85rem; color:#374151; margin-bottom:0.75rem;">${previewLines}${previewText.split("\n").length > 3 ? `<div style="color:#6b7280; margin-top:0.25rem;">...</div>` : ""}</div>` : ""}
-
-          ${
-            linesCount
-              ? `
-                <div style="overflow:auto;">
-                  <table class="table" style="min-width:720px;">
-                    <thead>
-                      <tr>
-                        <th style="width:120px;">CÓDIGO</th>
-                        <th>DESCRIPCIÓN</th>
-                        <th style="width:70px;">UD</th>
-                        <th style="width:90px; text-align:right;">CANT.</th>
-                        <th style="width:110px; text-align:right;">PVP (€)</th>
-                        <th style="width:130px; text-align:right;">IMPORTE (€)</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      ${(cap.lineas || [])
-                        .map((l) => {
+            <!-- DETALLE -->
+            <div class="presc-prev-body"
+                 style="
+                   display:${expanded ? "block" : "none"};
+                   border-top:1px solid #e5e7eb;
+                   padding:0.35rem 0.65rem;
+                   font-size:0.75rem;
+                   max-height:220px;
+                   overflow:auto;
+                 ">
+              ${
+                cap.lineas && cap.lineas.length
+                  ? `
+                    <table style="width:100%; border-collapse:collapse;">
+                      <thead>
+                        <tr style="border-bottom:1px solid #e5e7eb;">
+                          <th style="text-align:left;">Código</th>
+                          <th style="text-align:left;">Descripción</th>
+                          <th style="text-align:center;">Ud</th>
+                          <th style="text-align:right;">Precio</th>
+                          <th style="text-align:right;">Importe</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        ${cap.lineas.map((l) => {
                           const qty = safeNumber(l.cantidad);
                           const pvp = safeNumber(l.pvp);
-                          const imp = safeNumber(l.importe != null ? l.importe : qty * pvp);
+                          const imp = safeNumber(
+                            l.importe != null ? l.importe : qty * pvp
+                          );
                           return `
                             <tr>
-                              <td style="font-family:ui-monospace, SFMono-Regular, Menlo, monospace;">${escapeHtml(l.codigo || "")}</td>
+                              <td>${escapeHtml(l.codigo || "")}</td>
                               <td>${escapeHtml(l.descripcion || "")}</td>
-                              <td>${escapeHtml(l.unidad || "ud")}</td>
-                              <td style="text-align:right;">${qty}</td>
+                              <td style="text-align:center;">${escapeHtml(l.unidad || "Ud")}</td>
                               <td style="text-align:right;">${pvp.toFixed(2)} €</td>
                               <td style="text-align:right;">${imp.toFixed(2)} €</td>
                             </tr>
                           `;
-                        })
-                        .join("")}
-                    </tbody>
-                  </table>
-                </div>
-              `
-              : `<div style="font-size:0.85rem; color:#6b7280;">Sin líneas.</div>`
-          }
-        </div>
-      </div>
-    `;
-  });
+                        }).join("")}
+                      </tbody>
+                    </table>
+                  `
+                  : `<div class="text-muted">Sin referencias.</div>`
+              }
+            </div>
+          </div>
+        `;
+      }).join("")}
 
-  container.innerHTML = `
-    <div style="display:flex; flex-direction:column; gap:0.85rem;">
-      ${cards.join("")}
-      <div style="display:flex; justify-content:flex-end; font-weight:900; font-size:1.05rem; padding-top:0.25rem;">
+      <!-- TOTAL GLOBAL -->
+      <div style="
+        display:flex;
+        justify-content:flex-end;
+        font-weight:700;
+        font-size:0.85rem;
+        padding-top:0.25rem;">
         Total: ${totalGlobal.toFixed(2)} €
       </div>
     </div>
   `;
 
-  // Selección por click en cabecera
-  container.querySelectorAll(".presc-preview-head").forEach((row) => {
-    row.addEventListener("click", (e) => {
-      const id = row.dataset.id;
-      if (!id) return;
-      appState.prescripcion.selectedCapituloId = id;
-      renderPrescCapituloSelected();
+  // eventos
+  container.querySelectorAll(".presc-prev-head").forEach((head) => {
+    const capId = head.dataset.capId;
+
+    // doble click: expand / collapse
+    head.addEventListener("dblclick", () => {
+      appState.prescripcion.previewExpanded[capId] =
+        !appState.prescripcion.previewExpanded[capId];
       renderPrescPreview();
     });
-  });
 
-  // Toggle detalle
-  container.querySelectorAll(".presc-preview-open").forEach((btn) => {
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const id = btn.dataset.id;
-      const body = document.getElementById("prescPreviewBody_" + id);
-      if (!body) return;
-      body.style.display = body.style.display === "none" ? "block" : "none";
-    });
-  });
-
-  // Delete
-  container.querySelectorAll(".presc-preview-del").forEach((btn) => {
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const id = btn.dataset.id;
-      if (!id) return;
-      if (!confirm("¿Eliminar este capítulo?")) return;
-      appState.prescripcion.capitulos = (appState.prescripcion.capitulos || []).filter((c) => c.id !== id);
-      if (appState.prescripcion.selectedCapituloId === id) {
-        appState.prescripcion.selectedCapituloId = appState.prescripcion.capitulos.length
-          ? appState.prescripcion.capitulos[0].id
-          : null;
-      }
-      renderPrescCapituloSelected();
-      renderPrescPreview();
+    // click simple: seleccionar capítulo
+    head.addEventListener("click", () => {
+      appState.prescripcion.selectedCapituloId = capId;
+      renderPrescCapituloContent();
     });
   });
 }
 
 // ========================================================
-// BLOQUE 9 - Exportación Excel / PDF / BC3 con idioma
+// FIN PARTE 8
+// ========================================================
+// ========================================================
+// PARTE 9
+// EXPORTACIÓN + IDIOMA + GEMINI (modelo limpio)
 // ========================================================
 
 const PRESC_EXPORT_LABELS = {
@@ -2027,15 +1819,9 @@ const PRESC_EXPORT_LABELS = {
     qty: "Cant.",
     price: "PVP",
     amount: "Importe",
+    subtotal: "Subtotal capítulo",
+    total: "Total prescripción",
     title: "Prescripción técnica del proyecto",
-    total: "Total capítulo",
-    grandTotal: "Total prescripción",
-    project: "Proyecto",
-    date: "Fecha",
-    generated: "Generado desde Presupuestos 2N",
-    sheet: "Prescripción",
-    language: "Idioma",
-  
   },
   en: {
     chapter: "Chapter",
@@ -2045,15 +1831,9 @@ const PRESC_EXPORT_LABELS = {
     qty: "Qty",
     price: "Price",
     amount: "Amount",
+    subtotal: "Chapter subtotal",
+    total: "Specification total",
     title: "Project technical specification",
-    total: "Chapter total",
-    grandTotal: "Specification total",
-    project: "Project",
-    date: "Date",
-    generated: "Generated from Presupuestos 2N",
-    sheet: "Specification",
-    language: "Language",
-  
   },
   pt: {
     chapter: "Capítulo",
@@ -2063,624 +1843,257 @@ const PRESC_EXPORT_LABELS = {
     qty: "Qtd.",
     price: "PVP",
     amount: "Montante",
+    subtotal: "Subtotal capítulo",
+    total: "Total da especificação",
     title: "Especificação técnica do projeto",
-    total: "Total capítulo",
-    grandTotal: "Total da especificação",
-    project: "Projeto",
-    date: "Data",
-    generated: "Gerado a partir do Presupuestos 2N",
-    sheet: "Especificação",
-    language: "Idioma",
   }
 };
 
-
 // ========================================================
-// Gemini / IA (traducción) - implementación por defecto
-// Reutiliza el mismo patrón que Documentación (Cloud Run)
+// MODELO DE EXPORTACIÓN (NEUTRO, SIN FORMATO)
 // ========================================================
-
-function prescSanitizeAIText(t) {
-  return String(t || "")
-    .replace(/\r/g, "")
-    // quitar markdown común
-    .replace(/^\s*[-*•]\s+/gm, "")
-    .replace(/^\s*#+\s+/gm, "")
-    .trim();
-}
-
-// Si existe handleDocSectionAI (de Documentación) lo usamos.
-// Si no existe, creamos una implementación por defecto con el mismo endpoint.
-if (typeof window.handleDocSectionAI !== "function") {
-  window.handleDocSectionAI = async ({ sectionKey, idioma, titulo, texto, proyecto, presupuesto, modo }) => {
-    const payload = { sectionKey, idioma, titulo, texto, proyecto, presupuesto, modo };
-    const url = "https://docsectionai-is2pkrfj5a-uc.a.run.app";
-    const resp = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if (!resp.ok) {
-      const extra = await resp.text().catch(() => "");
-      throw new Error("IA error " + resp.status + ": " + extra);
-    }
-    const data = await resp.json().catch(() => null);
-    if (!data || typeof data.text !== "string") {
-      throw new Error("Respuesta IA inválida: falta 'text'");
-    }
-    return prescSanitizeAIText(data.text);
-  };
-}
-
-// Traducción de texto simple usando la misma Cloud Function.
-if (typeof window.geminiTranslateText !== "function") {
-  window.geminiTranslateText = async (text, targetLang) => {
-    const src = String(text || "");
-    const lang = targetLang || "es";
-    if (!src.trim()) return src;
-    // Reutilizamos el generador de Documentación, pero forzando modo translate.
-    const out = await window.handleDocSectionAI({
-      sectionKey: "translate",
-      idioma: lang,
-      titulo: "Traduce el texto",
-      texto: src,
-      proyecto: null,
-      presupuesto: null,
-      modo: "translate",
-    });
-    return String(out || src);
-  };
-}
-
-// Traducción batch (concurrencia limitada + caché simple)
-if (typeof window.geminiTranslateBatch !== "function") {
-  window.geminiTranslateBatch = async (texts, targetLang) => {
-    const arr = Array.isArray(texts) ? texts : [];
-    const lang = targetLang || "es";
-    const cache = {};
-    const out = new Array(arr.length);
-
-    const tasks = arr.map((t, i) => async () => {
-      const src = String(t || "");
-      const key = lang + "|" + src;
-      if (!src.trim()) {
-        out[i] = src;
-        return;
-      }
-      if (cache[key]) {
-        out[i] = cache[key];
-        return;
-      }
-      const tr = await window.geminiTranslateText(src, lang).catch(() => src);
-      cache[key] = String(tr || src);
-      out[i] = cache[key];
-    });
-
-    // Concurrencia 3 para no saturar
-    const limit = 3;
-    let cursor = 0;
-    async function worker() {
-      while (cursor < tasks.length) {
-        const my = cursor++;
-        await tasks[my]();
-      }
-    }
-    const workers = [];
-    for (let w = 0; w < Math.min(limit, tasks.length); w++) workers.push(worker());
-    await Promise.all(workers);
-    return out;
-  };
-}
 
 async function buildPrescExportModel(lang) {
   ensurePrescCapitulosArray();
   const language = lang || appState.prescripcion.exportLang || "es";
 
-  const result = {
-    language,
-    capitulos: [],
-    totalGlobal: 0
+  const model = {
+    lang: language,
+    labels: PRESC_EXPORT_LABELS[language] || PRESC_EXPORT_LABELS.es,
+    chapters: [],
+    total: 0
   };
 
   (appState.prescripcion.capitulos || []).forEach((cap) => {
-    if (!cap) return;
+    let subtotal = 0;
 
-    const capData = {
-      nombre: cap.nombre || "",
-      texto: cap.texto || "",
-      lineas: [],
-      subtotal: 0
-    };
-
-    (cap.lineas || []).forEach((l) => {
+    const lines = (cap.lineas || []).map((l) => {
       const qty = safeNumber(l.cantidad);
       const pvp = safeNumber(l.pvp);
-      const imp = safeNumber(l.importe != null ? l.importe : qty * pvp);
+      const imp = l.importe != null ? safeNumber(l.importe) : qty * pvp;
+      subtotal += imp;
 
-      capData.lineas.push({
-        codigo: l.codigo || "",
-        descripcion: l.descripcion || "",
-        unidad: l.unidad || "ud",
-        cantidad: qty,
-        pvp,
-        importe: imp
-      });
-
-      capData.subtotal += imp;
+      return {
+        code: l.codigo || "",
+        description: l.descripcion || "",
+        unit: l.unidad || "Ud",
+        qty,
+        price: pvp,
+        amount: imp
+      };
     });
 
-    result.totalGlobal += capData.subtotal;
-    result.capitulos.push(capData);
+    model.chapters.push({
+      title: cap.nombre || "",
+      text: cap.texto || "",
+      lines,
+      subtotal
+    });
+
+    model.total += subtotal;
   });
 
-  // Traducción completa del contenido (capítulos + texto plantilla + descripciones)
-  // Requiere que exista una función de traducción Gemini en window:
-  // - window.geminiTranslateText(text, targetLang) => Promise<string>
-  // Opcional:
-  // - window.geminiTranslateBatch(textArray, targetLang) => Promise<string[]>
+  // Traducción completa SOLO AQUÍ (modelo)
   if (language !== "es") {
-    result.capitulos = await prescTranslateDocumentWithGemini(result.capitulos, language);
+    await translatePrescModel(model, language);
   }
 
-  return result;
+  return model;
 }
 
-async function prescTranslateDocumentWithGemini(capitulos, targetLang) {
-  const hasBatch = typeof window.geminiTranslateBatch === "function";
-  const hasSingle = typeof window.geminiTranslateText === "function";
+// ========================================================
+// TRADUCCIÓN GEMINI (SIN ROMPER FORMATO)
+// ========================================================
 
-  if (!hasBatch && !hasSingle) {
-    alert(
-      "No hay traductor Gemini configurado (window.geminiTranslateText / window.geminiTranslateBatch).\n" +
-      "Se exportará manteniendo los textos originales."
-    );
-    return capitulos;
-  }
+async function translatePrescModel(model, targetLang) {
+  if (typeof window.geminiTranslateBatch !== "function") return;
 
-  // Cache en memoria (por sesión) para no repetir traducciones
-  window.__prescTrCache = window.__prescTrCache || {};
-  const cache = window.__prescTrCache;
-  const keyFor = (t) => `${targetLang}::${t}`;
+  const cache = {};
+  const texts = [];
 
-  // Recoger textos únicos a traducir
-  const toTranslate = [];
-  const pushTxt = (t) => {
+  const push = (t) => {
     const s = String(t || "").trim();
-    if (!s) return;
-    const k = keyFor(s);
-    if (cache[k]) return;
-    if (!toTranslate.includes(s)) toTranslate.push(s);
+    if (!s || cache[s]) return;
+    cache[s] = null;
+    texts.push(s);
   };
 
-  capitulos.forEach((cap) => {
-    pushTxt(cap.nombre);
-    pushTxt(cap.texto);
-    (cap.lineas || []).forEach((l) => pushTxt(l.descripcion));
+  model.chapters.forEach((c) => {
+    push(c.title);
+    push(c.text);
+    (c.lines || []).forEach((l) => push(l.description));
   });
 
-  // Ejecutar traducción
-  if (toTranslate.length) {
-    if (hasBatch) {
-      try {
-        const translated = await window.geminiTranslateBatch(toTranslate, targetLang);
-        if (Array.isArray(translated) && translated.length === toTranslate.length) {
-          toTranslate.forEach((src, i) => {
-            cache[keyFor(src)] = String(translated[i] || src);
-          });
-        }
-      } catch (e) {
-        console.warn("[Presc] Error geminiTranslateBatch", e);
-      }
-    }
+  if (!texts.length) return;
 
-    // Fallback a single si batch no existe o falló parcialmente
-    if (hasSingle) {
-      for (const src of toTranslate) {
-        const k = keyFor(src);
-        if (cache[k]) continue;
-        try {
-          const tr = await window.geminiTranslateText(src, targetLang);
-          cache[k] = String(tr || src);
-        } catch (e) {
-          console.warn("[Presc] Error geminiTranslateText", e);
-          cache[k] = src;
-        }
-      }
-    }
+  let translated = [];
+  try {
+    translated = await window.geminiTranslateBatch(texts, targetLang);
+  } catch (e) {
+    console.warn("[PRESC] Error traducción Gemini:", e);
+    return;
   }
 
-  // Aplicar traducciones
-  return capitulos.map((cap) => {
-    const nombre = cache[keyFor(String(cap.nombre || "").trim())] || cap.nombre;
-    const texto = cache[keyFor(String(cap.texto || "").trim())] || cap.texto;
-
-    const lineas = (cap.lineas || []).map((l) => {
-      const descKey = keyFor(String(l.descripcion || "").trim());
-      const descripcion = cache[descKey] || l.descripcion;
-      return { ...l, descripcion };
-    });
-
-    return { ...cap, nombre, texto, lineas };
+  texts.forEach((src, i) => {
+    cache[src] = translated[i] || src;
   });
+
+  model.chapters = model.chapters.map((c) => ({
+    ...c,
+    title: cache[c.title] || c.title,
+    text: cache[c.text] || c.text,
+    lines: (c.lines || []).map((l) => ({
+      ...l,
+      description: cache[l.description] || l.description
+    }))
+  }));
 }
 
-async function handlePrescExport(format) {
+// ========================================================
+// DISPATCH EXPORT
+// ========================================================
+
+async function handlePrescExport(type) {
   const lang = appState.prescripcion.exportLang || "es";
   const model = await buildPrescExportModel(lang);
 
-  if (!model || !model.capitulos || !model.capitulos.length) {
+  if (!model.chapters.length) {
     alert("No hay capítulos para exportar.");
     return;
   }
 
-  if (format === "excel" && typeof window.exportPrescripcionToExcel === "function") {
-    window.exportPrescripcionToExcel(model, lang);
+  if (type === "excel" && window.exportPrescripcionToExcel) {
+    window.exportPrescripcionToExcel(model);
     return;
   }
-  if (format === "pdf" && typeof window.exportPrescripcionToPdf === "function") {
-    window.exportPrescripcionToPdf(model, lang);
+  if (type === "pdf" && window.exportPrescripcionToPdf) {
+    window.exportPrescripcionToPdf(model);
     return;
   }
-  if (format === "bc3" && typeof window.exportPrescripcionToBc3 === "function") {
-    window.exportPrescripcionToBc3(model, lang);
+  if (type === "bc3" && window.exportPrescripcionToBc3) {
+    window.exportPrescripcionToBc3(model);
     return;
   }
 
-  if (format === "excel") {
-    const csv = prescExportToCSV(model, lang);
-    downloadTextFile(csv, `prescripcion_${lang}.csv`, "text/csv;charset=utf-8;");
- } else if (format === "bc3") {
-  const bc3 = prescExportToBC3(model, lang);
-  downloadBc3File(bc3, `prescripcion_${lang}.bc3`);
-  } else if (format === "pdf") {
-    openPrescPrintWindow(model, lang);
-  }
+  console.warn("[PRESCRIPCIÓN] Exportador no disponible:", type);
+}
+// ========================================================
+// PARTE 10 (FINAL)
+// Exporters (XLSX/PDF/BC3) + helpers + window hooks
+// ========================================================
+
+// ------------------------
+// Moneda / locale helpers
+// ------------------------
+function prescLangToLocale(lang) {
+  if (lang === "en") return "en-GB";
+  if (lang === "pt") return "pt-PT";
+  return "es-ES";
 }
 
-function prescExportToCSV(model, lang) {
-  const labels = PRESC_EXPORT_LABELS[lang] || PRESC_EXPORT_LABELS.es;
-  const sep = ";";
+function prescFormatCurrency(value, lang, opts = {}) {
+  const locale = prescLangToLocale(lang);
+  const v = Number(value);
+  const n = Number.isFinite(v) ? v : 0;
 
-  const header = [
-    labels.chapter,
-    labels.code,
-    labels.description,
-    labels.unit,
-    labels.qty,
-    labels.price,
-    labels.amount
-  ].join(sep);
-
-  const lines = [header];
-
-  model.capitulos.forEach((cap) => {
-    cap.lineas.forEach((l) => {
-      const row = [
-        (cap.nombre || "").replace(/;/g, ","),
-        (l.codigo || "").replace(/;/g, ","),
-        (l.descripcion || "").replace(/;/g, ","),
-        l.unidad || "",
-        String(l.cantidad || 0),
-        String(l.pvp || 0),
-        String(l.importe || 0)
-      ].join(sep);
-      lines.push(row);
-    });
-
-    // Subtotal de capítulo
-    lines.push([
-      (cap.nombre || "").replace(/;/g, ","),
-      "",
-      labels.total,
-      "",
-      "",
-      "",
-      (cap.subtotal || 0).toFixed(2)
-    ].join(sep));
-  });
-
-  // Total global
-  lines.push("");
-  lines.push([
-    "",
-    "",
-    labels.grandTotal || labels.total,
-    "",
-    "",
-    "",
-    (model.totalGlobal || 0).toFixed(2)
-  ].join(sep));
-
-  return lines.join("\n");
-}
-
-function prescExportToBC3(model, lang) {
-  const labels = PRESC_EXPORT_LABELS[lang] || PRESC_EXPORT_LABELS.es;
-
-  const now = new Date();
-  const dd = String(now.getDate()).padStart(2, "0");
-  const mm = String(now.getMonth() + 1).padStart(2, "0");
-  const yy = String(now.getFullYear()).slice(-2);
-  const dateStr = `${dd}${mm}${yy}`; // ddmmyy (como tu BC3 manual)
-
-  const lines = [];
-
-  // ==============================
-  // HELPERS
-  // ==============================
-  const sanitize = (s) => {
-    s = String(s ?? "");
-    // quitar diacríticos (más compatible con ANSI/Presto)
-    try { s = s.normalize("NFD").replace(/[\u0300-\u036f]/g, ""); } catch (_) {}
-    // BC3 separa por |
-    s = s.replace(/\|/g, " ");
-    return s;
-  };
-
-  const sanitizeOneLine = (s) => sanitize(s).replace(/\r?\n/g, " ").trim();
-
-  const fmtNum = (n) => {
-    const x = Number(n);
-    if (!isFinite(x)) return "0";
-    // punto decimal (no coma)
-    return String(Math.round(x * 1000000) / 1000000);
-  };
-
-  // Presto suele ir fino con códigos <= 8 (en tu manual hay muchos de 7-8)
-  // y sin caracteres raros. Si hay colisión, forzamos uniqueness.
-  const usedCodes = new Set();
-  const makeCode8 = (raw, fallbackPrefix) => {
-    let base = sanitizeOneLine(raw || "").replace(/\s+/g, "");
-    // deja solo A-Z 0-9 y algunos separadores comunes; luego quitamos separadores
-    base = base.toUpperCase().replace(/[^A-Z0-9]/g, "");
-    if (!base) base = fallbackPrefix || "REF";
-
-    // intenta quedarte con los ÚLTIMOS 8 (suele conservar mejor el “identificador” numérico)
-    let code = base.length > 8 ? base.slice(-8) : base;
-
-    // si sigue vacío
-    if (!code) code = (fallbackPrefix || "REF").slice(0, 3) + "00000";
-
-    // asegurar único (si colisiona, variamos últimos 2-3 dígitos)
-    if (!usedCodes.has(code)) {
-      usedCodes.add(code);
-      return code;
-    }
-
-    // fallback incremental manteniendo 8 chars
-    const prefix = code.slice(0, Math.max(0, 6)); // deja hueco para 2 dígitos
-    for (let i = 1; i < 100; i++) {
-      const suffix = String(i).padStart(8 - prefix.length, "0").slice(-(8 - prefix.length));
-      const c2 = (prefix + suffix).slice(-8);
-      if (!usedCodes.has(c2)) {
-        usedCodes.add(c2);
-        return c2;
-      }
-    }
-
-    // último recurso: timestamp
-    const ts = String(Date.now()).slice(-8);
-    if (!usedCodes.has(ts)) usedCodes.add(ts);
-    return ts;
-  };
-
-  // ==============================
-  // ESTRUCTURA “COMO TU MANUAL”
-  // ==============================
-  // Root / grupo principal
-  const rootCode = "PRESC2N##";     // ## raíz
-  const mainGroup = "PRESC2N#";     // # grupo principal
-
-  // Cabecera EXACTA estilo Presto 8.8 (como tu bc3 manual)
-  lines.push("~V|SOFT S.A.|FIEBDC-3/2002|Presto 8.8||ANSI|");
-  // el bloque de 2\2... lo dejamos como en tu ejemplo manual
-  lines.push(`~K|${rootCode}|${sanitizeOneLine(labels.project)}|${dateStr}|2\\2\\2\\2\\2\\2\\2\\2\\2\\2|`);
-
-  // ==============================
-  // CONCEPTOS (~C)
-  // Formato que se ve en tu manual:
-  // ~C|COD|UD|RESUMEN|PRECIO|FECHA||TIPO|
-  // ==============================
-  const caps = (model && Array.isArray(model.capitulos)) ? model.capitulos : [];
-  if (!caps.length) return lines.join("\r\n");
-
-  // Totales por capítulo (para que Presto “pinte” bien)
-  const capTotals = caps.map((cap) => {
-    let t = 0;
-    (cap.lineas || []).forEach((l) => {
-      const qty = Number(l.cantidad) || 0;
-      const price = Number(l.pvp) || 0;
-      t += qty * price;
-    });
-    return t;
-  });
-
-  const totalGlobal = capTotals.reduce((a, b) => a + (Number(b) || 0), 0);
-
-  // Root y grupo
-  lines.push(`~C|${rootCode}||${sanitizeOneLine(labels.title)}|${fmtNum(totalGlobal)}|${dateStr}||0|`);
-  lines.push(`~C|${mainGroup}||${sanitizeOneLine(labels.title)}|${fmtNum(totalGlobal)}|${dateStr}||0|`);
-
-  // ==============================
-  // DESCOMPOSICIÓN (~D)
-  // ==============================
-  const dLines = [];
-
-  // Root -> grupo principal
-  dLines.push(`~D|${rootCode}|${mainGroup}\\1\\1\\|`);
-
-  // Para cada capítulo creamos un código tipo 2N.0001 (como tu manual usa 2N.0111, etc.)
-  // Importante: el capítulo NO acaba en # (en tu manual, el # es para el grupo).
-  const chapCodes = [];
-
-  caps.forEach((cap, idx) => {
-    const chapIdx = String(idx + 1).padStart(4, "0"); // 0001..9999
-    const chapCode = `2N.${chapIdx}`;                // estilo “manual”
-    chapCodes.push(chapCode);
-
-    const chapName = sanitizeOneLine(cap.nombre || `${labels.chapter} ${idx + 1}`);
-    const chapTotal = Number(capTotals[idx]) || 0;
-
-    // Capítulo como concepto tipo 0 y Ud (como en tu manual)
-    lines.push(`~C|${chapCode}|Ud|${chapName}|${fmtNum(chapTotal)}|${dateStr}||0|`);
-
-    // Textos largos del capítulo con ~T (como tu manual)
-    // OJO: Permitimos saltos de línea reales: Presto los traga bien en ~T
-    const rawText = (cap.texto || "").toString();
-    const textClean = sanitize(rawText).trim();
-    if (textClean) {
-      lines.push(`~T|${chapCode}|${textClean}`);
-    }
-
-    // Grupo principal -> capítulos
-    // (lo completamos luego en una sola línea, como el manual)
-  });
-
-  // Grupo principal -> todos los capítulos en una sola ~D (como tu manual)
-  if (chapCodes.length) {
-    const packed = chapCodes.map((c) => `${c}\\1\\1\\`).join("");
-    dLines.push(`~D|${mainGroup}|${packed}|`);
+  let num;
+  try {
+    num = new Intl.NumberFormat(locale, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(n);
+  } catch (_) {
+    num = n.toFixed(2);
   }
 
-  // Capítulo -> sus referencias (también como tu manual: refs sin medición propia)
-  // Las refs van como tipo 3
-  const mLines = []; // mediciones (ponemos 1 por capítulo, como tu manual)
-
-  caps.forEach((cap, idx) => {
-    const chapCode = chapCodes[idx];
-    const lineas = cap.lineas || [];
-
-    // Medición del capítulo: 1 ud (igual que tu ejemplo manual)
-    // Formato de tu manual: ~M|GRUPO#\CAP|1\2\|1.000||
-    mLines.push(`~M|${mainGroup}\\${chapCode}|1\\2\\|1.000||`);
-
-    if (!lineas.length) return;
-
-    const refCodes = [];
-    lineas.forEach((l, i) => {
-      // Código ref <= 8 y único (CLAVE para que no “pise” y te quede solo la última)
-      const raw = l.codigo || "";
-      const refCode = makeCode8(raw, "REF" + String(i + 1).padStart(2, "0"));
-
-      const desc = sanitizeOneLine(l.descripcion || refCode);
-      const unit = sanitizeOneLine(l.unidad || "Ud") || "Ud";
-      const price = Number(l.pvp) || 0;
-
-      // Concepto de partida (tipo 3)
-      lines.push(`~C|${refCode}|${unit}|${desc}|${fmtNum(price)}|${dateStr}||3|`);
-
-      refCodes.push(refCode);
-    });
-
-    // Descomposición capítulo -> refs (en una ~D como tu manual)
-    if (refCodes.length) {
-      const packedRefs = refCodes.map((c) => `${c}\\1\\1\\`).join("");
-      dLines.push(`~D|${chapCode}|${packedRefs}|`);
-    }
-  });
-
-  // Añadimos D y M al final
-  lines.push(...dLines);
-  lines.push(...mLines);
-
-  // CRLF para Windows/Presto
-  return lines.join("\r\n");
+  const euro = opts.html ? "&nbsp;€" : " €";
+  return String(num) + euro;
 }
 
+function prescFormatCurrencyHTML(value, lang) {
+  // Evita salto de línea entre número y €
+  return prescFormatCurrency(value, lang, { html: true });
+}
 
-
-
+// ------------------------
+// Print / PDF (ventana)
+// ------------------------
 function openPrescPrintWindow(model, lang) {
-  const labels = PRESC_EXPORT_LABELS[lang] || PRESC_EXPORT_LABELS.es;
+  const language = lang || model?.lang || appState.prescripcion.exportLang || "es";
+  const labels = (model?.labels) || PRESC_EXPORT_LABELS[language] || PRESC_EXPORT_LABELS.es;
 
   const win = window.open("", "_blank");
   if (!win) {
-    alert("No se pudo abrir la ventana de impresión. Revisa el bloqueador de ventanas emergentes.");
+    alert("No se pudo abrir la ventana de impresión. Revisa el bloqueador de popups.");
     return;
   }
 
   const style = `
     <style>
-      body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; padding: 16px; }
-      h1 { font-size: 18px; margin-bottom: 8px; }
-      h2 { font-size: 14px; margin-top: 16px; margin-bottom: 4px; }
-      table { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 12px; }
-      th, td { border: 1px solid #ccc; padding: 4px 6px; }
+      body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; padding: 16px; color:#111; }
+      h1 { font-size: 18px; margin: 0 0 8px; }
+      h2 { font-size: 14px; margin: 16px 0 6px; }
+      .small { font-size: 10px; color: #6b7280; margin: 0 0 10px; }
+      table { width: 100%; border-collapse: collapse; font-size: 11px; margin: 8px 0 14px; }
+      th, td { border: 1px solid #d1d5db; padding: 4px 6px; vertical-align: top; }
       th { background: #f3f4f6; text-align: left; }
-      .cap-title { margin-top: 16px; font-weight: 600; }
-      .small { font-size: 10px; color: #6b7280; }
+      .right { text-align:right; }
+      .subtotal { font-weight:700; background:#fafafa; }
+      .chapterText { margin: 6px 0 10px; white-space: pre-wrap; }
     </style>
   `;
 
-  const totalGlobal =
-    typeof model.totalGlobal === "number"
-      ? model.totalGlobal
-      : (model.capitulos || []).reduce((acc, cap) => {
-          const sub = (cap.lineas || []).reduce(
-            (s, l) => s + (l.importe != null ? l.importe : (l.cantidad || 0) * (l.pvp || 0)),
-            0
-          );
-          return acc + sub;
-        }, 0);
+  const chapters = model?.chapters || [];
+  const totalGlobal = Number(model?.total) || 0;
 
   let html = `
     <html>
-      <head>
-        <meta charset="utf-8" />
-        ${style}
-      </head>
+      <head><meta charset="utf-8" />${style}</head>
       <body>
-        <h1>${labels.title}</h1>
-        <p class="small">${labels.project}: ${document.title || ""}</p>
+        <h1>${labels.title || "Prescripción"}</h1>
+        <p class="small">${(labels.language || "Idioma")}: ${String(language).toUpperCase()}</p>
   `;
-  model.capitulos.forEach((cap, idx) => {
-    html += `
-      <h2>${labels.chapter} ${idx + 1} - ${cap.nombre || ""}</h2>
-    `;
 
-    if (cap.texto) {
-      html += `<p>${(cap.texto || "").replace(/\n/g, "<br>")}</p>`;
+  chapters.forEach((cap, idx) => {
+    html += `<h2>${labels.chapter || "Capítulo"} ${idx + 1} — ${escapeHtml(cap.title || "")}</h2>`;
+
+    if (cap.text) {
+      html += `<div class="chapterText">${escapeHtml(cap.text).replace(/\n/g, "<br>")}</div>`;
     }
 
-    if (cap.lineas && cap.lineas.length) {
+    if (cap.lines && cap.lines.length) {
       html += `
         <table>
           <thead>
             <tr>
-              <th>${labels.code}</th>
-              <th>${labels.description}</th>
-              <th>${labels.unit}</th>
-              <th style="text-align:right;">${labels.qty}</th>
-              <th style="text-align:right;">${labels.price} (€)</th>
-              <th style="text-align:right;">${labels.amount} (€)</th>
+              <th style="width:120px;">${labels.code || "Código"}</th>
+              <th>${labels.description || "Descripción"}</th>
+              <th style="width:70px;">${labels.unit || "Ud"}</th>
+              <th class="right" style="width:90px;">${labels.qty || "Cant."}</th>
+              <th class="right" style="width:110px;">${labels.price || "PVP"} (€)</th>
+              <th class="right" style="width:130px;">${labels.amount || "Importe"} (€)</th>
             </tr>
           </thead>
           <tbody>
       `;
 
-      let subtotal = 0;
-
-      cap.lineas.forEach((l) => {
-        const importe =
-          l.importe != null ? l.importe : (l.cantidad || 0) * (l.pvp || 0);
-        subtotal += importe;
-
+      cap.lines.forEach((l) => {
         html += `
           <tr>
-            <td>${l.codigo || ""}</td>
-            <td>${l.descripcion || ""}</td>
-            <td>${l.unidad || ""}</td>
-            <td style="text-align:right;">${(l.cantidad || 0)}</td>
-            <td style="text-align:right;">${prescFormatCurrencyHTML((l.pvp || 0), lang)}</td>
-            <td style="text-align:right;">${prescFormatCurrencyHTML(importe, lang)}</td>
+            <td style="font-family:ui-monospace, SFMono-Regular, Menlo, monospace;">${escapeHtml(l.code || "")}</td>
+            <td>${escapeHtml(l.description || "")}</td>
+            <td>${escapeHtml(l.unit || "")}</td>
+            <td class="right">${safeNumber(l.qty)}</td>
+            <td class="right">${prescFormatCurrencyHTML(safeNumber(l.price), language)}</td>
+            <td class="right">${prescFormatCurrencyHTML(safeNumber(l.amount), language)}</td>
           </tr>
         `;
       });
 
       html += `
-          <tr>
-            <td colspan="5" style="text-align:right; font-weight:600;">${labels.total}</td>
-            <td style="text-align:right; font-weight:600;">${prescFormatCurrencyHTML(subtotal, lang)}</td>
+          <tr class="subtotal">
+            <td colspan="5" class="right">${labels.subtotal || "Subtotal capítulo"}</td>
+            <td class="right">${prescFormatCurrencyHTML(safeNumber(cap.subtotal), language)}</td>
           </tr>
           </tbody>
         </table>
@@ -2689,11 +2102,8 @@ function openPrescPrintWindow(model, lang) {
   });
 
   html += `
-        <p style="text-align:right; font-weight:600; margin-top:12px;">
-          ${labels.grandTotal}: ${prescFormatCurrencyHTML(totalGlobal, lang)}
-        </p>
-        <p class="small">
-          ${labels.generated} · ${labels.language}: ${lang.toUpperCase()}
+        <p style="text-align:right; font-weight:800; margin-top:12px;">
+          ${labels.total || "Total"}: ${prescFormatCurrencyHTML(totalGlobal, language)}
         </p>
       </body>
     </html>
@@ -2707,12 +2117,15 @@ function openPrescPrintWindow(model, lang) {
     setTimeout(() => {
       win.focus();
       win.print();
-    }, 500);
+    }, 350);
   } catch (e) {
-    console.warn("[PRESCRIPCIÓN] No se pudo lanzar print automáticamente:", e);
+    console.warn("[PRESCRIPCIÓN] print() bloqueado:", e);
   }
 }
 
+// ------------------------
+// Descargas (texto / BC3)
+// ------------------------
 function downloadTextFile(content, filename, mimeType) {
   const blob = new Blob([content], { type: mimeType || "text/plain;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
@@ -2724,57 +2137,12 @@ function downloadTextFile(content, filename, mimeType) {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
-function downloadTextFileWin1252(content, filename) {
-  // Encoder Win-1252 básico (suficiente para ES/PT + €)
-  const map = {
-    "€": 0x80, "‚": 0x82, "ƒ": 0x83, "„": 0x84, "…": 0x85, "†": 0x86, "‡": 0x87,
-    "ˆ": 0x88, "‰": 0x89, "Š": 0x8A, "‹": 0x8B, "Œ": 0x8C, "Ž": 0x8E,
-    "‘": 0x91, "’": 0x92, "“": 0x93, "”": 0x94, "•": 0x95, "–": 0x96, "—": 0x97,
-    "˜": 0x98, "™": 0x99, "š": 0x9A, "›": 0x9B, "œ": 0x9C, "ž": 0x9E, "Ÿ": 0x9F
-  };
 
-  const bytes = [];
-  for (let i = 0; i < content.length; i++) {
-    const ch = content[i];
-    const code = content.charCodeAt(i);
-
-    if (map[ch] != null) {
-      bytes.push(map[ch]);
-    } else if (code <= 0xFF) {
-      bytes.push(code);
-    } else {
-      // fuera de win1252 → reemplazo
-      bytes.push(0x3F); // '?'
-    }
-  }
-
-  const blob = new Blob([new Uint8Array(bytes)], { type: "text/plain" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename || "export.bc3";
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-function formatBc3Date(d) {
-  // ddmmyy (como en tu BC3 manual)
-  const dd = String(d.getDate()).padStart(2, "0");
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const yy = String(d.getFullYear()).slice(-2);
-  return `${dd}${mm}${yy}`;
-}
-
-// Descarga “ANSI/latin1 safe” (Presto 8.8 suele llevarse peor con UTF-8)
 function downloadBc3File(content, filename) {
-  const s = (content || "").toString();
-
-  // Forzamos bytes 0..255 (latin1). Como ya “safeText” deja ASCII, esto queda estable.
+  // Forzamos bytes 0..255 (latin1) para Presto clásico
+  const s = String(content || "");
   const bytes = new Uint8Array(s.length);
-  for (let i = 0; i < s.length; i++) {
-    bytes[i] = s.charCodeAt(i) & 0xff;
-  }
+  for (let i = 0; i < s.length; i++) bytes[i] = s.charCodeAt(i) & 0xff;
 
   const blob = new Blob([bytes], { type: "text/plain" });
   const url = URL.createObjectURL(blob);
@@ -2785,80 +2153,43 @@ function downloadBc3File(content, filename) {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
-}// ========================================================
-// Auth helper: asegurar UID antes de tocar Firestore (evita "solo local")
-// ========================================================
-
-function ensurePrescUidReady(timeoutMs = 15000) {
-  return new Promise((resolve) => {
-    const uidNow = getCurrentUidPresc();
-    if (uidNow) return resolve(uidNow);
-
-    const auth = getAuthPresc();
-    if (!auth || typeof auth.onAuthStateChanged !== "function") return resolve(null);
-
-    let done = false;
-    const timer = setTimeout(() => {
-      if (done) return;
-      done = true;
-      resolve(getCurrentUidPresc());
-    }, Math.max(0, Number(timeoutMs) || 0));
-
-    try {
-      auth.onAuthStateChanged((user) => {
-        if (done) return;
-        if (user && user.uid) {
-          done = true;
-          clearTimeout(timer);
-          resolve(user.uid);
-        }
-      });
-    } catch (_) {
-      clearTimeout(timer);
-      resolve(getCurrentUidPresc());
-    }
-  });
 }
 
-
-
-// ========================================================
-// Exportación XLSX (Excel real) + PDF en idioma + moneda EUR
-// ========================================================
-
-function prescLangToLocale(lang) {
-  if (lang === "en") return "en-GB";
-  if (lang === "pt") return "pt-PT";
-  return "es-ES";
-}
-
-function prescFormatCurrency(value, lang, opts = {}) {
-  // Devuelve siempre con símbolo de euro.
-  // opts.html=true -> usa &nbsp;€ para evitar salto de línea en PDF/print
-  const locale = prescLangToLocale(lang);
-  const v = Number(value);
-  const n = Number.isFinite(v) ? v : 0;
-
-  let num;
-  try {
-    num = new Intl.NumberFormat(locale, {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(n);
-  } catch (e) {
-    num = n.toFixed(2);
+// ------------------------
+// BC3 generator (usa tu función)
+// ------------------------
+function exportPrescripcionToBc3(model) {
+  const lang = model?.lang || appState.prescripcion.exportLang || "es";
+  if (typeof prescExportToBC3 !== "function") {
+    alert("No existe prescExportToBC3 en el archivo.");
+    return;
   }
+  const bc3 = prescExportToBC3(
+    {
+      capitulos: (model.chapters || []).map((c) => ({
+        nombre: c.title,
+        texto: c.text,
+        lineas: (c.lines || []).map((l) => ({
+          codigo: l.code,
+          descripcion: l.description,
+          unidad: l.unit,
+          cantidad: l.qty,
+          pvp: l.price,
+          importe: l.amount
+        })),
+        subtotal: c.subtotal
+      })),
+      totalGlobal: model.total
+    },
+    lang
+  );
 
-  const euro = opts.html ? "&nbsp;€" : " €";
-  return String(num) + euro;
+  downloadBc3File(bc3, `prescripcion_${lang}.bc3`);
 }
 
-function prescFormatCurrencyHTML(value, lang) {
-  // Evita salto de línea entre número y € en HTML/PDF
-  return prescFormatCurrency(value, lang, { html: true }).replace(/\s€$/, "&nbsp;€");
-}
-
-
+// ------------------------
+// Excel deps (ExcelJS + FileSaver)
+// ------------------------
 async function prescLoadScriptOnce(url, id) {
   if (id && document.getElementById(id)) return;
   return new Promise((resolve, reject) => {
@@ -2873,10 +2204,8 @@ async function prescLoadScriptOnce(url, id) {
 }
 
 async function ensureExcelDepsLoaded() {
-  // ExcelJS + FileSaver (si ya están en la app, no hace nada)
   if (window.ExcelJS && window.saveAs) return true;
 
-  // Carga dinámica (mínimo impacto)
   try {
     if (!window.ExcelJS) {
       await prescLoadScriptOnce(
@@ -2891,15 +2220,13 @@ async function ensureExcelDepsLoaded() {
       );
     }
   } catch (e) {
-    console.warn("[Presc] No se pudieron cargar dependencias XLSX", e);
+    console.warn("[Presc] No se pudieron cargar deps XLSX", e);
   }
 
   return !!(window.ExcelJS && window.saveAs);
 }
 
-
 function getPrescProjectDescription() {
-  // Intenta resolver una descripción del proyecto (si existe en tu appState)
   const p = appState.proyecto || {};
   const pr = appState.presupuesto || {};
   return (
@@ -2912,14 +2239,12 @@ function getPrescProjectDescription() {
   );
 }
 
-async function exportPrescripcionToExcel(model, lang) {
-  const language = lang || model?.language || appState.prescripcion.exportLang || "es";
-  const labels = PRESC_EXPORT_LABELS[language] || PRESC_EXPORT_LABELS.es;
-
-  if (!model || !model.capitulos || !model.capitulos.length) {
-    alert("No hay capítulos para exportar.");
-    return;
-  }
+// ------------------------
+// Export XLSX REAL (ExcelJS)
+// ------------------------
+async function exportPrescripcionToExcel(model) {
+  const language = model?.lang || appState.prescripcion.exportLang || "es";
+  const labels = model?.labels || PRESC_EXPORT_LABELS[language] || PRESC_EXPORT_LABELS.es;
 
   const ok = await ensureExcelDepsLoaded();
   if (!ok) {
@@ -2928,9 +2253,8 @@ async function exportPrescripcionToExcel(model, lang) {
   }
 
   const wb = new ExcelJS.Workbook();
-  const ws = wb.addWorksheet((labels.sheet || "Prescripción").slice(0, 31));
+  const ws = wb.addWorksheet((labels.title || "Prescripción").slice(0, 31));
 
-  // Columnas
   ws.columns = [
     { key: "chapter", width: 22 },
     { key: "code", width: 14 },
@@ -2949,7 +2273,7 @@ async function exportPrescripcionToExcel(model, lang) {
   };
 
   const fmtCurrency = '#,##0.00" €"';
-  const fmtQty = "#,##0";
+  const fmtQty = "#,##0.00";
 
   const projectName =
     (typeof window.getNombreProyectoActual === "function" && window.getNombreProyectoActual()) ||
@@ -2963,29 +2287,30 @@ async function exportPrescripcionToExcel(model, lang) {
   ws.mergeCells(titleRow.number, 1, titleRow.number, 7);
   titleRow.font = { name: "Aptos Narrow", size: 13, bold: true, color: { argb: "FFFFFFFF" } };
   titleRow.alignment = { horizontal: "center", vertical: "middle" };
-  titleRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1BB1C7" } };
+  titleRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF111827" } };
 
-  
-  // Descripción debajo del título (si existe)
+  // Descripción proyecto (si existe)
   const projectDesc = String(getPrescProjectDescription() || "").trim();
   if (projectDesc) {
     const descRowTop = ws.addRow([projectDesc]);
     ws.mergeCells(descRowTop.number, 1, descRowTop.number, 7);
     descRowTop.getCell(1).font = { name: "Aptos Narrow", size: 10, italic: true, color: { argb: "FF374151" } };
     descRowTop.getCell(1).alignment = { horizontal: "center", vertical: "top", wrapText: true };
+
+    // Ajuste de altura aproximado (exceljs no tiene autofit real)
     const approxCharsPerLineTop = 110;
     const linesTop = Math.max(1, Math.ceil(projectDesc.length / approxCharsPerLineTop));
     descRowTop.height = Math.min(300, 15 * linesTop + 6);
   }
 
-ws.addRow([]);
+  ws.addRow([]);
 
-  const info1 = ws.addRow([labels.project || "Proyecto", projectName]);
+  const info1 = ws.addRow(["Proyecto", projectName]);
   ws.mergeCells(info1.number, 2, info1.number, 7);
   info1.getCell(1).font = { name: "Aptos Narrow", size: 11, bold: true };
   info1.getCell(2).font = { name: "Aptos Narrow", size: 10 };
 
-  const info2 = ws.addRow([labels.date || "Fecha", today]);
+  const info2 = ws.addRow(["Fecha", today]);
   ws.mergeCells(info2.number, 2, info2.number, 7);
   info2.getCell(1).font = { name: "Aptos Narrow", size: 11, bold: true };
   info2.getCell(2).font = { name: "Aptos Narrow", size: 10 };
@@ -2994,56 +2319,55 @@ ws.addRow([]);
 
   // Header tabla
   const headerRow = ws.addRow([
-    labels.chapter,
-    labels.code,
-    labels.description,
-    labels.unit,
-    labels.qty,
-    labels.price + " (€)",
-    labels.amount + " (€)",
+    labels.chapter, labels.code, labels.description, labels.unit,
+    labels.qty, labels.price + " (€)", labels.amount + " (€)"
   ]);
-
   headerRow.eachCell((cell) => {
     cell.font = { name: "Aptos Narrow", size: 11, bold: true };
-    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE5F3F7" } };
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE5E7EB" } };
     cell.border = borderThin;
     cell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
   });
 
-  // Capítulos + descripción debajo (requisito)
-  (model.capitulos || []).forEach((cap) => {
+  // Capítulos
+  (model.chapters || []).forEach((cap) => {
     ws.addRow([]);
 
-    const capRow = ws.addRow([String(cap.nombre || "").toUpperCase()]);
+    const capRow = ws.addRow([String(cap.title || "").toUpperCase()]);
     ws.mergeCells(capRow.number, 1, capRow.number, 7);
-    capRow.getCell(1).font = { name: "Aptos Narrow", size: 11, bold: true, color: { argb: "FF374151" } };
+    capRow.getCell(1).font = { name: "Aptos Narrow", size: 11, bold: true, color: { argb: "FF111827" } };
     capRow.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF3F4F6" } };
     capRow.getCell(1).border = borderThin;
 
-    const capDesc = String(cap.texto || "").trim();
+    // Texto del capítulo debajo del título (ajuste de altura)
+    const capDesc = String(cap.text || "").trim();
     if (capDesc) {
       const descRow = ws.addRow([capDesc]);
       ws.mergeCells(descRow.number, 1, descRow.number, 7);
       descRow.getCell(1).font = { name: "Aptos Narrow", size: 10, italic: true, color: { argb: "FF4B5563" } };
       descRow.getCell(1).alignment = { wrapText: true, vertical: "top" };
       descRow.getCell(1).border = borderThin;
-      // Auto-ajustar altura aproximada según texto (ExcelJS no tiene autofit real)
-      const approxCharsPerLine = 110; // según ancho combinado
+
+      const approxCharsPerLine = 110;
       const lines = Math.max(1, Math.ceil(capDesc.length / approxCharsPerLine));
       descRow.height = Math.min(300, 15 * lines + 6);
-
     }
 
-    (cap.lineas || []).forEach((l) => {
-      const qty = Number(l.cantidad) || 0;
-      const pvp = Number(l.pvp) || 0;
-      const imp = Number(l.importe) || qty * pvp;
-
-      const r = ws.addRow([cap.nombre || "", l.codigo || "", l.descripcion || "", l.unidad || "ud", qty, pvp, imp]);
+    (cap.lines || []).forEach((l) => {
+      const r = ws.addRow([
+        cap.title || "",
+        l.code || "",
+        l.description || "",
+        l.unit || "Ud",
+        safeNumber(l.qty),
+        safeNumber(l.price),
+        safeNumber(l.amount),
+      ]);
 
       r.eachCell((cell, col) => {
         cell.border = borderThin;
         cell.font = { name: "Aptos Narrow", size: 10 };
+
         if (col === 5) {
           cell.numFmt = fmtQty;
           cell.alignment = { horizontal: "right", vertical: "top" };
@@ -3058,7 +2382,7 @@ ws.addRow([]);
       });
     });
 
-    const subRow = ws.addRow([labels.total, "", "", "", "", "", Number(cap.subtotal) || 0]);
+    const subRow = ws.addRow([labels.subtotal, "", "", "", "", "", safeNumber(cap.subtotal)]);
     subRow.getCell(1).font = { name: "Aptos Narrow", size: 11, bold: true };
     subRow.getCell(7).font = { name: "Aptos Narrow", size: 11, bold: true };
     subRow.eachCell((cell, col) => {
@@ -3072,7 +2396,7 @@ ws.addRow([]);
 
   ws.addRow([]);
 
-  const totalRow = ws.addRow([labels.grandTotal, "", "", "", "", "", Number(model.totalGlobal) || 0]);
+  const totalRow = ws.addRow([labels.total, "", "", "", "", "", safeNumber(model.total)]);
   totalRow.getCell(1).font = { name: "Aptos Narrow", size: 12, bold: true };
   totalRow.getCell(7).font = { name: "Aptos Narrow", size: 12, bold: true };
   totalRow.eachCell((cell, col) => {
@@ -3093,19 +2417,90 @@ ws.addRow([]);
   saveAs(blob, fileName);
 }
 
-function exportPrescripcionToPdf(model, lang) {
-  // Usa la ventana de impresión existente, pero garantiza idioma y formato moneda
-  const language = lang || model?.language || appState.prescripcion.exportLang || "es";
+// ------------------------
+// Export PDF (usa print)
+// ------------------------
+function exportPrescripcionToPdf(model) {
+  const language = model?.lang || appState.prescripcion.exportLang || "es";
   openPrescPrintWindow(model, language);
 }
 
-function exportPrescripcionToBc3(model, lang) {
-  const language = lang || model?.language || appState.prescripcion.exportLang || "es";
-  const bc3 = prescExportToBC3(model, language);
-  downloadBc3File(bc3, `prescripcion_${language}.bc3`);
-}
-
-// Exponer a window para handlePrescExport
+// ------------------------
+// Exponer a window (para handlePrescExport)
+// ------------------------
 window.exportPrescripcionToExcel = exportPrescripcionToExcel;
 window.exportPrescripcionToPdf = exportPrescripcionToPdf;
 window.exportPrescripcionToBc3 = exportPrescripcionToBc3;
+
+// (opcional útil para debug desde consola)
+window.handlePrescExport = handlePrescExport;
+window.buildPrescExportModel = buildPrescExportModel;
+// ========================================================
+// PARTE 11
+// Bootstrap final de Prescripción
+// ========================================================
+
+(function initPrescripcionModule() {
+  // Evita doble inicialización
+  if (window.__prescInitialized) return;
+  window.__prescInitialized = true;
+
+  console.log("[PRESCRIPCIÓN] Inicializando módulo de prescripción");
+
+  // Asegurar estructura base
+  window.appState = window.appState || {};
+  appState.prescripcion = appState.prescripcion || {};
+
+  if (!Array.isArray(appState.prescripcion.capitulos)) {
+    appState.prescripcion.capitulos = [];
+  }
+
+  if (!Array.isArray(appState.prescripcion.plantillas)) {
+    appState.prescripcion.plantillas = [];
+  }
+
+  if (!Array.isArray(appState.prescripcion.extraRefs)) {
+    appState.prescripcion.extraRefs = [];
+  }
+
+  appState.prescripcion.previewExpanded =
+    appState.prescripcion.previewExpanded || {};
+
+  // Render diferido: espera a que exista el contenedor
+  function tryRenderPrescripcion() {
+    const container =
+      document.getElementById("appContent") ||
+      document.getElementById("docAppContent") ||
+      document.querySelector(".app-content");
+
+    if (!container) return false;
+
+    try {
+      renderDocPrescripcionView();
+      console.log("[PRESCRIPCIÓN] Vista renderizada correctamente");
+      return true;
+    } catch (e) {
+      console.error("[PRESCRIPCIÓN] Error renderizando vista:", e);
+      return false;
+    }
+  }
+
+  // Intento inmediato
+  if (tryRenderPrescripcion()) return;
+
+  // Reintento con observer (navegación SPA)
+  const obs = new MutationObserver(() => {
+    if (tryRenderPrescripcion()) {
+      obs.disconnect();
+    }
+  });
+
+  obs.observe(document.body, {
+    childList: true,
+    subtree: true
+  });
+})();
+
+// ========================================================
+// FIN ARCHIVO ui_doc_prescripcion.js
+// ========================================================
