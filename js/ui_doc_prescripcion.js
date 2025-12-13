@@ -2203,7 +2203,12 @@ function prescJoinGeminiChunks(chunks) {
 }
 
 async function translatePrescModel(model, targetLang) {
-  if (typeof window.geminiTranslateBatch !== "function") return;
+ console.log("[PRESC][translate] targetLang =", targetLang, "hasBatch=", typeof window.geminiTranslateBatch);
+
+  if (typeof window.geminiTranslateBatch !== "function") {
+    console.warn("[PRESC][translate] geminiTranslateBatch NO disponible en Prescripción.");
+    return;
+  }
 
   // Normaliza de forma consistente para cache (SIN perder contenido)
   const keyOf = (t) => String(t ?? "");
