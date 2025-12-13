@@ -20,6 +20,19 @@ appState.prescripcion = appState.prescripcion || {
 };
 
 // ========================================================
+// Helpers generales
+// ========================================================
+function escapeHtml(str) {
+  return String(str || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+
+
+// ========================================================
 // MODAL GENÉRICO (usa el modal global definido en index.html)
 // ========================================================
 
@@ -380,21 +393,15 @@ function renderDocPrescripcionView() {
             <div id="prescPlantillasList" class="card-body" style="flex:1; overflow:auto;"></div>
           </div>
 
-          <div style="flex:1; overflow:hidden; display:flex; flex-direction:column;">
-            <div style="color:#6b7280; font-size:0.8rem; padding:0.25rem 0.25rem 0;">
-              Las referencias extra se muestran debajo, entre Plantillas y la Previsualización.
+          <!-- Referencias extra (mismo tamaño que Plantillas) -->
+          <div class="card" style="height:42%; min-height:220px; display:flex; flex-direction:column; overflow:hidden;">
+            <div class="card-header">
+              <div class="card-title">Referencias extra</div>
+              <div class="card-subtitle">Switches, cable, mano de obra…</div>
             </div>
+            <div id="prescExtraRefsList" class="card-body" style="flex:1; overflow:auto;"></div>
           </div>
         </div>
-      </div>
-
-      <!-- REFERENCIAS EXTRA (entre plantillas y previsualización) -->
-      <div class="card" style="margin-top:1rem; overflow:hidden;">
-        <div class="card-header">
-          <div class="card-title">Referencias extra</div>
-          <div class="card-subtitle">Switches, cable, mano de obra…</div>
-        </div>
-        <div id="prescExtraRefsList" class="card-body" style="max-height:260px; overflow:auto;"></div>
       </div>
 
       <!-- PREVISUALIZACIÓN inferior -->
@@ -1842,6 +1849,7 @@ function renderPrescPreview() {
 
   ensurePrescCapitulosArray();
   const caps = appState.prescripcion.capitulos || [];
+  const extraRefs = appState.prescripcion.extraRefs || [];
 
   if (!caps.length) {
     container.innerHTML = `
@@ -1852,110 +1860,126 @@ function renderPrescPreview() {
     return;
   }
 
-  const extraRefs = appState.prescripcion.extraRefs || [];
   appState.prescripcion.previewExpanded = appState.prescripcion.previewExpanded || {};
   const expanded = appState.prescripcion.previewExpanded;
 
   let totalGlobal = 0;
 
-  const rowsHTML = caps
+  const cards = caps
     .map((cap) => {
       const lineas = cap.lineas || [];
-
-      let totalCap = 0;
-      lineas.forEach((l) => {
+      const totalCap = lineas.reduce((acc, l) => {
         const cant = Number(l.cantidad) || 0;
         const pvp = Number(l.pvp) || 0;
-        totalCap += cant * pvp;
-      });
+        return acc + cant * pvp;
+      }, 0);
       totalGlobal += totalCap;
 
       const isExpanded = !!expanded[cap.id];
 
-      let detailsHTML = "";
-      if (isExpanded && lineas.length) {
-        const detailRows = lineas
-          .map((l) => {
-            const cod = l.codigo || "";
-            const desc = l.descripcion || "";
-            const cant = Number(l.cantidad) || 0;
-            const pvp = Number(l.pvp) || 0;
-            const importe = cant * pvp;
+      const detailTable = isExpanded
+        ? `
+          <div style="border-top:1px solid #e5e7eb; padding:0.6rem 0.75rem; background:#fafafa;">
+            ${cap.texto ? `<div style="font-size:0.78rem; color:#374151; margin-bottom:0.5rem; white-space:pre-wrap;">${escapeHtml(cap.texto)}</div>` : ""}
+            ${
+              lineas.length
+                ? `<div style="max-height:220px; overflow:auto;">
+                     <table class="table table-compact" style="width:100%; font-size:0.78rem; border-collapse:collapse;">
+                       <thead>
+                         <tr>
+                           <th style="text-align:left;">Código</th>
+                           <th style="text-align:left;">Descripción</th>
+                           <th style="text-align:center;">Ud</th>
+                           <th style="text-align:right;">Cant.</th>
+                           <th style="text-align:right;">PVP</th>
+                           <th style="text-align:right;">Importe</th>
+                         </tr>
+                       </thead>
+                       <tbody>
+                         ${lineas
+                           .map((l) => {
+                             const cod = l.codigo || "";
+                             const desc = l.descripcion || "";
+                             const cant = Number(l.cantidad) || 0;
+                             const pvp = Number(l.pvp) || 0;
+                             const importe = cant * pvp;
 
-            let unidad = l.unidad || "Ud";
-            if (l.tipo === "extra" && l.extraRefId && extraRefs.length) {
-              const ref = extraRefs.find((r) => r.id === l.extraRefId);
-              if (ref) unidad = ref.unidad || unidad;
+                             let unidad = l.unidad || "Ud";
+                             if (l.tipo === "extra" && l.extraRefId && extraRefs.length) {
+                               const ref = extraRefs.find((r) => r.id === l.extraRefId);
+                               if (ref) unidad = ref.unidad || unidad;
+                             }
+
+                             return `
+                               <tr>
+                                 <td>${escapeHtml(cod)}</td>
+                                 <td>${escapeHtml(desc)}</td>
+                                 <td style="text-align:center;">${escapeHtml(unidad)}</td>
+                                 <td style="text-align:right;">${cant}</td>
+                                 <td style="text-align:right;">${(pvp || 0).toFixed(2)} €</td>
+                                 <td style="text-align:right;">${(importe || 0).toFixed(2)} €</td>
+                               </tr>
+                             `;
+                           })
+                           .join("")}
+                       </tbody>
+                     </table>
+                   </div>
+                   <div style="text-align:right; margin-top:6px; font-weight:700;">
+                     Subtotal capítulo: ${totalCap.toFixed(2)} €
+                   </div>`
+                : `<div style="font-size:0.78rem; color:#6b7280;">Sin líneas en este capítulo.</div>`
             }
-
-            return `
-              <tr>
-                <td>${cod}</td>
-                <td>${desc}</td>
-                <td style="text-align:center;">${unidad}</td>
-                <td style="text-align:right;">${cant}</td>
-                <td style="text-align:right;">${pvp.toFixed(2)} €</td>
-                <td style="text-align:right;">${importe.toFixed(2)} €</td>
-              </tr>
-            `;
-          })
-          .join("");
-
-        detailsHTML = `
-          <tr class="presc-preview-cap-details-row" data-cap-id="${cap.id}">
-            <td colspan="5" style="padding:0.4rem 0.6rem 0.6rem 2.2rem;">
-              <div style="max-height:24vh; overflow:auto;">
-                <table class="table table-compact" 
-                       style="width:100%; font-size:0.78rem; border-collapse:collapse; border-top:1px solid #e5e7eb;">
-                  <thead>
-                    <tr>
-                      <th style="text-align:left;">Código</th>
-                      <th style="text-align:left;">Descripción</th>
-                      <th style="text-align:center;">Ud</th>
-                      <th style="text-align:right;">Cant.</th>
-                      <th style="text-align:right;">PVP</th>
-                      <th style="text-align:right;">Importe</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    ${detailRows}
-                  </tbody>
-                </table>
-              </div>
-              <div style="text-align:right; margin-top:4px; font-weight:600;">
-                Subtotal capítulo: ${totalCap.toFixed(2)} €
-              </div>
-            </td>
-          </tr>
-        `;
-      }
+          </div>
+        `
+        : "";
 
       return `
-        <tr class="presc-preview-cap-row" data-cap-id="${cap.id}">
-          <td style="width:1.8rem; text-align:center; cursor:pointer;">
-            ${isExpanded ? "▾" : "▸"}
-          </td>
-          <td style="cursor:pointer;">
-            ${cap.nombre || "(sin título)"}
-          </td>
-          <td style="text-align:right;">${lineas.length}</td>
-          <td style="text-align:right;">${totalCap.toFixed(2)} €</td>
-          <td style="text-align:center; white-space:nowrap;">
-            <button type="button"
-                    class="btn btn-xs btn-outline presc-preview-cap-edit"
-                    data-cap-id="${cap.id}"
-                    title="Editar capítulo">
-              ✏️
-            </button>
-            <button type="button"
-                    class="btn btn-xs btn-outline presc-preview-cap-del"
-                    data-cap-id="${cap.id}"
-                    title="Eliminar capítulo">
-              🗑️
-            </button>
-          </td>
-        </tr>
-        ${detailsHTML}
+        <div class="presc-preview-card"
+             style="border:1px solid #e5e7eb; border-radius:12px; overflow:hidden; background:#fff; margin-bottom:0.65rem;">
+          <div class="presc-preview-card-head"
+               data-cap-id="${cap.id}"
+               style="display:flex; align-items:center; justify-content:space-between; gap:0.75rem; padding:0.65rem 0.75rem; cursor:pointer;">
+            <div style="display:flex; align-items:flex-start; gap:0.6rem; min-width:0;">
+              <button type="button"
+                      class="btn btn-xs btn-outline presc-preview-toggle"
+                      data-cap-id="${cap.id}"
+                      title="${isExpanded ? "Contraer" : "Desplegar"}"
+                      style="min-width:2rem;">
+                ${isExpanded ? "▾" : "▸"}
+              </button>
+
+              <div style="min-width:0;">
+                <div style="font-weight:800; text-transform:uppercase; font-size:0.9rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                  ${escapeHtml(cap.nombre || "(sin título)")}
+                </div>
+                <div style="font-size:0.78rem; color:#6b7280;">
+                  ${lineas.length} líneas
+                </div>
+              </div>
+            </div>
+
+            <div style="display:flex; align-items:center; gap:0.6rem; flex-shrink:0;">
+              <div style="font-weight:800; white-space:nowrap;">
+                ${totalCap.toFixed(2)} €
+              </div>
+              <button type="button"
+                      class="btn btn-xs btn-outline presc-preview-edit"
+                      data-cap-id="${cap.id}"
+                      title="Editar">
+                ✏️
+              </button>
+              <button type="button"
+                      class="btn btn-xs btn-outline presc-preview-del"
+                      data-cap-id="${cap.id}"
+                      title="Eliminar">
+                🗑️
+              </button>
+            </div>
+          </div>
+
+          ${detailTable}
+        </div>
       `;
     })
     .join("");
@@ -1963,91 +1987,69 @@ function renderPrescPreview() {
   container.innerHTML = `
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
       <div style="font-size:0.8rem; color:#6b7280;">
-        Doble clic sobre un capítulo para desplegar u ocultar sus referencias.
+        Haz clic para seleccionar. Usa ▸ para desplegar.
+      </div>
+      <div style="font-weight:900;">
+        Total: ${totalGlobal.toFixed(2)} €
       </div>
     </div>
-
-    <div style="max-height:32vh; overflow:auto;">
-      <table class="table table-compact"
-             style="width:100%; font-size:0.8rem; border-collapse:collapse;">
-        <thead>
-          <tr>
-            <th style="width:1.8rem;"></th>
-            <th style="text-align:left;">Capítulo</th>
-            <th style="text-align:right;">Nº refs</th>
-            <th style="text-align:right;">Total capítulo</th>
-            <th style="width:4.5rem;"></th>
-          </tr>
-        </thead>
-        <tbody>
-          ${rowsHTML}
-        </tbody>
-      </table>
-    </div>
-
-    <div style="text-align:right; margin-top:0.4rem; font-weight:600;">
-      Total prescripción: ${totalGlobal.toFixed(2)} €
-    </div>
+    ${cards}
   `;
 
-  container
-    .querySelectorAll(".presc-preview-cap-row")
-    .forEach((row) => {
-      row.addEventListener("dblclick", () => {
-        const capId = row.getAttribute("data-cap-id");
-        if (!capId) return;
-
-        appState.prescripcion.previewExpanded =
-          appState.prescripcion.previewExpanded || {};
-        const exp = appState.prescripcion.previewExpanded;
-
-        exp[capId] = !exp[capId];
-        renderPrescPreview();
-      });
+  // Selección de capítulo al clicar en cabecera (sin re-render completo)
+  container.querySelectorAll(".presc-preview-card-head").forEach((head) => {
+    head.addEventListener("click", (ev) => {
+      // Si clicas en botones, no forzar selección doble
+      const target = ev.target;
+      if (target && (target.closest(".presc-preview-toggle") || target.closest(".presc-preview-edit") || target.closest(".presc-preview-del"))) {
+        return;
+      }
+      const capId = head.getAttribute("data-cap-id");
+      if (!capId) return;
+      setSelectedCapituloId(capId);
+      renderPrescCapituloContent();
     });
+  });
 
-  container
-    .querySelectorAll(".presc-preview-cap-edit")
-    .forEach((btn) => {
-      btn.addEventListener("click", (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
-        const capId = btn.getAttribute("data-cap-id");
-        if (!capId) return;
-        setSelectedCapitulo(capId);
-        renderPrescCapituloContent();
-      });
+  // Toggle expand
+  container.querySelectorAll(".presc-preview-toggle").forEach((btn) => {
+    btn.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      const capId = btn.getAttribute("data-cap-id");
+      if (!capId) return;
+      expanded[capId] = !expanded[capId];
+      renderPrescPreview();
     });
+  });
 
-  container
-    .querySelectorAll(".presc-preview-cap-del")
-    .forEach((btn) => {
-      btn.addEventListener("click", (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
-        const capId = btn.getAttribute("data-cap-id");
-        if (!capId) return;
-        deleteCapituloById(capId);
-        renderDocPrescripcionView();
-      });
+  // Edit -> seleccionar + scroll al editor
+  container.querySelectorAll(".presc-preview-edit").forEach((btn) => {
+    btn.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      const capId = btn.getAttribute("data-cap-id");
+      if (!capId) return;
+      setSelectedCapituloId(capId);
+      renderPrescCapituloContent();
+      const editor = document.getElementById("prescCapituloContent");
+      if (editor) editor.scrollTop = 0;
     });
+  });
+
+  // Delete
+  container.querySelectorAll(".presc-preview-del").forEach((btn) => {
+    btn.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      const capId = btn.getAttribute("data-cap-id");
+      if (!capId) return;
+      deleteCapituloById(capId);
+      renderDocPrescripcionView();
+    });
+  });
 }
 
-// Estilos tabla preview
-(function injectPrescPreviewStyles() {
-  if (document.getElementById("presc-preview-styles")) return;
-  const style = document.createElement("style");
-  style.id = "presc-preview-styles";
-  style.innerHTML = `
-    #prescPreview table thead tr {
-      border-bottom: 1px solid #e5e7eb;
-    }
-    #prescPreview table tbody tr.presc-preview-cap-row:hover {
-      background:#f9fafb;
-    }
-  `;
-  document.head.appendChild(style);
-})();
 
 // ========================================================
 // BLOQUE 9 - Exportación Excel / PDF / BC3 con idioma
@@ -2065,7 +2067,12 @@ const PRESC_EXPORT_LABELS = {
     title: "Prescripción técnica del proyecto",
     total: "Total capítulo",
     grandTotal: "Total prescripción",
-    project: "Proyecto"
+    project: "Proyecto",
+    date: "Fecha",
+    generated: "Generado desde Presupuestos 2N",
+    sheet: "Prescripción",
+    language: "Idioma",
+  
   },
   en: {
     chapter: "Chapter",
@@ -2078,7 +2085,12 @@ const PRESC_EXPORT_LABELS = {
     title: "Project technical specification",
     total: "Chapter total",
     grandTotal: "Specification total",
-    project: "Project"
+    project: "Project",
+    date: "Date",
+    generated: "Generated from Presupuestos 2N",
+    sheet: "Specification",
+    language: "Language",
+  
   },
   pt: {
     chapter: "Capítulo",
@@ -2460,6 +2472,11 @@ function openPrescPrintWindow(model, lang) {
             0
           );
           return acc + sub;
+    date: "Data",
+    generated: "Gerado a partir do Presupuestos 2N",
+    sheet: "Especificação",
+    language: "Idioma",
+  
         }, 0);
 
   let html = `
@@ -2532,7 +2549,7 @@ function openPrescPrintWindow(model, lang) {
           ${labels.grandTotal}: ${totalGlobal.toFixed(2)} €
         </p>
         <p class="small">
-          Generado desde CRM Prescripción 2N · Idioma: ${lang.toUpperCase()}
+          ${labels.generated} · ${labels.language}: ${lang.toUpperCase()}
         </p>
       </body>
     </html>
@@ -2672,17 +2689,19 @@ function prescLangToLocale(lang) {
 }
 
 function prescFormatCurrency(value, lang) {
+  // Siempre devolvemos formato número + " €" (evita casos donde el símbolo se pierde al imprimir)
   const locale = prescLangToLocale(lang);
-  const n = Number(value) || 0;
+  const n = Number(value);
+  const v = Number.isFinite(n) ? n : 0;
+
   try {
-    return new Intl.NumberFormat(locale, {
-      style: "currency",
-      currency: "EUR",
+    const num = new Intl.NumberFormat(locale, {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
-    }).format(n);
+    }).format(v);
+    return num + " €";
   } catch (e) {
-    return n.toFixed(2) + " €";
+    return v.toFixed(2) + " €";
   }
 }
 
@@ -2724,6 +2743,21 @@ async function ensureExcelDepsLoaded() {
   return !!(window.ExcelJS && window.saveAs);
 }
 
+
+function getPrescProjectDescription() {
+  // Intenta resolver una descripción del proyecto (si existe en tu appState)
+  const p = appState.proyecto || {};
+  const pr = appState.presupuesto || {};
+  return (
+    p.descripcion ||
+    p.description ||
+    pr.descripcionProyecto ||
+    pr.descripcion ||
+    pr.projectDescription ||
+    ""
+  );
+}
+
 async function exportPrescripcionToExcel(model, lang) {
   const language = lang || model?.language || appState.prescripcion.exportLang || "es";
   const labels = PRESC_EXPORT_LABELS[language] || PRESC_EXPORT_LABELS.es;
@@ -2740,7 +2774,7 @@ async function exportPrescripcionToExcel(model, lang) {
   }
 
   const wb = new ExcelJS.Workbook();
-  const ws = wb.addWorksheet("Prescripción");
+  const ws = wb.addWorksheet((labels.sheet || "Prescripción").slice(0, 31));
 
   // Columnas
   ws.columns = [
@@ -2777,14 +2811,27 @@ async function exportPrescripcionToExcel(model, lang) {
   titleRow.alignment = { horizontal: "center", vertical: "middle" };
   titleRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1BB1C7" } };
 
-  ws.addRow([]);
+  
+  // Descripción debajo del título (si existe)
+  const projectDesc = String(getPrescProjectDescription() || "").trim();
+  if (projectDesc) {
+    const descRowTop = ws.addRow([projectDesc]);
+    ws.mergeCells(descRowTop.number, 1, descRowTop.number, 7);
+    descRowTop.getCell(1).font = { name: "Aptos Narrow", size: 10, italic: true, color: { argb: "FF374151" } };
+    descRowTop.getCell(1).alignment = { horizontal: "center", vertical: "top", wrapText: true };
+    const approxCharsPerLineTop = 110;
+    const linesTop = Math.max(1, Math.ceil(projectDesc.length / approxCharsPerLineTop));
+    descRowTop.height = Math.min(300, 15 * linesTop + 6);
+  }
+
+ws.addRow([]);
 
   const info1 = ws.addRow([labels.project || "Proyecto", projectName]);
   ws.mergeCells(info1.number, 2, info1.number, 7);
   info1.getCell(1).font = { name: "Aptos Narrow", size: 11, bold: true };
   info1.getCell(2).font = { name: "Aptos Narrow", size: 10 };
 
-  const info2 = ws.addRow(["Fecha", today]);
+  const info2 = ws.addRow([labels.date || "Fecha", today]);
   ws.mergeCells(info2.number, 2, info2.number, 7);
   info2.getCell(1).font = { name: "Aptos Narrow", size: 11, bold: true };
   info2.getCell(2).font = { name: "Aptos Narrow", size: 10 };
@@ -2826,6 +2873,11 @@ async function exportPrescripcionToExcel(model, lang) {
       descRow.getCell(1).font = { name: "Aptos Narrow", size: 10, italic: true, color: { argb: "FF4B5563" } };
       descRow.getCell(1).alignment = { wrapText: true, vertical: "top" };
       descRow.getCell(1).border = borderThin;
+      // Auto-ajustar altura aproximada según texto (ExcelJS no tiene autofit real)
+      const approxCharsPerLine = 110; // según ancho combinado
+      const lines = Math.max(1, Math.ceil(capDesc.length / approxCharsPerLine));
+      descRow.height = Math.min(300, 15 * lines + 6);
+
     }
 
     (cap.lineas || []).forEach((l) => {
