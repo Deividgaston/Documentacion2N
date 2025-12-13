@@ -32,6 +32,27 @@ function escapeHtml(str) {
 
 
 
+
+
+// Helpers extra (evita bugs en previsualización / attrs)
+function escapeHtmlAttr(str) {
+  return String(str || "")
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function safeNumber(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
+// Re-render mínimo cuando cambia el capítulo seleccionado (sin re-render total)
+function renderPrescCapituloSelected() {
+  // Solo refresca el panel central para evitar parpadeos y mantener rendimiento
+  renderPrescCapituloContent();
+}
 // ========================================================
 // MODAL GENÉRICO (usa el modal global definido en index.html)
 // ========================================================
@@ -64,8 +85,14 @@ function openPrescModal({ title, bodyHTML, onSave }) {
   btnCancel.onclick = close;
 
   btnSave.onclick = async () => {
-    if (typeof onSave === "function") await onSave();
-    close();
+    try {
+      if (typeof onSave === "function") await onSave();
+    } catch (e) {
+      console.error("[PRESCRIPCIÓN] Error en modal onSave:", e);
+      alert("Ha ocurrido un error al guardar. Revisa la consola para más detalle.");
+    } finally {
+      close();
+    }
   };
 }
 
@@ -305,7 +332,7 @@ function renderDocPrescripcionView() {
   const currentLang = appState.prescripcion.exportLang || "es";
 
   container.innerHTML = `
-    <div class="presc-root" style="display:flex; flex-direction:column; height:100vh; max-height:100vh; overflow:hidden;">
+    <div class="presc-root" style="display:flex; flex-direction:column; min-height:100vh; height:auto; overflow:auto;">
 
       <!-- CABECERA SUPERIOR -->
       <div class="card" style="margin-bottom:1rem;">
@@ -346,8 +373,7 @@ function renderDocPrescripcionView() {
       </div>
 
       <!-- LAYOUT 3 COLUMNAS -->
-      <div class="presc-layout" 
-           style="display:grid; grid-template-columns:1fr 1.4fr 1.2fr; gap:1rem; height:calc(100vh - 340px); max-height:calc(100vh - 340px); min-height:480px; overflow:hidden;">
+      <div class="presc-layout" style="display:grid; grid-template-columns:1fr 1.4fr 1.2fr; gap:1rem; min-height:480px; overflow:visible;">
 
         <!-- COLUMNA 1: Secciones del presupuesto -->
         <div class="card" style="display:flex; flex-direction:column; overflow:hidden;">
@@ -411,7 +437,7 @@ function renderDocPrescripcionView() {
           <div class="card-subtitle">Capítulos añadidos, totales y desglose desplegable</div>
         </div>
 
-        <div id="prescPreview" class="card-body" style="overflow:auto; max-height:420px;">
+        <div id="prescPreview" class="card-body" style="overflow:visible;">
         </div>
       </div>
 
@@ -963,6 +989,7 @@ function renderPrescCapituloContent() {
       if (qtyInput) {
         qtyInput.addEventListener("input", () => {
           linea.cantidad = Number(qtyInput.value) || 0;
+          linea.importe = safeNumber(linea.cantidad) * safeNumber(linea.pvp);
         });
       }
 
@@ -1876,7 +1903,7 @@ function renderPrescPreview() {
              style="display:flex; justify-content:space-between; align-items:center; gap:0.75rem; padding:0.85rem 0.95rem; cursor:pointer;
                     ${isSelected ? "outline:2px solid #93c5fd;" : ""}">
           <div style="min-width:0;">
-            <div style="font-weight:900; font-size:0.95rem; text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+            <div style="font-weight:900; font-size:1.05rem; text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
               ${escapeHtml(cap.nombre || "Capítulo")}
             </div>
             <div style="font-size:0.82rem; color:#6b7280; margin-top:0.15rem;">
