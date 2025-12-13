@@ -368,29 +368,33 @@ function renderDocPrescripcionView() {
           </div>
         </div>
 
-        <!-- COLUMNA 3: Plantillas + Referencias extra -->
-        <div style="display:flex; flex-direction:column; gap:1rem; height:100%;">
-          
-          <!-- Plantillas -->
-          <div class="card" style="flex:1; display:flex; flex-direction:column; overflow:hidden;">
+        <!-- COLUMNA 3: Plantillas -->
+        <div style="display:flex; flex-direction:column; gap:1rem; height:100%; overflow:hidden;">
+
+          <!-- Plantillas (altura reducida) -->
+          <div class="card" style="height:42%; min-height:220px; display:flex; flex-direction:column; overflow:hidden;">
             <div class="card-header">
               <div class="card-title">Plantillas</div>
               <div class="card-subtitle">Arrastra y suelta para rellenar texto técnico</div>
             </div>
-            <div id="prescPlantillasList" class="card-body" style="flex:1; overflow:auto;">
-            </div>
+            <div id="prescPlantillasList" class="card-body" style="flex:1; overflow:auto;"></div>
           </div>
 
-          <!-- Referencias extra -->
-          <div class="card" style="flex:1; display:flex; flex-direction:column; overflow:hidden;">
-            <div class="card-header">
-              <div class="card-title">Referencias extra</div>
-              <div class="card-subtitle">Switches, cable, mano de obra…</div>
-            </div>
-            <div id="prescExtraRefsList" class="card-body" style="flex:1; overflow:auto;">
+          <div style="flex:1; overflow:hidden; display:flex; flex-direction:column;">
+            <div style="color:#6b7280; font-size:0.8rem; padding:0.25rem 0.25rem 0;">
+              Las referencias extra se muestran debajo, entre Plantillas y la Previsualización.
             </div>
           </div>
         </div>
+      </div>
+
+      <!-- REFERENCIAS EXTRA (entre plantillas y previsualización) -->
+      <div class="card" style="margin-top:1rem; overflow:hidden;">
+        <div class="card-header">
+          <div class="card-title">Referencias extra</div>
+          <div class="card-subtitle">Switches, cable, mano de obra…</div>
+        </div>
+        <div id="prescExtraRefsList" class="card-body" style="max-height:260px; overflow:auto;"></div>
       </div>
 
       <!-- PREVISUALIZACIÓN inferior -->
@@ -1520,7 +1524,7 @@ async function renderPrescPlantillasList() {
 // ========================================================
 // Render REFERENCIAS EXTRA (con buscador)
 // ========================================================
-async function renderPrescExtraRefsList() {
+async async function renderPrescExtraRefsList() {
   const container = document.getElementById("prescExtraRefsList");
   if (!container) return;
 
