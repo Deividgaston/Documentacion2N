@@ -2983,14 +2983,14 @@ async function prescTranslateTextWithAI(text, targetLang) {
   // Nota: forzamos un "modo" que el backend puede usar para entender que es traducción.
   // Si tu backend ignora "modo", igualmente suele traducir si el 'idioma' objetivo es EN/PT.
   const out = await window.handleDocSectionAI({
-    sectionKey: "presc_translate",
-    idioma: targetLang,
-    titulo: "TRANSLATE / TRADUCIR",
-    texto: clean,
-    proyecto,
-    presupuesto,
-    modo: "traduccion",
-  });
+  sectionKey: "doc_translate",                 // ✅ usa un key “genérico”/conocido (como Documentación)
+  idioma: String(targetLang || "es").toUpperCase(), // ✅ muchos backends esperan EN/PT/ES
+  titulo: "Traducción",
+  texto: clean,
+  proyecto,
+  presupuesto,
+  modo: "comercial",                           // ✅ modo conocido por tu backend
+});
 
   return prescSanitizeAIText(out) || clean;
 }
