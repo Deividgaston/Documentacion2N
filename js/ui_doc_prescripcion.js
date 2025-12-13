@@ -2289,8 +2289,8 @@ async function translatePrescModel(model, targetLang) {
  for (const originalKey of toTranslate) {
   const translated = await prescTranslateTextWithAI(originalKey, targetLang);
   cache[originalKey] = translated || originalKey;
+  }  
 }
-
 
 // ========================================================
 // DISPATCH EXPORT
