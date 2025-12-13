@@ -2205,41 +2205,66 @@ function prescJoinGeminiChunks(chunks) {
 async function translatePrescModel(model, targetLang) {
   if (typeof window.geminiTranslateBatch !== "function") return;
 
+  // cache por string exacto
   const cache = {};
   const texts = [];
 
   const push = (t) => {
-    const s = String(t || "").trim();
-    if (!s || cache[s]) return;
+    const s = String(t ?? "");
+    if (!s.trim()) return;
+    if (cache[s] !== undefined) return; // ya está en cache (aunque sea null)
     cache[s] = null;
     texts.push(s);
   };
 
- model.chapters.forEach((c) => {
-  push(c.title);
-
-  // ✅ Fuerza traducción si hay texto y viene de plantilla
-  if (c.text && String(c.text).trim()) {
+  // 1) recogemos TODOS los textos (incluido el de plantillas/capítulos)
+  model.chapters.forEach((c) => {
+    push(c.title);
     push(c.text);
-  }
-
-  (c.lines || []).forEach((l) => push(l.description));
-});
+    (c.lines || []).forEach((l) => push(l.description));
+  });
 
   if (!texts.length) return;
 
-  let translated = [];
+  // 2) Expandimos textos largos en trozos (clave para plantillas)
+  const expanded = [];
+  const mapBack = []; // [{ original, partsCount }]
+  const MAX_CHARS = 1500;
+
+  for (const src of texts) {
+    const parts = prescSplitForGemini(src, MAX_CHARS);
+    mapBack.push({ original: src, partsCount: parts.length });
+    expanded.push(...parts);
+  }
+
+  // 3) Traducimos en batch (y en batches pequeños por seguridad)
+  const translatedExpanded = [];
+  const BATCH = 25; // evita requests gigantes
+
   try {
-    translated = await window.geminiTranslateBatch(texts, targetLang);
+    for (let i = 0; i < expanded.length; i += BATCH) {
+      const slice = expanded.slice(i, i + BATCH);
+      const out = await window.geminiTranslateBatch(slice, targetLang);
+
+      // robustez: si gemini devuelve menos, rellenamos con original
+      for (let k = 0; k < slice.length; k++) {
+        translatedExpanded.push(out?.[k] || slice[k]);
+      }
+    }
   } catch (e) {
     console.warn("[PRESC] Error traducción Gemini:", e);
     return;
   }
 
-  texts.forEach((src, i) => {
-    cache[src] = translated[i] || src;
-  });
+  // 4) Reconstruimos cache original -> texto traducido recombinado
+  let cursor = 0;
+  for (const m of mapBack) {
+    const parts = translatedExpanded.slice(cursor, cursor + m.partsCount);
+    cursor += m.partsCount;
+    cache[m.original] = m.partsCount > 1 ? prescJoinGeminiChunks(parts) : (parts[0] || m.original);
+  }
 
+  // 5) Aplicamos traducción al modelo
   model.chapters = model.chapters.map((c) => ({
     ...c,
     title: cache[c.title] || c.title,
