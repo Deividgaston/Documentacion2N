@@ -2299,7 +2299,8 @@ async function translatePrescModel(model, targetLang) {
   try {
     for (let i = 0; i < expanded.length; i += BATCH) {
       const slice = expanded.slice(i, i + BATCH);
-      const out = await prescGeminiTranslateBatch(slice, targetLang);
+      const out = await window.geminiTranslateBatch(slice, targetLang);
+
 
 
       for (let k = 0; k < slice.length; k++) {
