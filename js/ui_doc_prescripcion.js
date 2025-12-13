@@ -759,11 +759,11 @@ function prescUid(prefix = "id") {
 
 function cloneSectionRefs(sec) {
   return (sec.refs || []).map((r) => ({
-    id: "sec-ref-" + Date.now() + "-" + Math.random().toString(36).slice(2),
+    id: prescUid("line"),
     tipo: "budget",
     codigo: r.codigo || "",
     descripcion: r.descripcion || "",
-    unidad: r.unidad || "Ud",
+    unidad: r.unidad ?? r.ud ?? r.unit ?? "Ud",
     cantidad: safeNumber(r.cantidad),
     pvp: safeNumber(r.pvp),
     importe: safeNumber(r.importe),
