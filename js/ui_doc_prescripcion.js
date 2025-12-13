@@ -1712,6 +1712,22 @@ async function renderPrescExtraRefsList() {
       renderPrescPreview();
     });
   });
+    // Drag & drop de referencias extra hacia capítulo
+  container.querySelectorAll(".presc-extra-item[draggable='true']").forEach((el) => {
+    el.addEventListener("dragstart", (ev) => {
+      const id = el.getAttribute("data-id") || "";
+      try {
+        ev.dataTransfer.setData("text/presc-extra-id", id);
+        ev.dataTransfer.setData("text/plain", "presc-extra-id:" + id);
+        ev.dataTransfer.effectAllowed = "copy";
+      } catch (_) {}
+      el.style.opacity = "0.6";
+    });
+    el.addEventListener("dragend", () => {
+      el.style.opacity = "1";
+    });
+  });
+
 }
 
 // ========================================================
