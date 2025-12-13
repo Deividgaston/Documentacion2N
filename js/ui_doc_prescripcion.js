@@ -2205,48 +2205,70 @@ function prescJoinGeminiChunks(chunks) {
 async function translatePrescModel(model, targetLang) {
   if (typeof window.geminiTranslateBatch !== "function") return;
 
-  // cache por string exacto
-  const cache = {};
-  const texts = [];
+  // Normaliza de forma consistente para cache (SIN perder contenido)
+  const keyOf = (t) => String(t ?? "");
+  const hasText = (t) => keyOf(t).trim().length > 0;
 
-  const push = (t) => {
-    const s = String(t ?? "");
-    if (!s.trim()) return;
-    if (cache[s] !== undefined) return; // ya está en cache (aunque sea null)
-    cache[s] = null;
-    texts.push(s);
+  // Conserva espacios/saltos al inicio y final
+  const splitWS = (s) => {
+    const str = keyOf(s);
+    const m1 = str.match(/^\s+/);
+    const m2 = str.match(/\s+$/);
+    return {
+      lead: m1 ? m1[0] : "",
+      core: str.trim(),
+      tail: m2 ? m2[0] : "",
+    };
   };
 
-  // 1) recogemos TODOS los textos (incluido el de plantillas/capítulos)
+  // --- cache ---
+  const cache = Object.create(null);
+  const toTranslate = [];
+
+  const push = (t) => {
+    if (!hasText(t)) return;
+    const k = keyOf(t);              // 👈 clave EXACTA (sin trim)
+    if (cache[k] !== undefined) return;
+    cache[k] = null;
+    toTranslate.push(k);
+  };
+
   model.chapters.forEach((c) => {
     push(c.title);
-    push(c.text);
+    push(c.text);                    // 👈 aquí caen las plantillas
     (c.lines || []).forEach((l) => push(l.description));
   });
 
-  if (!texts.length) return;
+  if (!toTranslate.length) return;
 
-  // 2) Expandimos textos largos en trozos (clave para plantillas)
-  const expanded = [];
-  const mapBack = []; // [{ original, partsCount }]
+  // Trocea SOLO el core (para no romper espacios/saltos)
   const MAX_CHARS = 1500;
+  const expanded = [];
+  const mapBack = []; // { originalKey, partsCount, lead, tail }
 
-  for (const src of texts) {
-    const parts = prescSplitForGemini(src, MAX_CHARS);
-    mapBack.push({ original: src, partsCount: parts.length });
+  for (const originalKey of toTranslate) {
+    const { lead, core, tail } = splitWS(originalKey);
+
+    // si core vacío, no traducimos
+    if (!core) {
+      mapBack.push({ originalKey, partsCount: 0, lead, tail });
+      continue;
+    }
+
+    const parts = prescSplitForGemini(core, MAX_CHARS);
+    mapBack.push({ originalKey, partsCount: parts.length, lead, tail });
     expanded.push(...parts);
   }
 
-  // 3) Traducimos en batch (y en batches pequeños por seguridad)
+  // Batch seguro
   const translatedExpanded = [];
-  const BATCH = 25; // evita requests gigantes
+  const BATCH = 25;
 
   try {
     for (let i = 0; i < expanded.length; i += BATCH) {
       const slice = expanded.slice(i, i + BATCH);
       const out = await window.geminiTranslateBatch(slice, targetLang);
 
-      // robustez: si gemini devuelve menos, rellenamos con original
       for (let k = 0; k < slice.length; k++) {
         translatedExpanded.push(out?.[k] || slice[k]);
       }
@@ -2256,22 +2278,28 @@ async function translatePrescModel(model, targetLang) {
     return;
   }
 
-  // 4) Reconstruimos cache original -> texto traducido recombinado
+  // Reconstrucción al cache (reaplica lead/tail)
   let cursor = 0;
   for (const m of mapBack) {
+    if (m.partsCount === 0) {
+      cache[m.originalKey] = m.originalKey; // nada que traducir
+      continue;
+    }
     const parts = translatedExpanded.slice(cursor, cursor + m.partsCount);
     cursor += m.partsCount;
-    cache[m.original] = m.partsCount > 1 ? prescJoinGeminiChunks(parts) : (parts[0] || m.original);
+
+    const joined = (m.partsCount > 1) ? prescJoinGeminiChunks(parts) : (parts[0] || "");
+    cache[m.originalKey] = m.lead + joined + m.tail;
   }
 
-  // 5) Aplicamos traducción al modelo
+  // Aplicar al modelo usando la MISMA clave exacta
   model.chapters = model.chapters.map((c) => ({
     ...c,
-    title: cache[c.title] || c.title,
-    text: cache[c.text] || c.text,
+    title: cache[keyOf(c.title)] ?? c.title,
+    text:  cache[keyOf(c.text)]  ?? c.text,
     lines: (c.lines || []).map((l) => ({
       ...l,
-      description: cache[l.description] || l.description
+      description: cache[keyOf(l.description)] ?? l.description
     }))
   }));
 }
