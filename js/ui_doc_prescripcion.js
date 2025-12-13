@@ -2238,58 +2238,35 @@ async function prescGeminiTranslateBatch(texts, targetLang) {
 window.geminiTranslateBatch = prescGeminiTranslateBatch;
 
 async function translatePrescModel(model, targetLang) {
- console.log("[PRESC][translate] targetLang =", targetLang, "hasBatch=", typeof window.geminiTranslateBatch);
+  const lang = String(targetLang || "").toLowerCase();
+  if (!model || !Array.isArray(model.chapters) || !model.chapters.length) return;
+  if (lang === "es") return;
 
-  if (typeof window.geminiTranslateBatch !== "function") {
-    console.warn("[PRESC][translate] geminiTranslateBatch NO disponible en Prescripción.");
-    return;
+  // Cache para no traducir textos repetidos
+  const cache = new Map();
+
+  const translateOne = async (text) => {
+    const key = String(text ?? "");
+    if (!key.trim()) return key;
+    if (cache.has(key)) return cache.get(key);
+
+    const out = await prescTranslateTextWithAI(key, lang);
+    const finalText = String(out || key);
+    cache.set(key, finalText);
+    return finalText;
+  };
+
+  // ✅ aplicar traducción al modelo (título, plantilla/texto, descripción de líneas)
+  for (const c of model.chapters) {
+    c.title = await translateOne(c.title);
+    c.text = await translateOne(c.text);
+
+    if (Array.isArray(c.lines)) {
+      for (const l of c.lines) {
+        l.description = await translateOne(l.description);
+      }
+    }
   }
-
-  // Normaliza de forma consistente para cache (SIN perder contenido)
-  const keyOf = (t) => String(t ?? "");
-  const hasText = (t) => keyOf(t).trim().length > 0;
-
-  // Conserva espacios/saltos al inicio y final
-  const splitWS = (s) => {
-    const str = keyOf(s);
-    const m1 = str.match(/^\s+/);
-    const m2 = str.match(/\s+$/);
-    return {
-      lead: m1 ? m1[0] : "",
-      core: str.trim(),
-      tail: m2 ? m2[0] : "",
-    };
-  };
-
-  // --- cache ---
-  const cache = Object.create(null);
-  const toTranslate = [];
-
-  const push = (t) => {
-    if (!hasText(t)) return;
-    const k = keyOf(t);              // 👈 clave EXACTA (sin trim)
-    if (cache[k] !== undefined) return;
-    cache[k] = null;
-    toTranslate.push(k);
-  };
-
-  model.chapters.forEach((c) => {
-    push(c.title);
-    push(c.text);                    // 👈 aquí caen las plantillas
-    (c.lines || []).forEach((l) => push(l.description));
-  });
-
-  if (!toTranslate.length) return;
-
-  // Trocea SOLO el core (para no romper espacios/saltos)
-  const MAX_CHARS = 1500;
-  const expanded = [];
-  const mapBack = []; // { originalKey, partsCount, lead, tail }
-
- for (const originalKey of toTranslate) {
-  const translated = await prescTranslateTextWithAI(originalKey, targetLang);
-  cache[originalKey] = translated || originalKey;
-  }  
 }
 
 // ========================================================
