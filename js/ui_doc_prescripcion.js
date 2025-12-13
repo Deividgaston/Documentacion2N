@@ -674,6 +674,24 @@ function handleSectionDrop(secId) {
     return;
   }
 
+  ensurePrescCapitulosArray();
+
+  // 1) Si ya existe un capítulo creado desde ESTA sección → lo seleccionamos
+  const existingCap = (appState.prescripcion.capitulos || []).find((c) =>
+    String(c.sourceSectionId || "") === String(sec.id || "") ||
+    String(c.sourceSectionRawId || "") === String(sec.rawId || "")
+  );
+
+  if (existingCap) {
+    appState.prescripcion.selectedCapituloId = existingCap.id;
+
+    // Si el capítulo existente es el seleccionado, preguntamos overwrite/append
+    // Si no lo era, lo seleccionamos y preguntamos igual (sin crear duplicados)
+    askOverwriteOrAppend(sec, existingCap);
+    return;
+  }
+
+  // 2) Si no existe capítulo vinculado, usamos el seleccionado si lo hay
   const capActual = getSelectedCapitulo();
   if (!capActual) {
     createChapterFromSection(sec);
