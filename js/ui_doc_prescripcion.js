@@ -395,16 +395,15 @@ function renderDocPrescripcionView() {
       </div>
 
 
-      <!-- PREVIEW (se trabaja en PARTE 7) -->
-      <div class="card" style="margin-top:0.75rem;">
+           <!-- PREVIEW (más accesible) -->
+      <div class="card" style="flex:1; min-height:0; margin-top:0.75rem; overflow:hidden;">
         <div class="card-header">
           <div class="card-title">Previsualización</div>
           <div class="card-subtitle">Resumen por capítulos</div>
         </div>
-        <div id="prescPreview" class="card-body"></div>
+        <div id="prescPreview" class="card-body" style="overflow:auto; min-height:0;"></div>
       </div>
 
-    </div>
   `;
 
   // =====================
