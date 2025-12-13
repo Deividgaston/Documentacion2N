@@ -411,7 +411,7 @@ function renderDocPrescripcionView() {
           <div class="card-subtitle">Capítulos añadidos, totales y desglose desplegable</div>
         </div>
 
-        <div id="prescPreview" class="card-body" style="overflow:auto; max-height:260px;">
+        <div id="prescPreview" class="card-body" style="overflow:auto; max-height:420px;">
         </div>
       </div>
 
@@ -1848,208 +1848,144 @@ function renderPrescPreview() {
   if (!container) return;
 
   ensurePrescCapitulosArray();
-  const caps = appState.prescripcion.capitulos || [];
-  const extraRefs = appState.prescripcion.extraRefs || [];
 
+  const caps = appState.prescripcion.capitulos || [];
   if (!caps.length) {
-    container.innerHTML = `
-      <p class="text-muted" style="font-size:0.8rem;">
-        Aún no hay capítulos en la prescripción. Crea uno manual o arrastra una sección del presupuesto.
-      </p>
-    `;
+    container.innerHTML = `<div style="color:#6b7280; font-size:0.9rem;">No hay capítulos todavía.</div>`;
     return;
   }
 
-  appState.prescripcion.previewExpanded = appState.prescripcion.previewExpanded || {};
-  const expanded = appState.prescripcion.previewExpanded;
-
+  // Cards grandes, como antes: título + resumen + acciones + desplegable
   let totalGlobal = 0;
 
-  const cards = caps
-    .map((cap) => {
-      const lineas = cap.lineas || [];
-      const totalCap = lineas.reduce((acc, l) => {
-        const cant = Number(l.cantidad) || 0;
-        const pvp = Number(l.pvp) || 0;
-        return acc + cant * pvp;
-      }, 0);
-      totalGlobal += totalCap;
+  const cards = caps.map((cap, idx) => {
+    const subtotal = (cap.lineas || []).reduce((acc, l) => acc + safeNumber(l.importe), 0);
+    totalGlobal += subtotal;
 
-      const isExpanded = !!expanded[cap.id];
+    const isSelected = appState.prescripcion.selectedCapituloId === cap.id;
 
-      const detailTable = isExpanded
-        ? `
-          <div style="border-top:1px solid #e5e7eb; padding:0.6rem 0.75rem; background:#fafafa;">
-            ${cap.texto ? `<div style="font-size:0.78rem; color:#374151; margin-bottom:0.5rem; white-space:pre-wrap;">${escapeHtml(cap.texto)}</div>` : ""}
-            ${
-              lineas.length
-                ? `<div style="max-height:220px; overflow:auto;">
-                     <table class="table table-compact" style="width:100%; font-size:0.78rem; border-collapse:collapse;">
-                       <thead>
-                         <tr>
-                           <th style="text-align:left;">Código</th>
-                           <th style="text-align:left;">Descripción</th>
-                           <th style="text-align:center;">Ud</th>
-                           <th style="text-align:right;">Cant.</th>
-                           <th style="text-align:right;">PVP</th>
-                           <th style="text-align:right;">Importe</th>
-                         </tr>
-                       </thead>
-                       <tbody>
-                         ${lineas
-                           .map((l) => {
-                             const cod = l.codigo || "";
-                             const desc = l.descripcion || "";
-                             const cant = Number(l.cantidad) || 0;
-                             const pvp = Number(l.pvp) || 0;
-                             const importe = cant * pvp;
+    const linesCount = (cap.lineas || []).length;
+    const previewText = String(cap.texto || "").trim();
+    const previewLines = previewText ? previewText.split("\n").slice(0, 3).join("<br/>") : "";
 
-                             let unidad = l.unidad || "Ud";
-                             if (l.tipo === "extra" && l.extraRefId && extraRefs.length) {
-                               const ref = extraRefs.find((r) => r.id === l.extraRefId);
-                               if (ref) unidad = ref.unidad || unidad;
-                             }
-
-                             return `
-                               <tr>
-                                 <td>${escapeHtml(cod)}</td>
-                                 <td>${escapeHtml(desc)}</td>
-                                 <td style="text-align:center;">${escapeHtml(unidad)}</td>
-                                 <td style="text-align:right;">${cant}</td>
-                                 <td style="text-align:right;">${(pvp || 0).toFixed(2)} €</td>
-                                 <td style="text-align:right;">${(importe || 0).toFixed(2)} €</td>
-                               </tr>
-                             `;
-                           })
-                           .join("")}
-                       </tbody>
-                     </table>
-                   </div>
-                   <div style="text-align:right; margin-top:6px; font-weight:700;">
-                     Subtotal capítulo: ${totalCap.toFixed(2)} €
-                   </div>`
-                : `<div style="font-size:0.78rem; color:#6b7280;">Sin líneas en este capítulo.</div>`
-            }
-          </div>
-        `
-        : "";
-
-      return `
-        <div class="presc-preview-card"
-             style="border:1px solid #e5e7eb; border-radius:12px; overflow:hidden; background:#fff; margin-bottom:0.65rem;">
-          <div class="presc-preview-card-head"
-               data-cap-id="${cap.id}"
-               style="display:flex; align-items:center; justify-content:space-between; gap:0.75rem; padding:0.65rem 0.75rem; cursor:pointer;">
-            <div style="display:flex; align-items:flex-start; gap:0.6rem; min-width:0;">
-              <button type="button"
-                      class="btn btn-xs btn-outline presc-preview-toggle"
-                      data-cap-id="${cap.id}"
-                      title="${isExpanded ? "Contraer" : "Desplegar"}"
-                      style="min-width:2rem;">
-                ${isExpanded ? "▾" : "▸"}
-              </button>
-
-              <div style="min-width:0;">
-                <div style="font-weight:800; text-transform:uppercase; font-size:0.9rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-                  ${escapeHtml(cap.nombre || "(sin título)")}
-                </div>
-                <div style="font-size:0.78rem; color:#6b7280;">
-                  ${lineas.length} líneas
-                </div>
-              </div>
+    return `
+      <div class="presc-preview-card"
+           style="border:1px solid #e5e7eb; border-radius:14px; overflow:hidden; background:#fff;">
+        <div class="presc-preview-head"
+             data-id="${escapeHtmlAttr(cap.id)}"
+             style="display:flex; justify-content:space-between; align-items:center; gap:0.75rem; padding:0.85rem 0.95rem; cursor:pointer;
+                    ${isSelected ? "outline:2px solid #93c5fd;" : ""}">
+          <div style="min-width:0;">
+            <div style="font-weight:900; font-size:0.95rem; text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+              ${escapeHtml(cap.nombre || "Capítulo")}
             </div>
-
-            <div style="display:flex; align-items:center; gap:0.6rem; flex-shrink:0;">
-              <div style="font-weight:800; white-space:nowrap;">
-                ${totalCap.toFixed(2)} €
-              </div>
-              <button type="button"
-                      class="btn btn-xs btn-outline presc-preview-edit"
-                      data-cap-id="${cap.id}"
-                      title="Editar">
-                ✏️
-              </button>
-              <button type="button"
-                      class="btn btn-xs btn-outline presc-preview-del"
-                      data-cap-id="${cap.id}"
-                      title="Eliminar">
-                🗑️
-              </button>
+            <div style="font-size:0.82rem; color:#6b7280; margin-top:0.15rem;">
+              ${linesCount} líneas · Total ${subtotal.toFixed(2)} €
             </div>
           </div>
 
-          ${detailTable}
+          <div style="display:flex; align-items:center; gap:0.35rem;">
+            <button class="btn btn-xs btn-secondary presc-preview-open" data-id="${escapeHtmlAttr(cap.id)}" title="Ver detalle">▾</button>
+            <button class="btn btn-xs btn-secondary presc-preview-del" data-id="${escapeHtmlAttr(cap.id)}" title="Eliminar">🗑️</button>
+          </div>
         </div>
-      `;
-    })
-    .join("");
+
+        <div class="presc-preview-body" id="prescPreviewBody_${escapeHtmlAttr(cap.id)}" style="display:none; border-top:1px solid #e5e7eb; padding:0.85rem 0.95rem; background:#fafafa;">
+          ${previewText ? `<div style="font-size:0.85rem; color:#374151; margin-bottom:0.75rem;">${previewLines}${previewText.split("\n").length > 3 ? `<div style="color:#6b7280; margin-top:0.25rem;">...</div>` : ""}</div>` : ""}
+
+          ${
+            linesCount
+              ? `
+                <div style="overflow:auto;">
+                  <table class="table" style="min-width:720px;">
+                    <thead>
+                      <tr>
+                        <th style="width:120px;">CÓDIGO</th>
+                        <th>DESCRIPCIÓN</th>
+                        <th style="width:70px;">UD</th>
+                        <th style="width:90px; text-align:right;">CANT.</th>
+                        <th style="width:110px; text-align:right;">PVP (€)</th>
+                        <th style="width:130px; text-align:right;">IMPORTE (€)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${(cap.lineas || [])
+                        .map((l) => {
+                          const qty = safeNumber(l.cantidad);
+                          const pvp = safeNumber(l.pvp);
+                          const imp = safeNumber(l.importe != null ? l.importe : qty * pvp);
+                          return `
+                            <tr>
+                              <td style="font-family:ui-monospace, SFMono-Regular, Menlo, monospace;">${escapeHtml(l.codigo || "")}</td>
+                              <td>${escapeHtml(l.descripcion || "")}</td>
+                              <td>${escapeHtml(l.unidad || "ud")}</td>
+                              <td style="text-align:right;">${qty}</td>
+                              <td style="text-align:right;">${pvp.toFixed(2)} €</td>
+                              <td style="text-align:right;">${imp.toFixed(2)} €</td>
+                            </tr>
+                          `;
+                        })
+                        .join("")}
+                    </tbody>
+                  </table>
+                </div>
+              `
+              : `<div style="font-size:0.85rem; color:#6b7280;">Sin líneas.</div>`
+          }
+        </div>
+      </div>
+    `;
+  });
 
   container.innerHTML = `
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
-      <div style="font-size:0.8rem; color:#6b7280;">
-        Haz clic para seleccionar. Usa ▸ para desplegar.
-      </div>
-      <div style="font-weight:900;">
+    <div style="display:flex; flex-direction:column; gap:0.85rem;">
+      ${cards.join("")}
+      <div style="display:flex; justify-content:flex-end; font-weight:900; font-size:1.05rem; padding-top:0.25rem;">
         Total: ${totalGlobal.toFixed(2)} €
       </div>
     </div>
-    ${cards}
   `;
 
-  // Selección de capítulo al clicar en cabecera (sin re-render completo)
-  container.querySelectorAll(".presc-preview-card-head").forEach((head) => {
-    head.addEventListener("click", (ev) => {
-      // Si clicas en botones, no forzar selección doble
-      const target = ev.target;
-      if (target && (target.closest(".presc-preview-toggle") || target.closest(".presc-preview-edit") || target.closest(".presc-preview-del"))) {
-        return;
-      }
-      const capId = head.getAttribute("data-cap-id");
-      if (!capId) return;
-      setSelectedCapituloId(capId);
-      renderPrescCapituloContent();
-    });
-  });
-
-  // Toggle expand
-  container.querySelectorAll(".presc-preview-toggle").forEach((btn) => {
-    btn.addEventListener("click", (ev) => {
-      ev.preventDefault();
-      ev.stopPropagation();
-      const capId = btn.getAttribute("data-cap-id");
-      if (!capId) return;
-      expanded[capId] = !expanded[capId];
+  // Selección por click en cabecera
+  container.querySelectorAll(".presc-preview-head").forEach((row) => {
+    row.addEventListener("click", (e) => {
+      const id = row.dataset.id;
+      if (!id) return;
+      appState.prescripcion.selectedCapituloId = id;
+      renderPrescCapituloSelected();
       renderPrescPreview();
     });
   });
 
-  // Edit -> seleccionar + scroll al editor
-  container.querySelectorAll(".presc-preview-edit").forEach((btn) => {
-    btn.addEventListener("click", (ev) => {
-      ev.preventDefault();
-      ev.stopPropagation();
-      const capId = btn.getAttribute("data-cap-id");
-      if (!capId) return;
-      setSelectedCapituloId(capId);
-      renderPrescCapituloContent();
-      const editor = document.getElementById("prescCapituloContent");
-      if (editor) editor.scrollTop = 0;
+  // Toggle detalle
+  container.querySelectorAll(".presc-preview-open").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.id;
+      const body = document.getElementById("prescPreviewBody_" + id);
+      if (!body) return;
+      body.style.display = body.style.display === "none" ? "block" : "none";
     });
   });
 
   // Delete
   container.querySelectorAll(".presc-preview-del").forEach((btn) => {
-    btn.addEventListener("click", (ev) => {
-      ev.preventDefault();
-      ev.stopPropagation();
-      const capId = btn.getAttribute("data-cap-id");
-      if (!capId) return;
-      deleteCapituloById(capId);
-      renderDocPrescripcionView();
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.id;
+      if (!id) return;
+      if (!confirm("¿Eliminar este capítulo?")) return;
+      appState.prescripcion.capitulos = (appState.prescripcion.capitulos || []).filter((c) => c.id !== id);
+      if (appState.prescripcion.selectedCapituloId === id) {
+        appState.prescripcion.selectedCapituloId = appState.prescripcion.capitulos.length
+          ? appState.prescripcion.capitulos[0].id
+          : null;
+      }
+      renderPrescCapituloSelected();
+      renderPrescPreview();
     });
   });
 }
-
 
 // ========================================================
 // BLOQUE 9 - Exportación Excel / PDF / BC3 con idioma
@@ -2111,9 +2047,8 @@ const PRESC_EXPORT_LABELS = {
   }
 };
 
-function buildPrescExportModel(lang) {
+async function buildPrescExportModel(lang) {
   ensurePrescCapitulosArray();
-  const caps = appState.prescripcion.capitulos || [];
   const language = lang || appState.prescripcion.exportLang || "es";
 
   const result = {
@@ -2122,46 +2057,131 @@ function buildPrescExportModel(lang) {
     totalGlobal: 0
   };
 
-  caps.forEach((cap, idx) => {
-    const lineas = cap.lineas || [];
+  (appState.prescripcion.capitulos || []).forEach((cap) => {
+    if (!cap) return;
+
     const capData = {
-      index: idx + 1,
-      id: cap.id,
       nombre: cap.nombre || "",
       texto: cap.texto || "",
       lineas: [],
       subtotal: 0
     };
 
-    lineas.forEach((l) => {
-      const cant = Number(l.cantidad) || 0;
-      const pvp = Number(l.pvp) || 0;
-      const importe = cant * pvp;
+    (cap.lineas || []).forEach((l) => {
+      const qty = safeNumber(l.cantidad);
+      const pvp = safeNumber(l.pvp);
+      const imp = safeNumber(l.importe != null ? l.importe : qty * pvp);
 
       capData.lineas.push({
-        id: l.id,
-        tipo: l.tipo || "budget",
         codigo: l.codigo || "",
         descripcion: l.descripcion || "",
-        unidad: l.unidad || "Ud",
-        cantidad: cant,
+        unidad: l.unidad || "ud",
+        cantidad: qty,
         pvp,
-        importe
+        importe: imp
       });
 
-      capData.subtotal += importe;
+      capData.subtotal += imp;
     });
 
     result.totalGlobal += capData.subtotal;
     result.capitulos.push(capData);
   });
 
+  // Traducción completa del contenido (capítulos + texto plantilla + descripciones)
+  // Requiere que exista una función de traducción Gemini en window:
+  // - window.geminiTranslateText(text, targetLang) => Promise<string>
+  // Opcional:
+  // - window.geminiTranslateBatch(textArray, targetLang) => Promise<string[]>
+  if (language !== "es") {
+    result.capitulos = await prescTranslateDocumentWithGemini(result.capitulos, language);
+  }
+
   return result;
 }
 
-function handlePrescExport(format) {
+async function prescTranslateDocumentWithGemini(capitulos, targetLang) {
+  const hasBatch = typeof window.geminiTranslateBatch === "function";
+  const hasSingle = typeof window.geminiTranslateText === "function";
+
+  if (!hasBatch && !hasSingle) {
+    alert(
+      "No hay traductor Gemini configurado (window.geminiTranslateText / window.geminiTranslateBatch).\n" +
+      "Se exportará manteniendo los textos originales."
+    );
+    return capitulos;
+  }
+
+  // Cache en memoria (por sesión) para no repetir traducciones
+  window.__prescTrCache = window.__prescTrCache || {};
+  const cache = window.__prescTrCache;
+  const keyFor = (t) => `${targetLang}::${t}`;
+
+  // Recoger textos únicos a traducir
+  const toTranslate = [];
+  const pushTxt = (t) => {
+    const s = String(t || "").trim();
+    if (!s) return;
+    const k = keyFor(s);
+    if (cache[k]) return;
+    if (!toTranslate.includes(s)) toTranslate.push(s);
+  };
+
+  capitulos.forEach((cap) => {
+    pushTxt(cap.nombre);
+    pushTxt(cap.texto);
+    (cap.lineas || []).forEach((l) => pushTxt(l.descripcion));
+  });
+
+  // Ejecutar traducción
+  if (toTranslate.length) {
+    if (hasBatch) {
+      try {
+        const translated = await window.geminiTranslateBatch(toTranslate, targetLang);
+        if (Array.isArray(translated) && translated.length === toTranslate.length) {
+          toTranslate.forEach((src, i) => {
+            cache[keyFor(src)] = String(translated[i] || src);
+          });
+        }
+      } catch (e) {
+        console.warn("[Presc] Error geminiTranslateBatch", e);
+      }
+    }
+
+    // Fallback a single si batch no existe o falló parcialmente
+    if (hasSingle) {
+      for (const src of toTranslate) {
+        const k = keyFor(src);
+        if (cache[k]) continue;
+        try {
+          const tr = await window.geminiTranslateText(src, targetLang);
+          cache[k] = String(tr || src);
+        } catch (e) {
+          console.warn("[Presc] Error geminiTranslateText", e);
+          cache[k] = src;
+        }
+      }
+    }
+  }
+
+  // Aplicar traducciones
+  return capitulos.map((cap) => {
+    const nombre = cache[keyFor(String(cap.nombre || "").trim())] || cap.nombre;
+    const texto = cache[keyFor(String(cap.texto || "").trim())] || cap.texto;
+
+    const lineas = (cap.lineas || []).map((l) => {
+      const descKey = keyFor(String(l.descripcion || "").trim());
+      const descripcion = cache[descKey] || l.descripcion;
+      return { ...l, descripcion };
+    });
+
+    return { ...cap, nombre, texto, lineas };
+  });
+}
+
+async function handlePrescExport(format) {
   const lang = appState.prescripcion.exportLang || "es";
-  const model = buildPrescExportModel(lang);
+  const model = await buildPrescExportModel(lang);
 
   if (!model || !model.capitulos || !model.capitulos.length) {
     alert("No hay capítulos para exportar.");
@@ -2687,26 +2707,30 @@ function prescLangToLocale(lang) {
   return "es-ES";
 }
 
-function prescFormatCurrency(value, lang) {
-  // Siempre devolvemos formato número + " €" (evita casos donde el símbolo se pierde al imprimir)
+function prescFormatCurrency(value, lang, opts = {}) {
+  // Devuelve siempre con símbolo de euro.
+  // opts.html=true -> usa &nbsp;€ para evitar salto de línea en PDF/print
   const locale = prescLangToLocale(lang);
-  const n = Number(value);
-  const v = Number.isFinite(n) ? n : 0;
+  const v = Number(value);
+  const n = Number.isFinite(v) ? v : 0;
 
+  let num;
   try {
-    const num = new Intl.NumberFormat(locale, {
+    num = new Intl.NumberFormat(locale, {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
-    }).format(v);
-    return num + " €";
+    }).format(n);
   } catch (e) {
-    return v.toFixed(2) + " €";
+    num = n.toFixed(2);
   }
+
+  const euro = opts.html ? "&nbsp;€" : " €";
+  return String(num) + euro;
 }
 
 function prescFormatCurrencyHTML(value, lang) {
   // Evita salto de línea entre número y € en HTML/PDF
-  return prescFormatCurrency(value, lang).replace(/\s€$/, "&nbsp;€");
+  return prescFormatCurrency(value, lang, { html: true }).replace(/\s€$/, "&nbsp;€");
 }
 
 
