@@ -726,6 +726,13 @@ function createChapterFromSection(sec) {
 
   appState.prescripcion.selectedCapituloId = id;
 }
+// IDs robustos (evita colisiones con Date.now())
+let __prescUidSeq = 0;
+function prescUid(prefix = "id") {
+  __prescUidSeq = (__prescUidSeq + 1) % 1e9;
+  const rnd = Math.random().toString(36).slice(2);
+  return `${prefix}-${Date.now()}-${__prescUidSeq}-${rnd}`;
+}
 
 function cloneSectionRefs(sec) {
   return (sec.refs || []).map((r) => ({
