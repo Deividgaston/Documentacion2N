@@ -2160,6 +2160,47 @@ async function buildPrescExportModel(lang) {
 // ========================================================
 // TRADUCCIÓN GEMINI (SIN ROMPER FORMATO)
 // ========================================================
+// ===============================
+// Gemini: helpers para textos largos
+// ===============================
+function prescSplitForGemini(text, maxLen = 1500) {
+  const s = String(text || "");
+  if (s.length <= maxLen) return [s];
+
+  // Preferimos cortar por párrafos para conservar formato
+  const paras = s.split(/\n\s*\n/);
+  const chunks = [];
+  let buf = "";
+
+  const flush = () => {
+    if (buf.trim()) chunks.push(buf);
+    buf = "";
+  };
+
+  for (const p of paras) {
+    const part = (buf ? buf + "\n\n" : "") + p;
+    if (part.length <= maxLen) {
+      buf = part;
+    } else {
+      // si el párrafo solo ya excede, cortamos duro
+      flush();
+      if (p.length <= maxLen) {
+        buf = p;
+      } else {
+        for (let i = 0; i < p.length; i += maxLen) {
+          chunks.push(p.slice(i, i + maxLen));
+        }
+      }
+    }
+  }
+  flush();
+  return chunks.length ? chunks : [s];
+}
+
+function prescJoinGeminiChunks(chunks) {
+  // Si venían de párrafos, la separación original era "\n\n"
+  return (chunks || []).join("\n\n");
+}
 
 async function translatePrescModel(model, targetLang) {
   if (typeof window.geminiTranslateBatch !== "function") return;
