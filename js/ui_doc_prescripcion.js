@@ -318,10 +318,16 @@ function renderDocPrescripcionView() {
         </div>
       </div>
 
-      <!-- CUERPO PRINCIPAL -->
+       <!-- CUERPO PRINCIPAL (altura reducida ~50% para dar más espacio a la preview) -->
       <div class="presc-layout"
-           style="flex:1; display:grid; grid-template-columns:1fr 1.4fr 1.2fr;
-                  gap:0.75rem; overflow:hidden; min-height:0;">
+           style="
+             flex:0 0 50%;
+             display:grid;
+             grid-template-columns:1fr 1.4fr 1.2fr;
+             gap:0.75rem;
+             overflow:hidden;
+             min-height:0;
+           ">
 
         <!-- COLUMNA 1: SECCIONES -->
         <div class="card" style="display:flex; flex-direction:column; overflow:hidden;">
@@ -360,10 +366,10 @@ function renderDocPrescripcionView() {
         </div>
 
         <!-- COLUMNA 3: PLANTILLAS / EXTRAS -->
-        <div style="display:flex; flex-direction:column; gap:0.75rem; overflow:hidden;">
+        <div style="display:flex; flex-direction:column; gap:0.75rem; overflow:hidden; min-height:0;">
 
           <div class="card"
-               style="flex:1; min-height:180px; display:flex; flex-direction:column; overflow:hidden;">
+               style="flex:1; min-height:0; display:flex; flex-direction:column; overflow:hidden;">
             <div class="card-header">
               <div class="card-title">Plantillas</div>
               <div class="card-subtitle">Texto técnico reutilizable</div>
@@ -375,7 +381,7 @@ function renderDocPrescripcionView() {
           </div>
 
           <div class="card"
-               style="flex:1; min-height:180px; display:flex; flex-direction:column; overflow:hidden;">
+               style="flex:1; min-height:0; display:flex; flex-direction:column; overflow:hidden;">
             <div class="card-header">
               <div class="card-title">Referencias extra</div>
               <div class="card-subtitle">Materiales y mano de obra</div>
@@ -387,6 +393,7 @@ function renderDocPrescripcionView() {
           </div>
         </div>
       </div>
+
 
       <!-- PREVIEW (se trabaja en PARTE 7) -->
       <div class="card" style="margin-top:0.75rem;">
