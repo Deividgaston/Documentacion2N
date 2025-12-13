@@ -1846,12 +1846,36 @@ function renderPrescPreview() {
                    font-size:0.8rem;
                    font-weight:600;
                    user-select:none;
+                   gap:0.5rem;
                  ">
-              <div style="overflow:hidden; white-space:nowrap; text-overflow:ellipsis;">
-                ${escapeHtml(cap.nombre || "Capítulo")}
+
+              <div style="display:flex; align-items:center; gap:0.45rem; overflow:hidden; min-width:0;">
+                <span style="font-size:0.8rem; opacity:0.75;">${expanded ? "▾" : "▸"}</span>
+                <div style="overflow:hidden; white-space:nowrap; text-overflow:ellipsis;">
+                  ${escapeHtml(cap.nombre || "Capítulo")}
+                </div>
               </div>
-              <div style="font-size:0.78rem;">
-                ${subtotal.toFixed(2)} €
+
+              <div style="display:flex; align-items:center; gap:0.35rem; flex-shrink:0;">
+                <div style="font-size:0.78rem; font-weight:700;">
+                  ${subtotal.toFixed(2)} €
+                </div>
+
+                <!-- Acciones -->
+                <button type="button"
+                        class="btn btn-xs btn-outline presc-prev-edit"
+                        data-edit-cap="${escapeHtmlAttr(cap.id)}"
+                        title="Editar capítulo"
+                        style="padding:0.15rem 0.35rem; line-height:1;">
+                  ✏️
+                </button>
+                <button type="button"
+                        class="btn btn-xs presc-prev-del"
+                        data-del-cap="${escapeHtmlAttr(cap.id)}"
+                        title="Eliminar capítulo"
+                        style="padding:0.15rem 0.35rem; line-height:1;">
+                  🗑️
+                </button>
               </div>
             </div>
 
@@ -1874,6 +1898,7 @@ function renderPrescPreview() {
                           <th style="text-align:left;">Código</th>
                           <th style="text-align:left;">Descripción</th>
                           <th style="text-align:center;">Ud</th>
+                          <th style="text-align:right;">Cant.</th>
                           <th style="text-align:right;">Precio</th>
                           <th style="text-align:right;">Importe</th>
                         </tr>
@@ -1885,11 +1910,15 @@ function renderPrescPreview() {
                           const imp = safeNumber(
                             l.importe != null ? l.importe : qty * pvp
                           );
+
+                          const unit = (l.unidad ?? l.ud ?? l.unit ?? "Ud");
+
                           return `
                             <tr>
                               <td>${escapeHtml(l.codigo || "")}</td>
                               <td>${escapeHtml(l.descripcion || "")}</td>
-                              <td style="text-align:center;">${escapeHtml(l.unidad || "Ud")}</td>
+                              <td style="text-align:center;">${escapeHtml(unit)}</td>
+                              <td style="text-align:right;">${qty}</td>
                               <td style="text-align:right;">${pvp.toFixed(2)} €</td>
                               <td style="text-align:right;">${imp.toFixed(2)} €</td>
                             </tr>
@@ -1917,21 +1946,70 @@ function renderPrescPreview() {
     </div>
   `;
 
-  // eventos
+  // 1) click/dblclick en cabecera
   container.querySelectorAll(".presc-prev-head").forEach((head) => {
     const capId = head.dataset.capId;
 
-    // doble click: expand / collapse
     head.addEventListener("dblclick", () => {
       appState.prescripcion.previewExpanded[capId] =
         !appState.prescripcion.previewExpanded[capId];
       renderPrescPreview();
     });
 
-    // click simple: seleccionar capítulo
     head.addEventListener("click", () => {
       appState.prescripcion.selectedCapituloId = capId;
       renderPrescCapituloContent();
+    });
+  });
+
+  // 2) EDITAR capítulo (no dispara click/expand)
+  container.querySelectorAll(".presc-prev-edit").forEach((btn) => {
+    btn.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+
+      const capId = btn.dataset.editCap;
+      const cap = (appState.prescripcion.capitulos || []).find(c => c.id === capId);
+      if (!cap) return;
+
+      openPrescModal({
+        title: "Editar capítulo",
+        bodyHTML: `
+          <div class="form-group">
+            <label>Título</label>
+            <input id="prescEditCapTitle" class="form-control" value="${escapeHtmlAttr(cap.nombre || "")}">
+          </div>
+          <div class="form-group">
+            <label>Texto (mediciones)</label>
+            <textarea id="prescEditCapText" class="form-control" rows="6">${escapeHtml(cap.texto || "")}</textarea>
+          </div>
+        `,
+        onSave: async () => {
+          const newTitle = document.getElementById("prescEditCapTitle")?.value || "";
+          const newText  = document.getElementById("prescEditCapText")?.value || "";
+          cap.nombre = newTitle;
+          cap.texto = newText;
+
+          appState.prescripcion.selectedCapituloId = capId;
+          renderPrescCapituloContent();
+          renderPrescPreview();
+        }
+      });
+    });
+  });
+
+  // 3) ELIMINAR capítulo (no dispara click/expand)
+  container.querySelectorAll(".presc-prev-del").forEach((btn) => {
+    btn.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+
+      const capId = btn.dataset.delCap;
+      const ok = deleteCapituloById(capId);
+      if (!ok) return;
+
+      renderPrescCapituloContent();
+      renderPrescPreview();
     });
   });
 }
