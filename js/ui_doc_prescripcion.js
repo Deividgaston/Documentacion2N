@@ -2261,11 +2261,9 @@ async function translatePrescModel(model, targetLang) {
     c.title = await translateOne(c.title);
     c.text = await translateOne(c.text);
 
-    if (Array.isArray(c.lines)) {
-      for (const l of c.lines) {
-        l.description = await translateOne(l.description);
-      }
-    }
+  // ✅ NO traducimos descripciones de líneas (referencias) para evitar expansión por IA
+// Se mantienen tal cual vienen del presupuesto/tarifa
+
   }
 }
 
