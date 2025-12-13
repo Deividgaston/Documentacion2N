@@ -2256,11 +2256,11 @@ async function translatePrescModel(model, targetLang) {
     return finalText;
   };
 
-  // ✅ Traducimos SOLO título y texto del capítulo (plantilla/mediciones)
-  // ❌ NO traducimos las descripciones de las líneas (evita que Gemini “redacte”)
+  // ✅ SOLO se traduce el texto del capítulo (plantillas / mediciones)
+  // ❌ NO se traduce el título del capítulo
+  // ❌ NO se traducen las líneas
   for (const c of model.chapters) {
-    c.title = await translateOne(c.title);
-    c.text  = await translateOne(c.text);
+    c.text = await translateOne(c.text);
   }
 }
 
