@@ -2103,7 +2103,11 @@ const PRESC_EXPORT_LABELS = {
     title: "Especificação técnica do projeto",
     total: "Total capítulo",
     grandTotal: "Total da especificação",
-    project: "Projeto"
+    project: "Projeto",
+    date: "Data",
+    generated: "Gerado a partir do Presupuestos 2N",
+    sheet: "Especificação",
+    language: "Idioma",
   }
 };
 
@@ -2472,11 +2476,6 @@ function openPrescPrintWindow(model, lang) {
             0
           );
           return acc + sub;
-    date: "Data",
-    generated: "Gerado a partir do Presupuestos 2N",
-    sheet: "Especificação",
-    language: "Idioma",
-  
         }, 0);
 
   let html = `
@@ -2507,8 +2506,8 @@ function openPrescPrintWindow(model, lang) {
               <th>${labels.description}</th>
               <th>${labels.unit}</th>
               <th style="text-align:right;">${labels.qty}</th>
-              <th style="text-align:right;">${labels.price}</th>
-              <th style="text-align:right;">${labels.amount}</th>
+              <th style="text-align:right;">${labels.price} (€)</th>
+              <th style="text-align:right;">${labels.amount} (€)</th>
             </tr>
           </thead>
           <tbody>
@@ -2527,8 +2526,8 @@ function openPrescPrintWindow(model, lang) {
             <td>${l.descripcion || ""}</td>
             <td>${l.unidad || ""}</td>
             <td style="text-align:right;">${(l.cantidad || 0)}</td>
-            <td style="text-align:right;">${(l.pvp || 0).toFixed(2)}</td>
-            <td style="text-align:right;">${importe.toFixed(2)}</td>
+            <td style="text-align:right;">${prescFormatCurrencyHTML((l.pvp || 0), lang)}</td>
+            <td style="text-align:right;">${prescFormatCurrencyHTML(importe, lang)}</td>
           </tr>
         `;
       });
@@ -2536,7 +2535,7 @@ function openPrescPrintWindow(model, lang) {
       html += `
           <tr>
             <td colspan="5" style="text-align:right; font-weight:600;">${labels.total}</td>
-            <td style="text-align:right; font-weight:600;">${subtotal.toFixed(2)}</td>
+            <td style="text-align:right; font-weight:600;">${prescFormatCurrencyHTML(subtotal, lang)}</td>
           </tr>
           </tbody>
         </table>
@@ -2546,7 +2545,7 @@ function openPrescPrintWindow(model, lang) {
 
   html += `
         <p style="text-align:right; font-weight:600; margin-top:12px;">
-          ${labels.grandTotal}: ${totalGlobal.toFixed(2)} €
+          ${labels.grandTotal}: ${prescFormatCurrencyHTML(totalGlobal, lang)}
         </p>
         <p class="small">
           ${labels.generated} · ${labels.language}: ${lang.toUpperCase()}
@@ -2704,6 +2703,12 @@ function prescFormatCurrency(value, lang) {
     return v.toFixed(2) + " €";
   }
 }
+
+function prescFormatCurrencyHTML(value, lang) {
+  // Evita salto de línea entre número y € en HTML/PDF
+  return prescFormatCurrency(value, lang).replace(/\s€$/, "&nbsp;€");
+}
+
 
 async function prescLoadScriptOnce(url, id) {
   if (id && document.getElementById(id)) return;
