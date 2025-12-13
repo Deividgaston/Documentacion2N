@@ -2256,14 +2256,11 @@ async function translatePrescModel(model, targetLang) {
     return finalText;
   };
 
-  // ✅ aplicar traducción al modelo (título, plantilla/texto, descripción de líneas)
+  // ✅ Traducimos SOLO título y texto del capítulo (plantilla/mediciones)
+  // ❌ NO traducimos las descripciones de las líneas (evita que Gemini “redacte”)
   for (const c of model.chapters) {
     c.title = await translateOne(c.title);
-    c.text = await translateOne(c.text);
-
-  // ✅ NO traducimos descripciones de líneas (referencias) para evitar expansión por IA
-// Se mantienen tal cual vienen del presupuesto/tarifa
-
+    c.text  = await translateOne(c.text);
   }
 }
 
