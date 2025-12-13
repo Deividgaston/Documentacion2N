@@ -2343,6 +2343,8 @@ async function translatePrescModel(model, targetLang) {
 
 async function handlePrescExport(type) {
   const lang = appState.prescripcion.exportLang || "es";
+
+  // 1) Modelo SIEMPRE en crudo (sin traducir UI)
   const model = await buildPrescExportModel(lang);
 
   if (!model.chapters.length) {
@@ -2350,6 +2352,17 @@ async function handlePrescExport(type) {
     return;
   }
 
+  // 2) ✅ Traducción SOLO EN EXPORT (y solo del modelo)
+  if (lang !== "es") {
+    try {
+      await translatePrescModel(model, lang);
+    } catch (e) {
+      console.warn("[PRESC] Error traduciendo para export:", e);
+      // seguimos exportando en original si falla
+    }
+  }
+
+  // 3) Export
   if (type === "excel" && window.exportPrescripcionToExcel) {
     window.exportPrescripcionToExcel(model);
     return;
@@ -2365,6 +2378,7 @@ async function handlePrescExport(type) {
 
   console.warn("[PRESCRIPCIÓN] Exportador no disponible:", type);
 }
+
 // ========================================================
 // PARTE 10 (FINAL)
 // Exporters (XLSX/PDF/BC3) + helpers + window hooks
