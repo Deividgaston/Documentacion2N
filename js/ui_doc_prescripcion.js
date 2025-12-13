@@ -683,6 +683,37 @@ function handleSectionDrop(secId) {
   askOverwriteOrAppend(sec, capActual);
 }
 
+function ensureCapExistsForDrop() {
+  let cap = getSelectedCapitulo();
+  if (cap) return cap;
+  cap = createManualCapitulo();
+  return cap;
+}
+
+function handlePlantillaDrop(tplId) {
+  const cap = ensureCapExistsForDrop();
+  const list = appState.prescripcion.plantillas || [];
+  const tpl = list.find((p) => String(p.id) === String(tplId));
+  if (!tpl) return;
+
+  const incoming = String(tpl.texto || "");
+  if (!incoming) return;
+
+  // si ya hay texto, preguntamos append/overwrite (mínimo, sin modal extra)
+  if (String(cap.texto || "").trim()) {
+    const ok = confirm("El capítulo ya tiene texto. ¿Quieres AÑADIR la plantilla al final?\n\nAceptar = Añadir\nCancelar = Sobrescribir");
+    cap.texto = ok ? (cap.texto + "\n\n" + incoming) : incoming;
+  } else {
+    cap.texto = incoming;
+  }
+}
+
+function handleExtraRefDrop(extraId) {
+  // Reutiliza tu función existente
+  addExtraRefToCurrentCap(extraId);
+}
+
+
 function createChapterFromSection(sec) {
   const id = "cap-" + Date.now();
 
