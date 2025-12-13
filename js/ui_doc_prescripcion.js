@@ -2972,6 +2972,38 @@ if (typeof window.handleDocSectionAI !== "function") {
 }
 
 // 3) Traducción de un texto (PROMPT ESTRICTO: SOLO TRADUCIR, NO REESCRIBIR)
+function prescLooksSpanish(text) {
+  const s = String(text || "").toLowerCase();
+  // stopwords típicas (heurística barata)
+  const hits = [" el ", " la ", " de ", " que ", " y ", " para ", " con ", " sistema ", " acceso ", "capítulo"]
+    .reduce((acc, w) => acc + (s.includes(w) ? 1 : 0), 0);
+  return hits >= 3;
+}
+
+function prescBuildStrictTranslatePrompt(raw, targetLang) {
+  const lang = String(targetLang || "es").toLowerCase();
+
+  const langName =
+    lang === "en" ? "ENGLISH" :
+    lang === "pt" ? "PORTUGUESE" :
+    "SPANISH";
+
+  // Reglas MUY cortas y “duras” (menos margen a que se invente texto)
+  return [
+    `YOU ARE A TRANSLATION ENGINE. OUTPUT LANGUAGE: ${langName}.`,
+    "STRICT RULES:",
+    "1) Translate ONLY. Do NOT add, remove, rephrase, explain, summarize, or embellish.",
+    "2) Keep the SAME structure, paragraph breaks, and technical tone.",
+    "3) Do NOT invent intros/conclusions. Do NOT add marketing.",
+    "4) Keep product names, brands, codes, units, acronyms unchanged (2N, WaveKey, SIP, RTSP, ONVIF, WDR, IP65, IK08, m², Ud).",
+    "5) Length must be close to original (do not expand).",
+    "Return ONLY the translated text. No markdown. No quotes.",
+    "",
+    "TEXT:",
+    raw
+  ].join("\n");
+}
+
 async function prescTranslateTextWithAI(text, targetLang) {
   const raw = String(text ?? "");
   if (!raw.trim()) return "";
@@ -2983,88 +3015,49 @@ async function prescTranslateTextWithAI(text, targetLang) {
       : null;
 
   const lang = String(targetLang || "es").toLowerCase();
+  if (lang === "es") return raw;
 
-  // ✅ Instrucciones duras para evitar “marketing / rewrite”
-  const instructions = [
-    "INSTRUCCIONES IMPORTANTES (OBLIGATORIO):",
-    "Eres un motor de TRADUCCIÓN LITERAL.",
-    "Traduce al idioma objetivo SIN reescribir, SIN ampliar, SIN resumir, SIN añadir contenido nuevo.",
-    "Mantén EXACTAMENTE el mismo significado, tono y nivel técnico.",
-    "Conserva la estructura y saltos de línea.",
-    "NO inventes introducciones ni texto comercial.",
-    "NO cambies nombres de producto, marcas, códigos, unidades (Ud, m, m²), ni siglas (SIP, RTSP, ONVIF, WDR).",
-    "Devuelve SOLO el texto traducido, sin markdown, sin comillas, sin listas añadidas.",
-    "",
-    "TEXTO A TRADUCIR (respeta el formato):",
-    raw
-  ].join("\n");
+  const prompt1 = prescBuildStrictTranslatePrompt(raw, lang);
 
-  const out = await window.handleDocSectionAI({
-    sectionKey: "presc_translate_strict",
-    idioma: lang, // en / pt / es
-    titulo: "TRANSLATION_ONLY_STRICT",
-    texto: instructions,
+  let out = await window.handleDocSectionAI({
+    sectionKey: "presc_translate_strict_v2",
+    idioma: lang,
+    titulo: "TRANSLATE_ONLY_STRICT_V2",
+    texto: prompt1,
     proyecto,
     presupuesto,
-    modo: "translate_only_strict",
+    modo: "translate_only_strict_v2",
   });
 
-  // ✅ Sanitizado suave (por si el modelo devuelve fences)
-  const cleaned = String(out || "").replace(/```[\s\S]*?```/g, "").trim();
-  return cleaned || raw;
-}
+  // Limpieza mínima (por si mete fences)
+  out = String(out || "").replace(/```[\s\S]*?```/g, "").trim();
 
-// 4) API que tu Prescripción estaba intentando llamar
-//    texts: array de strings; devuelve array de strings traducidos
-window.geminiTranslateBatch = async function geminiTranslateBatch(
-  texts,
-  targetLang
-) {
-  const arr = Array.isArray(texts) ? texts : [];
-  const lang = (targetLang || "es").toLowerCase();
-  if (lang === "es") return arr.map((t) => String(t || ""));
+  // ✅ Si pide EN y detectamos castellano, reintento 1 vez MÁS duro
+  if (lang === "en" && prescLooksSpanish(out)) {
+    const prompt2 = [
+      "YOUR PREVIOUS OUTPUT CONTAINED SPANISH WORDS.",
+      "Rewrite into PURE ENGLISH following the same STRICT RULES.",
+      "",
+      "ORIGINAL TEXT:",
+      raw
+    ].join("\n");
 
-  // mini-cache en memoria (evita repetir llamadas)
-  window.__prescTranslateCache = window.__prescTranslateCache || new Map();
-  const cache = window.__prescTranslateCache;
+    const out2 = await window.handleDocSectionAI({
+      sectionKey: "presc_translate_strict_retry_en",
+      idioma: "en",
+      titulo: "TRANSLATE_ONLY_STRICT_RETRY_EN",
+      texto: prompt2,
+      proyecto,
+      presupuesto,
+      modo: "translate_only_strict_retry_en",
+    });
 
-  const results = [];
-  for (const t of arr) {
-    const key = lang + "||" + String(t || "");
-    if (cache.has(key)) {
-      results.push(cache.get(key));
-      continue;
-    }
-
-    // Si tienes helpers de chunks en prescripción, úsalos para textos largos
-    const raw = String(t || "");
-    let translated = "";
-
-    try {
-      if (typeof window.prescSplitForGemini === "function" && raw.length > 2500) {
-        const chunks = window.prescSplitForGemini(raw, 1800); // tamaño seguro
-        const outChunks = [];
-        for (const c of chunks) {
-          outChunks.push(await prescTranslateTextWithAI(c, lang));
-        }
-        translated =
-          typeof window.prescJoinGeminiChunks === "function"
-            ? window.prescJoinGeminiChunks(outChunks)
-            : outChunks.join("\n");
-      } else {
-        translated = await prescTranslateTextWithAI(raw, lang);
-      }
-    } catch (e) {
-      console.error("[PRESC] Error traduciendo:", e);
-      translated = raw; // fallback
-    }
-
-    cache.set(key, translated);
-    results.push(translated);
+    const cleaned2 = String(out2 || "").replace(/```[\s\S]*?```/g, "").trim();
+    if (cleaned2) out = cleaned2;
   }
 
-  return results;
-};
+  return out || raw;
+}
 
 // ========================================================
 // FIN ARCHIVO ui_doc_prescripcion.js
