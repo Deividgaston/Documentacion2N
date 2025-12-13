@@ -733,17 +733,22 @@ function handleExtraRefDrop(extraId) {
 
 
 function createChapterFromSection(sec) {
-  const id = "cap-" + Date.now();
+  const id = prescUid("cap");
 
   appState.prescripcion.capitulos.push({
     id,
     nombre: sec.nombre || "Capítulo",
     texto: "",
-    lineas: cloneSectionRefs(sec)
+    lineas: cloneSectionRefs(sec),
+
+    // ✅ vínculo sección→capítulo (clave para no duplicar)
+    sourceSectionId: sec.id || null,       // "sec-XXX"
+    sourceSectionRawId: sec.rawId || null  // id real del presupuesto
   });
 
   appState.prescripcion.selectedCapituloId = id;
 }
+
 // IDs robustos (evita colisiones con Date.now())
 let __prescUidSeq = 0;
 function prescUid(prefix = "id") {
