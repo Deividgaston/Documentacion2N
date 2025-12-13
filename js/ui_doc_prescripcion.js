@@ -2149,13 +2149,10 @@ async function buildPrescExportModel(lang) {
     model.total += subtotal;
   });
 
-  // Traducción completa SOLO AQUÍ (modelo)
-  if (language !== "es") {
-    await translatePrescModel(model, language);
-  }
-
+  // ✅ OJO: aquí ya NO se traduce nada.
   return model;
 }
+
 
 // ========================================================
 // TRADUCCIÓN GEMINI (SIN ROMPER FORMATO)
