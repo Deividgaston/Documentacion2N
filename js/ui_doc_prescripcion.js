@@ -2891,6 +2891,149 @@ window.buildPrescExportModel = buildPrescExportModel;
     subtree: true
   });
 })();
+// ======================================================
+// GEMINI / IA (TRADUCCIÓN PARA PRESCRIPCIÓN)
+// Reutiliza el mismo endpoint que Documentación (handleDocSectionAI)
+// ======================================================
+
+// 1) Sanitizador igual que Documentación (evita markdown raro)
+function prescSanitizeAIText(raw) {
+  if (!raw) return "";
+  const lines = String(raw).split(/\r?\n/).map((line) => {
+    let l = line;
+    l = l.replace(/^\s*#{1,6}\s*/g, "");
+    l = l.replace(/^\s*[-*•]\s+/g, "");
+    l = l.replace(/^\s*\d+[\.\)]\s+/g, "");
+    l = l.replace(/\*\*(.+?)\*\*/g, "$1");
+    l = l.replace(/\*(.+?)\*/g, "$1");
+    l = l.replace(/__(.+?)__/g, "$1");
+    l = l.replace(/_(.+?)_/g, "$1");
+    return l;
+  });
+  return lines.join("\n").trim();
+}
+
+// 2) Si NO existe handleDocSectionAI en esta vista, lo definimos igual que en Documentación
+if (typeof window.handleDocSectionAI !== "function") {
+  window.handleDocSectionAI = async ({
+    sectionKey,
+    idioma,
+    titulo,
+    texto,
+    proyecto,
+    presupuesto,
+    modo,
+  }) => {
+    const payload = {
+      sectionKey,
+      idioma,
+      titulo,
+      texto,
+      proyecto,
+      presupuesto,
+      modo,
+    };
+
+    // MISMO endpoint que usas en ui_documentacion.js
+    const url = "https://docsectionai-is2pkrfj5a-uc.a.run.app";
+
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!resp.ok) {
+      const extra = await resp.text().catch(() => "");
+      throw new Error("IA error " + resp.status + ": " + extra);
+    }
+
+    const data = await resp.json().catch(() => null);
+    if (!data || typeof data.text !== "string") {
+      throw new Error("Respuesta IA inválida: falta ‘text’");
+    }
+
+    return prescSanitizeAIText(data.text);
+  };
+}
+
+// 3) Traducción de un texto (con “prompt” a través de los campos que ya envías)
+async function prescTranslateTextWithAI(text, targetLang) {
+  const clean = (text || "").trim();
+  if (!clean) return "";
+
+  const proyecto = window.appState?.proyecto || {};
+  const presupuesto =
+    typeof window.getPresupuestoActual === "function"
+      ? window.getPresupuestoActual()
+      : null;
+
+  // Nota: forzamos un "modo" que el backend puede usar para entender que es traducción.
+  // Si tu backend ignora "modo", igualmente suele traducir si el 'idioma' objetivo es EN/PT.
+  const out = await window.handleDocSectionAI({
+    sectionKey: "presc_translate",
+    idioma: targetLang,
+    titulo: "TRANSLATE / TRADUCIR",
+    texto: clean,
+    proyecto,
+    presupuesto,
+    modo: "traduccion",
+  });
+
+  return prescSanitizeAIText(out) || clean;
+}
+
+// 4) API que tu Prescripción estaba intentando llamar
+//    texts: array de strings; devuelve array de strings traducidos
+window.geminiTranslateBatch = async function geminiTranslateBatch(
+  texts,
+  targetLang
+) {
+  const arr = Array.isArray(texts) ? texts : [];
+  const lang = (targetLang || "es").toLowerCase();
+  if (lang === "es") return arr.map((t) => String(t || ""));
+
+  // mini-cache en memoria (evita repetir llamadas)
+  window.__prescTranslateCache = window.__prescTranslateCache || new Map();
+  const cache = window.__prescTranslateCache;
+
+  const results = [];
+  for (const t of arr) {
+    const key = lang + "||" + String(t || "");
+    if (cache.has(key)) {
+      results.push(cache.get(key));
+      continue;
+    }
+
+    // Si tienes helpers de chunks en prescripción, úsalos para textos largos
+    const raw = String(t || "");
+    let translated = "";
+
+    try {
+      if (typeof window.prescSplitForGemini === "function" && raw.length > 2500) {
+        const chunks = window.prescSplitForGemini(raw, 1800); // tamaño seguro
+        const outChunks = [];
+        for (const c of chunks) {
+          outChunks.push(await prescTranslateTextWithAI(c, lang));
+        }
+        translated =
+          typeof window.prescJoinGeminiChunks === "function"
+            ? window.prescJoinGeminiChunks(outChunks)
+            : outChunks.join("\n");
+      } else {
+        translated = await prescTranslateTextWithAI(raw, lang);
+      }
+    } catch (e) {
+      console.error("[PRESC] Error traduciendo:", e);
+      translated = raw; // fallback
+    }
+
+    cache.set(key, translated);
+    results.push(translated);
+  }
+
+  return results;
+};
 
 // ========================================================
 // FIN ARCHIVO ui_doc_prescripcion.js
