@@ -292,7 +292,7 @@ function renderDocPrescripcionView() {
   const currentLang = appState.prescripcion.exportLang || "es";
 
   container.innerHTML = `
-    <div class="presc-root" style="display:flex; flex-direction:column; height:100%;">
+    <div class="presc-root" style="display:flex; flex-direction:column; height:100vh; max-height:100vh; overflow:hidden;">
 
       <!-- CABECERA SUPERIOR -->
       <div class="card" style="margin-bottom:1rem;">
@@ -334,7 +334,7 @@ function renderDocPrescripcionView() {
 
       <!-- LAYOUT 3 COLUMNAS -->
       <div class="presc-layout" 
-           style="display:grid; grid-template-columns:1fr 1.4fr 1.2fr; gap:1rem; height:60vh; min-height:400px;">
+           style="display:grid; grid-template-columns:1fr 1.4fr 1.2fr; gap:1rem; height:calc(100vh - 340px); max-height:calc(100vh - 340px); min-height:480px; overflow:hidden;">
 
         <!-- COLUMNA 1: Secciones del presupuesto -->
         <div class="card" style="display:flex; flex-direction:column; overflow:hidden;">
@@ -400,7 +400,7 @@ function renderDocPrescripcionView() {
           <div class="card-subtitle">Capítulos añadidos, totales y desglose desplegable</div>
         </div>
 
-        <div id="prescPreview" class="card-body">
+        <div id="prescPreview" class="card-body" style="overflow:auto; max-height:260px;">
         </div>
       </div>
 
@@ -2655,3 +2655,247 @@ function ensurePrescUidReady(timeoutMs = 15000) {
   });
 }
 
+
+
+// ========================================================
+// Exportación XLSX (Excel real) + PDF en idioma + moneda EUR
+// ========================================================
+
+function prescLangToLocale(lang) {
+  if (lang === "en") return "en-GB";
+  if (lang === "pt") return "pt-PT";
+  return "es-ES";
+}
+
+function prescFormatCurrency(value, lang) {
+  const locale = prescLangToLocale(lang);
+  const n = Number(value) || 0;
+  try {
+    return new Intl.NumberFormat(locale, {
+      style: "currency",
+      currency: "EUR",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(n);
+  } catch (e) {
+    return n.toFixed(2) + " €";
+  }
+}
+
+async function prescLoadScriptOnce(url, id) {
+  if (id && document.getElementById(id)) return;
+  return new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    if (id) s.id = id;
+    s.src = url;
+    s.async = true;
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error("No se pudo cargar: " + url));
+    document.head.appendChild(s);
+  });
+}
+
+async function ensureExcelDepsLoaded() {
+  // ExcelJS + FileSaver (si ya están en la app, no hace nada)
+  if (window.ExcelJS && window.saveAs) return true;
+
+  // Carga dinámica (mínimo impacto)
+  try {
+    if (!window.ExcelJS) {
+      await prescLoadScriptOnce(
+        "https://cdn.jsdelivr.net/npm/exceljs/dist/exceljs.min.js",
+        "exceljs_cdn"
+      );
+    }
+    if (!window.saveAs) {
+      await prescLoadScriptOnce(
+        "https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js",
+        "filesaver_cdn"
+      );
+    }
+  } catch (e) {
+    console.warn("[Presc] No se pudieron cargar dependencias XLSX", e);
+  }
+
+  return !!(window.ExcelJS && window.saveAs);
+}
+
+async function exportPrescripcionToExcel(model, lang) {
+  const language = lang || model?.language || appState.prescripcion.exportLang || "es";
+  const labels = PRESC_EXPORT_LABELS[language] || PRESC_EXPORT_LABELS.es;
+
+  if (!model || !model.capitulos || !model.capitulos.length) {
+    alert("No hay capítulos para exportar.");
+    return;
+  }
+
+  const ok = await ensureExcelDepsLoaded();
+  if (!ok) {
+    alert("No se pudo exportar a Excel (XLSX). Falta ExcelJS/FileSaver.");
+    return;
+  }
+
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet("Prescripción");
+
+  // Columnas
+  ws.columns = [
+    { key: "chapter", width: 22 },
+    { key: "code", width: 14 },
+    { key: "desc", width: 55 },
+    { key: "unit", width: 10 },
+    { key: "qty", width: 10 },
+    { key: "pvp", width: 14 },
+    { key: "amount", width: 16 },
+  ];
+
+  const borderThin = {
+    top: { style: "thin", color: { argb: "FFCCCCCC" } },
+    left: { style: "thin", color: { argb: "FFCCCCCC" } },
+    bottom: { style: "thin", color: { argb: "FFCCCCCC" } },
+    right: { style: "thin", color: { argb: "FFCCCCCC" } },
+  };
+
+  const fmtCurrency = '#,##0.00" €"';
+  const fmtQty = "#,##0";
+
+  const projectName =
+    (typeof window.getNombreProyectoActual === "function" && window.getNombreProyectoActual()) ||
+    (appState.proyecto && appState.proyecto.nombre) ||
+    "Proyecto";
+
+  const today = new Date().toISOString().split("T")[0];
+
+  // Título
+  const titleRow = ws.addRow([labels.title || "Prescripción"]);
+  ws.mergeCells(titleRow.number, 1, titleRow.number, 7);
+  titleRow.font = { name: "Aptos Narrow", size: 13, bold: true, color: { argb: "FFFFFFFF" } };
+  titleRow.alignment = { horizontal: "center", vertical: "middle" };
+  titleRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1BB1C7" } };
+
+  ws.addRow([]);
+
+  const info1 = ws.addRow([labels.project || "Proyecto", projectName]);
+  ws.mergeCells(info1.number, 2, info1.number, 7);
+  info1.getCell(1).font = { name: "Aptos Narrow", size: 11, bold: true };
+  info1.getCell(2).font = { name: "Aptos Narrow", size: 10 };
+
+  const info2 = ws.addRow(["Fecha", today]);
+  ws.mergeCells(info2.number, 2, info2.number, 7);
+  info2.getCell(1).font = { name: "Aptos Narrow", size: 11, bold: true };
+  info2.getCell(2).font = { name: "Aptos Narrow", size: 10 };
+
+  ws.addRow([]);
+
+  // Header tabla
+  const headerRow = ws.addRow([
+    labels.chapter,
+    labels.code,
+    labels.description,
+    labels.unit,
+    labels.qty,
+    labels.price + " (€)",
+    labels.amount + " (€)",
+  ]);
+
+  headerRow.eachCell((cell) => {
+    cell.font = { name: "Aptos Narrow", size: 11, bold: true };
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE5F3F7" } };
+    cell.border = borderThin;
+    cell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+  });
+
+  // Capítulos + descripción debajo (requisito)
+  (model.capitulos || []).forEach((cap) => {
+    ws.addRow([]);
+
+    const capRow = ws.addRow([String(cap.nombre || "").toUpperCase()]);
+    ws.mergeCells(capRow.number, 1, capRow.number, 7);
+    capRow.getCell(1).font = { name: "Aptos Narrow", size: 11, bold: true, color: { argb: "FF374151" } };
+    capRow.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF3F4F6" } };
+    capRow.getCell(1).border = borderThin;
+
+    const capDesc = String(cap.texto || "").trim();
+    if (capDesc) {
+      const descRow = ws.addRow([capDesc]);
+      ws.mergeCells(descRow.number, 1, descRow.number, 7);
+      descRow.getCell(1).font = { name: "Aptos Narrow", size: 10, italic: true, color: { argb: "FF4B5563" } };
+      descRow.getCell(1).alignment = { wrapText: true, vertical: "top" };
+      descRow.getCell(1).border = borderThin;
+    }
+
+    (cap.lineas || []).forEach((l) => {
+      const qty = Number(l.cantidad) || 0;
+      const pvp = Number(l.pvp) || 0;
+      const imp = Number(l.importe) || qty * pvp;
+
+      const r = ws.addRow([cap.nombre || "", l.codigo || "", l.descripcion || "", l.unidad || "ud", qty, pvp, imp]);
+
+      r.eachCell((cell, col) => {
+        cell.border = borderThin;
+        cell.font = { name: "Aptos Narrow", size: 10 };
+        if (col === 5) {
+          cell.numFmt = fmtQty;
+          cell.alignment = { horizontal: "right", vertical: "top" };
+        } else if (col === 6 || col === 7) {
+          cell.numFmt = fmtCurrency;
+          cell.alignment = { horizontal: "right", vertical: "top" };
+        } else if (col === 3) {
+          cell.alignment = { wrapText: true, vertical: "top" };
+        } else {
+          cell.alignment = { horizontal: "left", vertical: "top" };
+        }
+      });
+    });
+
+    const subRow = ws.addRow([labels.total, "", "", "", "", "", Number(cap.subtotal) || 0]);
+    subRow.getCell(1).font = { name: "Aptos Narrow", size: 11, bold: true };
+    subRow.getCell(7).font = { name: "Aptos Narrow", size: 11, bold: true };
+    subRow.eachCell((cell, col) => {
+      cell.border = borderThin;
+      if (col === 7) {
+        cell.numFmt = fmtCurrency;
+        cell.alignment = { horizontal: "right", vertical: "middle" };
+      }
+    });
+  });
+
+  ws.addRow([]);
+
+  const totalRow = ws.addRow([labels.grandTotal, "", "", "", "", "", Number(model.totalGlobal) || 0]);
+  totalRow.getCell(1).font = { name: "Aptos Narrow", size: 12, bold: true };
+  totalRow.getCell(7).font = { name: "Aptos Narrow", size: 12, bold: true };
+  totalRow.eachCell((cell, col) => {
+    cell.border = borderThin;
+    if (col === 7) {
+      cell.numFmt = fmtCurrency;
+      cell.alignment = { horizontal: "right", vertical: "middle" };
+    }
+  });
+
+  const safeProject = String(projectName || "Proyecto").replace(/[^a-zA-Z0-9_-]+/g, "_");
+  const fileName = `Prescripcion_${safeProject}_${today.replace(/-/g, "")}_${language}.xlsx`;
+
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  saveAs(blob, fileName);
+}
+
+function exportPrescripcionToPdf(model, lang) {
+  // Usa la ventana de impresión existente, pero garantiza idioma y formato moneda
+  const language = lang || model?.language || appState.prescripcion.exportLang || "es";
+  openPrescPrintWindow(model, language);
+}
+
+function exportPrescripcionToBc3(model, lang) {
+  const language = lang || model?.language || appState.prescripcion.exportLang || "es";
+  const bc3 = prescExportToBC3(model, language);
+  downloadBc3File(bc3, `prescripcion_${language}.bc3`);
+}
+
+// Exponer a window para handlePrescExport
+window.exportPrescripcionToExcel = exportPrescripcionToExcel;
+window.exportPrescripcionToPdf = exportPrescripcionToPdf;
+window.exportPrescripcionToBc3 = exportPrescripcionToBc3;
