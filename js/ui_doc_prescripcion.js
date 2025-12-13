@@ -438,9 +438,11 @@ function renderDocPrescripcionView() {
   });
 
   container.querySelector("#prescCapGuardarBtn")?.addEventListener("click", () => {
-    createManualCapitulo();
-    renderDocPrescripcionView();
-  });
+  // Guardar = no crear capítulo nuevo
+  // De momento solo refrescamos preview
+  renderPrescPreview();
+});
+
 
   // =====================
   // SUB-RENDERS
