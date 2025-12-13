@@ -2106,6 +2106,22 @@ const PRESC_EXPORT_LABELS = {
     title: "Especificação técnica do projeto",
   }
 };
+// ========================================================
+// CÓDIGOS AUTOMÁTICOS DE MEDICIÓN (ESTÁNDAR)
+// Capítulo: 2N.01
+// Partida : 2N.01.01
+// ========================================================
+
+function prescAutoChapterCode2N(capIndex) {
+  const xx = String(capIndex + 1).padStart(2, "0");
+  return `2N.${xx}`;
+}
+
+function prescAutoLineCode2N(capIndex, lineIndex) {
+  const xx = String(capIndex + 1).padStart(2, "0");
+  const yy = String(lineIndex + 1).padStart(2, "0");
+  return `2N.${xx}.${yy}`;
+}
 
 // ========================================================
 // MODELO DE EXPORTACIÓN (NEUTRO, SIN FORMATO)
