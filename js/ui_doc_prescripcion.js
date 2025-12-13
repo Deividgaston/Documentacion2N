@@ -717,14 +717,19 @@ function handlePlantillaDrop(tplId) {
   const incoming = String(tpl.texto || "");
   if (!incoming) return;
 
-  // si ya hay texto, preguntamos append/overwrite (mínimo, sin modal extra)
+  // ✅ MARCA ORIGEN
+  cap.__hasTemplateText = true;
+
   if (String(cap.texto || "").trim()) {
-    const ok = confirm("El capítulo ya tiene texto. ¿Quieres AÑADIR la plantilla al final?\n\nAceptar = Añadir\nCancelar = Sobrescribir");
+    const ok = confirm(
+      "El capítulo ya tiene texto. ¿Quieres AÑADIR la plantilla al final?\n\nAceptar = Añadir\nCancelar = Sobrescribir"
+    );
     cap.texto = ok ? (cap.texto + "\n\n" + incoming) : incoming;
   } else {
     cap.texto = incoming;
   }
 }
+
 
 function handleExtraRefDrop(extraId) {
   // Reutiliza tu función existente
