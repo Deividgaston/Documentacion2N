@@ -2174,11 +2174,16 @@ async function translatePrescModel(model, targetLang) {
     texts.push(s);
   };
 
-  model.chapters.forEach((c) => {
-    push(c.title);
+ model.chapters.forEach((c) => {
+  push(c.title);
+
+  // ✅ Fuerza traducción si hay texto y viene de plantilla
+  if (c.text && String(c.text).trim()) {
     push(c.text);
-    (c.lines || []).forEach((l) => push(l.description));
-  });
+  }
+
+  (c.lines || []).forEach((l) => push(l.description));
+});
 
   if (!texts.length) return;
 
