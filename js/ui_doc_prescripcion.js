@@ -2047,6 +2047,104 @@ const PRESC_EXPORT_LABELS = {
   }
 };
 
+
+// ========================================================
+// Gemini / IA (traducción) - implementación por defecto
+// Reutiliza el mismo patrón que Documentación (Cloud Run)
+// ========================================================
+
+function prescSanitizeAIText(t) {
+  return String(t || "")
+    .replace(/\r/g, "")
+    // quitar markdown común
+    .replace(/^\s*[-*•]\s+/gm, "")
+    .replace(/^\s*#+\s+/gm, "")
+    .trim();
+}
+
+// Si existe handleDocSectionAI (de Documentación) lo usamos.
+// Si no existe, creamos una implementación por defecto con el mismo endpoint.
+if (typeof window.handleDocSectionAI !== "function") {
+  window.handleDocSectionAI = async ({ sectionKey, idioma, titulo, texto, proyecto, presupuesto, modo }) => {
+    const payload = { sectionKey, idioma, titulo, texto, proyecto, presupuesto, modo };
+    const url = "https://docsectionai-is2pkrfj5a-uc.a.run.app";
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!resp.ok) {
+      const extra = await resp.text().catch(() => "");
+      throw new Error("IA error " + resp.status + ": " + extra);
+    }
+    const data = await resp.json().catch(() => null);
+    if (!data || typeof data.text !== "string") {
+      throw new Error("Respuesta IA inválida: falta 'text'");
+    }
+    return prescSanitizeAIText(data.text);
+  };
+}
+
+// Traducción de texto simple usando la misma Cloud Function.
+if (typeof window.geminiTranslateText !== "function") {
+  window.geminiTranslateText = async (text, targetLang) => {
+    const src = String(text || "");
+    const lang = targetLang || "es";
+    if (!src.trim()) return src;
+    // Reutilizamos el generador de Documentación, pero forzando modo translate.
+    const out = await window.handleDocSectionAI({
+      sectionKey: "translate",
+      idioma: lang,
+      titulo: "Traduce el texto",
+      texto: src,
+      proyecto: null,
+      presupuesto: null,
+      modo: "translate",
+    });
+    return String(out || src);
+  };
+}
+
+// Traducción batch (concurrencia limitada + caché simple)
+if (typeof window.geminiTranslateBatch !== "function") {
+  window.geminiTranslateBatch = async (texts, targetLang) => {
+    const arr = Array.isArray(texts) ? texts : [];
+    const lang = targetLang || "es";
+    const cache = {};
+    const out = new Array(arr.length);
+
+    const tasks = arr.map((t, i) => async () => {
+      const src = String(t || "");
+      const key = lang + "|" + src;
+      if (!src.trim()) {
+        out[i] = src;
+        return;
+      }
+      if (cache[key]) {
+        out[i] = cache[key];
+        return;
+      }
+      const tr = await window.geminiTranslateText(src, lang).catch(() => src);
+      cache[key] = String(tr || src);
+      out[i] = cache[key];
+    });
+
+    // Concurrencia 3 para no saturar
+    const limit = 3;
+    let cursor = 0;
+    async function worker() {
+      while (cursor < tasks.length) {
+        const my = cursor++;
+        await tasks[my]();
+      }
+    }
+    const workers = [];
+    for (let w = 0; w < Math.min(limit, tasks.length); w++) workers.push(worker());
+    await Promise.all(workers);
+    return out;
+  };
+}
+
 async function buildPrescExportModel(lang) {
   ensurePrescCapitulosArray();
   const language = lang || appState.prescripcion.exportLang || "es";
