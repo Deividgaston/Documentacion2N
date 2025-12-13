@@ -1330,6 +1330,22 @@ async function renderPrescPlantillasList() {
       renderPrescPlantillasList();
     });
   });
+    // Drag & drop de plantillas hacia capítulo
+  container.querySelectorAll(".presc-plantilla-item[draggable='true']").forEach((el) => {
+    el.addEventListener("dragstart", (ev) => {
+      const id = el.getAttribute("data-id") || "";
+      try {
+        ev.dataTransfer.setData("text/presc-plantilla-id", id);
+        ev.dataTransfer.setData("text/plain", "presc-plantilla-id:" + id);
+        ev.dataTransfer.effectAllowed = "copy";
+      } catch (_) {}
+      el.style.opacity = "0.6";
+    });
+    el.addEventListener("dragend", () => {
+      el.style.opacity = "1";
+    });
+  });
+
 }
 
 // ========================================================
