@@ -810,7 +810,12 @@ function overwriteChapterWithSection(cap, sec) {
   cap.nombre = sec.nombre || cap.nombre;
   cap.texto = "";
   cap.lineas = cloneSectionRefs(sec);
+
+  // ✅ FIX
+  appState.prescripcion.selectedCapituloId = cap.id;
+  renderPrescCapituloContent();
 }
+
 
 function appendSectionToChapter(cap, sec) {
   const existing = cap.lineas || [];
