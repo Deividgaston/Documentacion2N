@@ -2215,21 +2215,27 @@ function prescJoinGeminiChunks(chunks) {
 // ========================================================
 // Gemini batch adapter (LOCAL para Prescripción)
 // ========================================================
+// ========================================================
+// Gemini batch adapter (LOCAL para Prescripción)
+// ========================================================
 async function prescGeminiTranslateBatch(texts, targetLang) {
   if (!Array.isArray(texts) || !texts.length) return [];
 
-  // Si más adelante conectas Gemini real, solo cambias esto
-  if (typeof window.translateTextWithGemini === "function") {
+  // Usa tu traductor estricto (el que tienes al final del archivo)
+  if (typeof prescTranslateTextWithAI === "function") {
     const out = [];
     for (const t of texts) {
-      out.push(await window.translateTextWithGemini(t, targetLang));
+      out.push(await prescTranslateTextWithAI(t, targetLang));
     }
     return out;
   }
 
-  console.warn("[PRESC] Gemini no disponible, se devuelve texto original");
+  console.warn("[PRESC] prescTranslateTextWithAI no disponible, se devuelve texto original");
   return texts;
 }
+
+// ✅ EXPÓNLO para que translatePrescModel lo encuentre
+window.geminiTranslateBatch = prescGeminiTranslateBatch;
 
 async function translatePrescModel(model, targetLang) {
  console.log("[PRESC][translate] targetLang =", targetLang, "hasBatch=", typeof window.geminiTranslateBatch);
