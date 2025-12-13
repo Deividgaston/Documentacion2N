@@ -2971,10 +2971,10 @@ if (typeof window.handleDocSectionAI !== "function") {
   };
 }
 
-// 3) Traducción de un texto (con “prompt” a través de los campos que ya envías)
+// 3) Traducción de un texto (PROMPT ESTRICTO: SOLO TRADUCIR, NO REESCRIBIR)
 async function prescTranslateTextWithAI(text, targetLang) {
-  const clean = (text || "").trim();
-  if (!clean) return "";
+  const raw = String(text ?? "");
+  if (!raw.trim()) return "";
 
   const proyecto = window.appState?.proyecto || {};
   const presupuesto =
@@ -2982,19 +2982,36 @@ async function prescTranslateTextWithAI(text, targetLang) {
       ? window.getPresupuestoActual()
       : null;
 
-  // Nota: forzamos un "modo" que el backend puede usar para entender que es traducción.
-  // Si tu backend ignora "modo", igualmente suele traducir si el 'idioma' objetivo es EN/PT.
-  const out = await window.handleDocSectionAI({
-  sectionKey: "doc_translate",                 // ✅ usa un key “genérico”/conocido (como Documentación)
-  idioma: String(targetLang || "es").toUpperCase(), // ✅ muchos backends esperan EN/PT/ES
-  titulo: "Traducción",
-  texto: clean,
-  proyecto,
-  presupuesto,
-  modo: "comercial",                           // ✅ modo conocido por tu backend
-});
+  const lang = String(targetLang || "es").toLowerCase();
 
-  return prescSanitizeAIText(out) || clean;
+  // ✅ Instrucciones duras para evitar “marketing / rewrite”
+  const instructions = [
+    "INSTRUCCIONES IMPORTANTES (OBLIGATORIO):",
+    "Eres un motor de TRADUCCIÓN LITERAL.",
+    "Traduce al idioma objetivo SIN reescribir, SIN ampliar, SIN resumir, SIN añadir contenido nuevo.",
+    "Mantén EXACTAMENTE el mismo significado, tono y nivel técnico.",
+    "Conserva la estructura y saltos de línea.",
+    "NO inventes introducciones ni texto comercial.",
+    "NO cambies nombres de producto, marcas, códigos, unidades (Ud, m, m²), ni siglas (SIP, RTSP, ONVIF, WDR).",
+    "Devuelve SOLO el texto traducido, sin markdown, sin comillas, sin listas añadidas.",
+    "",
+    "TEXTO A TRADUCIR (respeta el formato):",
+    raw
+  ].join("\n");
+
+  const out = await window.handleDocSectionAI({
+    sectionKey: "presc_translate_strict",
+    idioma: lang, // en / pt / es
+    titulo: "TRANSLATION_ONLY_STRICT",
+    texto: instructions,
+    proyecto,
+    presupuesto,
+    modo: "translate_only_strict",
+  });
+
+  // ✅ Sanitizado suave (por si el modelo devuelve fences)
+  const cleaned = String(out || "").replace(/```[\s\S]*?```/g, "").trim();
+  return cleaned || raw;
 }
 
 // 4) API que tu Prescripción estaba intentando llamar
