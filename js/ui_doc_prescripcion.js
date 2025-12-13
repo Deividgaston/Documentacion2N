@@ -579,16 +579,25 @@ function attachPrescSectionsDragHandlers() {
 // PARTE 4
 // Drop de secciones → capítulos
 // ========================================================
-
 function attachPrescDropZone() {
   const dropZone = document.getElementById("prescCapituloContent");
   if (!dropZone) return;
 
+  const canAccept = (dt) => {
+    try {
+      const types = Array.from(dt?.types || []);
+      if (types.includes("text/presc-section-id")) return true;
+      if (types.includes("text/presc-plantilla-id")) return true;
+      if (types.includes("text/presc-extra-id")) return true;
+      if (types.includes("text/plain")) return true; // fallback
+    } catch (_) {}
+    return false;
+  };
+
   dropZone.addEventListener("dragover", (ev) => {
-    if (ev.dataTransfer.types.includes("text/presc-section-id")) {
-      ev.preventDefault();
-      dropZone.style.background = "#f9fafb";
-    }
+    if (!canAccept(ev.dataTransfer)) return;
+    ev.preventDefault();
+    dropZone.style.background = "#f9fafb";
   });
 
   dropZone.addEventListener("dragleave", () => {
@@ -599,12 +608,63 @@ function attachPrescDropZone() {
     ev.preventDefault();
     dropZone.style.background = "transparent";
 
-    const secId = ev.dataTransfer.getData("text/presc-section-id");
-    if (!secId) return;
+    const dt = ev.dataTransfer;
 
-    handleSectionDrop(secId);
+    // 1) Sección (custom)
+    let secId = "";
+    try { secId = dt.getData("text/presc-section-id") || ""; } catch (_) {}
+    if (secId) {
+      handleSectionDrop(secId);
+      renderPrescCapituloContent();
+      renderPrescPreview();
+      return;
+    }
+
+    // 2) Plantilla (custom)
+    let tplId = "";
+    try { tplId = dt.getData("text/presc-plantilla-id") || ""; } catch (_) {}
+    if (tplId) {
+      handlePlantillaDrop(tplId);
+      renderPrescCapituloContent();
+      renderPrescPreview();
+      return;
+    }
+
+    // 3) Extra ref (custom)
+    let extraId = "";
+    try { extraId = dt.getData("text/presc-extra-id") || ""; } catch (_) {}
+    if (extraId) {
+      handleExtraRefDrop(extraId);
+      renderPrescCapituloContent();
+      renderPrescPreview();
+      return;
+    }
+
+    // 4) Fallback universal: text/plain
+    let plain = "";
+    try { plain = dt.getData("text/plain") || ""; } catch (_) {}
+
+    if (plain.startsWith("presc-section-id:")) {
+      handleSectionDrop(plain.replace("presc-section-id:", ""));
+      renderPrescCapituloContent();
+      renderPrescPreview();
+      return;
+    }
+    if (plain.startsWith("presc-plantilla-id:")) {
+      handlePlantillaDrop(plain.replace("presc-plantilla-id:", ""));
+      renderPrescCapituloContent();
+      renderPrescPreview();
+      return;
+    }
+    if (plain.startsWith("presc-extra-id:")) {
+      handleExtraRefDrop(plain.replace("presc-extra-id:", ""));
+      renderPrescCapituloContent();
+      renderPrescPreview();
+      return;
+    }
   });
 }
+
 
 function handleSectionDrop(secId) {
   const sections = ensurePrescSectionsFromBudget();
