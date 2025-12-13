@@ -556,7 +556,10 @@ function attachPrescSectionsDragHandlers() {
       el.addEventListener("dragstart", (ev) => {
         const secId = el.getAttribute("data-section-id") || "";
         try {
+          // Custom type (tu enfoque original)
           ev.dataTransfer.setData("text/presc-section-id", secId);
+          // Fallback universal (Safari/Chrome): text/plain
+          ev.dataTransfer.setData("text/plain", "presc-section-id:" + secId);
           ev.dataTransfer.effectAllowed = "copy";
         } catch (_) {}
         el.style.opacity = "0.6";
@@ -567,6 +570,7 @@ function attachPrescSectionsDragHandlers() {
       });
     });
 }
+
 
 // ========================================================
 // FIN PARTE 3
