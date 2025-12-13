@@ -2286,65 +2286,11 @@ async function translatePrescModel(model, targetLang) {
   const expanded = [];
   const mapBack = []; // { originalKey, partsCount, lead, tail }
 
-  for (const originalKey of toTranslate) {
-    const { lead, core, tail } = splitWS(originalKey);
-
-    // si core vacío, no traducimos
-    if (!core) {
-      mapBack.push({ originalKey, partsCount: 0, lead, tail });
-      continue;
-    }
-
-    const parts = prescSplitForGemini(core, MAX_CHARS);
-    mapBack.push({ originalKey, partsCount: parts.length, lead, tail });
-    expanded.push(...parts);
-  }
-
-  // Batch seguro
-  const translatedExpanded = [];
-  const BATCH = 25;
-
-  try {
-    for (let i = 0; i < expanded.length; i += BATCH) {
-      const slice = expanded.slice(i, i + BATCH);
-      const out = await window.geminiTranslateBatch(slice, targetLang);
-
-
-
-      for (let k = 0; k < slice.length; k++) {
-        translatedExpanded.push(out?.[k] || slice[k]);
-      }
-    }
-  } catch (e) {
-    console.warn("[PRESC] Error traducción Gemini:", e);
-    return;
-  }
-
-  // Reconstrucción al cache (reaplica lead/tail)
-  let cursor = 0;
-  for (const m of mapBack) {
-    if (m.partsCount === 0) {
-      cache[m.originalKey] = m.originalKey; // nada que traducir
-      continue;
-    }
-    const parts = translatedExpanded.slice(cursor, cursor + m.partsCount);
-    cursor += m.partsCount;
-
-    const joined = (m.partsCount > 1) ? prescJoinGeminiChunks(parts) : (parts[0] || "");
-    cache[m.originalKey] = m.lead + joined + m.tail;
-  }
-
-  // Aplicar al modelo usando la MISMA clave exacta
-  model.chapters = model.chapters.map((c) => ({
-    ...c,
-    title: cache[keyOf(c.title)] ?? c.title,
-    text:  cache[keyOf(c.text)]  ?? c.text,
-    lines: (c.lines || []).map((l) => ({
-      ...l,
-      description: cache[keyOf(l.description)] ?? l.description
-    }))
-  }));
+ for (const originalKey of toTranslate) {
+  const translated = await prescTranslateTextWithAI(originalKey, targetLang);
+  cache[originalKey] = translated || originalKey;
 }
+
 
 // ========================================================
 // DISPATCH EXPORT
