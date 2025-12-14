@@ -212,6 +212,20 @@ async function importPrescFromExcel(file) {
         cellToText(Graw).trim() === "";
       if (isEmptyRow) continue;
 
+      // ⛔ CIERRE DE CAPÍTULO
+const firstCell = cellToText(row.getCell(1).value).toLowerCase();
+
+if (
+  firstCell.includes("subtotal capítulo") ||
+  firstCell.includes("subtotal capitulo") ||
+  firstCell.includes("total prescripción") ||
+  firstCell.includes("total prescripcion")
+) {
+  currentCap = null;
+  continue;
+}
+
+      
       // ✅ Detectar CAPÍTULO: "2N.01 ...." en columna A (fila “mergeada” o casi vacía en el resto)
       const restEmpty =
         !B && !C && !D &&
