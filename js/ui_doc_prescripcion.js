@@ -125,27 +125,28 @@ function openPrescImportModal() {
       </p>
     `,
     onSave: async () => {
-      const type = document.getElementById("prescImportType")?.value;
-      const file = document.getElementById("prescImportFile")?.files?.[0];
+  const type = document.getElementById("prescImportType")?.value;
+  const file = document.getElementById("prescImportFile")?.files?.[0];
 
-      if (!file) {
-        alert("Selecciona un archivo.");
-        return;
-      }
+  if (!file) {
+    alert("Selecciona un archivo.");
+    return false; // ✅ no cerrar
+  }
 
-      if (!confirm("Esto reemplazará la prescripción actual. ¿Continuar?")) {
-        return;
-      }
+  if (!confirm("Esto reemplazará la prescripción actual. ¿Continuar?")) {
+    return false; // ✅ no cerrar
+  }
 
-      if (type === "excel") {
-        await importPrescFromExcel(file);
-      } else {
-        await importPrescFromBc3(file);
-      }
+  if (type === "excel") {
+    await importPrescFromExcel(file);
+  } else {
+    await importPrescFromBc3(file);
+  }
 
-      // refresco total UI
-      renderDocPrescripcionView();
-    }
+  renderDocPrescripcionView();
+  return true; // ✅ cerrar
+}
+
   });
 }
 async function importPrescFromExcel(file) {
