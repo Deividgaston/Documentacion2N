@@ -276,30 +276,56 @@ if (capMatch) {
         }
       }
 
-      // ✅ Detectar LÍNEA: B=código, C=desc, D=ud, E=qty, F=price, G=amount
-      // (en tu export A suele ser cap.title, pero NO lo necesitamos)
-      if (currentCap && B && C) {
-        const qty = cellToNum(Eraw);
-        const price = cellToNum(Fraw);
-        const amount = cellToText(Graw).trim() ? cellToNum(Graw) : (qty * price);
+      // ✅ Detectar LÍNEA (solo si hay código real o números de medición)
+if (currentCap && (B || C)) {
+  const qtyTxt = cellToText(Eraw).trim();
+  const priceTxt = cellToText(Fraw).trim();
+  const amtTxt = cellToText(Graw).trim();
 
-        // si B NO parece código de línea (por ejemplo, header), lo ignoramos
-        const looksLineCode = /^2N\.\d{2}\.\d{2}$/i.test(B) || B.length >= 4;
-        if (looksLineCode) {
-          currentCap.lineas.push({
-            id: prescUid("line"),
-            tipo: "import",
-            codigo: B,
-            descripcion: C,
-            unidad: D || "Ud",
-            cantidad: qty,
-            pvp: price,
-            importe: amount,
-            extraRefId: null
-          });
-          continue;
-        }
-      }
+  const qty = cellToNum(Eraw);
+  const price = cellToNum(Fraw);
+  const amount = amtTxt ? cellToNum(Graw) : (qty * price);
+
+  const codeOk =
+    /^2N\.\d{2}\.\d{2}$/i.test(B) ||
+    /^2N\.\d{2}\.\d{2}\.\d{2}$/i.test(B); // por si algún Excel viene con 3 niveles
+
+  const hasNumbers = (qtyTxt !== "" || priceTxt !== "" || amtTxt !== "") && (qty > 0 || price > 0 || amount > 0);
+  const unitOk = !D || String(D).trim().length <= 6; // Ud, m, m², h, etc.
+
+  // 👉 Si NO es línea y parece un párrafo (típico "Marca: ...", merges en B/C),
+  // lo consideramos TEXTO del capítulo (no referencias)
+  const looksParagraph =
+    !codeOk &&
+    !hasNumbers &&
+    unitOk &&
+    ((B && B.length > 25) || (C && C.length > 25));
+
+  if (looksParagraph) {
+    const paragraph = (B ? B : C).trim();
+    if (paragraph) {
+      currentCap.texto = currentCap.texto ? (currentCap.texto + "\n" + paragraph) : paragraph;
+      continue;
+    }
+  }
+
+  // ✅ Línea real: requiere código o números de medición
+  if (B && C && unitOk && (codeOk || hasNumbers)) {
+    currentCap.lineas.push({
+      id: prescUid("line"),
+      tipo: "import",
+      codigo: B,
+      descripcion: C,
+      unidad: D || "Ud",
+      cantidad: qty,
+      pvp: price,
+      importe: amount,
+      extraRefId: null
+    });
+    continue;
+  }
+}
+
     }
 
     if (!newCaps.length) {
