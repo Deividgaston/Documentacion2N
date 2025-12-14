@@ -202,16 +202,17 @@ async function importPrescFromExcel(file) {
       const Fraw = row.getCell(6).value;
       const Graw = row.getCell(7).value;
 
-      const A = cellToText(Araw).trim();
-      const B = cellToText(Braw).trim();
-      const C = cellToText(Craw).trim();
-      const D = cellToText(Draw).trim();
+     const A = cellToText(Araw).trim();
+const B = cellToText(Braw).trim();
+const C = cellToText(Craw).trim();
+const D = cellToText(Draw).trim();
 
-      const isEmptyRow =
-        !A && !B && !C && !D &&
-        cellToText(Eraw).trim() === "" &&
-        cellToText(Fraw).trim() === "" &&
-        cellToText(Graw).trim() === "";
+const restEmpty =
+  !B && !C && !D &&
+  cellToText(Eraw).trim() === "" &&
+  cellToText(Fraw).trim() === "" &&
+  cellToText(Graw).trim() === "";
+
       if (isEmptyRow) continue;
 
       // ⛔ CIERRE DE CAPÍTULO
@@ -319,6 +320,8 @@ if (capMatch) {
     alert("No se pudo importar el Excel. Revisa consola.");
   }
 }
+window.importPrescFromExcel = importPrescFromExcel;
+
 
 async function importPrescFromBc3(file) {
   alert("Import BC3 pendiente.");
