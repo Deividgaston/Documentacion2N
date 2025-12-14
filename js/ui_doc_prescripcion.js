@@ -2404,7 +2404,9 @@ function openPrescPrintWindow(model, lang) {
   `;
 
   chapters.forEach((cap, idx) => {
-    html += `<h2>${labels.chapter || "Capítulo"} ${idx + 1} — ${escapeHtml(cap.title || "")}</h2>`;
+   const capCode = cap.code ? `${escapeHtml(cap.code)} — ` : "";
+   html += `<h2>${labels.chapter || "Capítulo"} ${idx + 1} — ${capCode}${escapeHtml(cap.title || "")}</h2>`;
+
 
     if (cap.text) {
       html += `<div class="chapterText">${escapeHtml(cap.text).replace(/\n/g, "<br>")}</div>`;
