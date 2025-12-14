@@ -207,11 +207,12 @@ const B = cellToText(Braw).trim();
 const C = cellToText(Craw).trim();
 const D = cellToText(Draw).trim();
 
-const restEmpty =
-  !B && !C && !D &&
+const isEmptyRow =
+  !A && !B && !C && !D &&
   cellToText(Eraw).trim() === "" &&
   cellToText(Fraw).trim() === "" &&
   cellToText(Graw).trim() === "";
+
 
       if (isEmptyRow) continue;
 
