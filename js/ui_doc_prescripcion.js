@@ -226,31 +226,32 @@ if (
 }
 
       
-      // ✅ Detectar CAPÍTULO: "2N.01 ...." en columna A (fila “mergeada” o casi vacía en el resto)
-      const restEmpty =
-        !B && !C && !D &&
-        cellToText(Eraw).trim() === "" &&
-        cellToText(Fraw).trim() === "" &&
-        cellToText(Graw).trim() === "";
+     // ✅ Detectar CAPÍTULO: "2N.01 ..." en A (o si viene en B por merges)
+const Aclean = A.replace(/\u00A0/g, " ").trim(); // NBSP -> espacio normal
+const Bclean = B.replace(/\u00A0/g, " ").trim();
 
-      if (A && restEmpty && /(^|\s)2N\.\d{2}(\s|$)/i.test(A)) {
-        const parts = A.split(/\s+/);
-        const code = parts.shift(); // 2N.01
-        const title = parts.join(" ").trim() || "Capítulo";
+const capMatch =
+  Aclean.match(/(?:^|\s)(2N\.\d{2})\s+(.*)$/i) ||
+  Bclean.match(/(?:^|\s)(2N\.\d{2})\s+(.*)$/i);
 
-        currentCap = {
-          id: prescUid("cap"),
-          nombre: title,
-          texto: "",
-          lineas: [],
-          sourceSectionId: null,
-          sourceSectionRawId: null,
-          __importCode: code
-        };
+if (capMatch) {
+  const code = capMatch[1];                 // 2N.04
+  const title = (capMatch[2] || "").trim() || "Capítulo";
 
-        newCaps.push(currentCap);
-        continue;
-      }
+  currentCap = {
+    id: prescUid("cap"),
+    nombre: title,
+    texto: "",
+    lineas: [],
+    sourceSectionId: null,
+    sourceSectionRawId: null,
+    __importCode: code
+  };
+
+  newCaps.push(currentCap);
+  continue;
+}
+
 
       // ✅ Detectar TEXTO de capítulo: fila mergeada debajo del capítulo (solo A con texto)
       if (currentCap && A && restEmpty && !/(^|\s)2N\.\d{2}(\s|$)/i.test(A)) {
