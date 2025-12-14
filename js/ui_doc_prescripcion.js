@@ -1846,6 +1846,25 @@ function renderPrescPreview() {
   ensurePrescCapitulosArray();
   const caps = appState.prescripcion.capitulos || [];
 
+    // ✅ Orden estable de capítulos en preview
+  const capsSorted = [...caps].sort((a, b) => {
+    const an = String(a?.nombre || "").trim();
+    const bn = String(b?.nombre || "").trim();
+
+    // 1) Si vienen del presupuesto y tienen rawId numérico, respétalo
+    const ar = Number(a?.sourceSectionRawId);
+    const br = Number(b?.sourceSectionRawId);
+    const arOk = Number.isFinite(ar);
+    const brOk = Number.isFinite(br);
+    if (arOk && brOk && ar !== br) return ar - br;
+    if (arOk && !brOk) return -1;
+    if (!arOk && brOk) return 1;
+
+    // 2) Fallback: orden alfabético ES
+    return an.localeCompare(bn, "es", { sensitivity: "base" });
+  });
+
+
   if (!caps.length) {
     container.innerHTML = `
       <p class="text-muted" style="font-size:0.8rem;">
@@ -1863,7 +1882,7 @@ function renderPrescPreview() {
 
   container.innerHTML = `
     <div style="display:flex; flex-direction:column; gap:0.5rem;">
-      ${caps.map((cap) => {
+      ${capsSorted.map((cap) => {
         const subtotal = (cap.lineas || []).reduce((acc, l) => {
           const imp = l.importe != null
             ? safeNumber(l.importe)
@@ -1949,28 +1968,49 @@ function renderPrescPreview() {
                           <th style="text-align:right;">Importe</th>
                         </tr>
                       </thead>
-                      <tbody>
-                        ${cap.lineas.map((l) => {
-                          const qty = safeNumber(l.cantidad);
-                          const pvp = safeNumber(l.pvp);
-                          const imp = safeNumber(
-                            l.importe != null ? l.importe : qty * pvp
-                          );
+                <tbody>
+  ${(() => {
+    const sortedLines = [...(cap.lineas || [])].sort((a, b) => {
+      const ac = String(a?.codigo || "");
+      const bc = String(b?.codigo || "");
 
-                          const unit = (l.unidad ?? l.ud ?? l.unit ?? "Ud");
+      // 1️⃣ Orden principal por código (numérico si aplica)
+      const c = ac.localeCompare(bc, "es", {
+        numeric: true,
+        sensitivity: "base"
+      });
+      if (c !== 0) return c;
 
-                          return `
-                            <tr>
-                              <td>${escapeHtml(l.codigo || "")}</td>
-                              <td>${escapeHtml(l.descripcion || "")}</td>
-                              <td style="text-align:center;">${escapeHtml(unit)}</td>
-                              <td style="text-align:right;">${qty}</td>
-                              <td style="text-align:right;">${pvp.toFixed(2)} €</td>
-                              <td style="text-align:right;">${imp.toFixed(2)} €</td>
-                            </tr>
-                          `;
-                        }).join("")}
-                      </tbody>
+      // 2️⃣ Fallback: descripción
+      return String(a?.descripcion || "")
+        .localeCompare(String(b?.descripcion || ""), "es", {
+          sensitivity: "base"
+        });
+    });
+
+    return sortedLines.map((l) => {
+      const qty = safeNumber(l.cantidad);
+      const pvp = safeNumber(l.pvp);
+      const imp = safeNumber(
+        l.importe != null ? l.importe : qty * pvp
+      );
+
+      const unit = (l.unidad ?? l.ud ?? l.unit ?? "Ud");
+
+      return `
+        <tr>
+          <td>${escapeHtml(l.codigo || "")}</td>
+          <td>${escapeHtml(l.descripcion || "")}</td>
+          <td style="text-align:center;">${escapeHtml(unit)}</td>
+          <td style="text-align:right;">${qty}</td>
+          <td style="text-align:right;">${pvp.toFixed(2)} €</td>
+          <td style="text-align:right;">${imp.toFixed(2)} €</td>
+        </tr>
+      `;
+    }).join("");
+  })()}
+</tbody>
+
                     </table>
                   `
                   : `<div class="text-muted">Sin referencias.</div>`
