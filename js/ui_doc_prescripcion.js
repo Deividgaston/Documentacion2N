@@ -439,6 +439,9 @@ function renderDocPrescripcionView() {
     createManualCapitulo();
     renderDocPrescripcionView();
   });
+  container.querySelector("#prescImportBtn")?.addEventListener("click", () => {
+  openPrescImportModal();
+});
 
   container.querySelector("#prescCapGuardarBtn")?.addEventListener("click", () => {
   // Guardar = no crear capítulo nuevo
