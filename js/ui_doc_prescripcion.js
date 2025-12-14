@@ -101,6 +101,51 @@ function openPrescModal({ title, bodyHTML, onSave }) {
     };
   }
 }
+function openPrescImportModal() {
+  openPrescModal({
+    title: "Importar prescripción",
+    bodyHTML: `
+      <div class="form-group">
+        <label>Formato</label>
+        <select id="prescImportType" class="form-control">
+          <option value="excel">Excel (.xlsx)</option>
+          <option value="bc3">BC3 (.bc3)</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Archivo</label>
+        <input id="prescImportFile" type="file" class="form-control" accept=".xlsx,.bc3" />
+      </div>
+
+      <p class="text-muted" style="font-size:0.75rem;">
+        ⚠️ La importación reemplazará la prescripción actual.
+      </p>
+    `,
+    onSave: async () => {
+      const type = document.getElementById("prescImportType")?.value;
+      const file = document.getElementById("prescImportFile")?.files?.[0];
+
+      if (!file) {
+        alert("Selecciona un archivo.");
+        return;
+      }
+
+      if (!confirm("Esto reemplazará la prescripción actual. ¿Continuar?")) {
+        return;
+      }
+
+      if (type === "excel") {
+        await importPrescFromExcel(file);
+      } else {
+        await importPrescFromBc3(file);
+      }
+
+      // refresco total UI
+      renderDocPrescripcionView();
+    }
+  });
+}
 
 // ========================================================
 // Helpers Firestore / Auth (compat v8 / compat)
