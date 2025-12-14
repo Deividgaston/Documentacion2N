@@ -3126,6 +3126,134 @@ function downloadBc3File(content, filename) {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
+// ========================================================
+// BC3 EXPORT (FIEBDC-3) — generador estándar para Presto
+// Crea ~V, ~K, ~C, ~T, ~M
+// ========================================================
+
+function prescExportModelToBC3(model) {
+  const m = model || {};
+  const chapters = Array.isArray(m.chapters) ? m.chapters : [];
+
+  // Limpia campos para BC3 (evita pipes y saltos raros)
+  const cleanField = (v) => {
+    let s = String(v ?? "");
+    s = s.replace(/\u0000/g, "");
+    s = s.replace(/[\r\n]+/g, " / ");
+    s = s.replace(/\|/g, " / ");
+    return s.trim();
+  };
+
+  const num = (v) => {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return "0";
+    return String(Math.round(n * 100) / 100).replace(",", ".");
+  };
+
+  const today = new Date();
+  const dateStr =
+    String(today.getFullYear()) +
+    String(today.getMonth() + 1).padStart(2, "0") +
+    String(today.getDate()).padStart(2, "0");
+
+  const out = [];
+  const NL = "\r\n";
+
+  // Cabecera (simple y compatible)
+  out.push(`~V|FIEBDC-3/2020|Presupuestos2N|1.0|${dateStr}|`);
+  out.push(`~K|`);
+
+  const emitted = new Set();
+
+  const emitC = (code, unit, desc, price) => {
+    const c = cleanField(code);
+    if (!c) return;
+    const key = "C:" + c;
+    if (emitted.has(key)) return;
+    emitted.add(key);
+
+    const u = cleanField(unit || "Ud");
+    const d = cleanField(desc || "");
+    const p = num(price || 0);
+
+    // ~C|CODIGO|UD|RESUMEN|PRECIO|
+    out.push(`~C|${c}|${u}|${d}|${p}|`);
+  };
+
+  const emitT = (code, text) => {
+    const c = cleanField(code);
+    const t = cleanField(text);
+    if (!c || !t) return;
+
+    // Una línea ~T por párrafo (más compatible)
+    const paras = String(text || "")
+      .replace(/\u0000/g, "")
+      .split(/\n\s*\n/)
+      .map((x) => cleanField(x))
+      .filter(Boolean);
+
+    paras.forEach((p) => out.push(`~T|${c}|${p}|`));
+  };
+
+  const emitM = (parent, child, qty) => {
+    const p = cleanField(parent);
+    const c = cleanField(child);
+    const q = Number(qty);
+    if (!p || !c) return;
+    if (!Number.isFinite(q) || q === 0) return;
+
+    // ~M|PADRE|HIJO|CANTIDAD|
+    out.push(`~M|${p}|${c}|${num(q)}|`);
+  };
+
+  chapters.forEach((ch) => {
+    const chCode = cleanField(ch.code || "");
+    const chTitle = cleanField(ch.title || chCode || "Capítulo");
+
+    // Capítulo como concepto (precio 0)
+    emitC(chCode, "Ud", chTitle, 0);
+
+    // Texto capítulo
+    if (String(ch.text || "").trim()) emitT(chCode, ch.text);
+
+    // Partidas
+    const lines = Array.isArray(ch.lines) ? ch.lines : [];
+    lines.forEach((l) => {
+      const lc = cleanField(l.code || "");
+      if (!lc) return;
+
+      emitC(
+        lc,
+        l.unit || "Ud",
+        l.description || "",
+        Number(l.price ?? 0)
+      );
+
+      emitM(chCode, lc, Number(l.qty ?? 0));
+    });
+  });
+
+  return out.join(NL) + NL;
+}
+
+// ========================================================
+// Hook esperado por tu handlePrescExport("bc3")
+// Firma: window.exportPrescripcionToBc3(model, lang)
+// ========================================================
+if (typeof window.exportPrescripcionToBc3 !== "function") {
+  window.exportPrescripcionToBc3 = function (model, lang) {
+    const bc3 = prescExportModelToBC3(model);
+
+    // Reutiliza tu helper existente
+    if (typeof downloadBc3File !== "function") {
+      alert("Falta downloadBc3File(...) en el archivo.");
+      return;
+    }
+
+    const language = model?.lang || lang || "es";
+    downloadBc3File(bc3, `prescripcion_${language}.bc3`);
+  };
+}
 
 // ------------------------
 // BC3 generator (usa tu función)
