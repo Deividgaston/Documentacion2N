@@ -1846,23 +1846,39 @@ function renderPrescPreview() {
   ensurePrescCapitulosArray();
   const caps = appState.prescripcion.capitulos || [];
 
-    // ✅ Orden estable de capítulos en preview
-  const capsSorted = [...caps].sort((a, b) => {
-    const an = String(a?.nombre || "").trim();
-    const bn = String(b?.nombre || "").trim();
+  // ✅ Orden REAL según el presupuesto (sectionsFromBudget)
+  const sections = ensurePrescSectionsFromBudget() || [];
 
-    // 1) Si vienen del presupuesto y tienen rawId numérico, respétalo
-    const ar = Number(a?.sourceSectionRawId);
-    const br = Number(b?.sourceSectionRawId);
-    const arOk = Number.isFinite(ar);
-    const brOk = Number.isFinite(br);
-    if (arOk && brOk && ar !== br) return ar - br;
-    if (arOk && !brOk) return -1;
-    if (!arOk && brOk) return 1;
-
-    // 2) Fallback: orden alfabético ES
-    return an.localeCompare(bn, "es", { sensitivity: "base" });
+  // mapa: id/rawId sección -> posición
+  const secIndex = new Map();
+  sections.forEach((s, i) => {
+    if (s?.id) secIndex.set(String(s.id), i);
+    if (s?.rawId != null) secIndex.set(String(s.rawId), i);
   });
+
+  const capsSorted = [...caps].sort((a, b) => {
+    // Manuales al final
+    const aIsManual = String(a?.id || "").startsWith("manual-") || !a?.sourceSectionId;
+    const bIsManual = String(b?.id || "").startsWith("manual-") || !b?.sourceSectionId;
+    if (aIsManual !== bIsManual) return aIsManual ? 1 : -1;
+
+    // Orden por posición de la sección del presupuesto
+    const ai =
+      secIndex.get(String(a?.sourceSectionId || "")) ??
+      secIndex.get(String(a?.sourceSectionRawId || "")) ??
+      999999;
+
+    const bi =
+      secIndex.get(String(b?.sourceSectionId || "")) ??
+      secIndex.get(String(b?.sourceSectionRawId || "")) ??
+      999999;
+
+    if (ai !== bi) return ai - bi;
+
+    // Fallback estable: alfabético ES
+    return String(a?.nombre || "").localeCompare(String(b?.nombre || ""), "es", { sensitivity: "base" });
+  });
+
 
 
   if (!caps.length) {
