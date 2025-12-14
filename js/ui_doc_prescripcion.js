@@ -90,13 +90,15 @@ function openPrescModal({ title, bodyHTML, onSave }) {
     btnSave.onclick = async () => {
       try {
         if (typeof onSave === "function") {
-          await onSave();
+          // ✅ onSave debe devolver true (cerrar) o false (no cerrar)
+          const shouldClose = await onSave();
+          if (shouldClose === false) return; // 👈 se queda abierto
         }
+        close(); // ✅ solo cerramos si ha ido bien o no devolvió false
       } catch (e) {
         console.error("[PRESCRIPCIÓN] Error en modal:", e);
         alert("Error al guardar. Revisa la consola.");
-      } finally {
-        close();
+        // 👈 NO cerramos para que puedas corregir
       }
     };
   }
