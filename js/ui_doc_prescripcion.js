@@ -309,11 +309,14 @@ function renderDocPrescripcionView() {
             </div>
 
             <div style="display:flex; gap:0.4rem; flex-wrap:wrap; justify-content:flex-end;">
-              <button id="prescReloadSectionsBtn" class="btn btn-outline btn-sm">🔄 Secciones</button>
-              <button id="prescExportExcelBtn" class="btn btn-sm btn-outline">⬇️ Excel</button>
-              <button id="prescExportPdfBtn" class="btn btn-sm btn-outline">⬇️ PDF</button>
-              <button id="prescExportBc3Btn" class="btn btn-sm btn-outline">⬇️ BC3</button>
-            </div>
+  <button id="prescReloadSectionsBtn" class="btn btn-outline btn-sm">🔄 Secciones</button>
+  <button id="prescImportBtn" class="btn btn-sm btn-outline">⬆️ Importar</button>
+  <button id="prescExportExcelBtn" class="btn btn-sm btn-outline">⬇️ Excel</button>
+  <button id="prescExportPdfBtn" class="btn btn-sm btn-outline">⬇️ PDF</button>
+  <button id="prescExportBc3Btn" class="btn btn-sm btn-outline">⬇️ BC3</button>
+</div>
+
+
           </div>
         </div>
       </div>
