@@ -202,19 +202,20 @@ async function importPrescFromExcel(file) {
       const Fraw = row.getCell(6).value;
       const Graw = row.getCell(7).value;
 
-     const A = cellToText(Araw).trim();
+   const A = cellToText(Araw).trim();
 const B = cellToText(Braw).trim();
 const C = cellToText(Craw).trim();
 const D = cellToText(Draw).trim();
 
-const isEmptyRow =
-  !A && !B && !C && !D &&
+const restEmpty =
+  !B && !C && !D &&
   cellToText(Eraw).trim() === "" &&
   cellToText(Fraw).trim() === "" &&
   cellToText(Graw).trim() === "";
 
+const isEmptyRow = !A && restEmpty;   // ✅ AÑADIR ESTO
 
-      if (isEmptyRow) continue;
+if (isEmptyRow) continue;
 
       // ⛔ CIERRE DE CAPÍTULO
 const firstCell = cellToText(row.getCell(1).value).toLowerCase();
