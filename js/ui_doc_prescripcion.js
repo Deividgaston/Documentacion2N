@@ -387,14 +387,202 @@ if (currentCap && (B || C)) {
 window.importPrescFromExcel = importPrescFromExcel;
 
 
+// ========================================================
+// IMPORT BC3 (FIEBDC-3) → capítulos + líneas + texto capítulo
+// ========================================================
+
 async function importPrescFromBc3(file) {
-  alert("Import BC3 pendiente.");
+  try {
+    const buf = await file.arrayBuffer();
+
+    // BC3 suele venir en latin1/Windows-1252. Probamos latin1 y fallback utf-8.
+    let text = "";
+    try {
+      text = new TextDecoder("latin1").decode(buf);
+    } catch (_) {
+      text = new TextDecoder("utf-8").decode(buf);
+    }
+
+    // Normaliza saltos y elimina nulls raros
+    text = String(text || "").replace(/\u0000/g, "").replace(/\r\n/g, "\n");
+
+    const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
+
+    // --- helpers ---
+    const parseNum = (v) => {
+      const s = String(v ?? "").trim().replace(",", ".");
+      const n = Number(s);
+      return Number.isFinite(n) ? n : 0;
+    };
+
+    // BC3 usa | como separador. A veces el texto lleva |; no lo vamos a “reconstruir perfecto”
+    // pero sí guardaremos el resto del campo como texto unido.
+    const splitBC3 = (line) => line.split("|"); // simple y suficiente para la mayoría
+
+    // --- almacenamiento temporal ---
+    const concepts = new Map();   // code -> { code, unit, desc, price }
+    const textsMap = new Map();   // code -> "texto..."
+    const qtyMap = new Map();     // itemCode -> qty (si aparece en M o D)
+    const chapterOrder = [];      // orden de capítulos detectados (según aparecen)
+
+    // patrones (tu estándar)
+    const isChapterCode = (code) => /^2N\.\d{2}$/i.test(code);
+    const isLineCode = (code) => /^2N\.\d{2}\.\d{2}(?:\.\d{2})?$/i.test(code);
+
+    const pushChapterOrder = (chCode) => {
+      if (!chCode) return;
+      if (!chapterOrder.includes(chCode)) chapterOrder.push(chCode);
+    };
+
+    // --- 1) parsear registros ---
+    for (const raw of lines) {
+      // Ejemplos típicos:
+      // ~C|CODIGO|UD|DESCRIPCION|PRECIO|...
+      // ~T|CODIGO|TEXTO...
+      // ~M|PADRE|HIJO|CANTIDAD|...
+      // ~D|PADRE|HIJO|FACTOR|...
+      if (!raw.startsWith("~")) continue;
+
+      const recType = raw.slice(0, 2); // "~C", "~T", "~M", "~D", etc.
+      const parts = splitBC3(raw);
+
+      if (recType === "~C") {
+        // FIEBDC: ~C|code|unit|desc|price|...
+        const code = (parts[1] || "").trim();
+        const unit = (parts[2] || "").trim() || "Ud";
+        const desc = (parts[3] || "").trim();
+        const price = parseNum(parts[4]);
+
+        if (code) {
+          concepts.set(code, { code, unit, desc, price });
+
+          // si es capítulo, guardamos orden
+          if (isChapterCode(code)) pushChapterOrder(code);
+        }
+        continue;
+      }
+
+      if (recType === "~T") {
+        // ~T|code|texto... (puede tener más pipes)
+        const code = (parts[1] || "").trim();
+        if (!code) continue;
+
+        const t = parts.slice(2).join("|").trim();
+        if (!t) continue;
+
+        const prev = textsMap.get(code) || "";
+        textsMap.set(code, prev ? (prev + "\n" + t) : t);
+
+        if (isChapterCode(code)) pushChapterOrder(code);
+        continue;
+      }
+
+      if (recType === "~M") {
+        // Medición: ~M|padre|hijo|qty|...
+        const parent = (parts[1] || "").trim();
+        const child  = (parts[2] || "").trim();
+        const qty    = parseNum(parts[3]);
+
+        if (child && qty) qtyMap.set(child, qty);
+        if (isChapterCode(parent)) pushChapterOrder(parent);
+        continue;
+      }
+
+      if (recType === "~D") {
+        // Descomposición: ~D|padre|hijo|factor|...
+        const parent = (parts[1] || "").trim();
+        const child  = (parts[2] || "").trim();
+        const factor = parseNum(parts[3]);
+
+        // Si no hay qty en M, a veces D trae factor útil como cantidad
+        if (child && factor && !qtyMap.has(child)) qtyMap.set(child, factor);
+        if (isChapterCode(parent)) pushChapterOrder(parent);
+        continue;
+      }
+    }
+
+    // --- 2) construir capítulos ---
+    // Si no detectamos capítulos por ~C/~T, intentamos inferir por prefijo de líneas
+    if (!chapterOrder.length) {
+      for (const code of concepts.keys()) {
+        if (isLineCode(code)) {
+          const m = String(code).match(/^2N\.(\d{2})/i);
+          if (m) pushChapterOrder(`2N.${m[1]}`);
+        }
+      }
+    }
+
+    const newCaps = [];
+    for (const chCode of chapterOrder) {
+      const chConcept = concepts.get(chCode);
+      const chTitle = (chConcept?.desc || chCode).trim() || "Capítulo";
+
+      const cap = {
+        id: prescUid("cap"),
+        nombre: chTitle,
+        texto: (textsMap.get(chCode) || "").trim(), // ✅ TEXTO del capítulo
+        lineas: [],
+        sourceSectionId: null,
+        sourceSectionRawId: null,
+        __importCode: chCode
+      };
+
+      // líneas pertenecientes al capítulo: 2N.XX.YY...
+      const prefix = chCode + ".";
+      const lineCodes = [];
+      for (const code of concepts.keys()) {
+        if (isLineCode(code) && String(code).startsWith(prefix)) {
+          lineCodes.push(code);
+        }
+      }
+
+      // orden por código numérico
+      lineCodes.sort((a, b) =>
+        String(a).localeCompare(String(b), "es", { numeric: true, sensitivity: "base" })
+      );
+
+      for (const lc of lineCodes) {
+        const c = concepts.get(lc);
+        if (!c) continue;
+
+        const qty = qtyMap.has(lc) ? safeNumber(qtyMap.get(lc)) : 0;
+        const price = safeNumber(c.price);
+        const amount = qty * price;
+
+        cap.lineas.push({
+          id: prescUid("line"),
+          tipo: "import",
+          codigo: lc,
+          descripcion: c.desc || "",
+          unidad: c.unit || "Ud",
+          cantidad: qty,
+          pvp: price,
+          importe: amount,
+          extraRefId: null
+        });
+      }
+
+      newCaps.push(cap);
+    }
+
+    if (!newCaps.length) {
+      console.warn("[PRESC][BC3] No chapters detected. First lines:", lines.slice(0, 30));
+      alert("No he podido detectar capítulos en el BC3. Revisa consola (BC3 no estándar o sin ~C/~T).");
+      return;
+    }
+
+    // --- 3) aplicar al estado ---
+    appState.prescripcion.capitulos = newCaps;
+    appState.prescripcion.selectedCapituloId = newCaps[0]?.id || null;
+
+    renderDocPrescripcionView();
+  } catch (e) {
+    console.error("[PRESCRIPCIÓN] importPrescFromBc3 error:", e);
+    alert("No se pudo importar el BC3. Revisa consola.");
+  }
 }
 
-
-async function importPrescFromBc3(file) {
-  alert("Import BC3: función pendiente. (Ya no romperá el botón)");
-}
+window.importPrescFromBc3 = importPrescFromBc3;
 
 // ========================================================
 // Helpers Firestore / Auth (compat v8 / compat)
