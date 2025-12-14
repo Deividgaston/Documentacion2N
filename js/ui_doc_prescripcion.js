@@ -2194,42 +2194,72 @@ async function buildPrescExportModel(lang) {
     total: 0
   };
 
-  (appState.prescripcion.capitulos || []).forEach((cap) => {
+  // ✅ Orden REAL según el presupuesto (igual que preview)
+  const sections = ensurePrescSectionsFromBudget() || [];
+  const secIndex = new Map();
+  sections.forEach((s, i) => {
+    if (s?.id) secIndex.set(String(s.id), i);
+    if (s?.rawId != null) secIndex.set(String(s.rawId), i);
+  });
+
+  const caps = appState.prescripcion.capitulos || [];
+  const capsSorted = [...caps].sort((a, b) => {
+    const aIsManual = String(a?.id || "").startsWith("manual-") || !a?.sourceSectionId;
+    const bIsManual = String(b?.id || "").startsWith("manual-") || !b?.sourceSectionId;
+    if (aIsManual !== bIsManual) return aIsManual ? 1 : -1;
+
+    const ai =
+      secIndex.get(String(a?.sourceSectionId || "")) ??
+      secIndex.get(String(a?.sourceSectionRawId || "")) ??
+      999999;
+
+    const bi =
+      secIndex.get(String(b?.sourceSectionId || "")) ??
+      secIndex.get(String(b?.sourceSectionRawId || "")) ??
+      999999;
+
+    if (ai !== bi) return ai - bi;
+
+    return String(a?.nombre || "").localeCompare(String(b?.nombre || ""), "es", { sensitivity: "base" });
+  });
+
+  // ✅ AQUÍ estaba el bug: necesitamos capIndex
+  capsSorted.forEach((cap, capIndex) => {
     let subtotal = 0;
+
     const chapterCode = prescAutoChapterCode2N(capIndex);
 
     const lines = (cap.lineas || []).map((l, lineIndex) => {
-  const qty = safeNumber(l.cantidad);
-  const pvp = safeNumber(l.pvp);
-  const imp = l.importe != null ? safeNumber(l.importe) : qty * pvp;
-  subtotal += imp;
+      const qty = safeNumber(l.cantidad);
+      const pvp = safeNumber(l.pvp);
+      const imp = l.importe != null ? safeNumber(l.importe) : qty * pvp;
 
-  return {
-    code: prescAutoLineCode2N(capIndex, lineIndex), // 👈 AQUÍ
-    description: l.descripcion || "",
-    unit: l.unidad || "Ud",
-    qty,
-    price: pvp,
-    amount: imp
-  };
-});
+      subtotal += imp;
 
+      return {
+        code: prescAutoLineCode2N(capIndex, lineIndex),
+        description: l.descripcion || "",
+        unit: l.unidad || "Ud",
+        qty,
+        price: pvp,
+        amount: imp
+      };
+    });
 
-   model.chapters.push({
-  code: chapterCode,      // 👈 NUEVO
-  title: cap.nombre || "",
-  text: cap.texto || "",
-  lines,
-  subtotal
-});
-
+    model.chapters.push({
+      code: chapterCode,
+      title: cap.nombre || "",
+      text: cap.texto || "",
+      lines,
+      subtotal
+    });
 
     model.total += subtotal;
   });
 
-  // ✅ OJO: aquí ya NO se traduce nada.
   return model;
 }
+
 
 
 // ========================================================
