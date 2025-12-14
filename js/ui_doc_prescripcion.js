@@ -3236,54 +3236,23 @@ function prescExportModelToBC3(model) {
   return out.join(NL) + NL;
 }
 
-// ========================================================
-// Hook esperado por tu handlePrescExport("bc3")
-// Firma: window.exportPrescripcionToBc3(model, lang)
-// ========================================================
-if (typeof window.exportPrescripcionToBc3 !== "function") {
-  window.exportPrescripcionToBc3 = function (model, lang) {
-    const bc3 = prescExportModelToBC3(model);
-
-    // Reutiliza tu helper existente
-    if (typeof downloadBc3File !== "function") {
-      alert("Falta downloadBc3File(...) en el archivo.");
-      return;
-    }
-
-    const language = model?.lang || lang || "es";
-    downloadBc3File(bc3, `prescripcion_${language}.bc3`);
-  };
-}
 
 // ------------------------
-// BC3 generator (usa tu función)
+// BC3 export (usa prescExportModelToBC3)
 // ------------------------
 function exportPrescripcionToBc3(model) {
   const lang = model?.lang || appState.prescripcion.exportLang || "es";
-  if (typeof prescExportToBC3 !== "function") {
-    alert("No existe prescExportToBC3 en el archivo.");
+
+  if (typeof prescExportModelToBC3 !== "function") {
+    alert("No existe prescExportModelToBC3 en el archivo.");
     return;
   }
-  const bc3 = prescExportToBC3(
-    {
-      capitulos: (model.chapters || []).map((c) => ({
-        nombre: c.title,
-        texto: c.text,
-        lineas: (c.lines || []).map((l) => ({
-          codigo: l.code,
-          descripcion: l.description,
-          unidad: l.unit,
-          cantidad: l.qty,
-          pvp: l.price,
-          importe: l.amount
-        })),
-        subtotal: c.subtotal
-      })),
-      totalGlobal: model.total
-    },
-    lang
-  );
+  if (typeof downloadBc3File !== "function") {
+    alert("No existe downloadBc3File en el archivo.");
+    return;
+  }
 
+  const bc3 = prescExportModelToBC3(model);
   downloadBc3File(bc3, `prescripcion_${lang}.bc3`);
 }
 
