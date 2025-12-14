@@ -146,6 +146,13 @@ function openPrescImportModal() {
     }
   });
 }
+async function importPrescFromExcel(file) {
+  alert("Import Excel: función pendiente. (Ya no romperá el botón)");
+}
+
+async function importPrescFromBc3(file) {
+  alert("Import BC3: función pendiente. (Ya no romperá el botón)");
+}
 
 // ========================================================
 // Helpers Firestore / Auth (compat v8 / compat)
