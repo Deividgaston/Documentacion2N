@@ -1838,6 +1838,50 @@ async function renderPrescExtraRefsList() {
 // PARTE 8
 // PREVISUALIZACIÓN (compacta, clara, funcional)
 // ========================================================
+(function injectPrescPrevStyles() {
+  if (document.getElementById("presc-prev-styles")) return;
+  const s = document.createElement("style");
+  s.id = "presc-prev-styles";
+  s.textContent = `
+    .presc-prev-table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;            /* 👈 clave para que no “explote” el spacing */
+      font-size: 12px;
+    }
+    .presc-prev-table th,
+    .presc-prev-table td {
+      padding: 6px 8px;               /* 👈 aire */
+      border-bottom: 1px solid #e5e7eb;
+      vertical-align: top;
+    }
+    .presc-prev-table th {
+      font-weight: 700;
+      color: #111827;
+      background: #f9fafb;
+    }
+    .presc-prev-table td.code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .presc-prev-table td.desc {
+      white-space: normal;            /* 👈 permite wrap */
+      word-break: break-word;
+    }
+    .presc-prev-table td.num {
+      text-align: right;
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
+    .presc-prev-table td.center {
+      text-align: center;
+      white-space: nowrap;
+    }
+  `;
+  document.head.appendChild(s);
+})();
 
 function renderPrescPreview() {
   const container = document.getElementById("prescPreview");
@@ -1960,7 +2004,7 @@ function renderPrescPreview() {
               </div>
             </div>
 
-            <!-- DETALLE -->
+                        <!-- DETALLE -->
             <div class="presc-prev-body"
                  style="
                    display:${expanded ? "block" : "none"};
@@ -1973,9 +2017,17 @@ function renderPrescPreview() {
               ${
                 cap.lineas && cap.lineas.length
                   ? `
-                    <table style="width:100%; border-collapse:collapse;">
+                    <table class="presc-prev-table">
+                      <colgroup>
+                        <col style="width:110px">
+                        <col>
+                        <col style="width:55px">
+                        <col style="width:75px">
+                        <col style="width:95px">
+                        <col style="width:110px">
+                      </colgroup>
                       <thead>
-                        <tr style="border-bottom:1px solid #e5e7eb;">
+                        <tr>
                           <th style="text-align:left;">Código</th>
                           <th style="text-align:left;">Descripción</th>
                           <th style="text-align:center;">Ud</th>
@@ -1984,54 +2036,49 @@ function renderPrescPreview() {
                           <th style="text-align:right;">Importe</th>
                         </tr>
                       </thead>
-                <tbody>
-  ${(() => {
-    const sortedLines = [...(cap.lineas || [])].sort((a, b) => {
-      const ac = String(a?.codigo || "");
-      const bc = String(b?.codigo || "");
+                      <tbody>
+                        ${(() => {
+                          const sortedLines = [...(cap.lineas || [])].sort((a, b) => {
+                            const ac = String(a?.codigo || "");
+                            const bc = String(b?.codigo || "");
 
-      // 1️⃣ Orden principal por código (numérico si aplica)
-      const c = ac.localeCompare(bc, "es", {
-        numeric: true,
-        sensitivity: "base"
-      });
-      if (c !== 0) return c;
+                            const c = ac.localeCompare(bc, "es", {
+                              numeric: true,
+                              sensitivity: "base"
+                            });
+                            if (c !== 0) return c;
 
-      // 2️⃣ Fallback: descripción
-      return String(a?.descripcion || "")
-        .localeCompare(String(b?.descripcion || ""), "es", {
-          sensitivity: "base"
-        });
-    });
+                            return String(a?.descripcion || "")
+                              .localeCompare(String(b?.descripcion || ""), "es", {
+                                sensitivity: "base"
+                              });
+                          });
 
-    return sortedLines.map((l) => {
-      const qty = safeNumber(l.cantidad);
-      const pvp = safeNumber(l.pvp);
-      const imp = safeNumber(
-        l.importe != null ? l.importe : qty * pvp
-      );
+                          return sortedLines.map((l) => {
+                            const qty = safeNumber(l.cantidad);
+                            const pvp = safeNumber(l.pvp);
+                            const imp = safeNumber(l.importe != null ? l.importe : qty * pvp);
+                            const unit = (l.unidad ?? l.ud ?? l.unit ?? "Ud");
 
-      const unit = (l.unidad ?? l.ud ?? l.unit ?? "Ud");
-
-      return `
-        <tr>
-          <td>${escapeHtml(l.codigo || "")}</td>
-          <td>${escapeHtml(l.descripcion || "")}</td>
-          <td style="text-align:center;">${escapeHtml(unit)}</td>
-          <td style="text-align:right;">${qty}</td>
-          <td style="text-align:right;">${pvp.toFixed(2)} €</td>
-          <td style="text-align:right;">${imp.toFixed(2)} €</td>
-        </tr>
-      `;
-    }).join("");
-  })()}
-</tbody>
-
+                            return `
+                              <tr>
+                                <td class="code">${escapeHtml(l.codigo || "")}</td>
+                                <td class="desc">${escapeHtml(l.descripcion || "")}</td>
+                                <td class="center">${escapeHtml(unit)}</td>
+                                <td class="num">${qty}</td>
+                                <td class="num">${pvp.toFixed(2)} €</td>
+                                <td class="num">${imp.toFixed(2)} €</td>
+                              </tr>
+                            `;
+                          }).join("");
+                        })()}
+                      </tbody>
                     </table>
                   `
                   : `<div class="text-muted">Sin referencias.</div>`
               }
             </div>
+
           </div>
         `;
       }).join("")}
