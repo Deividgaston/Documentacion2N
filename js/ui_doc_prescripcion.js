@@ -262,10 +262,19 @@ if (capMatch) {
 //    Regla: si NO hay números (qty/price/amount) y hay texto en A/B/C/D,
 //    lo tratamos como texto del capítulo (salvo headers/meta/subtotales).
 if (currentCap) {
+  const qtyTxt = cellToText(Eraw).trim();
+  const priceTxt = cellToText(Fraw).trim();
+  const amtTxt = cellToText(Graw).trim();
+
+  const qtyN = cellToNum(Eraw);
+  const priceN = cellToNum(Fraw);
+  const amtN = cellToNum(Graw);
+
+  // ✅ Solo consideramos que “hay números” si hay algo y NO es cero
   const hasNums =
-    cellToText(Eraw).trim() !== "" ||
-    cellToText(Fraw).trim() !== "" ||
-    cellToText(Graw).trim() !== "";
+    (qtyTxt !== "" && qtyN !== 0) ||
+    (priceTxt !== "" && priceN !== 0) ||
+    (amtTxt !== "" && amtN !== 0);
 
   // primer texto no vacío entre A,B,C,D
   const textCand = [A, B, C, D].find((x) => String(x || "").trim());
@@ -295,7 +304,6 @@ if (currentCap) {
       lower.startsWith("subtotal") ||
       lower.startsWith("total");
 
-    // si no es cabecera ni subtotal ni fila-código, lo añadimos a texto
     if (!isMeta && !isChapterHeader && !isLineCodeOnly) {
       currentCap.texto = currentCap.texto ? (currentCap.texto + "\n" + t) : t;
       continue;
