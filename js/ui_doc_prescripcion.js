@@ -150,8 +150,153 @@ function openPrescImportModal() {
   });
 }
 async function importPrescFromExcel(file) {
-  alert("Import Excel: función pendiente. (Ya no romperá el botón)");
+  // Importa SOLO el Excel generado por exportPrescripcionToExcel()
+  // Requiere ExcelJS (ya lo cargas en ensureExcelDepsLoaded)
+
+  const ok = await ensureExcelDepsLoaded();
+  if (!ok || !window.ExcelJS) {
+    alert("No se puede importar: falta ExcelJS.");
+    return;
+  }
+
+  try {
+    const buf = await file.arrayBuffer();
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buf);
+
+    const ws = wb.worksheets?.[0];
+    if (!ws) throw new Error("Excel sin hojas.");
+
+    const newCaps = [];
+    let currentCap = null;
+
+    const toStr = (v) => (v == null ? "" : String(v)).trim();
+    const toNum = (v) => {
+      const n = Number(v);
+      return Number.isFinite(n) ? n : 0;
+    };
+
+    // Heurística:
+    // - Capítulo: fila con valor en A y el resto vacío (porque estaba mergeada)
+    //   y que empieza por "2N." (p.ej. "2N.01 VIDEO PORTERO...")
+    // - Texto capítulo: fila similar, justo después del capítulo, que NO parece cabecera/tabla
+    // - Líneas: columnas B..G rellenas (code/desc/unit/qty/price/amount)
+
+    for (let r = 1; r <= ws.rowCount; r++) {
+      const row = ws.getRow(r);
+
+      const A = toStr(row.getCell(1).value);
+      const B = toStr(row.getCell(2).value);
+      const C = toStr(row.getCell(3).value);
+      const D = toStr(row.getCell(4).value);
+      const E = row.getCell(5).value;
+      const F = row.getCell(6).value;
+      const G = row.getCell(7).value;
+
+      // Saltar filas vacías
+      const isAllEmpty =
+        !A && !B && !C && !D &&
+        (E == null || toStr(E) === "") &&
+        (F == null || toStr(F) === "") &&
+        (G == null || toStr(G) === "");
+      if (isAllEmpty) continue;
+
+      const rowLooksMergedTitle =
+        A && !B && !C && !D &&
+        (toStr(E) === "") && (toStr(F) === "") && (toStr(G) === "");
+
+      // 1) Detectar capítulo (tu export pone: "2N.XX TITLE...")
+      if (rowLooksMergedTitle && /^2N\.\d{2}\b/i.test(A)) {
+        const parts = A.split(/\s+/);
+        const code = parts.shift(); // "2N.01"
+        const title = parts.join(" ").trim() || "Capítulo";
+
+        currentCap = {
+          id: prescUid("cap"),
+          nombre: title,   // NO lo dejo en upper para que sea editable bonito
+          texto: "",
+          lineas: [],
+          // Importado -> sin vínculo a sección
+          sourceSectionId: null,
+          sourceSectionRawId: null
+        };
+
+        // si quieres conservar el código, puedes guardarlo en una prop interna:
+        currentCap.__importCode = code;
+
+        newCaps.push(currentCap);
+        continue;
+      }
+
+      // 2) Texto capítulo (fila mergeada justo después del capítulo)
+      //    En tu export: debajo del título metes cap.text en A (merge 1..7)
+      if (rowLooksMergedTitle && currentCap && A && !/^2N\.\d{2}\b/i.test(A)) {
+        // Evitar capturar "Prescripción", "Proyecto", etc.
+        const isMeta =
+          /^prescrip/i.test(A) ||
+          /^proyecto$/i.test(A) ||
+          /^fecha$/i.test(A) ||
+          /^subtotal/i.test(A) ||
+          /^total/i.test(A) ||
+          /^cap[ií]tulo$/i.test(A);
+
+        if (!isMeta) {
+          // Acumula por si hay varias filas de texto
+          currentCap.texto = currentCap.texto
+            ? (currentCap.texto + "\n" + A)
+            : A;
+          continue;
+        }
+      }
+
+      // 3) Líneas: tu tabla exportada mete:
+      // [cap.title, l.code, l.description, unit, qty, price, amount]
+      // -> A=cap.title (string), B=código línea, C=desc, D=unit, E=qty, F=price, G=amount
+      const looksLikeLine = currentCap && B && C && D && (E != null);
+
+      if (looksLikeLine) {
+        const qty = toNum(E);
+        const price = toNum(F);
+        const amount = (G != null && toStr(G) !== "") ? toNum(G) : (qty * price);
+
+        currentCap.lineas.push({
+          id: prescUid("line"),
+          tipo: "import",
+          codigo: B,
+          descripcion: C,
+          unidad: D || "Ud",
+          cantidad: qty,
+          pvp: price,
+          importe: amount,
+          extraRefId: null
+        });
+        continue;
+      }
+
+      // (subtotal/total/meta -> ignoramos)
+    }
+
+    if (!newCaps.length) {
+      alert("No he encontrado capítulos en el Excel. Importa un XLSX exportado por esta misma app.");
+      return;
+    }
+
+    // Reemplaza prescripción actual
+    appState.prescripcion.capitulos = newCaps;
+    appState.prescripcion.selectedCapituloId = newCaps[0]?.id || null;
+
+    // refresco UI
+    renderDocPrescripcionView();
+  } catch (e) {
+    console.error("[PRESCRIPCIÓN] importPrescFromExcel error:", e);
+    alert("No se pudo importar el Excel. Revisa consola.");
+  }
 }
+
+async function importPrescFromBc3(file) {
+  alert("Import BC3 pendiente.");
+}
+
 
 async function importPrescFromBc3(file) {
   alert("Import BC3: función pendiente. (Ya no romperá el botón)");
