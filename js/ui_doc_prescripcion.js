@@ -150,14 +150,33 @@ function openPrescImportModal() {
   });
 }
 async function importPrescFromExcel(file) {
-  // Importa SOLO el Excel generado por exportPrescripcionToExcel()
-  // Requiere ExcelJS (ya lo cargas en ensureExcelDepsLoaded)
-
   const ok = await ensureExcelDepsLoaded();
   if (!ok || !window.ExcelJS) {
     alert("No se puede importar: falta ExcelJS.");
     return;
   }
+
+  // Convierte cualquier tipo de value de ExcelJS a texto “plano”
+  const cellToText = (v) => {
+    if (v == null) return "";
+    if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") return String(v);
+    if (v instanceof Date) return v.toISOString().split("T")[0];
+
+    // ExcelJS típicos:
+    if (v.text != null) return String(v.text);
+    if (v.richText && Array.isArray(v.richText)) return v.richText.map(x => x?.text || "").join("");
+    if (v.result != null) return String(v.result);
+    if (v.formula != null) return String(v.result ?? "");
+    if (v.hyperlink != null) return String(v.text ?? v.hyperlink);
+
+    try { return String(v); } catch { return ""; }
+  };
+
+  const cellToNum = (v) => {
+    const t = cellToText(v).replace(",", ".").trim();
+    const n = Number(t);
+    return Number.isFinite(n) ? n : 0;
+  };
 
   try {
     const buf = await file.arrayBuffer();
@@ -170,122 +189,113 @@ async function importPrescFromExcel(file) {
     const newCaps = [];
     let currentCap = null;
 
-    const toStr = (v) => (v == null ? "" : String(v)).trim();
-    const toNum = (v) => {
-      const n = Number(v);
-      return Number.isFinite(n) ? n : 0;
-    };
-
-    // Heurística:
-    // - Capítulo: fila con valor en A y el resto vacío (porque estaba mergeada)
-    //   y que empieza por "2N." (p.ej. "2N.01 VIDEO PORTERO...")
-    // - Texto capítulo: fila similar, justo después del capítulo, que NO parece cabecera/tabla
-    // - Líneas: columnas B..G rellenas (code/desc/unit/qty/price/amount)
-
     for (let r = 1; r <= ws.rowCount; r++) {
       const row = ws.getRow(r);
 
-      const A = toStr(row.getCell(1).value);
-      const B = toStr(row.getCell(2).value);
-      const C = toStr(row.getCell(3).value);
-      const D = toStr(row.getCell(4).value);
-      const E = row.getCell(5).value;
-      const F = row.getCell(6).value;
-      const G = row.getCell(7).value;
+      const Araw = row.getCell(1).value;
+      const Braw = row.getCell(2).value;
+      const Craw = row.getCell(3).value;
+      const Draw = row.getCell(4).value;
+      const Eraw = row.getCell(5).value;
+      const Fraw = row.getCell(6).value;
+      const Graw = row.getCell(7).value;
 
-      // Saltar filas vacías
-      const isAllEmpty =
+      const A = cellToText(Araw).trim();
+      const B = cellToText(Braw).trim();
+      const C = cellToText(Craw).trim();
+      const D = cellToText(Draw).trim();
+
+      const isEmptyRow =
         !A && !B && !C && !D &&
-        (E == null || toStr(E) === "") &&
-        (F == null || toStr(F) === "") &&
-        (G == null || toStr(G) === "");
-      if (isAllEmpty) continue;
+        cellToText(Eraw).trim() === "" &&
+        cellToText(Fraw).trim() === "" &&
+        cellToText(Graw).trim() === "";
+      if (isEmptyRow) continue;
 
-      const rowLooksMergedTitle =
-        A && !B && !C && !D &&
-        (toStr(E) === "") && (toStr(F) === "") && (toStr(G) === "");
+      // ✅ Detectar CAPÍTULO: "2N.01 ...." en columna A (fila “mergeada” o casi vacía en el resto)
+      const restEmpty =
+        !B && !C && !D &&
+        cellToText(Eraw).trim() === "" &&
+        cellToText(Fraw).trim() === "" &&
+        cellToText(Graw).trim() === "";
 
-      // 1) Detectar capítulo (tu export pone: "2N.XX TITLE...")
-      if (rowLooksMergedTitle && /^2N\.\d{2}\b/i.test(A)) {
+      if (A && restEmpty && /(^|\s)2N\.\d{2}(\s|$)/i.test(A)) {
         const parts = A.split(/\s+/);
-        const code = parts.shift(); // "2N.01"
+        const code = parts.shift(); // 2N.01
         const title = parts.join(" ").trim() || "Capítulo";
 
         currentCap = {
           id: prescUid("cap"),
-          nombre: title,   // NO lo dejo en upper para que sea editable bonito
+          nombre: title,
           texto: "",
           lineas: [],
-          // Importado -> sin vínculo a sección
           sourceSectionId: null,
-          sourceSectionRawId: null
+          sourceSectionRawId: null,
+          __importCode: code
         };
-
-        // si quieres conservar el código, puedes guardarlo en una prop interna:
-        currentCap.__importCode = code;
 
         newCaps.push(currentCap);
         continue;
       }
 
-      // 2) Texto capítulo (fila mergeada justo después del capítulo)
-      //    En tu export: debajo del título metes cap.text en A (merge 1..7)
-      if (rowLooksMergedTitle && currentCap && A && !/^2N\.\d{2}\b/i.test(A)) {
-        // Evitar capturar "Prescripción", "Proyecto", etc.
+      // ✅ Detectar TEXTO de capítulo: fila mergeada debajo del capítulo (solo A con texto)
+      if (currentCap && A && restEmpty && !/(^|\s)2N\.\d{2}(\s|$)/i.test(A)) {
+        const lower = A.toLowerCase();
         const isMeta =
-          /^prescrip/i.test(A) ||
-          /^proyecto$/i.test(A) ||
-          /^fecha$/i.test(A) ||
-          /^subtotal/i.test(A) ||
-          /^total/i.test(A) ||
-          /^cap[ií]tulo$/i.test(A);
+          lower.startsWith("prescrip") ||
+          lower === "proyecto" ||
+          lower === "fecha" ||
+          lower.startsWith("subtotal") ||
+          lower.startsWith("total") ||
+          lower === "capítulo" ||
+          lower === "chapter";
 
         if (!isMeta) {
-          // Acumula por si hay varias filas de texto
-          currentCap.texto = currentCap.texto
-            ? (currentCap.texto + "\n" + A)
-            : A;
+          currentCap.texto = currentCap.texto ? (currentCap.texto + "\n" + A) : A;
           continue;
         }
       }
 
-      // 3) Líneas: tu tabla exportada mete:
-      // [cap.title, l.code, l.description, unit, qty, price, amount]
-      // -> A=cap.title (string), B=código línea, C=desc, D=unit, E=qty, F=price, G=amount
-      const looksLikeLine = currentCap && B && C && D && (E != null);
+      // ✅ Detectar LÍNEA: B=código, C=desc, D=ud, E=qty, F=price, G=amount
+      // (en tu export A suele ser cap.title, pero NO lo necesitamos)
+      if (currentCap && B && C) {
+        const qty = cellToNum(Eraw);
+        const price = cellToNum(Fraw);
+        const amount = cellToText(Graw).trim() ? cellToNum(Graw) : (qty * price);
 
-      if (looksLikeLine) {
-        const qty = toNum(E);
-        const price = toNum(F);
-        const amount = (G != null && toStr(G) !== "") ? toNum(G) : (qty * price);
-
-        currentCap.lineas.push({
-          id: prescUid("line"),
-          tipo: "import",
-          codigo: B,
-          descripcion: C,
-          unidad: D || "Ud",
-          cantidad: qty,
-          pvp: price,
-          importe: amount,
-          extraRefId: null
-        });
-        continue;
+        // si B NO parece código de línea (por ejemplo, header), lo ignoramos
+        const looksLineCode = /^2N\.\d{2}\.\d{2}$/i.test(B) || B.length >= 4;
+        if (looksLineCode) {
+          currentCap.lineas.push({
+            id: prescUid("line"),
+            tipo: "import",
+            codigo: B,
+            descripcion: C,
+            unidad: D || "Ud",
+            cantidad: qty,
+            pvp: price,
+            importe: amount,
+            extraRefId: null
+          });
+          continue;
+        }
       }
-
-      // (subtotal/total/meta -> ignoramos)
     }
 
     if (!newCaps.length) {
-      alert("No he encontrado capítulos en el Excel. Importa un XLSX exportado por esta misma app.");
+      console.warn("[PRESC][IMPORT] No chapters detected. Debug A1..A60:");
+      for (let i = 1; i <= Math.min(60, ws.rowCount); i++) {
+        const a = cellToText(ws.getRow(i).getCell(1).value);
+        if (a) console.log("Row", i, "A:", a);
+      }
+
+      alert("No he encontrado capítulos en el Excel. (Mira consola: imprime filas A para debug)");
       return;
     }
 
-    // Reemplaza prescripción actual
     appState.prescripcion.capitulos = newCaps;
     appState.prescripcion.selectedCapituloId = newCaps[0]?.id || null;
 
-    // refresco UI
     renderDocPrescripcionView();
   } catch (e) {
     console.error("[PRESCRIPCIÓN] importPrescFromExcel error:", e);
