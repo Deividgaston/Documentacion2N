@@ -2684,7 +2684,9 @@ async function exportPrescripcionToExcel(model) {
   (model.chapters || []).forEach((cap) => {
     ws.addRow([]);
 
-    const capRow = ws.addRow([String(cap.title || "").toUpperCase()]);
+   const capHeader = `${cap.code || ""} ${String(cap.title || "").toUpperCase()}`;
+const capRow = ws.addRow([capHeader]);
+
     ws.mergeCells(capRow.number, 1, capRow.number, 7);
     capRow.getCell(1).font = { name: "Aptos Narrow", size: 11, bold: true, color: { argb: "FF111827" } };
     capRow.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF3F4F6" } };
