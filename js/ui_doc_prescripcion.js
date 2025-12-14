@@ -258,23 +258,51 @@ if (capMatch) {
 }
 
 
-      // ✅ Detectar TEXTO de capítulo: fila mergeada debajo del capítulo (solo A con texto)
-      if (currentCap && A && restEmpty && !/(^|\s)2N\.\d{2}(\s|$)/i.test(A)) {
-        const lower = A.toLowerCase();
-        const isMeta =
-          lower.startsWith("prescrip") ||
-          lower === "proyecto" ||
-          lower === "fecha" ||
-          lower.startsWith("subtotal") ||
-          lower.startsWith("total") ||
-          lower === "capítulo" ||
-          lower === "chapter";
+    // ✅ Detectar TEXTO descriptivo del capítulo (mergeado: puede venir en A o en C/B)
+//    Regla: si NO hay números (qty/price/amount) y hay texto en A/B/C/D,
+//    lo tratamos como texto del capítulo (salvo headers/meta/subtotales).
+if (currentCap) {
+  const hasNums =
+    cellToText(Eraw).trim() !== "" ||
+    cellToText(Fraw).trim() !== "" ||
+    cellToText(Graw).trim() !== "";
 
-        if (!isMeta) {
-          currentCap.texto = currentCap.texto ? (currentCap.texto + "\n" + A) : A;
-          continue;
-        }
-      }
+  // primer texto no vacío entre A,B,C,D
+  const textCand = [A, B, C, D].find((x) => String(x || "").trim());
+  if (!hasNums && textCand) {
+    const t = String(textCand).trim();
+    const lower = t.toLowerCase();
+
+    const isChapterHeader = /(?:^|\s)2N\.\d{2}(?:\s|$)/i.test(t);
+    const isLineCodeOnly = /^2N\.\d{2}\.\d{2}$/i.test(t);
+
+    const isMeta =
+      lower.startsWith("prescrip") ||
+      lower === "proyecto" ||
+      lower === "fecha" ||
+      lower === "capítulo" ||
+      lower === "chapter" ||
+      lower === "codigo" ||
+      lower === "código" ||
+      lower === "descripcion" ||
+      lower === "descripción" ||
+      lower === "ud" ||
+      lower === "cant" ||
+      lower === "cant." ||
+      lower === "precio" ||
+      lower === "pvp" ||
+      lower === "importe" ||
+      lower.startsWith("subtotal") ||
+      lower.startsWith("total");
+
+    // si no es cabecera ni subtotal ni fila-código, lo añadimos a texto
+    if (!isMeta && !isChapterHeader && !isLineCodeOnly) {
+      currentCap.texto = currentCap.texto ? (currentCap.texto + "\n" + t) : t;
+      continue;
+    }
+  }
+}
+
 
       // ✅ Detectar LÍNEA (solo si hay código real o números de medición)
 if (currentCap && (B || C)) {
