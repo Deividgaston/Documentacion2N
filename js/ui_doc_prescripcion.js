@@ -138,9 +138,11 @@ function openPrescImportModal() {
   }
 
   if (type === "excel") {
-    await importPrescFromExcel(file);
+    await window.importPrescFromExcel(file);
+
   } else {
-    await importPrescFromBc3(file);
+    await window.importPrescFromBc3(file);
+
   }
 
   renderDocPrescripcionView();
