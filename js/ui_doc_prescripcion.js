@@ -3132,33 +3132,25 @@ function downloadBc3File(content, filename) {
 // ========================================================
 
 function prescExportModelToBC3(model) {
-  const m = model || {};
-  const chapters = Array.isArray(m.chapters) ? m.chapters : [];
-
-  const cleanField = (v) => {
-    let s = String(v ?? "");
-    s = s.replace(/\u0000/g, "");
-    // IMPORTANTE: NO generamos múltiples ~T, así que aquí sí “aplanamos” saltos
-    s = s.replace(/\r\n/g, "\n");
-    s = s.replace(/\r/g, "\n");
-    // BC3 no permite saltos dentro del campo: los convertimos a separador visible
-    s = s.replace(/\n+/g, " ⏎ ");
-    s = s.replace(/\|/g, " / ");
-    return s.trim();
-  };
-
-  const num = (v) => {
-    const n = Number(v);
-    if (!Number.isFinite(n)) return "0";
-    return String(Math.round(n * 100) / 100).replace(",", ".");
-  };
-
+  const chapters = model?.chapters || [];
   const out = [];
   const NL = "\r\n";
 
+  const clean = (v) =>
+    String(v ?? "")
+      .replace(/\u0000/g, "")
+      .replace(/\r?\n+/g, " ")
+      .replace(/\|/g, " / ")
+      .trim();
+
+  const num = (v) =>
+    Number.isFinite(Number(v))
+      ? String(Number(v).toFixed(2)).replace(",", ".")
+      : "0";
+
   const today = new Date();
   const dateStr =
-    String(today.getFullYear()) +
+    today.getFullYear() +
     String(today.getMonth() + 1).padStart(2, "0") +
     String(today.getDate()).padStart(2, "0");
 
@@ -3166,85 +3158,47 @@ function prescExportModelToBC3(model) {
   out.push(`~V|FIEBDC-3/2020|Presupuestos2N|1.0|${dateStr}|`);
   out.push(`~K|`);
 
-  const emittedC = new Set();
+  const usedCodes = new Set();
+  let matSeq = 0;
 
   const emitC = (code, unit, desc, price) => {
-    const c = cleanField(code);
-    if (!c) return;
-    if (emittedC.has(c)) return;
-    emittedC.add(c);
-
-    const u = cleanField(unit || "Ud");
-    const d = cleanField(desc || "");
-    const p = num(price || 0);
-
-    out.push(`~C|${c}|${u}|${d}|${p}|`);
-  };
-
-  // ✅ UN SOLO ~T por código (Presto no concatena bien varios)
-  const emitTSingle = (code, text) => {
-    const c = cleanField(code);
-    const t = cleanField(text);
-    if (!c || !t) return;
-    out.push(`~T|${c}|${t}|`);
-  };
-
-  // ✅ ~D: aquí metemos cantidades (factor) para que SIEMPRE importe todo
-  const emitD = (parent, child, factor) => {
-    const p = cleanField(parent);
-    const c = cleanField(child);
-    const f = Number(factor);
-    if (!p || !c) return;
-    if (!Number.isFinite(f) || f === 0) return;
-    out.push(`~D|${p}|${c}|${num(f)}|`);
-  };
-
-  // Generador de códigos de material únicos (para evitar que Presto “pise” conceptos)
-  let matSeq = 0;
-  const nextMatCode = () => {
-    matSeq += 1;
-    return `MAT-${String(matSeq).padStart(5, "0")}`;
+    if (!code || usedCodes.has(code)) return;
+    usedCodes.add(code);
+    out.push(`~C|${code}|${unit}|${desc}|${num(price)}|`);
   };
 
   chapters.forEach((ch) => {
-    const chCode = cleanField(ch.code || "");
+    const chCode = clean(ch.code);
     if (!chCode) return;
 
-    const chTitle = cleanField(ch.title || chCode || "Capítulo");
-
     // CAPÍTULO (precio 0)
-    emitC(chCode, "Ud", chTitle, 0);
+    emitC(chCode, "Ud", clean(ch.title || "Capítulo"), 0);
 
-    // TEXTO del capítulo (1 solo ~T)
-    if (String(ch.text || "").trim()) emitTSingle(chCode, ch.text);
+    // TEXTO capítulo (UNO SOLO)
+    if (ch.text) {
+      out.push(`~T|${chCode}|${clean(ch.text)}|`);
+    }
 
-    const lines = Array.isArray(ch.lines) ? ch.lines : [];
+    const refs = [];
+    (ch.lines || []).forEach((l) => {
+      matSeq += 1;
+      const matCode = `MAT-${String(matSeq).padStart(5, "0")}`;
 
-    lines.forEach((l) => {
-      // PARTIDA = tu line.code (2N.01.01)
-      const partidaCode = cleanField(l.code || "");
-      if (!partidaCode) return;
+      emitC(
+        matCode,
+        clean(l.unit || "Ud"),
+        clean(l.description || ""),
+        Number(l.price || 0)
+      );
 
-      const partidaDesc = cleanField(l.description || "");
-      const unit = cleanField(l.unit || "Ud");
-
-      // Partida con precio 0 (porque el coste lo llevan los materiales)
-      emitC(partidaCode, unit, partidaDesc, 0);
-
-      // Enlazar capítulo -> partida (1)
-      emitD(chCode, partidaCode, 1);
-
-      // MATERIAL (código único)
-      const matCode = nextMatCode();
-
-      const qty = Number(l.qty ?? 0);
-      const price = Number(l.price ?? 0);
-
-      emitC(matCode, unit, partidaDesc, price);
-
-      // Enlazar partida -> material con cantidad REAL
-      emitD(partidaCode, matCode, qty);
+      const qty = Number(l.qty || 0);
+      if (qty > 0) refs.push(`${matCode}\\${num(qty)}\\`);
     });
+
+    // 🔑 UNA SOLA DESCOMPOSICIÓN POR CAPÍTULO
+    if (refs.length) {
+      out.push(`~D|${chCode}|${refs.join("")}|`);
+    }
   });
 
   return out.join(NL) + NL;
