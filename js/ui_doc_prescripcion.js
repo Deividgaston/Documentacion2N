@@ -3189,9 +3189,14 @@ function prescExportModelToBC3_Compat(model) {
   const NL = "\r\n";
   const clean = prescBc3TextSafe;
 
-  const num = (v) => {
+  const num2 = (v) => {
     const n = Number(v);
     return Number.isFinite(n) ? String(n.toFixed(2)).replace(",", ".") : "0.00";
+  };
+
+  const num = (v) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? String(n).replace(",", ".") : "0";
   };
 
   // Presto usa ddmmyy (ej: 080925)
@@ -3201,21 +3206,22 @@ function prescExportModelToBC3_Compat(model) {
   const yy = String(now.getFullYear()).slice(-2);
   const prestoDate = `${dd}${mm}${yy}`;
 
-  // Cabecera compatible estilo Presto (muy tolerante)
+  // Cabecera compatible
   out.push(`~V|SOFT S.A.|FIEBDC-3/2002|Presupuestos2N|1.0||ANSI|`);
   out.push(`~K|\\2\\2\\3\\2\\2\\2\\2\\EUR\\|0|`);
 
-  const ROOT = "PRESC";
+  // ✅ ROOT tipo “presupuesto” (como Presto)
+  const ROOT = "PRESCRIPCION##";
   const used = new Set();
 
-  // type: 0 = capítulo/partida, 3 = recurso/artículo (como tu BC3)
+  // type: 0 = capítulo/partida, 3 = recurso/artículo
   const emitC = (code, unit, desc, price, type = 0) => {
     const c = clean(code);
     if (!c || used.has(c)) return;
     used.add(c);
 
     out.push(
-      `~C|${c}|${clean(unit || "Ud")}|${clean(desc || "")}|${num(price)}|${prestoDate}|${type}|`
+      `~C|${c}|${clean(unit || "Ud")}|${clean(desc || "")}|${num2(price)}|${prestoDate}|${type}|`
     );
   };
 
@@ -3226,26 +3232,37 @@ function prescExportModelToBC3_Compat(model) {
   const rootDecomp = [];
 
   chapters.forEach((ch, idx) => {
-    const chCodeBase = clean(ch.code || ch.codigo || ch.__importCode || `2N.${String(idx + 1).padStart(2, "0")}`);
-    const chCode = chCodeBase.endsWith("#") ? chCodeBase : (chCodeBase + "#");
+    // code base (sin inventarnos nada raro)
+    const chBase = clean(
+      ch.code || ch.codigo || ch.__importCode || `2N.${String(idx + 1).padStart(2, "0")}`
+    );
+
+    // ✅ ~C de capítulo: con #
+    const chConcept = chBase.endsWith("#") ? chBase : (chBase + "#");
+    // ✅ ~D raíz debe referenciar SIN # (como Presto)
+    const chRef = chConcept.replace(/#+$/, "");
 
     const chTitle = ch.title || ch.nombre || "Capítulo";
     const chText  = ch.text  || ch.texto  || "";
 
     // Capítulo como concepto tipo 0
-    emitC(chCode, "Ud", chTitle, 0, 0);
+    emitC(chConcept, "Ud", chTitle, 0, 0);
 
-    // ✅ MUY IMPORTANTE: Presto suele necesitar 3 campos en ~D: code\qty\1\
-    rootDecomp.push(`${chCode}\\1\\1\\`);
+    // ✅ IMPORTANTÍSIMO: el root cuelga el capítulo SIN #
+    rootDecomp.push(`${chRef}\\1\\1\\`);
 
-    if (chText) out.push(`~T|${chCode}|${clean(chText)}|`);
+    // Texto del capítulo (si hay)
+    if (chText) out.push(`~T|${chConcept}|${clean(chText)}|`);
 
+    // Descomposición del capítulo con sus líneas (padre sí con #)
     const resRefs = [];
     const lines = prescGetLinesCompat(ch);
 
     lines.forEach((l, lineIdx) => {
       const lineCode = clean(
-        l.code || l.codigo || `2N.${String(idx + 1).padStart(2, "0")}.${String(lineIdx + 1).padStart(2, "0")}`
+        l.code ||
+          l.codigo ||
+          `2N.${String(idx + 1).padStart(2, "0")}.${String(lineIdx + 1).padStart(2, "0")}`
       );
 
       const desc  = l.description || l.descripcion || "";
@@ -3253,17 +3270,20 @@ function prescExportModelToBC3_Compat(model) {
       const price = Number(l.price ?? l.pvp ?? 0);
       const qty   = Number(l.qty ?? l.cantidad ?? 1);
 
-      // Línea como recurso tipo 3 (como hace Presto en tu fichero)
+      // Línea como recurso tipo 3
       emitC(lineCode, unit, desc, price, 3);
 
-      const q = qty > 0 ? qty : 1; // evita “desaparece” por 0
-      // ✅ 3 campos en descomposición
-      resRefs.push(`${lineCode}\\1\\${num(qty > 0 ? qty : 1)}\\`);
+      const q = qty > 0 ? qty : 1; // evita que “desaparezca” por 0
+      // ✅ 3 campos en descomposición: code\factor\qty\
+      resRefs.push(`${lineCode}\\1\\${num(q)}\\`);
     });
 
-    if (resRefs.length) out.push(`~D|${chCode}|${resRefs.join("")}|`);
+    if (resRefs.length) {
+      out.push(`~D|${chConcept}|${resRefs.join("")}|`);
+    }
   });
 
+  // Root → capítulos
   if (rootDecomp.length) out.push(`~D|${ROOT}|${rootDecomp.join("")}|`);
 
   return out.join(NL) + NL;
