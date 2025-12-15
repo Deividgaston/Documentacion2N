@@ -3200,8 +3200,9 @@ function prescExportModelToBC3_Compat(model) {
     String(today.getMonth() + 1).padStart(2, "0") +
     String(today.getDate()).padStart(2, "0");
 
-  out.push(`~V|FIEBDC-3/2020|Presupuestos2N|1.0|${dateStr}|`);
-  out.push(`~K|`);
+  out.push(`~V|FIEBDC-3/2002|Presupuestos2N|1.0|${dateStr}|`);
+  out.push(`~K|0|0|0|0|0|0|0|0|0|`);
+
 
   const ROOT = "PRESC";
   out.push(`~C|${ROOT}|Ud|Prescripción|0.00|`);
