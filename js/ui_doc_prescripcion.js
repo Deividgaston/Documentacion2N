@@ -3188,26 +3188,19 @@ function prescExportModelToBC3(model) {
     String(today.getMonth() + 1).padStart(2, "0") +
     String(today.getDate()).padStart(2, "0");
 
-  // Cabecera
   out.push(`~V|FIEBDC-3/2020|Presupuestos2N|1.0|${dateStr}|`);
   out.push(`~K|`);
 
-  // Concepto raíz (para que capítulos vayan a 1 Ud y sumen bien)
+  // Concepto raíz (para que capítulos = 1 Ud y sumen bien)
   const ROOT = "PRESC";
-  // ~C|COD|UD|RES|PRECIO|NAT|
-  // NAT: 0=capítulo/raíz (genérico)
-  out.push(`~C|${ROOT}|Ud|Prescripción|0.00|0|`);
+  out.push(`~C|${ROOT}|Ud|Prescripción|0.00|`);
 
   const used = new Set();
-
-  // NAT (asumido): 1=Partida, 2=Material, 3=ManoObra, 4=Maquinaria
-  const emitC = (code, unit, desc, price, nat) => {
+  const emitC = (code, unit, desc, price) => {
     const c = clean(code);
-    if (!c) return;
-    if (!used.has(c)) {
-      used.add(c);
-      out.push(`~C|${c}|${clean(unit || "Ud")}|${clean(desc || "")}|${num(price)}|${nat}|`);
-    }
+    if (!c || used.has(c)) return;
+    used.add(c);
+    out.push(`~C|${c}|${clean(unit || "Ud")}|${clean(desc || "")}|${num(price)}|`);
   };
 
   // ROOT -> capítulos (cada capítulo 1 Ud)
@@ -3217,51 +3210,29 @@ function prescExportModelToBC3(model) {
     const chCode = clean(ch.code);
     if (!chCode) return;
 
-    // Capítulo como PARTIDA (así puede tener descomposición)
-    emitC(chCode, "Ud", ch.title || "Capítulo", 0, 1);
-
-    // Texto del capítulo
-    if (ch.text) out.push(`~T|${chCode}|${clean(ch.text)}|`);
-
-    // Root descompone a capítulos con 1
+    emitC(chCode, "Ud", ch.title || "Capítulo", 0);
     rootDecomp.push(`${chCode}\\1\\`);
 
-    // Capítulo -> recursos (materiales)
-    const resRefs = [];
+    if (ch.text) out.push(`~T|${chCode}|${clean(ch.text)}|`);
 
+    const resRefs = [];
     (ch.lines || []).forEach((l) => {
-      // Usamos el código real de línea (2N.xx.yy...) para que no “pise” y sea consistente
       const lineCode = clean(l.code);
       if (!lineCode) return;
 
-      // IMPORTANTE: si quieres que SIEMPRE sea material:
-      const NAT_MATERIAL = 2;
+      emitC(lineCode, l.unit || "Ud", l.description || "", Number(l.price || 0));
 
-      emitC(
-        lineCode,
-        l.unit || "Ud",
-        l.description || "",
-        Number(l.price || 0),
-        NAT_MATERIAL
-      );
-
-      // descomposición: capítulo -> recurso con su cantidad
       const qty = Number(l.qty || 0);
       resRefs.push(`${lineCode}\\${num(qty > 0 ? qty : 1)}\\`);
     });
 
-    if (resRefs.length) {
-      out.push(`~D|${chCode}|${resRefs.join("")}|`);
-    }
+    if (resRefs.length) out.push(`~D|${chCode}|${resRefs.join("")}|`);
   });
 
-  if (rootDecomp.length) {
-    out.push(`~D|${ROOT}|${rootDecomp.join("")}|`);
-  }
+  if (rootDecomp.length) out.push(`~D|${ROOT}|${rootDecomp.join("")}|`);
 
   return out.join(NL) + NL;
 }
-
 
 
 
