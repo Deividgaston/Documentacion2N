@@ -92,7 +92,15 @@ const TARIFA_TEMPLATES = {
 
 // Campos de descuento que soporta el sistema.
 // Se guardan como decimales (0.36, 0.28, etc.) en Firestore.
-const DISCOUNT_FIELDS = ["nfrDist", "nfrRes", "dist", "subd", "rp2", "rp1"];
+const DISCOUNT_FIELDS = [
+  "nfrDist",
+  "nfrRes",
+  "dist",
+  "vad", // <-- NUEVO: VAD MSRP (si no existe, se usará dist como fallback en export)
+  "subd",
+  "rp2",
+  "rp1",
+];
 
 // Identificadores de grupo lógicos
 const GRUPOS_IDS = ["GRUPO_A", "GRUPO_B", "GRUPO_C", "GRUPO_D"];
@@ -663,7 +671,7 @@ function mostrarFormularioTipoTarifa(tipoOriginal) {
       <div style="margin-top:0.8rem;">
         <h4 style="font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Descuentos por grupo</h4>
         <p class="small-hint">
-          Valores en % sobre PVP. Se aplican por grupo (A/B/C/D) y nivel (NFR, Dist, SubD, RP2, RP1).
+          Valores en % sobre PVP. Se aplican por grupo (A/B/C/D) y nivel (NFR, Dist, VAD, SubD, RP2, RP1).
         </p>
 
         <div class="table-wrapper-compact">
@@ -830,41 +838,56 @@ function tarifasGetExportSpec(tipo) {
   const lang = String(t.idioma || "").toUpperCase() === "EN" ? "EN" : "ES";
   const exportType = tarifaTipoFromId(t.id || t.templateId || "");
 
-  const L = lang === "EN"
-    ? {
-        sku: "2N SKU",
-        name: "Name",
-        msrp: "MSRP (EUR)",
-        vadMsrp: "VAD MSRP (EUR)",
-        subd: "SubD price (EUR)",
-        rp2: "RP2 (EUR)",
-        rp1: "RP1 (EUR)",
-        note: "Note",
-        w: "Width (mm)",
-        h: "Height (mm)",
-        d: "Depth (mm)",
-        weight: "Weight (kg)",
-        hs: "HS code",
-        ean: "EAN code",
-        website: "Website",
-      }
-    : {
-        sku: "2N SKU",
-        name: "Nombre",
-        msrp: "MSRP (EUR)",
-        vadMsrp: "VAD MSRP (EUR)",
-        subd: "Precio SubD (EUR)",
-        rp2: "RP2 (EUR)",
-        rp1: "RP1 (EUR)",
-        note: "Nota",
-        w: "Anchura (mm)",
-        h: "Altura (mm)",
-        d: "Profundidad (mm)",
-        weight: "Peso (kg)",
-        hs: "HS code",
-        ean: "EAN code",
-        website: "Website",
-      };
+  const L =
+    lang === "EN"
+      ? {
+          sku: "2N SKU",
+          name: "Name",
+
+          // precios
+          msrp: "MSRP (EUR)",
+          vadMsrp: "VAD MSRP (EUR)",
+          subd: "SubD price (EUR)",
+          nfrDist: "NFR Distributor Price (EUR)",
+          nfrRes: "NFR Reseller Price (EUR)",
+          dist: "Distributor Price (EUR)",
+          rp2: "RP2 (EUR)",
+          rp1: "RP1 (EUR)",
+
+          // resto
+          note: "Note",
+          w: "Width (mm)",
+          h: "Height (mm)",
+          d: "Depth (mm)",
+          weight: "Weight (kg)",
+          hs: "HS code",
+          ean: "EAN code",
+          website: "Website",
+        }
+      : {
+          sku: "2N SKU",
+          name: "Nombre",
+
+          // precios
+          msrp: "MSRP (EUR)",
+          vadMsrp: "VAD MSRP (EUR)",
+          subd: "Precio SubD (EUR)",
+          nfrDist: "NFR Distribuidor (EUR)",
+          nfrRes: "NFR Reseller (EUR)",
+          dist: "Precio Distribuidor (EUR)",
+          rp2: "RP2 (EUR)",
+          rp1: "RP1 (EUR)",
+
+          // resto
+          note: "Nota",
+          w: "Anchura (mm)",
+          h: "Altura (mm)",
+          d: "Profundidad (mm)",
+          weight: "Peso (kg)",
+          hs: "HS code",
+          ean: "EAN code",
+          website: "Website",
+        };
 
   const base = [
     { key: "sku", header: L.sku, width: 12 },
@@ -874,8 +897,8 @@ function tarifasGetExportSpec(tipo) {
   // Reglas de columnas dinámicas (memoria):
   // PVP -> MSRP
   // SUBD -> MSRP + SubD + RP2 + RP1
-  // BBD -> MSRP + RP2 + RP1
-  // VAD -> VAD MSRP + RP2 + RP1
+  // BBD -> MSRP + Distributor + NFR Dist + NFR Res + RP2 + RP1
+  // VAD -> VAD MSRP + RP2 + RP1 (+ NFR si aplica)
   let priceCols = [];
   if (exportType === "PVP") {
     priceCols = [{ key: "msrp", header: L.msrp, width: 14, isMoney: true }];
@@ -888,12 +911,17 @@ function tarifasGetExportSpec(tipo) {
     ];
   } else if (exportType === "BBD") {
     priceCols = [
+      { key: "nfrDist", header: L.nfrDist, width: 18, isMoney: true },
+      { key: "nfrRes", header: L.nfrRes, width: 18, isMoney: true },
+      { key: "dist", header: L.dist, width: 16, isMoney: true },
       { key: "rp2", header: L.rp2, width: 16, isMoney: true },
       { key: "rp1", header: L.rp1, width: 16, isMoney: true },
       { key: "msrp", header: L.msrp, width: 14, isMoney: true },
     ];
   } else if (exportType === "VAD") {
     priceCols = [
+      { key: "nfrDist", header: L.nfrDist, width: 18, isMoney: true },
+      { key: "nfrRes", header: L.nfrRes, width: 18, isMoney: true },
       { key: "vadMsrp", header: L.vadMsrp, width: 16, isMoney: true },
       { key: "rp2", header: L.rp2, width: 16, isMoney: true },
       { key: "rp1", header: L.rp1, width: 16, isMoney: true },
@@ -933,12 +961,25 @@ async function buildTarifaExportModel(tipo) {
   function familiaDesdeSKU(sku, prod) {
     const name = (prod.descripcion || prod.desc || "").toLowerCase();
     if (name.includes("access unit")) return "Access Unit";
-    if (name.includes("intercom") || name.includes("verso") || name.includes("ip style"))
+    if (
+      name.includes("intercom") ||
+      name.includes("verso") ||
+      name.includes("ip style")
+    )
       return "Videoporteros";
     if (name.includes("fortis")) return "Fortis";
     if (name.includes("indoor")) return "Indoor Units";
     if (name.includes("my2n")) return "Licencias My2N";
     return "Otros";
+  }
+
+  // helper mínimo para “coger campos correspondientes” aunque vengan con nombres distintos
+  function pickFirst(obj, keys, fallback = "") {
+    for (const k of keys) {
+      if (obj && obj[k] !== undefined && obj[k] !== null && obj[k] !== "")
+        return obj[k];
+    }
+    return fallback;
   }
 
   const filas = [];
@@ -956,32 +997,59 @@ async function buildTarifaExportModel(tipo) {
     const gid = clasificarGrupoPorDescripcion(desc);
     const dto = grupos[gid] || {};
 
+    // sacar TODAS las tarifas desde PVP + descuentos del grupo (dto)
     const subd = pvp * (1 - (dto.subd || 0));
     const rp2 = pvp * (1 - (dto.rp2 || 0));
     const rp1 = pvp * (1 - (dto.rp1 || 0));
-    const dist = pvp * (1 - (dto.dist || 0)); // usado como VAD MSRP
+    const dist = pvp * (1 - (dto.dist || 0));
+    const nfrDist = pvp * (1 - (dto.nfrDist || 0));
+    const nfrRes = pvp * (1 - (dto.nfrRes || 0));
+    // VAD es otra tarifa: si no hay dto.vad, usamos dto.dist como fallback para no romper datos existentes
+    const vadDto = dto.vad !== undefined ? dto.vad : dto.dist;
+    const vadMsrp = pvp * (1 - (vadDto || 0));
+
+    // rellenar columnas técnicas desde tarifa base (campos “correspondientes”)
+    const note = pickFirst(prod, ["nota", "note", "Nota", "Note"], "");
+    const w = pickFirst(prod, ["anchura", "ancho", "width", "Width"], "");
+    const h = pickFirst(prod, ["altura", "alto", "height", "Height"], "");
+    const d = pickFirst(prod, ["profundidad", "profundo", "depth", "Depth"], "");
+    const weight = pickFirst(prod, ["peso", "weight", "Weight"], "");
+    const hs = pickFirst(prod, ["hs", "hsCode", "hs_code", "HS code", "hscode"], "");
+    const ean = pickFirst(prod, ["ean", "eanCode", "ean_code", "EAN code"], "");
+    const website = pickFirst(prod, ["website", "url", "Website"], "");
 
     filas.push({
       sku,
       name: desc,
+
+      // precios
+      msrp: pvp,
       subd,
+      nfrDist,
+      nfrRes,
+      dist,
+      vadMsrp,
       rp2,
       rp1,
-      msrp: pvp,
-      vadMsrp: dist,
-      note: "",
-      w: prod.width || "",
-      h: prod.height || "",
-      d: prod.depth || "",
-      weight: prod.weight || "",
-      hs: prod.hs || "",
-      ean: prod.ean || "",
-      website: prod.url || prod.website || "",
+
+      // resto
+      note,
+      w,
+      h,
+      d,
+      weight,
+      hs,
+      ean,
+      website,
+
       __groupId: gid,
     });
   }
 
-  const fileBase = (tipo.nombre || tipo.id || "Tarifa").replace(/[\\/:*?"<>|]+/g, "_");
+  const fileBase = (tipo.nombre || tipo.id || "Tarifa").replace(
+    /[\\/:*?"<>|]+/g,
+    "_"
+  );
   const fileName = `${fileBase}_${spec.exportType}_${spec.lang}`;
 
   return { tipo, spec, filas, fileName };
@@ -1011,7 +1079,9 @@ async function exportarTarifaExcel(tipoId) {
 
   const tarifasBase = await getTarifasBase2N();
   if (!tarifasBase || !Object.keys(tarifasBase).length) {
-    alert("No se han encontrado productos en la tarifa base. Revisa la colección 'tarifas'.");
+    alert(
+      "No se han encontrado productos en la tarifa base. Revisa la colección 'tarifas'."
+    );
     return;
   }
 
@@ -1046,7 +1116,11 @@ async function exportarTarifaExcel(tipoId) {
       bold: true,
       color: { argb: "FF374151" },
     };
-    const fontBody = { name: "Aptos Narrow", size: 10, color: { argb: "FF000000" } };
+    const fontBody = {
+      name: "Aptos Narrow",
+      size: 10,
+      color: { argb: "FF000000" },
+    };
     const borderThin = {
       top: { style: "thin", color: { argb: "FFCCCCCC" } },
       left: { style: "thin", color: { argb: "FFCCCCCC" } },
@@ -1062,7 +1136,11 @@ async function exportarTarifaExcel(tipoId) {
     ws.getCell("A1").value = "2N Price List";
     ws.getCell("A1").font = fontHeaderBig;
     ws.getCell("A1").alignment = { vertical: "middle", horizontal: "left" };
-    ws.getCell("A1").fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLOR_HEADER } };
+    ws.getCell("A1").fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: COLOR_HEADER },
+    };
 
     ws.addRow([]);
 
@@ -1070,9 +1148,17 @@ async function exportarTarifaExcel(tipoId) {
     const headerRow = ws.addRow(spec.columns.map((c) => c.header));
     headerRow.eachCell((cell) => {
       cell.font = fontHeader;
-      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLOR_HEADER_LIGHT } };
+      cell.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: COLOR_HEADER_LIGHT },
+      };
       cell.border = borderThin;
-      cell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+      cell.alignment = {
+        vertical: "middle",
+        horizontal: "center",
+        wrapText: true,
+      };
     });
 
     ws.columns = spec.columns.map((c) => ({ key: c.key, width: c.width || 12 }));
@@ -1082,7 +1168,11 @@ async function exportarTarifaExcel(tipoId) {
       if (item.__section) {
         const row = ws.addRow([item.sectionTitle]);
         row.font = fontSection;
-        row.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLOR_SECTION } };
+        row.getCell(1).fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: COLOR_SECTION },
+        };
         ws.mergeCells(`A${row.number}:${lastCol}${row.number}`);
         continue;
       }
@@ -1101,14 +1191,17 @@ async function exportarTarifaExcel(tipoId) {
         cell.font = fontBody;
         cell.border = borderThin;
 
-        const colKey = spec.columns[colIdx - 1]?.key;
         const isMoney = !!spec.columns[colIdx - 1]?.isMoney;
 
         if (isMoney) {
           cell.numFmt = "#,##0.00";
           cell.alignment = { horizontal: "right" };
           if (groupColor) {
-            cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: groupColor } };
+            cell.fill = {
+              type: "pattern",
+              pattern: "solid",
+              fgColor: { argb: groupColor },
+            };
           }
         }
       });
@@ -1140,7 +1233,9 @@ async function exportarTarifaPDF(tipoId) {
 
   const tarifasBase = await getTarifasBase2N();
   if (!tarifasBase || !Object.keys(tarifasBase).length) {
-    alert("No se han encontrado productos en la tarifa base. Revisa la colección 'tarifas'.");
+    alert(
+      "No se han encontrado productos en la tarifa base. Revisa la colección 'tarifas'."
+    );
     return;
   }
 
@@ -1172,7 +1267,9 @@ async function exportarTarifaPDF(tipoId) {
             const v = r[c.key] ?? "";
             const isMoney = !!c.isMoney;
             const txt =
-              isMoney && typeof v === "number" && isFinite(v) ? v.toFixed(2) : String(v ?? "");
+              isMoney && typeof v === "number" && isFinite(v)
+                ? v.toFixed(2)
+                : String(v ?? "");
             return `<td style="border:1px solid #ddd;padding:6px;vertical-align:top;${
               isMoney ? "text-align:right;white-space:nowrap;" : ""
             }">${escapeHtmlLite(txt)}</td>`;
@@ -1190,7 +1287,9 @@ async function exportarTarifaPDF(tipoId) {
           <title>${escapeHtmlLite(fileName)}</title>
         </head>
         <body>
-          <h3 style="margin:0 0 10px 0;font-family:Arial,sans-serif;">${escapeHtmlLite(fileName)}</h3>
+          <h3 style="margin:0 0 10px 0;font-family:Arial,sans-serif;">${escapeHtmlLite(
+            fileName
+          )}</h3>
           <table style="border-collapse:collapse;width:100%;font-family:Arial,sans-serif;font-size:10px;">
             <thead><tr>${thead}</tr></thead>
             <tbody>${rowsHtml}</tbody>
@@ -1229,7 +1328,9 @@ async function exportarTarifaBC3(tipoId) {
 
   const tarifasBase = await getTarifasBase2N();
   if (!tarifasBase || !Object.keys(tarifasBase).length) {
-    alert("No se han encontrado productos en la tarifa base. Revisa la colección 'tarifas'.");
+    alert(
+      "No se han encontrado productos en la tarifa base. Revisa la colección 'tarifas'."
+    );
     return;
   }
 
@@ -1298,22 +1399,22 @@ function escapeBC3(s) {
 function encodeCP850(str) {
   const s = String(str ?? "");
   const map = {
-    "á": 160,
-    "í": 161,
-    "ó": 162,
-    "ú": 163,
-    "ñ": 164,
-    "Ñ": 165,
-    "Á": 181,
-    "É": 144,
-    "Í": 214,
-    "Ó": 224,
-    "Ú": 233,
-    "é": 130,
-    "ü": 129,
-    "Ü": 154,
-    "ç": 135,
-    "Ç": 128,
+    á: 160,
+    í: 161,
+    ó: 162,
+    ú: 163,
+    ñ: 164,
+    Ñ: 165,
+    Á: 181,
+    É: 144,
+    Í: 214,
+    Ó: 224,
+    Ú: 233,
+    é: 130,
+    ü: 129,
+    Ü: 154,
+    ç: 135,
+    Ç: 128,
     "€": 213,
   };
 
@@ -1328,6 +1429,9 @@ function encodeCP850(str) {
   return out;
 }
 
-console.log("%c[UI Tarifas cargada · export Excel/PDF/BC3 dinámico]", "color:#0ea5e9;");
+console.log(
+  "%c[UI Tarifas cargada · export Excel/PDF/BC3 dinámico]",
+  "color:#0ea5e9;"
+);
 
 window.renderTarifasView = renderTarifasView;
