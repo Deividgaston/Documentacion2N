@@ -1765,6 +1765,51 @@ function encodeCP850(str) {
   }
   return out;
 }
+// Field safe (usa una sola, la de tarifas)
+function tarifasBc3FieldSafe(s) {
+  return String(s ?? "")
+    .normalize("NFC")
+    .replace(/\u0000/g, "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .replace(/\u00A0/g, " ")
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/[\u2013\u2014]/g, "-")
+    .replace(/\u2026/g, "...")
+    .replace(/\u2022/g, "-")
+    .replace(/\u00B7/g, "-")
+    .replace(/\u20AC/g, " EUR")
+    .replace(/\|/g, " / ")
+    .replace(/\\/g, " / ")
+    .replace(/[ \t]+/g, " ")
+    .trim();
+}
+
+// Encoder CP850 (amplio, tipo Prescripción)
+function encodeCP850(str) {
+  const s = String(str ?? "").normalize("NFC");
+  const map = {
+    "Ç": 128, "ü": 129, "é": 130, "â": 131, "ä": 132, "à": 133, "å": 134, "ç": 135,
+    "ê": 136, "ë": 137, "è": 138, "ï": 139, "î": 140, "ì": 141, "Ä": 142, "Å": 143,
+    "É": 144, "æ": 145, "Æ": 146, "ô": 147, "ö": 148, "ò": 149, "û": 150, "ù": 151,
+    "ÿ": 152, "Ö": 153, "Ü": 154, "ø": 155, "£": 156, "Ø": 157, "×": 158, "ƒ": 159,
+    "á": 160, "í": 161, "ó": 162, "ú": 163, "ñ": 164, "Ñ": 165, "ª": 166, "º": 167,
+    "¿": 168, "®": 169, "¬": 170, "½": 171, "¼": 172, "¡": 173, "«": 174, "»": 175,
+    "Á": 181, "Â": 182, "À": 183, "©": 184, "¦": 185, "Ã": 198, "Í": 214, "Ó": 224,
+    "Ú": 233, "€": 213,
+  };
+
+  const out = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    const code = ch.charCodeAt(0);
+    if (code <= 127) out[i] = code;
+    else if (map[ch] !== undefined) out[i] = map[ch];
+    else out[i] = 63; // '?'
+  }
+  return out;
+}
 
 console.log(
   "%c[UI Tarifas cargada · export Excel/PDF/BC3 dinámico]",
