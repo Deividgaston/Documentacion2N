@@ -3150,20 +3150,7 @@ function downloadBc3File(content, filename) {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
-function prescBc3TextSafe(s) {
-  return String(s ?? "")
-    .replace(/\u0000/g, "")
-    // normaliza “caracteres problemáticos” a ASCII
-    .replace(/[“”]/g, '"')
-    .replace(/[‘’]/g, "'")
-    .replace(/[–—]/g, "-")
-    .replace(/[•·]/g, "-")
-    .replace(/\u00A0/g, " ")
-    // BC3: evita pipes y saltos raros
-    .replace(/\r?\n+/g, " ")
-    .replace(/\|/g, " / ")
-    .trim();
-}
+
 
 // ========================================================
 // BC3 EXPORT (FIEBDC-3) — COMPATIBLE (model.chapters o model.capitulos)
