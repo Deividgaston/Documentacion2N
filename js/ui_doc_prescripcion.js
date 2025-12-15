@@ -949,6 +949,7 @@ function renderDocPrescripcionView() {
       renderPrescSectionsList();
     }
   });
+}
 
 
 // ========================================================
