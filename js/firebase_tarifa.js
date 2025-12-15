@@ -16,7 +16,7 @@ const PRODUCTOS_SUBCOL = "productos";
 /**
  * Sube la tarifa a Firestore usando batches (máx. ~400 docs por batch)
  * productosMap: {
- *   "916020": { pvp: 833.0, descripcion: "2N IP Style ..." },
+ *   "916020": { pvp: 833.0, descripcion: "2N IP Style ...", "Ancho (mm)": 110, ... },
  *   ...
  * }
  *
@@ -70,11 +70,17 @@ export async function subirTarifaAFirestore(productosMap) {
         .collection(PRODUCTOS_SUBCOL)
         .doc(String(ref));
 
+      // ✅ CAMBIO MÍNIMO:
+      // - guardamos TODOS los campos que vengan del import (incluidas keys con espacios: "Ancho (mm)", "EAN code"...)
+      // - PERO NO guardamos rawRow (es enorme y no hace falta en Firestore)
+      const safeData = { ...(data || {}) };
+      if ("rawRow" in safeData) delete safeData.rawRow;
+
       const payload = {
+        ...safeData, // <- aquí van Nota/Ancho/Alto/Profundidad/Peso/HS/EAN/Web/EOL/Motivo...
         referencia: String(ref),
-        // guardamos el PVP como número
-        pvp: Number(data.pvp) || 0,
-        descripcion: data.descripcion || "",
+        pvp: Number(safeData.pvp) || 0,
+        descripcion: safeData.descripcion || "",
         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       };
 
