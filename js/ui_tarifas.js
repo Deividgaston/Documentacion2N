@@ -438,28 +438,57 @@ async function cargarTarifasBaseRawDesdeFirestore(version = "v1") {
   return out;
 }
 
+// ======================================================
+// 5) TARIFA BASE (PVP) DESDE FIRESTORE (FULL DOCS + CACHE)
+// ======================================================
+
 async function getTarifasBase2N() {
   if (appState.tarifasCache) return appState.tarifasCache;
 
-  // ✅ Prioridad: RAW (para que salgan Nota/Ancho/Alto/Profundidad/Peso/HS/EAN/Web/EOL/Motivo)
+  const db = firebase.firestore();
+
   try {
-    const raw = await cargarTarifasBaseRawDesdeFirestore("v1");
-    appState.tarifasCache = raw;
-    return raw;
+    // Leemos los docs COMPLETOS (incluye Ancho/Alto/HS/EAN/Web/EOL/etc)
+    const snap = await db
+      .collection("tarifas")
+      .doc("v1")
+      .collection("productos")
+      .get();
+
+    const out = {};
+    snap.forEach((d) => {
+      const data = d.data() || {};
+      const sku = String(data["2N SKU"] || data.sku || d.id || "").trim();
+      if (!sku) return;
+
+      // Normalizamos pvp para que el resto del código funcione siempre
+      const pvp =
+        Number(
+          data.pvp ??
+            data.pvpEUR ??
+            data["MSRP (EUR)"] ??
+            data["MSRP(EUR)"] ??
+            data.MSRP ??
+            0
+        ) || 0;
+
+      out[sku] = { ...data, pvp };
+    });
+
+    appState.tarifasCache = out;
+    return out;
   } catch (e) {
-    console.warn("[Tarifas] No se pudo leer tarifa RAW tarifas/v1/productos:", e);
+    console.warn("[Tarifas] Error leyendo tarifas/v1/productos:", e);
+    // fallback a tu loader existente si lo tienes
+    if (typeof cargarTarifasDesdeFirestore === "function") {
+      const legacy = await cargarTarifasDesdeFirestore();
+      appState.tarifasCache = legacy || {};
+      return appState.tarifasCache;
+    }
+    return {};
   }
-
-  // Fallback: tu helper existente si está
-  if (typeof cargarTarifasDesdeFirestore === "function") {
-    const data = await cargarTarifasDesdeFirestore();
-    appState.tarifasCache = data;
-    return data;
-  }
-
-  console.warn("No existe cargarTarifasDesdeFirestore()");
-  return {};
 }
+
 
 // ======================================================
 // 6) RENDER PANTALLA TARIFAS
