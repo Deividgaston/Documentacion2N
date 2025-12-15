@@ -3175,17 +3175,12 @@ function prescExportModelToBC3(model) {
   const out = [];
   const NL = "\r\n";
 
-  const clean = (v) =>
-    String(v ?? "")
-      .replace(/\u0000/g, "")
-      .replace(/\r?\n+/g, " ")
-      .replace(/\|/g, " / ")
-      .trim();
+  const clean = prescBc3TextSafe;
 
-  const num = (v) =>
-    Number.isFinite(Number(v))
-      ? String(Number(v).toFixed(2)).replace(",", ".")
-      : "0";
+  const num = (v) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? String(n.toFixed(2)).replace(",", ".") : "0.00";
+  };
 
   const today = new Date();
   const dateStr =
@@ -3193,55 +3188,76 @@ function prescExportModelToBC3(model) {
     String(today.getMonth() + 1).padStart(2, "0") +
     String(today.getDate()).padStart(2, "0");
 
-  // Cabecera mínima
+  // Cabecera
   out.push(`~V|FIEBDC-3/2020|Presupuestos2N|1.0|${dateStr}|`);
   out.push(`~K|`);
 
-  const usedCodes = new Set();
+  // Concepto raíz (para que capítulos vayan a 1 Ud y sumen bien)
+  const ROOT = "PRESC";
+  // ~C|COD|UD|RES|PRECIO|NAT|
+  // NAT: 0=capítulo/raíz (genérico)
+  out.push(`~C|${ROOT}|Ud|Prescripción|0.00|0|`);
 
-  const emitC = (code, unit, desc, price) => {
+  const used = new Set();
+
+  // NAT (asumido): 1=Partida, 2=Material, 3=ManoObra, 4=Maquinaria
+  const emitC = (code, unit, desc, price, nat) => {
     const c = clean(code);
-    if (!c || usedCodes.has(c)) return;
-    usedCodes.add(c);
-    out.push(`~C|${c}|${clean(unit || "Ud")}|${clean(desc || "")}|${num(price)}|`);
+    if (!c) return;
+    if (!used.has(c)) {
+      used.add(c);
+      out.push(`~C|${c}|${clean(unit || "Ud")}|${clean(desc || "")}|${num(price)}|${nat}|`);
+    }
   };
+
+  // ROOT -> capítulos (cada capítulo 1 Ud)
+  const rootDecomp = [];
 
   chapters.forEach((ch) => {
     const chCode = clean(ch.code);
     if (!chCode) return;
 
-    // 1) CAPÍTULO (precio 0)
-    emitC(chCode, "Ud", clean(ch.title || "Capítulo"), 0);
+    // Capítulo como PARTIDA (así puede tener descomposición)
+    emitC(chCode, "Ud", ch.title || "Capítulo", 0, 1);
 
-    // 2) TEXTO capítulo
+    // Texto del capítulo
     if (ch.text) out.push(`~T|${chCode}|${clean(ch.text)}|`);
 
-    // 3) PARTIDAS: cada línea es una partida con su precio
-    const lineRefsForD = [];
+    // Root descompone a capítulos con 1
+    rootDecomp.push(`${chCode}\\1\\`);
+
+    // Capítulo -> recursos (materiales)
+    const resRefs = [];
 
     (ch.lines || []).forEach((l) => {
+      // Usamos el código real de línea (2N.xx.yy...) para que no “pise” y sea consistente
       const lineCode = clean(l.code);
       if (!lineCode) return;
 
-      const unit = clean(l.unit || "Ud");
-      const desc = clean(l.description || "");
-      const price = Number(l.price || 0);
+      // IMPORTANTE: si quieres que SIEMPRE sea material:
+      const NAT_MATERIAL = 2;
 
-      emitC(lineCode, unit, desc, price);
+      emitC(
+        lineCode,
+        l.unit || "Ud",
+        l.description || "",
+        Number(l.price || 0),
+        NAT_MATERIAL
+      );
 
-      // Descomposición del capítulo a partidas (factor 1)
-      lineRefsForD.push(`${lineCode}\\1\\`);
-
-      // Medición: cantidad real de la partida dentro del capítulo
+      // descomposición: capítulo -> recurso con su cantidad
       const qty = Number(l.qty || 0);
-      if (qty > 0) out.push(`~M|${chCode}|${lineCode}|${num(qty)}|`);
+      resRefs.push(`${lineCode}\\${num(qty > 0 ? qty : 1)}\\`);
     });
 
-    // 4) UNA descomposición por capítulo (capítulo -> partidas)
-    if (lineRefsForD.length) {
-      out.push(`~D|${chCode}|${lineRefsForD.join("")}|`);
+    if (resRefs.length) {
+      out.push(`~D|${chCode}|${resRefs.join("")}|`);
     }
   });
+
+  if (rootDecomp.length) {
+    out.push(`~D|${ROOT}|${rootDecomp.join("")}|`);
+  }
 
   return out.join(NL) + NL;
 }
