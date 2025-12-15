@@ -72,10 +72,7 @@ function loadPresupuestoFromStorage() {
     const data = JSON.parse(raw);
     if (!data || typeof data !== "object") return;
     appState.presupuesto = normalizarPresupuesto(data);
-    console.log(
-      "%cPresupuesto cargado desde localStorage",
-      "color:#22c55e;"
-    );
+    console.log("%cPresupuesto cargado desde localStorage", "color:#22c55e;");
   } catch (e) {
     console.warn("[Presupuesto] Error leyendo de localStorage", e);
   }
@@ -632,24 +629,41 @@ async function cargarTarifasDesdeFirestore() {
 }
 
 // ===============================================
-// Buscar referencia en tarifa
+// Helpers de referencia (NO truncar)  <<< FIX
+// ===============================================
+function normalizarRefKeep(refRaw) {
+  return String(refRaw || "").trim().replace(/\s+/g, "");
+}
+
+function buildRefCandidates(refClean) {
+  const c = [];
+  if (refClean) c.push(refClean);
+
+  // SOLO para buscar en tarifa (sin alterar lo que guardas/exportas)
+  if (/^\d+$/.test(refClean)) {
+    if (refClean.length === 7) {
+      c.push(refClean + "0", refClean + "00");
+    } else if (refClean.length === 8) {
+      c.push(refClean.slice(0, 7));
+    }
+  }
+
+  return [...new Set(c)];
+}
+
+// ===============================================
+// Buscar referencia en tarifa  <<< FIX
 // ===============================================
 async function buscarProductoEnTarifa(refRaw) {
   const tarifas = await cargarTarifasDesdeFirestore();
   if (!tarifas) return null;
 
-  const refOriginal = String(refRaw || "").trim();
-  let ref = refOriginal.replace(/\s+/g, "");
+  const refClean = normalizarRefKeep(refRaw);
+  if (!refClean) return null;
 
-  if (/^9\d{7}$/.test(ref)) ref = ref.slice(0, 7);
+  const candidatos = buildRefCandidates(refClean);
 
-  const candidatos = [refOriginal, ref];
-  if (ref.length === 7) candidatos.push(ref + "0", ref + "00");
-  if (ref.length === 8) candidatos.push(ref.slice(0, 7));
-
-  const unicos = [...new Set(candidatos.map((c) => c.replace(/\s+/g, "")))];
-
-  for (const c of unicos) {
+  for (const c of candidatos) {
     if (tarifas[c]) return tarifas[c];
   }
 
@@ -697,23 +711,10 @@ async function generarPresupuesto() {
       continue;
     }
 
+    // <<< FIX: NO truncar nunca la referencia guardada/exportada
     const refOriginal = String(refCampo || "").trim();
-    let ref = refOriginal.replace(/\s+/g, "");
-
-    if (/^9\d{7}$/.test(ref)) ref = ref.slice(0, 7);
-
-    const candidatos = [];
-    if (refOriginal) candidatos.push(refOriginal.replace(/\s+/g, ""));
-    if (ref) candidatos.push(ref);
-
-    if (ref.length === 7) {
-      candidatos.push(ref + "0");
-      candidatos.push(ref + "00");
-    } else if (ref.length === 8) {
-      candidatos.push(ref.slice(0, 7));
-    }
-
-    const candidatosUnicos = [...new Set(candidatos)];
+    const ref = normalizarRefKeep(refOriginal);
+    const candidatosUnicos = buildRefCandidates(ref);
 
     const cantidad =
       Number(item.cantidad) ||
@@ -786,7 +787,7 @@ async function generarPresupuesto() {
       "";
 
     lineasPresupuesto.push({
-      ref,
+      ref, // <<< FIX: ref completa
       descripcion,
       cantidad,
       pvp,
@@ -1381,7 +1382,7 @@ async function exportarPresupuestoExcel() {
   Object.keys(sectionNotes || {}).forEach((sec) => {
     if (sectionOrder && sectionOrder.includes && sectionOrder.includes(sec))
       return;
-  const txt = (sectionNotes[sec] || "").trim();
+    const txt = (sectionNotes[sec] || "").trim();
     if (txt) {
       notasSecciones.push({ seccion: sec, nota: txt });
     }
@@ -1698,10 +1699,7 @@ async function exportarPresupuestoExcel() {
   // ==========================
   // DESCARGAR ARCHIVO
   // ==========================
-  const safeName = (nombreProyecto || "2N").replace(
-    /[^a-zA-Z0-9_-]+/g,
-    "_"
-  );
+  const safeName = (nombreProyecto || "2N").replace(/[^a-zA-Z0-9_-]+/g, "_");
   const fileName =
     "Presupuesto_" + safeName + "_" + fechaHoy.replace(/-/g, "") + ".xlsx";
 
@@ -1711,7 +1709,6 @@ async function exportarPresupuestoExcel() {
   });
   saveAs(blob, fileName);
 }
-
 
 // ===============================================
 // EXPORTAR A CSV SALESFORCE (SKU;Quantity;Discount)
@@ -2056,10 +2053,7 @@ function exportarPresupuestoPDF() {
   win.print();
 }
 
-console.log(
-  "%cUI Presupuesto cargado (ui_presupuesto.js)",
-  "color:#0284c7;"
-);
+console.log("%cUI Presupuesto cargado (ui_presupuesto.js)", "color:#0284c7;");
 
 // Exponer helpers globales para otras pantallas (Simulador, etc.)
 window.renderPresupuestoView = renderPresupuestoView;
