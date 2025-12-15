@@ -11,6 +11,7 @@ appState.simulador = appState.simulador || {
   mgnSubdist: 0,
   mgnInte: 0,
   mgnConst: 0,
+  actorTab: "DIST",            // "DIST" | "SUBDIST" | "INTE" | "CONST" | "PROMO"
 };
 
 appState.tarifasBaseSimCache = appState.tarifasBaseSimCache || null;
@@ -41,7 +42,7 @@ const TARIFAS_MAP = TARIFAS_2N.reduce((acc, t) => {
 }, {});
 
 console.log(
-  "%cUI Simulador · v4.3 · layout 2 columnas + PDF",
+  "%cUI Simulador · v4.4 · tabs por actor (cadena márgenes) + PDF",
   "color:#22c55e; font-weight:bold;"
 );
 
@@ -262,12 +263,20 @@ function renderSimuladorView() {
       <div class="simulador-right-column"
            style="flex:1 1 auto; min-width:0;">
         <div class="card">
-          <div class="card-header" style="display:flex; align-items:center; justify-content:space-between; gap:1rem;">
+          <div class="card-header" style="display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap;">
             <div class="card-title">
               Líneas simuladas
               <span id="simLineCount" style="font-size:0.8rem; color:#6b7280; font-weight:400;">
                 0 líneas simuladas
               </span>
+            </div>
+
+            <div id="simActorTabs" style="display:flex; gap:0.35rem; flex-wrap:wrap;">
+              <button class="sim-tab" data-tab="DIST">Distribuidor</button>
+              <button class="sim-tab" data-tab="SUBDIST">Subdistribuidor</button>
+              <button class="sim-tab" data-tab="INTE">Integrador</button>
+              <button class="sim-tab" data-tab="CONST">Constructora</button>
+              <button class="sim-tab" data-tab="PROMO">Promotor</button>
             </div>
           </div>
 
@@ -291,8 +300,7 @@ function renderSimuladorView() {
   const btnExcel = document.getElementById("btnSimExcel");
 
   if (selTarifaDefecto) {
-    selTarifaDefecto.value =
-      appState.simulador.tarifaDefecto || "DIST_PRICE";
+    selTarifaDefecto.value = appState.simulador.tarifaDefecto || "DIST_PRICE";
   }
   if (inpDtoGlobal) {
     inpDtoGlobal.value = appState.simulador.dtoGlobal || 0;
@@ -355,7 +363,7 @@ function renderSimuladorView() {
     });
   }
 
-  // 🔹 Nuevo: Excel específico del simulador (sin columna Tarifa en el fichero)
+  // 🔹 Excel específico del simulador (si existe)
   if (btnExcel) {
     btnExcel.addEventListener("click", () => {
       if (typeof window.exportSimuladorExcel === "function") {
@@ -363,6 +371,18 @@ function renderSimuladorView() {
       } else {
         alert("Función exportSimuladorExcel no disponible.");
       }
+    });
+  }
+
+  // Tabs actor
+  const tabs = document.getElementById("simActorTabs");
+  if (tabs) {
+    tabs.addEventListener("click", (e) => {
+      const btn = e.target && e.target.closest ? e.target.closest(".sim-tab") : null;
+      const tab = btn && btn.dataset ? btn.dataset.tab : null;
+      if (!tab) return;
+      appState.simulador.actorTab = tab;
+      recalcularSimulador();
     });
   }
 
@@ -381,8 +401,7 @@ async function recalcularSimulador() {
   if (!detalle || !resumenCard || !cadenaCard) return;
 
   const presu =
-    (typeof getPresupuestoActual === "function" &&
-      getPresupuestoActual()) ||
+    (typeof getPresupuestoActual === "function" && getPresupuestoActual()) ||
     null;
 
   const lineasBase = presu && presu.lineas ? presu.lineas : [];
@@ -434,36 +453,32 @@ async function recalcularSimulador() {
   const lineasSim = lineasBase.map((lBase, index) => {
     const key = buildLineaKey(lBase, index);
 
-    const refNorm = String(lBase.ref || "")
-      .trim()
-      .replace(/\s+/g, "");
+    const refNorm = String(lBase.ref || "").trim().replace(/\s+/g, "");
 
     const infoTarifa = tarifasBase[refNorm] || {};
-    const basePvp =
-      Number(infoTarifa.pvp) || Number(lBase.pvp || 0) || 0;
+    const basePvp = Number(infoTarifa.pvp) || Number(lBase.pvp || 0) || 0;
 
     const cantidad = Number(lBase.cantidad || 0) || 0;
 
-   const cfg = configPrev[key] || {};
+    const cfg = configPrev[key] || {};
 
-// 🔥 Si la línea NO ha sido editada → SIEMPRE seguir tarifa global
-let tarifaId;
-if (editedMap[key]) {
-  // El usuario tocó esta línea → usar su tarifa manual
-  tarifaId = cfg.tarifaId || tarifaDefecto;
-} else {
-  // No tocada → usar tarifa global SIEMPRE
-  tarifaId = tarifaDefecto;
-}
+    // 🔥 Si la línea NO ha sido editada → SIEMPRE seguir tarifa global
+    let tarifaId;
+    if (editedMap[key]) {
+      // El usuario tocó esta línea → usar su tarifa manual
+      tarifaId = cfg.tarifaId || tarifaDefecto;
+    } else {
+      // No tocada → usar tarifa global SIEMPRE
+      tarifaId = tarifaDefecto;
+    }
 
-// Dto línea: igual que antes
-let dtoLinea;
-if (editedMap[key]) {
-  dtoLinea = Number(cfg.dtoLinea || 0) || 0;
-} else {
-  dtoLinea = dtoGlobal;
-}
-
+    // Dto línea: igual que antes
+    let dtoLinea;
+    if (editedMap[key]) {
+      dtoLinea = Number(cfg.dtoLinea || 0) || 0;
+    } else {
+      dtoLinea = dtoGlobal;
+    }
 
     const objTarifa = TARIFAS_MAP[tarifaId] || TARIFAS_MAP["DIST_PRICE"];
     const dtoTarifa = objTarifa ? objTarifa.dto || 0 : 0;
@@ -485,9 +500,7 @@ if (editedMap[key]) {
       key,
       ref: refNorm || lBase.ref || "-",
       descripcion:
-        lBase.descripcion ||
-        infoTarifa.descripcion ||
-        "Producto sin descripción",
+        lBase.descripcion || infoTarifa.descripcion || "Producto sin descripción",
       seccion: lBase.seccion || "",
       titulo: lBase.titulo || "",
       cantidad,
@@ -508,8 +521,73 @@ if (editedMap[key]) {
     countLabel.textContent = `${lineasSim.length} líneas simuladas`;
   }
 
-  // ===== Tabla en la derecha =====
+  // ===== Helpers actor tabs =====
+  function aplicarMargenSobreVenta(cost, marginPct) {
+    const m = Number(marginPct) || 0;
+    if (m <= 0) return cost;
+    const f = m / 100;
+    if (f >= 0.99) return cost / 0.01;
+    return cost / (1 - f);
+  }
+
+  function getLabelActor(tab) {
+    switch (tab) {
+      case "DIST":
+        return "Distribuidor";
+      case "SUBDIST":
+        return "Subdistribuidor";
+      case "INTE":
+        return "Integrador";
+      case "CONST":
+        return "Constructora";
+      case "PROMO":
+        return "Promotor";
+      default:
+        return "2N";
+    }
+  }
+
+  function getFactorActor(tab, mgnDist, mgnSubdist, mgnInte, mgnConst) {
+    // multiplicador sobre el precio 2N (totalFinal/pvpFinalUd)
+    const step = (pct) => aplicarMargenSobreVenta(1, pct); // 1 -> precio tras margen
+
+    const multDist = step(mgnDist);
+    const multSub = multDist * step(mgnSubdist);
+    const multInte = multSub * step(mgnInte);
+    const multConst = multInte * step(mgnConst);
+
+    switch (tab) {
+      case "DIST":
+        return multDist;
+      case "SUBDIST":
+        return multSub;
+      case "INTE":
+        return multInte;
+      case "CONST":
+        return multConst;
+      case "PROMO":
+        return multConst; // promotor compra a constructora
+      default:
+        return 1;
+    }
+  }
+
+  const actorTab = appState.simulador.actorTab || "DIST";
+  const actorLabel = getLabelActor(actorTab);
+  const actorFactor = getFactorActor(actorTab, mgnDist, mgnSubdist, mgnInte, mgnConst);
+
+  // ===== Tabla en la derecha (según pestaña) =====
   let html = `
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:0.75rem; margin-bottom:0.5rem;">
+      <div style="font-size:0.85rem; color:#111827;">
+        Vista: <strong>${actorLabel}</strong>
+        <span style="color:#6b7280;">(aplicando cadena de márgenes)</span>
+      </div>
+      <div style="font-size:0.78rem; color:#6b7280;">
+        Factor aplicado: <strong>x${actorFactor.toFixed(4)}</strong>
+      </div>
+    </div>
+
     <table class="table">
       <thead>
         <tr>
@@ -520,8 +598,8 @@ if (editedMap[key]) {
           <th style="width:9%;">Dto tarifa</th>
           <th style="width:10%;">Dto línea</th>
           <th style="width:10%;">PVP base</th>
-          <th style="width:12%;">PVP final ud.</th>
-          <th style="width:12%;">Importe final</th>
+          <th style="width:12%;">Precio ${actorLabel} ud.</th>
+          <th style="width:12%;">Importe ${actorLabel}</th>
         </tr>
       </thead>
       <tbody>
@@ -530,9 +608,7 @@ if (editedMap[key]) {
   lineasSim.forEach((l) => {
     const optionsHtml = TARIFAS_2N.map(
       (t) =>
-        `<option value="${t.id}" ${
-          t.id === l.tarifaId ? "selected" : ""
-        }>${t.label}</option>`
+        `<option value="${t.id}" ${t.id === l.tarifaId ? "selected" : ""}>${t.label}</option>`
     ).join("");
 
     html += `
@@ -578,8 +654,8 @@ if (editedMap[key]) {
         </td>
 
         <td>${l.basePvp.toFixed(2)} €</td>
-        <td>${l.pvpFinalUd.toFixed(2)} €</td>
-        <td>${l.subtotalFinal.toFixed(2)} €</td>
+        <td>${(l.pvpFinalUd * actorFactor).toFixed(2)} €</td>
+        <td>${(l.subtotalFinal * actorFactor).toFixed(2)} €</td>
       </tr>
     `;
   });
@@ -591,6 +667,21 @@ if (editedMap[key]) {
 
   detalle.innerHTML = html;
 
+  // pintar tabs activos (mínimo)
+  const tabsWrap = document.getElementById("simActorTabs");
+  if (tabsWrap) {
+    tabsWrap.querySelectorAll(".sim-tab").forEach((b) => {
+      const active = b.dataset.tab === actorTab;
+      b.style.padding = "0.25rem 0.6rem";
+      b.style.fontSize = "0.78rem";
+      b.style.borderRadius = "999px";
+      b.style.border = active ? "1px solid #111827" : "1px solid #d1d5db";
+      b.style.background = active ? "#111827" : "#ffffff";
+      b.style.color = active ? "#ffffff" : "#374151";
+      b.style.cursor = "pointer";
+    });
+  }
+
   detalle.querySelectorAll(".sim-tarifa-line").forEach((sel) => {
     sel.addEventListener("change", () => {
       recalcularSimulador();
@@ -601,8 +692,7 @@ if (editedMap[key]) {
     input.addEventListener("change", (e) => {
       const key = e.target.dataset.key;
       if (key) {
-        appState.simulador.lineDtoEdited =
-          appState.simulador.lineDtoEdited || {};
+        appState.simulador.lineDtoEdited = appState.simulador.lineDtoEdited || {};
         appState.simulador.lineDtoEdited[key] = true;
       }
       recalcularSimulador();
@@ -610,23 +700,16 @@ if (editedMap[key]) {
   });
 
   // ===== BLOQUE 2: Resumen (referencia PVP) =====
-  const tarifaLabel =
-    TARIFAS_MAP[tarifaDefecto]?.label || tarifaDefecto;
+  const tarifaLabel = TARIFAS_MAP[tarifaDefecto]?.label || tarifaDefecto;
 
   const dtoTarifaEf =
-    totalPvpBase > 0
-      ? (1 - totalBaseTarifa / totalPvpBase) * 100
-      : 0;
+    totalPvpBase > 0 ? (1 - totalBaseTarifa / totalPvpBase) * 100 : 0;
 
   const dtoTotalEf =
-    totalPvpBase > 0
-      ? (1 - totalFinal / totalPvpBase) * 100
-      : 0;
+    totalPvpBase > 0 ? (1 - totalFinal / totalPvpBase) * 100 : 0;
 
   const dtoExtraEf =
-    totalBaseTarifa > 0
-      ? (1 - totalFinal / totalBaseTarifa) * 100
-      : 0;
+    totalBaseTarifa > 0 ? (1 - totalFinal / totalBaseTarifa) * 100 : 0;
 
   resumenCard.innerHTML = `
     <div style="font-size:0.84rem;">
@@ -656,20 +739,12 @@ if (editedMap[key]) {
   `;
 
   // ===== BLOQUE 3: Cadena de márgenes hasta promotor (solo pantalla) =====
-  function aplicarMargenSobreVenta(cost, marginPct) {
-    const m = Number(marginPct) || 0;
-    if (m <= 0) return cost;
-    const f = m / 100;
-    if (f >= 0.99) return cost / 0.01;
-    return cost / (1 - f);
-  }
-
   const precio2N = totalFinal;
 
-  const precioDist    = aplicarMargenSobreVenta(precio2N,     mgnDist);
-  const precioSubdist = aplicarMargenSobreVenta(precioDist,   mgnSubdist);
-  const precioInte    = aplicarMargenSobreVenta(precioSubdist,mgnInte);
-  const precioConst   = aplicarMargenSobreVenta(precioInte,   mgnConst);
+  const precioDist    = aplicarMargenSobreVenta(precio2N,      mgnDist);
+  const precioSubdist = aplicarMargenSobreVenta(precioDist,    mgnSubdist);
+  const precioInte    = aplicarMargenSobreVenta(precioSubdist, mgnInte);
+  const precioConst   = aplicarMargenSobreVenta(precioInte,    mgnConst);
 
   const desc2N =
     totalPvpBase > 0 ? (1 - precio2N / totalPvpBase) * 100 : 0;
@@ -737,8 +812,7 @@ async function exportarSimuladorPDF() {
   }
 
   const presu =
-    (typeof getPresupuestoActual === "function" &&
-      getPresupuestoActual()) || {};
+    (typeof getPresupuestoActual === "function" && getPresupuestoActual()) || {};
 
   const nombreProyecto = presu.nombre || "Proyecto sin nombre";
   const fechaPresu = presu.fecha || "";
@@ -757,19 +831,13 @@ async function exportarSimuladorPDF() {
   });
 
   const dtoTarifaEf =
-    totalPvpBase > 0
-      ? (1 - totalBaseTarifa / totalPvpBase) * 100
-      : 0;
+    totalPvpBase > 0 ? (1 - totalBaseTarifa / totalPvpBase) * 100 : 0;
 
   const dtoTotalEf =
-    totalPvpBase > 0
-      ? (1 - totalFinal / totalPvpBase) * 100
-      : 0;
+    totalPvpBase > 0 ? (1 - totalFinal / totalPvpBase) * 100 : 0;
 
   const dtoExtraEf =
-    totalBaseTarifa > 0
-      ? (1 - totalFinal / totalBaseTarifa) * 100
-      : 0;
+    totalBaseTarifa > 0 ? (1 - totalFinal / totalBaseTarifa) * 100 : 0;
 
   // jsPDF + autoTable
   const jsPDFGlobal = window.jspdf || window.jsPDF;
@@ -803,25 +871,19 @@ async function exportarSimuladorPDF() {
   doc.text(`PVP base total: ${totalPvpBase.toFixed(2)} €`, 14, y);
   y += 5;
   doc.text(
-    `Total tras tarifa ${tarifaLabel}: ${totalBaseTarifa.toFixed(
-      2
-    )} €  (${dtoTarifaEf.toFixed(1)} % dto vs PVP)`,
+    `Total tras tarifa ${tarifaLabel}: ${totalBaseTarifa.toFixed(2)} €  (${dtoTarifaEf.toFixed(1)} % dto vs PVP)`,
     14,
     y
   );
   y += 5;
   doc.text(
-    `Total simulado: ${totalFinal.toFixed(
-      2
-    )} €  (${dtoTotalEf.toFixed(1)} % dto total vs PVP)`,
+    `Total simulado: ${totalFinal.toFixed(2)} €  (${dtoTotalEf.toFixed(1)} % dto total vs PVP)`,
     14,
     y
   );
   y += 5;
   doc.text(
-    `Descuento extra sobre tarifa (dto adicional de línea): ${dtoExtraEf.toFixed(
-      1
-    )} %`,
+    `Descuento extra sobre tarifa (dto adicional de línea): ${dtoExtraEf.toFixed(1)} %`,
     14,
     y
   );
@@ -848,11 +910,12 @@ async function exportarSimuladorPDF() {
     `${Number(l.subtotalFinal || 0).toFixed(2)} €`,
   ]);
 
-  const autoTable = doc.autoTable || (jsPDFGlobal.autoTable && jsPDFGlobal.autoTable.bind(doc));
+  const autoTable =
+    doc.autoTable ||
+    (jsPDFGlobal.autoTable && jsPDFGlobal.autoTable.bind(doc));
+
   if (!autoTable) {
-    alert(
-      "No está disponible jsPDF-autoTable. No se puede generar la tabla en el PDF."
-    );
+    alert("No está disponible jsPDF-autoTable. No se puede generar la tabla en el PDF.");
     doc.save("simulacion_2n.pdf");
     return;
   }
