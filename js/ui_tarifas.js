@@ -409,14 +409,54 @@ async function guardarTarifaTipoEnFirestore(tipo) {
 }
 
 // ======================================================
-// 5) TARIFA BASE (PVP) DESDE FIRESTORE (ya lo tienes)
+// 5) TARIFA BASE (PVP) DESDE FIRESTORE
 // ======================================================
+
+// ✅ FIX ESTRICTO: leer RAW de /tarifas/v1/productos para NO perder campos con espacios (ej: "Ancho (mm)")
+// (tu helper cargarTarifasDesdeFirestore() puede estar “limpiando”/filtrando campos y por eso salen vacíos)
+async function cargarTarifasBaseRawDesdeFirestore(version = "v1") {
+  const db = firebase.firestore();
+  const col = db.collection("tarifas").doc(version).collection("productos");
+  const snap = await col.get();
+
+  const out = {};
+  snap.forEach((doc) => {
+    const data = doc.data() || {};
+    const sku =
+      String(
+        data["2N SKU"] ??
+          data.sku ??
+          data.SKU ??
+          data.referencia ??
+          doc.id ??
+          ""
+      ).trim() || doc.id;
+
+    out[sku] = { ...data, __docId: doc.id };
+  });
+
+  return out;
+}
 
 async function getTarifasBase2N() {
   if (appState.tarifasCache) return appState.tarifasCache;
-  if (typeof cargarTarifasDesdeFirestore === "function") {
-    return await cargarTarifasDesdeFirestore();
+
+  // ✅ Prioridad: RAW (para que salgan Nota/Ancho/Alto/Profundidad/Peso/HS/EAN/Web/EOL/Motivo)
+  try {
+    const raw = await cargarTarifasBaseRawDesdeFirestore("v1");
+    appState.tarifasCache = raw;
+    return raw;
+  } catch (e) {
+    console.warn("[Tarifas] No se pudo leer tarifa RAW tarifas/v1/productos:", e);
   }
+
+  // Fallback: tu helper existente si está
+  if (typeof cargarTarifasDesdeFirestore === "function") {
+    const data = await cargarTarifasDesdeFirestore();
+    appState.tarifasCache = data;
+    return data;
+  }
+
   console.warn("No existe cargarTarifasDesdeFirestore()");
   return {};
 }
@@ -998,7 +1038,9 @@ async function buildTarifaExportModel(tipo) {
       familiaActual = fam;
     }
 
-    const pvp = Number(prod.pvp ?? prod.pvpEUR ?? prod["MSRP (EUR)"] ?? prod.MSRP ?? 0);
+    const pvp = Number(
+      prod.pvp ?? prod.pvpEUR ?? prod["MSRP (EUR)"] ?? prod.MSRP ?? 0
+    );
     const desc =
       prod.descripcion ||
       prod.desc ||
@@ -1020,17 +1062,32 @@ async function buildTarifaExportModel(tipo) {
     const vadDto = dto.vad !== undefined ? dto.vad : dto.dist;
     const vadMsrp = pvp * (1 - (vadDto || 0));
 
-    // ✅ FIX CLAVE: soportar exactamente las keys que tienes en Firestore (con unidades / espacios)
+    // Técnicos: soportar keys EXACTAS Firestore (con espacios/unidades) + variantes
     const note = pickFirst(prod, ["Nota", "Note", "nota", "note"], "");
-
     const w = pickFirst(
       prod,
-      ["Ancho (mm)", "Anchura (mm)", "Width (mm)", "ancho", "anchura", "width", "Width"],
+      [
+        "Ancho (mm)",
+        "Anchura (mm)",
+        "Width (mm)",
+        "ancho",
+        "anchura",
+        "width",
+        "Width",
+      ],
       ""
     );
     const h = pickFirst(
       prod,
-      ["Alto (mm)", "Altura (mm)", "Height (mm)", "alto", "altura", "height", "Height"],
+      [
+        "Alto (mm)",
+        "Altura (mm)",
+        "Height (mm)",
+        "alto",
+        "altura",
+        "height",
+        "Height",
+      ],
       ""
     );
     const d = pickFirst(
@@ -1043,17 +1100,8 @@ async function buildTarifaExportModel(tipo) {
       ["Peso (kg)", "Weight (kg)", "peso", "weight", "Weight"],
       ""
     );
-
-    const hs = pickFirst(
-      prod,
-      ["HS code", "hs", "hsCode", "hs_code", "hscode"],
-      ""
-    );
-    const ean = pickFirst(
-      prod,
-      ["EAN code", "ean", "eanCode", "ean_code"],
-      ""
-    );
+    const hs = pickFirst(prod, ["HS code", "hs", "hsCode", "hs_code", "hscode"], "");
+    const ean = pickFirst(prod, ["EAN code", "ean", "eanCode", "ean_code"], "");
     const website = pickFirst(
       prod,
       ["Página web", "Pagina web", "Website", "website", "url"],
@@ -1262,7 +1310,11 @@ async function exportarTarifaExcel(tipoId) {
             };
           }
         } else {
-          cell.alignment = { vertical: "top", horizontal: "left", wrapText: true };
+          cell.alignment = {
+            vertical: "top",
+            horizontal: "left",
+            wrapText: true,
+          };
         }
       });
     }
