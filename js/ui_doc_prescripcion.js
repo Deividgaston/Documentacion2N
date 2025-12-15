@@ -3166,15 +3166,73 @@ function prescBc3TextSafe(s) {
 }
 
 // ========================================================
-// BC3 EXPORT (FIEBDC-3) — generador estándar para Presto
-// Crea ~V, ~K, ~C, ~T, ~M
+// BC3 EXPORT (FIEBDC-3) — COMPATIBLE (model.chapters o model.capitulos)
 // ========================================================
 
-function prescExportModelToBC3(model) {
-  const chapters = model?.chapters || [];
+function prescBc3TextSafe(s) {
+  return String(s ?? "")
+    .replace(/\u0000/g, "")
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'")
+    .replace(/[–—]/g, "-")
+    .replace(/[•·]/g, "-")
+    .replace(/\u00A0/g, " ")
+    .replace(/\r?\n+/g, " ")
+    .replace(/\|/g, " / ")
+    .trim();
+}
+
+function downloadBc3File(content, filename) {
+  const s = String(content || "");
+
+  const map = {
+    "€": 0x80, "‚": 0x82, "ƒ": 0x83, "„": 0x84, "…": 0x85, "†": 0x86, "‡": 0x87,
+    "ˆ": 0x88, "‰": 0x89, "Š": 0x8A, "‹": 0x8B, "Œ": 0x8C, "Ž": 0x8E,
+    "‘": 0x91, "’": 0x92, "“": 0x93, "”": 0x94, "•": 0x95, "–": 0x96, "—": 0x97,
+    "˜": 0x98, "™": 0x99, "š": 0x9A, "›": 0x9B, "œ": 0x9C, "ž": 0x9E, "Ÿ": 0x9F,
+    "¡": 0xA1, "¿": 0xBF,
+    "Á": 0xC1, "É": 0xC9, "Í": 0xCD, "Ó": 0xD3, "Ú": 0xDA, "Ñ": 0xD1, "Ü": 0xDC,
+    "á": 0xE1, "é": 0xE9, "í": 0xED, "ó": 0xF3, "ú": 0xFA, "ñ": 0xF1, "ü": 0xFC,
+  };
+
+  const bytes = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    const code = ch.charCodeAt(0);
+    if (code <= 0xFF) bytes[i] = code;
+    else if (map[ch] != null) bytes[i] = map[ch];
+    else bytes[i] = "?".charCodeAt(0);
+  }
+
+  const blob = new Blob([bytes], { type: "text/plain" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename || "export.bc3";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// Normaliza modelo (nuevo/viejo) a estructura común
+function prescGetChaptersCompat(model) {
+  if (!model) return [];
+  if (Array.isArray(model.chapters)) return model.chapters;     // nuevo
+  if (Array.isArray(model.capitulos)) return model.capitulos;   // viejo
+  return [];
+}
+
+function prescGetLinesCompat(ch) {
+  if (!ch) return [];
+  if (Array.isArray(ch.lines)) return ch.lines;   // nuevo
+  if (Array.isArray(ch.lineas)) return ch.lineas; // viejo
+  return [];
+}
+
+function prescExportModelToBC3_Compat(model) {
   const out = [];
   const NL = "\r\n";
-
   const clean = prescBc3TextSafe;
 
   const num = (v) => {
@@ -3191,7 +3249,6 @@ function prescExportModelToBC3(model) {
   out.push(`~V|FIEBDC-3/2020|Presupuestos2N|1.0|${dateStr}|`);
   out.push(`~K|`);
 
-  // Concepto raíz (para que capítulos = 1 Ud y sumen bien)
   const ROOT = "PRESC";
   out.push(`~C|${ROOT}|Ud|Prescripción|0.00|`);
 
@@ -3203,26 +3260,36 @@ function prescExportModelToBC3(model) {
     out.push(`~C|${c}|${clean(unit || "Ud")}|${clean(desc || "")}|${num(price)}|`);
   };
 
-  // ROOT -> capítulos (cada capítulo 1 Ud)
+  const chapters = prescGetChaptersCompat(model);
   const rootDecomp = [];
 
-  chapters.forEach((ch) => {
-    const chCode = clean(ch.code);
-    if (!chCode) return;
+  chapters.forEach((ch, idx) => {
+    const chCode =
+      clean(ch.code || ch.codigo || ch.__importCode || `2N.${String(idx + 1).padStart(2, "0")}`);
 
-    emitC(chCode, "Ud", ch.title || "Capítulo", 0);
+    const chTitle = ch.title || ch.nombre || "Capítulo";
+    const chText  = ch.text  || ch.texto  || "";
+
+    emitC(chCode, "Ud", chTitle, 0);
     rootDecomp.push(`${chCode}\\1\\`);
 
-    if (ch.text) out.push(`~T|${chCode}|${clean(ch.text)}|`);
+    if (chText) out.push(`~T|${chCode}|${clean(chText)}|`);
 
     const resRefs = [];
-    (ch.lines || []).forEach((l) => {
-      const lineCode = clean(l.code);
-      if (!lineCode) return;
+    const lines = prescGetLinesCompat(ch);
 
-      emitC(lineCode, l.unit || "Ud", l.description || "", Number(l.price || 0));
+    lines.forEach((l, lineIdx) => {
+      const lineCode =
+        clean(l.code || l.codigo || `2N.${String(idx + 1).padStart(2, "0")}.${String(lineIdx + 1).padStart(2, "0")}`);
 
-      const qty = Number(l.qty || 0);
+      const desc = l.description || l.descripcion || "";
+      const unit = l.unit || l.unidad || "Ud";
+      const price = Number(l.price ?? l.pvp ?? 0);
+      const qty = Number(l.qty ?? l.cantidad ?? 1);
+
+      emitC(lineCode, unit, desc, price);
+
+      // En ~D: cantidad (si 0, ponemos 1 para que no desaparezca en algunos Presto)
       resRefs.push(`${lineCode}\\${num(qty > 0 ? qty : 1)}\\`);
     });
 
@@ -3234,78 +3301,15 @@ function prescExportModelToBC3(model) {
   return out.join(NL) + NL;
 }
 
-
-
-// ------------------------
-// BC3 export (usa prescExportModelToBC3)
-// ------------------------
+// Hook final (lo que debe llamar tu botón BC3)
 function exportPrescripcionToBc3(model) {
-  const lang = model?.lang || appState.prescripcion.exportLang || "es";
-
-  if (typeof prescExportModelToBC3 !== "function") {
-    alert("No existe prescExportModelToBC3 en el archivo.");
-    return;
-  }
-  if (typeof downloadBc3File !== "function") {
-    alert("No existe downloadBc3File en el archivo.");
-    return;
-  }
-
-  const bc3 = prescExportModelToBC3(model);
+  const lang = model?.lang || appState?.prescripcion?.exportLang || "es";
+  const bc3 = prescExportModelToBC3_Compat(model);
   downloadBc3File(bc3, `prescripcion_${lang}.bc3`);
 }
 
-// ------------------------
-// Excel deps (ExcelJS + FileSaver)
-// ------------------------
-async function prescLoadScriptOnce(url, id) {
-  if (id && document.getElementById(id)) return;
-  return new Promise((resolve, reject) => {
-    const s = document.createElement("script");
-    if (id) s.id = id;
-    s.src = url;
-    s.async = true;
-    s.onload = () => resolve();
-    s.onerror = () => reject(new Error("No se pudo cargar: " + url));
-    document.head.appendChild(s);
-  });
-}
+window.exportPrescripcionToBc3 = exportPrescripcionToBc3;
 
-async function ensureExcelDepsLoaded() {
-  if (window.ExcelJS && window.saveAs) return true;
-
-  try {
-    if (!window.ExcelJS) {
-      await prescLoadScriptOnce(
-        "https://cdn.jsdelivr.net/npm/exceljs/dist/exceljs.min.js",
-        "exceljs_cdn"
-      );
-    }
-    if (!window.saveAs) {
-      await prescLoadScriptOnce(
-        "https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js",
-        "filesaver_cdn"
-      );
-    }
-  } catch (e) {
-    console.warn("[Presc] No se pudieron cargar deps XLSX", e);
-  }
-
-  return !!(window.ExcelJS && window.saveAs);
-}
-
-function getPrescProjectDescription() {
-  const p = appState.proyecto || {};
-  const pr = appState.presupuesto || {};
-  return (
-    p.descripcion ||
-    p.description ||
-    pr.descripcionProyecto ||
-    pr.descripcion ||
-    pr.projectDescription ||
-    ""
-  );
-}
 
 // ------------------------
 // Export XLSX REAL (ExcelJS)
