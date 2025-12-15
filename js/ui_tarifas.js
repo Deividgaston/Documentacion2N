@@ -1560,11 +1560,63 @@ async function exportarTarifaPDF(tipoId) {
   }
 }
 
-// ===============================================
-// EXPORTAR BC3 (Presto 8.8) — SOLO PVP + CP850 (OEM)
-// FIX: añadir DESCOMPOSICIONES (~D) para que Presto muestre el árbol
-// + incluir el nombre de la tarifa en el BC3
-// ===============================================
+// ======================================================
+// BC3 (Presto 8.8) — Tarifa de precios
+// OBRA (root) = nombre tarifa
+// CAPÍTULO = "2N"
+// ARTÍCULOS = recursos (materiales) con qty=1
+// ======================================================
+
+function tarifasBc3FieldSafe(s) {
+  return String(s ?? "")
+    .normalize("NFC")
+    .replace(/\u0000/g, "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .replace(/\u00A0/g, " ")
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/[\u2013\u2014]/g, "-")
+    .replace(/\u2026/g, "...")
+    .replace(/\u2022/g, "-")
+    .replace(/\u00B7/g, "-")
+    .replace(/\u20AC/g, " EUR")
+    .replace(/\|/g, " / ")
+    .replace(/\\/g, " / ")
+    .replace(/[ \t]+/g, " ")
+    .trim();
+}
+
+function encodeCP850(str) {
+  const s = String(str ?? "").normalize("NFC");
+  const m = {
+    "á": 0xA0, "é": 0x82, "í": 0xA1, "ó": 0xA2, "ú": 0xA3, "ü": 0x81, "ñ": 0xA4, "ç": 0x87,
+    "ã": 0xC6, "õ": 0xE4, "â": 0x83, "ê": 0x88, "ô": 0x93, "à": 0x85,
+    "Á": 0xB5, "É": 0x90, "Í": 0xD6, "Ó": 0xE0, "Ú": 0xE9, "Ü": 0x9A, "Ñ": 0xA5, "Ç": 0x80,
+    "Ã": 0xC7, "Õ": 0xE5, "Â": 0xB6, "Ê": 0xD2, "Ô": 0xE2, "À": 0xB7
+  };
+
+  const out = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    const code = s.charCodeAt(i);
+    if (code <= 0x7F) out[i] = code;
+    else if (m[ch] != null) out[i] = m[ch];
+    else out[i] = 0x3F; // '?'
+  }
+  return out;
+}
+
+function downloadBc3File(content, filename) {
+  const bytes = encodeCP850(content);
+  const blob = new Blob([bytes], { type: "application/octet-stream" });
+  if (typeof saveAs === "function") {
+    saveAs(blob, filename || "export.bc3");
+    return;
+  }
+  downloadBlobFallback(blob, filename || "export.bc3");
+}
+
 async function exportarTarifaBC3(tipoId) {
   const tipo = appState.tarifasTipos[tipoId];
   if (!tipo) return alert("Tipo de tarifa no encontrado.");
@@ -1585,118 +1637,81 @@ async function exportarTarifaBC3(tipoId) {
     const model = await buildTarifaExportModel(tipo);
     const { filas, fileName } = model;
 
-    const CRLF = "\r\n";
+    const NL = "\r\n";
+    const clean = tarifasBc3FieldSafe;
 
-    const cleanCode = (s) =>
-      String(s ?? "")
-        .normalize("NFC")
-        .replace(/\u0000/g, "")
-        .replace(/\r?\n/g, " ")
-        .replace(/[|\\]/g, " ")
-        .replace(/[<>:"/]+/g, " ")
-        .replace(/[ \t]+/g, " ")
-        .trim();
-
-    const bc3FieldSafe = (s) => prescBc3FieldSafe(s); // reutiliza helper “bueno” (ver abajo)
-    const num2 = (n) => (isFinite(Number(n)) ? Number(n).toFixed(2) : "0.00");
-
-    const prestoDate = () => {
-      const d = new Date();
-      const yyyy = d.getFullYear();
-      const mm = String(d.getMonth() + 1).padStart(2, "0");
-      const dd = String(d.getDate()).padStart(2, "0");
-      return `${yyyy}${mm}${dd}`;
+    const num2 = (v) => {
+      const n = Number(v);
+      return Number.isFinite(n) ? String(n.toFixed(2)).replace(",", ".") : "0.00";
+    };
+    const num = (v) => {
+      const n = Number(v);
+      return Number.isFinite(n) ? String(n).replace(",", ".") : "0";
     };
 
-    const tarifaNombre = bc3FieldSafe(tipo.nombre || tipo.id || "Tarifa 2N");
+    const now = new Date();
+    const dd = String(now.getDate()).padStart(2, "0");
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+    const yy = String(now.getFullYear()).slice(-2);
+    const prestoDate = `${dd}${mm}${yy}`;
 
-    // --- Construcción BC3 como en Prescripción (con trailing |) ---
-    const out = [];
+    const ROOT = "0##";      // obra
+    const CHAPTER = "2N#";   // capítulo (partida)
+    const CH_REF = "2N";     // referencia en ~D sin '#'
 
-    out.push(`~V|FIEBDC-3/2002|2N|TARIFAS|${prestoDate()}|${CRLF}`);
-    out.push(`~K|0|${CRLF}`);
-
-    // “Cabecera” (contendor lógico)
-    out.push(`~C|TARIFA|${tarifaNombre}|0|0|${CRLF}`);
-
-    // Root visible
-    const ROOT_CODE = "0##";
-    const ROOT_REF = "0";
-    out.push(`~C|${ROOT_CODE}|${tarifaNombre}|0|0|${CRLF}`);
-
-    // Vamos a colgar todo con ~D (root -> familias -> productos)
-    const rootLinks = []; // ["REF\\1\\1\\", ...]
-
-    let currentFamRef = null;
-    let currentFamLinks = [];
-    let famIndex = 0;
-
-    const flushFamilia = () => {
-      if (!currentFamRef) return;
-      if (currentFamLinks.length) {
-        out.push(`~D|${currentFamRef}|${currentFamLinks.join("")}|${CRLF}`);
-      }
-      currentFamRef = null;
-      currentFamLinks = [];
+    const used = new Set();
+    const emitC = (code, unit, desc, price, type = 0) => {
+      const c = clean(code);
+      if (!c || used.has(c)) return;
+      used.add(c);
+      // Formato como en prescripción (con '|' final)
+      return `~C|${c}|${clean(unit || "Ud")}|${clean(desc || "")}|${num2(price)}|${prestoDate}|${type}|`;
     };
 
+    let out = "";
+    out += `~V|SOFT S.A.|FIEBDC-3/2002|Presupuestos2N|1.0||OEM|` + NL;
+    out += `~K|\\2\\2\\3\\2\\2\\2\\2\\EUR\\|0|` + NL;
+
+    // OBRA = nombre de la tarifa (lo que pedías)
+    const obraName = clean(tipo.nombre || tipo.id || "Tarifa");
+    out += emitC(ROOT, "", obraName, 0, 0) + NL;
+
+    // Capítulo "2N"
+    out += emitC(CHAPTER, "Ud", "2N", 0, 0) + NL;
+
+    // Root -> capítulo (en ~D se referencia SIN '#')
+    out += `~D|${ROOT}|${CH_REF}\\1\\1\\|` + NL;
+
+    // Artículos como recursos (materiales) + descomposición del capítulo
+    const refs = [];
     for (const r of filas) {
-      if (r.__section) {
-        // cierra familia anterior
-        flushFamilia();
+      if (r.__section) continue;
 
-        famIndex += 1;
-        const famTitle = bc3FieldSafe(r.sectionTitle || `Familia ${famIndex}`);
-        const famCode = `TAR_FAM_${String(famIndex).padStart(2, "0")}#`;
-        const famRef = famCode.replace(/#$/, "");
+      const code = clean(String(r.sku || "").trim());
+      if (!code) continue;
 
-        out.push(`~C|${famCode}|${famTitle}|0|0|${CRLF}`);
+      const desc = clean(String(r.name || "").replace(/\r?\n/g, " ").trim());
+      const price = Number(r.msrp || 0); // PVP
+      const p = Number.isFinite(price) ? price : 0;
 
-        // cuelga familia del root
-        rootLinks.push(`${famRef}\\1\\1\\`);
+      // Recurso tipo 3
+      out += emitC(code, "ud", desc, p, 3) + NL;
 
-        currentFamRef = famRef;
-        continue;
-      }
-
-      const sku = cleanCode(r.sku);
-      if (!sku) continue;
-
-      const prodCode = `${sku}#`;
-      const prodRef = sku;
-
-      const desc = bc3FieldSafe(r.name || "");
-      const price = Number(r.msrp || 0);
-
-      // Concepto producto (tipo 3 como en prescripción, con unidad y precio)
-      out.push(
-        `~C|${prodCode}|${desc}|3|ud|${num2(price)}|${num2(price)}|${CRLF}`
-      );
-
-      // Cuelga producto de la familia actual (si por lo que sea no hay familia, cuelga del root)
-      if (currentFamRef) currentFamLinks.push(`${prodRef}\\1\\1\\`);
-      else rootLinks.push(`${prodRef}\\1\\1\\`);
+      // En precios: qty=1
+      refs.push(`${code}\\1\\${num(1)}\\`);
     }
 
-    // flush última familia
-    flushFamilia();
-
-    // root descomp
-    if (rootLinks.length) {
-      out.push(`~D|${ROOT_REF}|${rootLinks.join("")}|${CRLF}`);
+    if (refs.length) {
+      out += `~D|${CHAPTER}|${refs.join("")}|` + NL;
     }
 
-    const textOut = out.join("");
-    const bytes = encodeCP850(textOut);
-    const blob = new Blob([bytes], { type: "application/octet-stream" });
-
-    if (typeof saveAs === "function") saveAs(blob, `${fileName}.bc3`);
-    else downloadBlobFallback(blob, `${fileName}.bc3`);
+    downloadBc3File(out, `${fileName}.bc3`);
   } catch (e) {
     console.error("[Tarifas] Error exportando BC3:", e);
     alert("Error al generar el BC3.");
   }
 }
+
 
 
 // -------------------- utils (mínimos) --------------------
