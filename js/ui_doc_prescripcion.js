@@ -3226,8 +3226,9 @@ function prescExportModelToBC3_Compat(model) {
   const rootDecomp = [];
 
   chapters.forEach((ch, idx) => {
-    const chCode = clean(
-      ch.code || ch.codigo || ch.__importCode || `2N.${String(idx + 1).padStart(2, "0")}`
+    const chCodeBase = clean(ch.code || ch.codigo || ch.__importCode || `2N.${String(idx + 1).padStart(2, "0")}`);
+    const chCode = chCodeBase.endsWith("#") ? chCodeBase : (chCodeBase + "#");
+
     );
 
     const chTitle = ch.title || ch.nombre || "Capítulo";
