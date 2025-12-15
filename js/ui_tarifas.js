@@ -1561,15 +1561,19 @@ async function exportarTarifaPDF(tipoId) {
 }
 
 // ===============================================
-// EXPORTAR BC3 (Presto) — SOLO PVP + CP850 (OEM)
-// FIX: sin '|' final en cada línea (Presto 8.8)
+// EXPORTAR BC3 (Presto 8.8) — SOLO PVP + CP850 (OEM)
+// FIX: añadir DESCOMPOSICIONES (~D) para que Presto muestre el árbol
+// + incluir el nombre de la tarifa en el BC3
 // ===============================================
 async function exportarTarifaBC3(tipoId) {
   const tipo = appState.tarifasTipos[tipoId];
   if (!tipo) return alert("Tipo de tarifa no encontrado.");
 
   const tType = tarifaTipoFromId(tipo.id || tipo.templateId || "");
-  if (tType !== "PVP") return alert("BC3 solo está disponible si has seleccionado una tarifa PVP.");
+  if (tType !== "PVP") {
+    alert("BC3 solo está disponible si has seleccionado una tarifa PVP.");
+    return;
+  }
 
   const tarifasBase = await getTarifasBase2N();
   if (!tarifasBase || !Object.keys(tarifasBase).length) {
@@ -1582,29 +1586,108 @@ async function exportarTarifaBC3(tipoId) {
     const { filas, fileName } = model;
 
     const CRLF = "\r\n";
-    const line = (arr) => arr.map((x) => String(x ?? "")).join("|") + CRLF;
 
-    let out = "";
-    // ✅ sin pipe final
-    out += line(["~V", "FIEBDC-3/2002", "2N", "TARIFA", "1"]);
-    out += line(["~K", "0"]);
-    out += line(["~C", "TARIFA", "Tarifa 2N", "0"]); // contenedor
+    const cleanCode = (s) =>
+      String(s ?? "")
+        .normalize("NFC")
+        .replace(/\u0000/g, "")
+        .replace(/\r?\n/g, " ")
+        .replace(/[|\\]/g, " ")
+        .replace(/[<>:"/]+/g, " ")
+        .replace(/[ \t]+/g, " ")
+        .trim();
+
+    const bc3FieldSafe = (s) => prescBc3FieldSafe(s); // reutiliza helper “bueno” (ver abajo)
+    const num2 = (n) => (isFinite(Number(n)) ? Number(n).toFixed(2) : "0.00");
+
+    const prestoDate = () => {
+      const d = new Date();
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, "0");
+      const dd = String(d.getDate()).padStart(2, "0");
+      return `${yyyy}${mm}${dd}`;
+    };
+
+    const tarifaNombre = bc3FieldSafe(tipo.nombre || tipo.id || "Tarifa 2N");
+
+    // --- Construcción BC3 como en Prescripción (con trailing |) ---
+    const out = [];
+
+    out.push(`~V|FIEBDC-3/2002|2N|TARIFAS|${prestoDate()}|${CRLF}`);
+    out.push(`~K|0|${CRLF}`);
+
+    // “Cabecera” (contendor lógico)
+    out.push(`~C|TARIFA|${tarifaNombre}|0|0|${CRLF}`);
+
+    // Root visible
+    const ROOT_CODE = "0##";
+    const ROOT_REF = "0";
+    out.push(`~C|${ROOT_CODE}|${tarifaNombre}|0|0|${CRLF}`);
+
+    // Vamos a colgar todo con ~D (root -> familias -> productos)
+    const rootLinks = []; // ["REF\\1\\1\\", ...]
+
+    let currentFamRef = null;
+    let currentFamLinks = [];
+    let famIndex = 0;
+
+    const flushFamilia = () => {
+      if (!currentFamRef) return;
+      if (currentFamLinks.length) {
+        out.push(`~D|${currentFamRef}|${currentFamLinks.join("")}|${CRLF}`);
+      }
+      currentFamRef = null;
+      currentFamLinks = [];
+    };
 
     for (const r of filas) {
-      if (r.__section) continue;
+      if (r.__section) {
+        // cierra familia anterior
+        flushFamilia();
 
-      const code = String(r.sku || "").trim();
-      if (!code) continue;
+        famIndex += 1;
+        const famTitle = bc3FieldSafe(r.sectionTitle || `Familia ${famIndex}`);
+        const famCode = `TAR_FAM_${String(famIndex).padStart(2, "0")}#`;
+        const famRef = famCode.replace(/#$/, "");
 
-      const desc = String(r.name || "").replace(/\r?\n/g, " ").trim();
-      const price = Number(r.msrp || 0); // SOLO PVP
-      const p = isFinite(price) ? price.toFixed(2) : "0.00";
+        out.push(`~C|${famCode}|${famTitle}|0|0|${CRLF}`);
 
-      // ✅ Presto: concepto simple con unidad y precio
-      out += line(["~C", escapeBC3(code), escapeBC3(desc), "0", "ud", p]);
+        // cuelga familia del root
+        rootLinks.push(`${famRef}\\1\\1\\`);
+
+        currentFamRef = famRef;
+        continue;
+      }
+
+      const sku = cleanCode(r.sku);
+      if (!sku) continue;
+
+      const prodCode = `${sku}#`;
+      const prodRef = sku;
+
+      const desc = bc3FieldSafe(r.name || "");
+      const price = Number(r.msrp || 0);
+
+      // Concepto producto (tipo 3 como en prescripción, con unidad y precio)
+      out.push(
+        `~C|${prodCode}|${desc}|3|ud|${num2(price)}|${num2(price)}|${CRLF}`
+      );
+
+      // Cuelga producto de la familia actual (si por lo que sea no hay familia, cuelga del root)
+      if (currentFamRef) currentFamLinks.push(`${prodRef}\\1\\1\\`);
+      else rootLinks.push(`${prodRef}\\1\\1\\`);
     }
 
-    const bytes = encodeCP850(out);
+    // flush última familia
+    flushFamilia();
+
+    // root descomp
+    if (rootLinks.length) {
+      out.push(`~D|${ROOT_REF}|${rootLinks.join("")}|${CRLF}`);
+    }
+
+    const textOut = out.join("");
+    const bytes = encodeCP850(textOut);
     const blob = new Blob([bytes], { type: "application/octet-stream" });
 
     if (typeof saveAs === "function") saveAs(blob, `${fileName}.bc3`);
@@ -1614,6 +1697,7 @@ async function exportarTarifaBC3(tipoId) {
     alert("Error al generar el BC3.");
   }
 }
+
 
 // -------------------- utils (mínimos) --------------------
 
