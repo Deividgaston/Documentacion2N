@@ -1,34 +1,16 @@
 // js/firebase_tarifa.js
 // Funciones específicas para gestionar la TARIFA 2N en Firestore (modo compat)
-//
-// Usa la instancia global de Firestore ya creada en firebase.js
-// y la API compat (db.collection(...), db.batch(), etc).
 
-// Instancia de Firestore (compat)
 const db = firebase.firestore();
 
-// Ruta base de la tarifa en Firestore:
-// /tarifas/v1/productos/{referencia}
 const TARIFAS_COLLECTION = "tarifas";
 const TARIFA_VERSION = "v1";
 const PRODUCTOS_SUBCOL = "productos";
 
-/**
- * Sube la tarifa a Firestore usando batches (máx. ~400 docs por batch)
- * productosMap: {
- *   "916020": { pvp: 833.0, descripcion: "2N IP Style ...", "Ancho (mm)": 110, ... },
- *   ...
- * }
- *
- * Devuelve el número total de referencias subidas.
- */
 export async function subirTarifaAFirestore(productosMap) {
   const entries = Object.entries(productosMap || {});
   if (!entries.length) return 0;
 
-  // ================================
-  // 1) Asegurar documento padre /tarifas/v1
-  // ================================
   try {
     const tarifaVersionRef = db
       .collection(TARIFAS_COLLECTION)
@@ -52,9 +34,6 @@ export async function subirTarifaAFirestore(productosMap) {
     throw e;
   }
 
-  // ================================
-  // 2) Subir productos en batches
-  // ================================
   const batchSize = 400;
   let totalEscritos = 0;
 
@@ -63,21 +42,17 @@ export async function subirTarifaAFirestore(productosMap) {
     const batch = db.batch();
 
     chunk.forEach(([ref, data]) => {
-      // /tarifas/v1/productos/{ref}
       const docRef = db
         .collection(TARIFAS_COLLECTION)
         .doc(TARIFA_VERSION)
         .collection(PRODUCTOS_SUBCOL)
         .doc(String(ref));
 
-      // ✅ CAMBIO MÍNIMO:
-      // - guardamos TODOS los campos que vengan del import (incluidas keys con espacios: "Ancho (mm)", "EAN code"...)
-      // - PERO NO guardamos rawRow (es enorme y no hace falta en Firestore)
       const safeData = { ...(data || {}) };
       if ("rawRow" in safeData) delete safeData.rawRow;
 
       const payload = {
-        ...safeData, // <- aquí van Nota/Ancho/Alto/Profundidad/Peso/HS/EAN/Web/EOL/Motivo...
+        ...safeData,
         referencia: String(ref),
         pvp: Number(safeData.pvp) || 0,
         descripcion: safeData.descripcion || "",
@@ -103,18 +78,6 @@ export async function subirTarifaAFirestore(productosMap) {
   return totalEscritos;
 }
 
-/**
- * Lee la tarifa actual desde Firestore.
- *
- * Devuelve un objeto:
- * {
- *   "916020": 833.0,
- *   "9155101": 1299.0,
- *   ...
- * }
- *
- * (solo número, para encajar con ui_presupuesto.js)
- */
 export async function getTarifas() {
   const colRef = db
     .collection(TARIFAS_COLLECTION)
@@ -132,7 +95,6 @@ export async function getTarifas() {
     const pvp = Number(d.pvp) || 0;
     if (!pvp) return;
 
-    // Mapa simple ref -> número
     result[ref] = pvp;
   });
 
@@ -142,4 +104,51 @@ export async function getTarifas() {
   );
 
   return result;
+}
+
+/**
+ * ✅ NUEVO: Vacía /tarifas/v1/productos (borrado por batches)
+ * Devuelve cuántos docs se han borrado.
+ */
+export async function vaciarTarifaEnFirestore() {
+  const colRef = db
+    .collection(TARIFAS_COLLECTION)
+    .doc(TARIFA_VERSION)
+    .collection(PRODUCTOS_SUBCOL);
+
+  const batchSize = 400;
+  let totalBorrados = 0;
+
+  while (true) {
+    const snap = await colRef.limit(batchSize).get();
+    if (snap.empty) break;
+
+    const batch = db.batch();
+    snap.docs.forEach((d) => batch.delete(d.ref));
+    await batch.commit();
+
+    totalBorrados += snap.size;
+    console.log(
+      `%cTarifa · Borrados ${totalBorrados}...`,
+      "color:#ef4444; font-weight:600;"
+    );
+  }
+
+  // (Opcional) dejar marca en el doc padre
+  try {
+    await db
+      .collection(TARIFAS_COLLECTION)
+      .doc(TARIFA_VERSION)
+      .set(
+        { updatedAt: firebase.firestore.FieldValue.serverTimestamp(), emptiedAt: firebase.firestore.FieldValue.serverTimestamp() },
+        { merge: true }
+      );
+  } catch (_) {}
+
+  console.log(
+    `%cTarifa · Vaciado completo: ${totalBorrados} docs`,
+    "color:#ef4444; font-weight:700;"
+  );
+
+  return totalBorrados;
 }
