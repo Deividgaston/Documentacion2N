@@ -1562,26 +1562,18 @@ async function exportarTarifaPDF(tipoId) {
 
 // ===============================================
 // EXPORTAR BC3 (Presto) — SOLO PVP + CP850 (OEM)
-// NOTA: BC3 NO EXPORTA columnas técnicas (nota/eol/etc)
+// FIX: sin '|' final en cada línea (Presto 8.8)
 // ===============================================
 async function exportarTarifaBC3(tipoId) {
   const tipo = appState.tarifasTipos[tipoId];
-  if (!tipo) {
-    alert("Tipo de tarifa no encontrado.");
-    return;
-  }
+  if (!tipo) return alert("Tipo de tarifa no encontrado.");
 
   const tType = tarifaTipoFromId(tipo.id || tipo.templateId || "");
-  if (tType !== "PVP") {
-    alert("BC3 solo está disponible si has seleccionado una tarifa PVP.");
-    return;
-  }
+  if (tType !== "PVP") return alert("BC3 solo está disponible si has seleccionado una tarifa PVP.");
 
   const tarifasBase = await getTarifasBase2N();
   if (!tarifasBase || !Object.keys(tarifasBase).length) {
-    alert(
-      "No se han encontrado productos en la tarifa base. Revisa la colección 'tarifas'."
-    );
+    alert("No se han encontrado productos en la tarifa base. Revisa la colección 'tarifas'.");
     return;
   }
 
@@ -1589,13 +1581,18 @@ async function exportarTarifaBC3(tipoId) {
     const model = await buildTarifaExportModel(tipo);
     const { filas, fileName } = model;
 
+    const CRLF = "\r\n";
+    const line = (arr) => arr.map((x) => String(x ?? "")).join("|") + CRLF;
+
     let out = "";
-    out += "~V|FIEBDC-3/2002|2N|TARIFA|1|\r\n";
-    out += "~K|0|\r\n";
-    out += "~C|TARIFA|Tarifa 2N|0|\r\n";
+    // ✅ sin pipe final
+    out += line(["~V", "FIEBDC-3/2002", "2N", "TARIFA", "1"]);
+    out += line(["~K", "0"]);
+    out += line(["~C", "TARIFA", "Tarifa 2N", "0"]); // contenedor
 
     for (const r of filas) {
       if (r.__section) continue;
+
       const code = String(r.sku || "").trim();
       if (!code) continue;
 
@@ -1603,11 +1600,13 @@ async function exportarTarifaBC3(tipoId) {
       const price = Number(r.msrp || 0); // SOLO PVP
       const p = isFinite(price) ? price.toFixed(2) : "0.00";
 
-      out += `~C|${escapeBC3(code)}|${escapeBC3(desc)}|0|ud|${p}|\r\n`;
+      // ✅ Presto: concepto simple con unidad y precio
+      out += line(["~C", escapeBC3(code), escapeBC3(desc), "0", "ud", p]);
     }
 
     const bytes = encodeCP850(out);
     const blob = new Blob([bytes], { type: "application/octet-stream" });
+
     if (typeof saveAs === "function") saveAs(blob, `${fileName}.bc3`);
     else downloadBlobFallback(blob, `${fileName}.bc3`);
   } catch (e) {
