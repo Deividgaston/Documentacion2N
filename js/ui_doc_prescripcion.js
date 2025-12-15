@@ -3122,26 +3122,39 @@ function downloadTextFile(content, filename, mimeType) {
 // ========================================================
 // BC3 EXPORT (FIEBDC-3) — COMPATIBLE (model.chapters o model.capitulos)
 // ========================================================
-function prescBc3TextSafe(s) {
+// Normaliza texto para BC3 (solo para DESCRIPCIONES y TEXTOS, NO para la línea completa)
+function prescBc3FieldSafe(s) {
   return String(s ?? "")
     .replace(/\u0000/g, "")
     .replace(/\r\n/g, "\n")
     .replace(/\r/g, "\n")
-    .replace(/\u00A0/g, " ") // NBSP
+    .replace(/\u00A0/g, " ")              // NBSP
 
-    // ✅ Normaliza caracteres “tipográficos” a ASCII (evita símbolos raros en Presto)
-    .replace(/[\u2018\u2019]/g, "'")  // ‘ ’
-    .replace(/[\u201C\u201D]/g, '"')  // “ ”
-    .replace(/[\u2013\u2014]/g, "-")  // – —
-    .replace(/\u2026/g, "...")        // …
-    .replace(/\u2022/g, "-")          // •
-    .replace(/\u00B7/g, "-")          // ·
-    .replace(/\u20AC/g, "EUR")        // €
+    // Tipográficas -> ASCII
+    .replace(/[\u2018\u2019]/g, "'")      // ‘ ’
+    .replace(/[\u201C\u201D]/g, '"')      // “ ”
+    .replace(/[\u2013\u2014]/g, "-")      // – —
+    .replace(/\u2026/g, "...")            // …
+    .replace(/\u2022/g, "-")              // •
+    .replace(/\u00B7/g, "-")              // ·
 
-    // BC3 usa | como separador
+    // Euro: en BC3 + CP1252 puede ir, pero para evitar líos lo dejamos como EUR
+    .replace(/\u20AC/g, " EUR")
+
+    // Separadores reservados BC3: NO pueden aparecer en campos
     .replace(/\|/g, " / ")
+    .replace(/\\/g, " / ")
+
+    // Limpieza
+    .replace(/[ \t]+/g, " ")
     .trim();
 }
+
+// Compat: si en tu código usas "prescBc3TextSafe", lo apuntamos al nuevo safe de campos
+function prescBc3TextSafe(s) {
+  return prescBc3FieldSafe(s);
+}
+
 
 
 
