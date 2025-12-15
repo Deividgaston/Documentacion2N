@@ -1722,38 +1722,7 @@ function escapeBC3(s) {
 }
 
 // CP850 (OEM) encoder básico (suficiente para ES habitual). No mapeado => '?'
-function encodeCP850(str) {
-  const s = String(str ?? "");
-  const map = {
-    á: 160,
-    í: 161,
-    ó: 162,
-    ú: 163,
-    ñ: 164,
-    Ñ: 165,
-    Á: 181,
-    É: 144,
-    Í: 214,
-    Ó: 224,
-    Ú: 233,
-    é: 130,
-    ü: 129,
-    Ü: 154,
-    ç: 135,
-    Ç: 128,
-    "€": 213,
-  };
 
-  const out = new Uint8Array(s.length);
-  for (let i = 0; i < s.length; i++) {
-    const ch = s[i];
-    const code = ch.charCodeAt(0);
-    if (code <= 127) out[i] = code;
-    else if (map[ch] !== undefined) out[i] = map[ch];
-    else out[i] = 63; // '?'
-  }
-  return out;
-}
 function prescBc3FieldSafe(s) {
   return String(s ?? "")
     .normalize("NFC")
