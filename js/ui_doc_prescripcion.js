@@ -3184,50 +3184,54 @@ function prescExportModelToBC3(model) {
   out.push(`~K|`);
 
   const usedCodes = new Set();
-  let matSeq = 0;
 
   const emitC = (code, unit, desc, price) => {
-    if (!code || usedCodes.has(code)) return;
-    usedCodes.add(code);
-    out.push(`~C|${code}|${unit}|${desc}|${num(price)}|`);
+    const c = clean(code);
+    if (!c || usedCodes.has(c)) return;
+    usedCodes.add(c);
+    out.push(`~C|${c}|${clean(unit || "Ud")}|${clean(desc || "")}|${num(price)}|`);
   };
 
   chapters.forEach((ch) => {
     const chCode = clean(ch.code);
     if (!chCode) return;
 
-    // CAPÍTULO (precio 0)
+    // 1) CAPÍTULO (precio 0)
     emitC(chCode, "Ud", clean(ch.title || "Capítulo"), 0);
 
-    // TEXTO capítulo (UNO SOLO)
-    if (ch.text) {
-      out.push(`~T|${chCode}|${clean(ch.text)}|`);
-    }
+    // 2) TEXTO capítulo
+    if (ch.text) out.push(`~T|${chCode}|${clean(ch.text)}|`);
 
-    const refs = [];
+    // 3) PARTIDAS: cada línea es una partida con su precio
+    const lineRefsForD = [];
+
     (ch.lines || []).forEach((l) => {
-      matSeq += 1;
-      const matCode = `MAT-${String(matSeq).padStart(5, "0")}`;
+      const lineCode = clean(l.code);
+      if (!lineCode) return;
 
-      emitC(
-        matCode,
-        clean(l.unit || "Ud"),
-        clean(l.description || ""),
-        Number(l.price || 0)
-      );
+      const unit = clean(l.unit || "Ud");
+      const desc = clean(l.description || "");
+      const price = Number(l.price || 0);
 
+      emitC(lineCode, unit, desc, price);
+
+      // Descomposición del capítulo a partidas (factor 1)
+      lineRefsForD.push(`${lineCode}\\1\\`);
+
+      // Medición: cantidad real de la partida dentro del capítulo
       const qty = Number(l.qty || 0);
-      if (qty > 0) refs.push(`${matCode}\\${num(qty)}\\`);
+      if (qty > 0) out.push(`~M|${chCode}|${lineCode}|${num(qty)}|`);
     });
 
-    // 🔑 UNA SOLA DESCOMPOSICIÓN POR CAPÍTULO
-    if (refs.length) {
-      out.push(`~D|${chCode}|${refs.join("")}|`);
+    // 4) UNA descomposición por capítulo (capítulo -> partidas)
+    if (lineRefsForD.length) {
+      out.push(`~D|${chCode}|${lineRefsForD.join("")}|`);
     }
   });
 
   return out.join(NL) + NL;
 }
+
 
 
 
