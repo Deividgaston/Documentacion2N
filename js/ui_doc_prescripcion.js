@@ -3258,7 +3258,7 @@ function prescExportModelToBC3_Compat(model) {
 
       const q = qty > 0 ? qty : 1; // evita “desaparece” por 0
       // ✅ 3 campos en descomposición
-      resRefs.push(`${lineCode}\\${num(q)}\\1\\`);
+      resRefs.push(`${lineCode}\\1\\${num(qty > 0 ? qty : 1)}\\`);
     });
 
     if (resRefs.length) out.push(`~D|${chCode}|${resRefs.join("")}|`);
