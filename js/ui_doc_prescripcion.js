@@ -3189,9 +3189,11 @@ function prescExportModelToBC3_Compat(model) {
   const NL = "\r\n";
   const clean = prescBc3TextSafe;
 
+  // num en formato FIEBDC (punto decimal)
   const num = (v) => {
     const n = Number(v);
-    return Number.isFinite(n) ? String(n.toFixed(2)).replace(",", ".") : "0.00";
+    const x = Number.isFinite(n) ? n : 0;
+    return String(x.toFixed(2)).replace(",", ".");
   };
 
   const today = new Date();
@@ -3200,9 +3202,9 @@ function prescExportModelToBC3_Compat(model) {
     String(today.getMonth() + 1).padStart(2, "0") +
     String(today.getDate()).padStart(2, "0");
 
+  // Cabecera mínima
   out.push(`~V|FIEBDC-3/2002|Presupuestos2N|1.0|${dateStr}|`);
   out.push(`~K|0|0|0|0|0|0|0|0|0|`);
-
 
   const ROOT = "PRESC";
   out.push(`~C|${ROOT}|Ud|Prescripción|0.00|`);
@@ -3216,42 +3218,59 @@ function prescExportModelToBC3_Compat(model) {
   };
 
   const chapters = prescGetChaptersCompat(model);
+
+  // ROOT -> capítulos (para ~D y ~M)
   const rootDecomp = [];
+  const rootMeasures = [];
 
   chapters.forEach((ch, idx) => {
-    const chCode =
-      clean(ch.code || ch.codigo || ch.__importCode || `2N.${String(idx + 1).padStart(2, "0")}`);
-
+    const chCode = clean(ch.code || ch.codigo || ch.__importCode || `2N.${String(idx + 1).padStart(2, "0")}`);
     const chTitle = ch.title || ch.nombre || "Capítulo";
     const chText  = ch.text  || ch.texto  || "";
 
     emitC(chCode, "Ud", chTitle, 0);
-    rootDecomp.push(`${chCode}\\1\\`);
 
+    // Relación ROOT -> Capítulo (siempre qty 1.00)
+    rootDecomp.push(`${chCode}\\${num(1)}\\`);
+    rootMeasures.push(`~M|${ROOT}|${chCode}|${num(1)}|`);
+
+    // Texto capítulo
     if (chText) out.push(`~T|${chCode}|${clean(chText)}|`);
 
-    const resRefs = [];
     const lines = prescGetLinesCompat(ch);
+    const resRefs = [];
 
     lines.forEach((l, lineIdx) => {
-      const lineCode =
-        clean(l.code || l.codigo || `2N.${String(idx + 1).padStart(2, "0")}.${String(lineIdx + 1).padStart(2, "0")}`);
+      const lineCode = clean(
+        l.code ||
+        l.codigo ||
+        `2N.${String(idx + 1).padStart(2, "0")}.${String(lineIdx + 1).padStart(2, "0")}`
+      );
 
-      const desc = l.description || l.descripcion || "";
-      const unit = l.unit || l.unidad || "Ud";
+      const desc  = l.description || l.descripcion || "";
+      const unit  = l.unit || l.unidad || "Ud";
       const price = Number(l.price ?? l.pvp ?? 0);
-      const qty = Number(l.qty ?? l.cantidad ?? 1);
+
+      // qty: en Presto mejor >= 1 para que “exista” la línea
+      const qRaw = Number(l.qty ?? l.cantidad ?? 1);
+      const qty = (Number.isFinite(qRaw) && qRaw > 0) ? qRaw : 1;
 
       emitC(lineCode, unit, desc, price);
 
-      // En ~D: cantidad (si 0, ponemos 1 para que no desaparezca en algunos Presto)
-      resRefs.push(`${lineCode}\\${num(qty > 0 ? qty : 1)}\\`);
+      // Descomposición (estructura)
+      resRefs.push(`${lineCode}\\${num(qty)}\\`);
+
+      // ✅ Medición (esto es lo que suele hacer que Presto “lo vea”)
+      out.push(`~M|${chCode}|${lineCode}|${num(qty)}|`);
     });
 
     if (resRefs.length) out.push(`~D|${chCode}|${resRefs.join("")}|`);
   });
 
+  // ROOT -> capítulos (estructura)
   if (rootDecomp.length) out.push(`~D|${ROOT}|${rootDecomp.join("")}|`);
+  // ROOT -> capítulos (medición)
+  if (rootMeasures.length) out.push(...rootMeasures);
 
   return out.join(NL) + NL;
 }
