@@ -3189,88 +3189,83 @@ function prescExportModelToBC3_Compat(model) {
   const NL = "\r\n";
   const clean = prescBc3TextSafe;
 
-  // num en formato FIEBDC (punto decimal)
   const num = (v) => {
     const n = Number(v);
-    const x = Number.isFinite(n) ? n : 0;
-    return String(x.toFixed(2)).replace(",", ".");
+    return Number.isFinite(n) ? String(n.toFixed(2)).replace(",", ".") : "0.00";
   };
 
-  const today = new Date();
-  const dateStr =
-    today.getFullYear() +
-    String(today.getMonth() + 1).padStart(2, "0") +
-    String(today.getDate()).padStart(2, "0");
+  // Presto usa ddmmyy (ej: 080925)
+  const now = new Date();
+  const dd = String(now.getDate()).padStart(2, "0");
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const yy = String(now.getFullYear()).slice(-2);
+  const prestoDate = `${dd}${mm}${yy}`;
 
-  // Cabecera mínima
-  out.push(`~V|FIEBDC-3/2002|Presupuestos2N|1.0|${dateStr}|`);
-  out.push(`~K|0|0|0|0|0|0|0|0|0|`);
+  // Cabecera compatible estilo Presto (muy tolerante)
+  out.push(`~V|SOFT S.A.|FIEBDC-3/2002|Presupuestos2N|1.0||ANSI|`);
+  out.push(`~K|\\2\\2\\3\\2\\2\\2\\2\\EUR\\|0|`);
 
   const ROOT = "PRESC";
-  out.push(`~C|${ROOT}|Ud|Prescripción|0.00|`);
-
   const used = new Set();
-  const emitC = (code, unit, desc, price) => {
+
+  // type: 0 = capítulo/partida, 3 = recurso/artículo (como tu BC3)
+  const emitC = (code, unit, desc, price, type = 0) => {
     const c = clean(code);
     if (!c || used.has(c)) return;
     used.add(c);
-    out.push(`~C|${c}|${clean(unit || "Ud")}|${clean(desc || "")}|${num(price)}|`);
+
+    out.push(
+      `~C|${c}|${clean(unit || "Ud")}|${clean(desc || "")}|${num(price)}|${prestoDate}|${type}|`
+    );
   };
 
-  const chapters = prescGetChaptersCompat(model);
+  // Concepto raíz
+  emitC(ROOT, "Ud", "Prescripción", 0, 0);
 
-  // ROOT -> capítulos (para ~D y ~M)
+  const chapters = prescGetChaptersCompat(model);
   const rootDecomp = [];
-  const rootMeasures = [];
 
   chapters.forEach((ch, idx) => {
-    const chCode = clean(ch.code || ch.codigo || ch.__importCode || `2N.${String(idx + 1).padStart(2, "0")}`);
+    const chCode = clean(
+      ch.code || ch.codigo || ch.__importCode || `2N.${String(idx + 1).padStart(2, "0")}`
+    );
+
     const chTitle = ch.title || ch.nombre || "Capítulo";
     const chText  = ch.text  || ch.texto  || "";
 
-    emitC(chCode, "Ud", chTitle, 0);
+    // Capítulo como concepto tipo 0
+    emitC(chCode, "Ud", chTitle, 0, 0);
 
-    // Relación ROOT -> Capítulo (siempre qty 1.00)
-    rootDecomp.push(`${chCode}\\${num(1)}\\`);
-    rootMeasures.push(`~M|${ROOT}|${chCode}|${num(1)}|`);
+    // ✅ MUY IMPORTANTE: Presto suele necesitar 3 campos en ~D: code\qty\1\
+    rootDecomp.push(`${chCode}\\1\\1\\`);
 
-    // Texto capítulo
     if (chText) out.push(`~T|${chCode}|${clean(chText)}|`);
 
-    const lines = prescGetLinesCompat(ch);
     const resRefs = [];
+    const lines = prescGetLinesCompat(ch);
 
     lines.forEach((l, lineIdx) => {
       const lineCode = clean(
-        l.code ||
-        l.codigo ||
-        `2N.${String(idx + 1).padStart(2, "0")}.${String(lineIdx + 1).padStart(2, "0")}`
+        l.code || l.codigo || `2N.${String(idx + 1).padStart(2, "0")}.${String(lineIdx + 1).padStart(2, "0")}`
       );
 
       const desc  = l.description || l.descripcion || "";
       const unit  = l.unit || l.unidad || "Ud";
       const price = Number(l.price ?? l.pvp ?? 0);
+      const qty   = Number(l.qty ?? l.cantidad ?? 1);
 
-      // qty: en Presto mejor >= 1 para que “exista” la línea
-      const qRaw = Number(l.qty ?? l.cantidad ?? 1);
-      const qty = (Number.isFinite(qRaw) && qRaw > 0) ? qRaw : 1;
+      // Línea como recurso tipo 3 (como hace Presto en tu fichero)
+      emitC(lineCode, unit, desc, price, 3);
 
-      emitC(lineCode, unit, desc, price);
-
-      // Descomposición (estructura)
-      resRefs.push(`${lineCode}\\${num(qty)}\\`);
-
-      // ✅ Medición (esto es lo que suele hacer que Presto “lo vea”)
-      out.push(`~M|${chCode}|${lineCode}|${num(qty)}|`);
+      const q = qty > 0 ? qty : 1; // evita “desaparece” por 0
+      // ✅ 3 campos en descomposición
+      resRefs.push(`${lineCode}\\${num(q)}\\1\\`);
     });
 
     if (resRefs.length) out.push(`~D|${chCode}|${resRefs.join("")}|`);
   });
 
-  // ROOT -> capítulos (estructura)
   if (rootDecomp.length) out.push(`~D|${ROOT}|${rootDecomp.join("")}|`);
-  // ROOT -> capítulos (medición)
-  if (rootMeasures.length) out.push(...rootMeasures);
 
   return out.join(NL) + NL;
 }
