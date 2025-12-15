@@ -3150,6 +3150,22 @@ function prescExportModelToBC3(model) {
     return String(Math.round(n * 100) / 100).replace(",", ".");
   };
 
+  // ✅ Nombre de proyecto real (para ~K)
+  const getProjectName = () => {
+    try {
+      if (typeof window.getNombreProyectoActual === "function") {
+        const n = String(window.getNombreProyectoActual() || "").trim();
+        if (n) return n;
+      }
+    } catch (_) {}
+
+    const p = window.appState?.proyecto || {};
+    const pr = window.appState?.presupuesto || {};
+    return String(
+      p.nombre || p.name || pr.nombreProyecto || pr.projectName || "Proyecto"
+    ).trim() || "Proyecto";
+  };
+
   const today = new Date();
   const dateStr =
     String(today.getFullYear()) +
@@ -3159,9 +3175,16 @@ function prescExportModelToBC3(model) {
   const out = [];
   const NL = "\r\n";
 
-  // Cabecera (simple y compatible)
+  // ✅ Root para que Presto tenga “obra” + árbol claro
+  const rootCode = "PRESC2N##";
+  const rootDesc = cleanField(getProjectName());
+
+  // Cabecera
   out.push(`~V|FIEBDC-3/2020|Presupuestos2N|1.0|${dateStr}|`);
-  out.push(`~K|`);
+
+  // ✅ ~K con nombre de proyecto (más compatible que vacío)
+  // (formato simple, Presto lo acepta y ya te muestra nombre en propiedades/import)
+  out.push(`~K|${rootCode}|${rootDesc}|${dateStr}||`);
 
   const emitted = new Set();
 
@@ -3176,16 +3199,13 @@ function prescExportModelToBC3(model) {
     const d = cleanField(desc || "");
     const p = num(price || 0);
 
-    // ~C|CODIGO|UD|RESUMEN|PRECIO|
     out.push(`~C|${c}|${u}|${d}|${p}|`);
   };
 
   const emitT = (code, text) => {
     const c = cleanField(code);
-    const t = cleanField(text);
-    if (!c || !t) return;
+    if (!c) return;
 
-    // Una línea ~T por párrafo (más compatible)
     const paras = String(text || "")
       .replace(/\u0000/g, "")
       .split(/\n\s*\n/)
@@ -3202,12 +3222,33 @@ function prescExportModelToBC3(model) {
     if (!p || !c) return;
     if (!Number.isFinite(q) || q === 0) return;
 
-    // ~M|PADRE|HIJO|CANTIDAD|
     out.push(`~M|${p}|${c}|${num(q)}|`);
   };
 
+  // ✅ NUEVO: ~D para crear árbol (root->capítulos, capítulo->partidas)
+  const emitD = (parent, childrenCodes) => {
+    const p = cleanField(parent);
+    if (!p || !childrenCodes?.length) return;
+    childrenCodes.forEach((ch) => {
+      const c = cleanField(ch);
+      if (!c) return;
+      // Formato simple: ~D|PADRE|HIJO|FACTOR|
+      out.push(`~D|${p}|${c}|1|`);
+    });
+  };
+
+  // Root como concepto (precio 0)
+  emitC(rootCode, "Ud", rootDesc, 0);
+
+  // Capítulos
+  const chapterCodes = [];
+
   chapters.forEach((ch) => {
     const chCode = cleanField(ch.code || "");
+    if (!chCode) return;
+
+    chapterCodes.push(chCode);
+
     const chTitle = cleanField(ch.title || chCode || "Capítulo");
 
     // Capítulo como concepto (precio 0)
@@ -3216,11 +3257,15 @@ function prescExportModelToBC3(model) {
     // Texto capítulo
     if (String(ch.text || "").trim()) emitT(chCode, ch.text);
 
-    // Partidas
+    // Partidas del capítulo
     const lines = Array.isArray(ch.lines) ? ch.lines : [];
+    const lineCodes = [];
+
     lines.forEach((l) => {
       const lc = cleanField(l.code || "");
       if (!lc) return;
+
+      lineCodes.push(lc);
 
       emitC(
         lc,
@@ -3229,9 +3274,16 @@ function prescExportModelToBC3(model) {
         Number(l.price ?? 0)
       );
 
+      // Cantidad (medición)
       emitM(chCode, lc, Number(l.qty ?? 0));
     });
+
+    // ✅ Árbol capítulo -> partidas
+    emitD(chCode, lineCodes);
   });
+
+  // ✅ Árbol root -> capítulos
+  emitD(rootCode, chapterCodes);
 
   return out.join(NL) + NL;
 }
