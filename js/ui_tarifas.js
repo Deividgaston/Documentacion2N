@@ -92,14 +92,7 @@ const TARIFA_TEMPLATES = {
 
 // Campos de descuento que soporta el sistema.
 // Se guardan como decimales (0.36, 0.28, etc.) en Firestore.
-const DISCOUNT_FIELDS = [
-  "nfrDist",
-  "nfrRes",
-  "dist",
-  "subd",
-  "rp2",
-  "rp1",
-];
+const DISCOUNT_FIELDS = ["nfrDist", "nfrRes", "dist", "subd", "rp2", "rp1"];
 
 // Identificadores de grupo lógicos
 const GRUPOS_IDS = ["GRUPO_A", "GRUPO_B", "GRUPO_C", "GRUPO_D"];
@@ -160,19 +153,16 @@ const GROUP_PATTERNS = {
     "backplate",
     "frame",
   ],
-  // GRUPO_A: resto (main units, licencias, etc.)
+  // GRUPO_A: resto
 };
 
 function clasificarGrupoPorDescripcion(descripcionRaw) {
   const desc = (descripcionRaw || "").toString().toLowerCase();
-
   if (!desc) return "GRUPO_A";
 
   for (const gid of ["GRUPO_D", "GRUPO_C", "GRUPO_B"]) {
     const patterns = GROUP_PATTERNS[gid] || [];
-    if (patterns.some((p) => desc.includes(p))) {
-      return gid;
-    }
+    if (patterns.some((p) => desc.includes(p))) return gid;
   }
   return "GRUPO_A";
 }
@@ -225,9 +215,27 @@ const DEFAULT_TIPOS_TARIFA = {
     moneda: "EUR",
     templateId: "ES_BBD",
     grupos: {
-      GRUPO_A: { nfrDist: 0.55, nfrRes: 0.5, dist: 0.39, rp2: 0.28, rp1: 0.1 },
-      GRUPO_B: { nfrDist: 0.55, nfrRes: 0.5, dist: 0.25, rp2: 0.15, rp1: 0.05 },
-      GRUPO_C: { nfrDist: 0.55, nfrRes: 0.5, dist: 0.35, rp2: 0.26, rp1: 0.1 },
+      GRUPO_A: {
+        nfrDist: 0.55,
+        nfrRes: 0.5,
+        dist: 0.39,
+        rp2: 0.28,
+        rp1: 0.1,
+      },
+      GRUPO_B: {
+        nfrDist: 0.55,
+        nfrRes: 0.5,
+        dist: 0.25,
+        rp2: 0.15,
+        rp1: 0.05,
+      },
+      GRUPO_C: {
+        nfrDist: 0.55,
+        nfrRes: 0.5,
+        dist: 0.35,
+        rp2: 0.26,
+        rp1: 0.1,
+      },
       GRUPO_D: { nfrDist: 0, nfrRes: 0, dist: 0.2, rp2: 0.1, rp1: 0.1 },
     },
     activo: true,
@@ -257,9 +265,27 @@ const DEFAULT_TIPOS_TARIFA = {
     moneda: "EUR",
     templateId: "EN_VAD",
     grupos: {
-      GRUPO_A: { nfrDist: 0.55, nfrRes: 0.5, dist: 0.42, rp2: 0.28, rp1: 0.1 },
-      GRUPO_B: { nfrDist: 0.55, nfrRes: 0.5, dist: 0.28, rp2: 0.15, rp1: 0.05 },
-      GRUPO_C: { nfrDist: 0.55, nfrRes: 0.5, dist: 0.38, rp2: 0.26, rp1: 0.1 },
+      GRUPO_A: {
+        nfrDist: 0.55,
+        nfrRes: 0.5,
+        dist: 0.42,
+        rp2: 0.28,
+        rp1: 0.1,
+      },
+      GRUPO_B: {
+        nfrDist: 0.55,
+        nfrRes: 0.5,
+        dist: 0.28,
+        rp2: 0.15,
+        rp1: 0.05,
+      },
+      GRUPO_C: {
+        nfrDist: 0.55,
+        nfrRes: 0.5,
+        dist: 0.38,
+        rp2: 0.26,
+        rp1: 0.1,
+      },
       GRUPO_D: { nfrDist: 0, nfrRes: 0, dist: 0.2, rp2: 0.1, rp1: 0.1 },
     },
     activo: true,
@@ -313,11 +339,7 @@ async function loadTarifasTiposFromFirestore() {
         const data = d.data() || {};
         const id = data.id || d.id;
         const def = DEFAULT_TIPOS_TARIFA[id] || {};
-        const merged = {
-          ...def,
-          ...data,
-          id,
-        };
+        const merged = { ...def, ...data, id };
         merged.grupos = normalizarGrupos(merged.grupos);
         result[id] = merged;
       });
@@ -325,10 +347,7 @@ async function loadTarifasTiposFromFirestore() {
       // Añadir por defecto los que falten (para tenerlos todos)
       Object.entries(DEFAULT_TIPOS_TARIFA).forEach(([id, def]) => {
         if (!result[id]) {
-          result[id] = {
-            ...def,
-            grupos: normalizarGrupos(def.grupos),
-          };
+          result[id] = { ...def, grupos: normalizarGrupos(def.grupos) };
         }
       });
     }
@@ -351,10 +370,7 @@ async function loadTarifasTiposFromFirestore() {
     );
     const fallback = {};
     Object.entries(DEFAULT_TIPOS_TARIFA).forEach(([id, def]) => {
-      fallback[id] = {
-        ...def,
-        grupos: normalizarGrupos(def.grupos),
-      };
+      fallback[id] = { ...def, grupos: normalizarGrupos(def.grupos) };
     });
     appState.tarifasTipos = fallback;
     appState.tarifasTiposLoaded = true;
@@ -372,10 +388,7 @@ async function loadTarifasTiposFromFirestore() {
 
 async function guardarTarifaTipoEnFirestore(tipo) {
   if (!tipo || !tipo.id) return;
-  const tipoGuardar = {
-    ...tipo,
-    grupos: normalizarGrupos(tipo.grupos),
-  };
+  const tipoGuardar = { ...tipo, grupos: normalizarGrupos(tipo.grupos) };
 
   try {
     const db = firebase.firestore();
@@ -510,9 +523,7 @@ function pintarListadoTiposTarifa() {
             const tpl = TARIFA_TEMPLATES[t.templateId] || {};
             return `
               <tr class="tarifa-row ${
-                t.id === appState.tarifasTipoSeleccionadoId
-                  ? "row-selected"
-                  : ""
+                t.id === appState.tarifasTipoSeleccionadoId ? "row-selected" : ""
               }" data-id="${t.id}">
                 <td><span class="status-dot ${
                   t.activo !== false ? "bg-green" : "bg-gray"
@@ -568,14 +579,15 @@ function mostrarFormularioTipoTarifa(tipoOriginal) {
   const opcionesTemplate = Object.values(TARIFA_TEMPLATES)
     .map(
       (tpl) => `
-      <option value="${tpl.id}" ${
-        tpl.id === tipo.templateId ? "selected" : ""
-      }>
+      <option value="${tpl.id}" ${tpl.id === tipo.templateId ? "selected" : ""}>
         ${tpl.id} · ${tpl.descripcion}
       </option>
     `
     )
     .join("");
+
+  const exportType = tarifaTipoFromId(tipo.id || tipo.templateId || "");
+  const showBC3 = !esNuevo && exportType === "PVP"; // BC3 SOLO PVP
 
   detalle.innerHTML = `
     <style>
@@ -585,34 +597,18 @@ function mostrarFormularioTipoTarifa(tipoOriginal) {
         gap: 0.5rem 1rem;
       }
       @media (max-width: 960px) {
-        .tarifas-detalle-compact .form-grid {
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
+        .tarifas-detalle-compact .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       }
       @media (max-width: 720px) {
-        .tarifas-detalle-compact .form-grid {
-          grid-template-columns: minmax(0, 1fr);
-        }
+        .tarifas-detalle-compact .form-grid { grid-template-columns: minmax(0, 1fr); }
       }
-      .tarifas-detalle-compact .form-group {
-        margin-bottom: 0.35rem;
-      }
-      .tarifas-detalle-compact .small-hint {
-        font-size: 0.7rem;
-        color: #6b7280;
-        margin-top: 0.15rem;
-      }
+      .tarifas-detalle-compact .form-group { margin-bottom: 0.35rem; }
+      .tarifas-detalle-compact .small-hint { font-size: 0.7rem; color: #6b7280; margin-top: 0.15rem; }
       .tarifas-detalle-compact .table-wrapper-compact {
-        max-height: 260px;
-        overflow: auto;
-        border-radius: 0.5rem;
-        border: 1px solid #e5e7eb;
-        background: #f9fafb;
-        padding: 0.25rem;
+        max-height: 260px; overflow: auto; border-radius: 0.5rem; border: 1px solid #e5e7eb;
+        background: #f9fafb; padding: 0.25rem;
       }
-      .tarifas-detalle-compact table.table {
-        margin-bottom: 0;
-      }
+      .tarifas-detalle-compact table.table { margin-bottom: 0; }
     </style>
 
     <div class="tarifas-detalle-compact">
@@ -621,12 +617,8 @@ function mostrarFormularioTipoTarifa(tipoOriginal) {
 
         <div class="form-group">
           <label>ID tipo (único)</label>
-          <input id="tipoId" type="text" value="${tipo.id}" ${
-    esNuevo ? "" : "readonly"
-  } />
-          <p class="small-hint">
-            Ej: ES_SUBD, ES_BBD, TARIFA_INSTALADOR_15
-          </p>
+          <input id="tipoId" type="text" value="${tipo.id}" ${esNuevo ? "" : "readonly"} />
+          <p class="small-hint">Ej: ES_SUBD, ES_BBD, TARIFA_INSTALADOR_15</p>
         </div>
 
         <div class="form-group">
@@ -649,12 +641,8 @@ function mostrarFormularioTipoTarifa(tipoOriginal) {
 
         <div class="form-group">
           <label>Plantilla base</label>
-          <select id="tipoTemplateId">
-            ${opcionesTemplate}
-          </select>
-          <p class="small-hint">
-            Solo define el formato (columnas NFR/Dist/SubD/RP2/RP1/MSRP).
-          </p>
+          <select id="tipoTemplateId">${opcionesTemplate}</select>
+          <p class="small-hint">Solo define el formato (columnas NFR/Dist/SubD/RP2/RP1/MSRP).</p>
         </div>
 
         <div class="form-group">
@@ -665,9 +653,7 @@ function mostrarFormularioTipoTarifa(tipoOriginal) {
         <div class="form-group">
           <label>Activo</label>
           <label style="display:flex; align-items:center; gap:0.35rem;">
-            <input id="tipoActivo" type="checkbox" ${
-              tipo.activo !== false ? "checked" : ""
-            } />
+            <input id="tipoActivo" type="checkbox" ${tipo.activo !== false ? "checked" : ""} />
             <span style="font-size:0.8rem;">Disponible para exportar</span>
           </label>
         </div>
@@ -675,9 +661,7 @@ function mostrarFormularioTipoTarifa(tipoOriginal) {
       </div>
 
       <div style="margin-top:0.8rem;">
-        <h4 style="font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">
-          Descuentos por grupo
-        </h4>
+        <h4 style="font-size:0.8rem; font-weight:600; margin-bottom:0.25rem;">Descuentos por grupo</h4>
         <p class="small-hint">
           Valores en % sobre PVP. Se aplican por grupo (A/B/C/D) y nivel (NFR, Dist, SubD, RP2, RP1).
         </p>
@@ -687,9 +671,7 @@ function mostrarFormularioTipoTarifa(tipoOriginal) {
             <thead>
               <tr>
                 <th>Grupo</th>
-                ${DISCOUNT_FIELDS.map(
-                  (f) => `<th style="text-align:right;">${f}</th>`
-                ).join("")}
+                ${DISCOUNT_FIELDS.map((f) => `<th style="text-align:right;">${f}</th>`).join("")}
               </tr>
             </thead>
             <tbody>
@@ -724,14 +706,18 @@ function mostrarFormularioTipoTarifa(tipoOriginal) {
       </div>
 
       <div style="margin-top:0.8rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
-        <button id="btnGuardarTipoTarifa" class="btn btn-primary btn-sm">
-          Guardar
-        </button>
+        <button id="btnGuardarTipoTarifa" class="btn btn-primary btn-sm">Guardar</button>
         ${
           !esNuevo
-            ? `<button id="btnExportarTipoTarifa" class="btn btn-secondary btn-sm">
-                 Exportar Excel
-               </button>`
+            ? `
+              <button id="btnExportarTipoTarifaExcel" class="btn btn-secondary btn-sm">Exportar Excel</button>
+              <button id="btnExportarTipoTarifaPDF" class="btn btn-secondary btn-sm">Exportar PDF</button>
+              ${
+                showBC3
+                  ? `<button id="btnExportarTipoTarifaBC3" class="btn btn-secondary btn-sm">Exportar BC3 (Presto)</button>`
+                  : ""
+              }
+            `
             : ""
         }
       </div>
@@ -741,52 +727,40 @@ function mostrarFormularioTipoTarifa(tipoOriginal) {
   `;
 
   const btnGuardar = document.getElementById("btnGuardarTipoTarifa");
-  const btnExportar = document.getElementById("btnExportarTipoTarifa");
+  const btnExcel = document.getElementById("btnExportarTipoTarifaExcel");
+  const btnPDF = document.getElementById("btnExportarTipoTarifaPDF");
+  const btnBC3 = document.getElementById("btnExportarTipoTarifaBC3");
 
   if (btnGuardar) {
     btnGuardar.addEventListener("click", async () => {
       const id = (document.getElementById("tipoId").value || "").trim();
       const nombre = (document.getElementById("tipoNombre").value || "").trim();
       const idioma = document.getElementById("tipoIdioma").value || "ES";
-      const moneda =
-        (document.getElementById("tipoMoneda").value || "EUR").trim();
-      const templateId =
-        document.getElementById("tipoTemplateId").value || "ES_SUBD";
-      const orden =
-        Number(document.getElementById("tipoOrden").value) || 100;
+      const moneda = (document.getElementById("tipoMoneda").value || "EUR").trim();
+      const templateId = document.getElementById("tipoTemplateId").value || "ES_SUBD";
+      const orden = Number(document.getElementById("tipoOrden").value) || 100;
       const activo = !!document.getElementById("tipoActivo").checked;
 
       if (!id) {
-        mostrarMsgTarifaDetalle(
-          "El ID del tipo de tarifa es obligatorio.",
-          true
-        );
+        mostrarMsgTarifaDetalle("El ID del tipo de tarifa es obligatorio.", true);
         return;
       }
       if (!nombre) {
-        mostrarMsgTarifaDetalle(
-          "El nombre visible es obligatorio.",
-          true
-        );
+        mostrarMsgTarifaDetalle("El nombre visible es obligatorio.", true);
         return;
       }
 
       // Leer descuentos por grupo
       const grupos = normalizarGrupos(tipo.grupos);
-      document
-        .querySelectorAll(".input-dto-grupo")
-        .forEach((input) => {
-          const gid = input.dataset.gid;
-          const field = input.dataset.field;
-          const val = Number(input.value);
-          if (!gid || !field) return;
-          if (!grupos[gid]) grupos[gid] = {};
-          if (!isNaN(val) && val > 0) {
-            grupos[gid][field] = val / 100;
-          } else {
-            delete grupos[gid][field];
-          }
-        });
+      document.querySelectorAll(".input-dto-grupo").forEach((input) => {
+        const gid = input.dataset.gid;
+        const field = input.dataset.field;
+        const val = Number(input.value);
+        if (!gid || !field) return;
+        if (!grupos[gid]) grupos[gid] = {};
+        if (!isNaN(val) && val > 0) grupos[gid][field] = val / 100;
+        else delete grupos[gid][field];
+      });
 
       const nuevoTipo = {
         ...(tipoOriginal || {}),
@@ -806,23 +780,26 @@ function mostrarFormularioTipoTarifa(tipoOriginal) {
         appState.tarifasTipoSeleccionadoId = id;
         pintarListadoTiposTarifa();
         mostrarFormularioTipoTarifa(nuevoTipo);
-        mostrarMsgTarifaDetalle(
-          "Tipo de tarifa guardado correctamente.",
-          false
-        );
+        mostrarMsgTarifaDetalle("Tipo de tarifa guardado correctamente.", false);
       } catch (e) {
         console.error("[Tarifas] Error guardando tipo:", e);
-        mostrarMsgTarifaDetalle(
-          "Error guardando el tipo de tarifa.",
-          true
-        );
+        mostrarMsgTarifaDetalle("Error guardando el tipo de tarifa.", true);
       }
     });
   }
 
-  if (btnExportar && !esNuevo) {
-    btnExportar.addEventListener("click", () => {
-      exportarTarifaExcel(tipo.id);
+  if (btnExcel && !esNuevo) btnExcel.addEventListener("click", () => exportarTarifaExcel(tipo.id));
+  if (btnPDF && !esNuevo) btnPDF.addEventListener("click", () => exportarTarifaPDF(tipo.id));
+  if (btnBC3 && !esNuevo) {
+    btnBC3.addEventListener("click", () => {
+      // Guard extra por seguridad (aunque el botón solo sale en PVP)
+      const t = appState.tarifasTipos[tipo.id];
+      const tType = tarifaTipoFromId(t?.id || t?.templateId || "");
+      if (tType !== "PVP") {
+        alert("BC3 solo está disponible si has seleccionado una tarifa PVP.");
+        return;
+      }
+      exportarTarifaBC3(tipo.id);
     });
   }
 }
@@ -835,8 +812,195 @@ function mostrarMsgTarifaDetalle(texto, esError) {
   msg.className = "alert mt-3 " + (esError ? "alert-error" : "alert-success");
 }
 
+// ======================================================
+// EXPORT (modelo único + columnas dinámicas + ES/EN + BC3 solo PVP)
+// ======================================================
+
+function tarifaTipoFromId(idOrTpl) {
+  const s = String(idOrTpl || "").toUpperCase();
+  if (s.includes("PVP")) return "PVP";
+  if (s.includes("SUBD")) return "SUBD";
+  if (s.includes("BBD")) return "BBD";
+  if (s.includes("VAD")) return "VAD";
+  return "PVP";
+}
+
+function tarifasGetExportSpec(tipo) {
+  const t = tipo || {};
+  const lang = String(t.idioma || "").toUpperCase() === "EN" ? "EN" : "ES";
+  const exportType = tarifaTipoFromId(t.id || t.templateId || "");
+
+  const L = lang === "EN"
+    ? {
+        sku: "2N SKU",
+        name: "Name",
+        msrp: "MSRP (EUR)",
+        vadMsrp: "VAD MSRP (EUR)",
+        subd: "SubD price (EUR)",
+        rp2: "RP2 (EUR)",
+        rp1: "RP1 (EUR)",
+        note: "Note",
+        w: "Width (mm)",
+        h: "Height (mm)",
+        d: "Depth (mm)",
+        weight: "Weight (kg)",
+        hs: "HS code",
+        ean: "EAN code",
+        website: "Website",
+      }
+    : {
+        sku: "2N SKU",
+        name: "Nombre",
+        msrp: "MSRP (EUR)",
+        vadMsrp: "VAD MSRP (EUR)",
+        subd: "Precio SubD (EUR)",
+        rp2: "RP2 (EUR)",
+        rp1: "RP1 (EUR)",
+        note: "Nota",
+        w: "Anchura (mm)",
+        h: "Altura (mm)",
+        d: "Profundidad (mm)",
+        weight: "Peso (kg)",
+        hs: "HS code",
+        ean: "EAN code",
+        website: "Website",
+      };
+
+  const base = [
+    { key: "sku", header: L.sku, width: 12 },
+    { key: "name", header: L.name, width: 45 },
+  ];
+
+  // Reglas de columnas dinámicas (memoria):
+  // PVP -> MSRP
+  // SUBD -> MSRP + SubD + RP2 + RP1
+  // BBD -> MSRP + RP2 + RP1
+  // VAD -> VAD MSRP + RP2 + RP1
+  let priceCols = [];
+  if (exportType === "PVP") {
+    priceCols = [{ key: "msrp", header: L.msrp, width: 14, isMoney: true }];
+  } else if (exportType === "SUBD") {
+    priceCols = [
+      { key: "subd", header: L.subd, width: 14, isMoney: true },
+      { key: "rp2", header: L.rp2, width: 16, isMoney: true },
+      { key: "rp1", header: L.rp1, width: 16, isMoney: true },
+      { key: "msrp", header: L.msrp, width: 14, isMoney: true },
+    ];
+  } else if (exportType === "BBD") {
+    priceCols = [
+      { key: "rp2", header: L.rp2, width: 16, isMoney: true },
+      { key: "rp1", header: L.rp1, width: 16, isMoney: true },
+      { key: "msrp", header: L.msrp, width: 14, isMoney: true },
+    ];
+  } else if (exportType === "VAD") {
+    priceCols = [
+      { key: "vadMsrp", header: L.vadMsrp, width: 16, isMoney: true },
+      { key: "rp2", header: L.rp2, width: 16, isMoney: true },
+      { key: "rp1", header: L.rp1, width: 16, isMoney: true },
+    ];
+  } else {
+    priceCols = [{ key: "msrp", header: L.msrp, width: 14, isMoney: true }];
+  }
+
+  const tech = [
+    { key: "note", header: L.note, width: 25 },
+    { key: "w", header: L.w, width: 10 },
+    { key: "h", header: L.h, width: 10 },
+    { key: "d", header: L.d, width: 10 },
+    { key: "weight", header: L.weight, width: 10 },
+    { key: "hs", header: L.hs, width: 12 },
+    { key: "ean", header: L.ean, width: 16 },
+    { key: "website", header: L.website, width: 25 },
+  ];
+
+  return {
+    exportType,
+    lang,
+    columns: [...base, ...priceCols, ...tech],
+  };
+}
+
+async function buildTarifaExportModel(tipo) {
+  const tarifasBase = await getTarifasBase2N();
+  const grupos = normalizarGrupos(tipo.grupos);
+  const spec = tarifasGetExportSpec(tipo);
+
+  const productos = Object.entries(tarifasBase || {}).sort(([a], [b]) =>
+    a.localeCompare(b)
+  );
+
+  // Familias (igual que tu lógica anterior)
+  function familiaDesdeSKU(sku, prod) {
+    const name = (prod.descripcion || prod.desc || "").toLowerCase();
+    if (name.includes("access unit")) return "Access Unit";
+    if (name.includes("intercom") || name.includes("verso") || name.includes("ip style"))
+      return "Videoporteros";
+    if (name.includes("fortis")) return "Fortis";
+    if (name.includes("indoor")) return "Indoor Units";
+    if (name.includes("my2n")) return "Licencias My2N";
+    return "Otros";
+  }
+
+  const filas = [];
+  let familiaActual = null;
+
+  for (const [sku, prod] of productos) {
+    const fam = familiaDesdeSKU(sku, prod);
+    if (fam !== familiaActual) {
+      filas.push({ __section: true, sectionTitle: fam });
+      familiaActual = fam;
+    }
+
+    const pvp = Number(prod.pvp || 0);
+    const desc = prod.descripcion || prod.desc || "";
+    const gid = clasificarGrupoPorDescripcion(desc);
+    const dto = grupos[gid] || {};
+
+    const subd = pvp * (1 - (dto.subd || 0));
+    const rp2 = pvp * (1 - (dto.rp2 || 0));
+    const rp1 = pvp * (1 - (dto.rp1 || 0));
+    const dist = pvp * (1 - (dto.dist || 0)); // usado como VAD MSRP
+
+    filas.push({
+      sku,
+      name: desc,
+      subd,
+      rp2,
+      rp1,
+      msrp: pvp,
+      vadMsrp: dist,
+      note: "",
+      w: prod.width || "",
+      h: prod.height || "",
+      d: prod.depth || "",
+      weight: prod.weight || "",
+      hs: prod.hs || "",
+      ean: prod.ean || "",
+      website: prod.url || prod.website || "",
+      __groupId: gid,
+    });
+  }
+
+  const fileBase = (tipo.nombre || tipo.id || "Tarifa").replace(/[\\/:*?"<>|]+/g, "_");
+  const fileName = `${fileBase}_${spec.exportType}_${spec.lang}`;
+
+  return { tipo, spec, filas, fileName };
+}
+
+function colLetter(n1) {
+  // 1-indexed
+  let n = n1;
+  let s = "";
+  while (n > 0) {
+    const m = (n - 1) % 26;
+    s = String.fromCharCode(65 + m) + s;
+    n = Math.floor((n - 1) / 26);
+  }
+  return s;
+}
+
 // ===============================================
-// EXPORTAR TARIFA CON EXCELJS (formato 2N con color)
+// EXPORTAR EXCEL (ExcelJS) con columnas dinámicas
 // ===============================================
 async function exportarTarifaExcel(tipoId) {
   const tipo = appState.tarifasTipos[tipoId];
@@ -847,26 +1011,41 @@ async function exportarTarifaExcel(tipoId) {
 
   const tarifasBase = await getTarifasBase2N();
   if (!tarifasBase || !Object.keys(tarifasBase).length) {
-    alert(
-      "No se han encontrado productos en la tarifa base. Revisa la colección 'tarifas'."
-    );
+    alert("No se han encontrado productos en la tarifa base. Revisa la colección 'tarifas'.");
     return;
   }
 
   try {
-    const grupos = normalizarGrupos(tipo.grupos);
+    const model = await buildTarifaExportModel(tipo);
+    const { spec, filas, fileName } = model;
+
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet("Price List");
 
     // ====== COLORES 2N ======
-    const COLOR_HEADER = "FF1BB1C7"; // Verde corporativo 2N
-    const COLOR_HEADER_LIGHT = "FFE5E7EB"; // Gris cabecera columnas
-    const COLOR_SECTION = "FFF3F4F6"; // Gris suave para familias
+    const COLOR_HEADER = "FF1BB1C7";
+    const COLOR_HEADER_LIGHT = "FFE5E7EB";
+    const COLOR_SECTION = "FFF3F4F6";
 
     // ====== ESTILOS ======
-    const fontHeaderBig = { name: "Aptos Narrow", size: 13, bold: true, color: { argb: "FFFFFFFF" } };
-    const fontHeader = { name: "Aptos Narrow", size: 11, bold: true, color: { argb: "FF000000" } };
-    const fontSection = { name: "Aptos Narrow", size: 11, bold: true, color: { argb: "FF374151" } };
+    const fontHeaderBig = {
+      name: "Aptos Narrow",
+      size: 13,
+      bold: true,
+      color: { argb: "FFFFFFFF" },
+    };
+    const fontHeader = {
+      name: "Aptos Narrow",
+      size: 11,
+      bold: true,
+      color: { argb: "FF000000" },
+    };
+    const fontSection = {
+      name: "Aptos Narrow",
+      size: 11,
+      bold: true,
+      color: { argb: "FF374151" },
+    };
     const fontBody = { name: "Aptos Narrow", size: 10, color: { argb: "FF000000" } };
     const borderThin = {
       top: { style: "thin", color: { argb: "FFCCCCCC" } },
@@ -875,8 +1054,11 @@ async function exportarTarifaExcel(tipoId) {
       right: { style: "thin", color: { argb: "FFCCCCCC" } },
     };
 
+    const totalCols = spec.columns.length;
+    const lastCol = colLetter(totalCols);
+
     // ====== CABECERA PRINCIPAL ======
-    ws.mergeCells("A1:N1");
+    ws.mergeCells(`A1:${lastCol}1`);
     ws.getCell("A1").value = "2N Price List";
     ws.getCell("A1").font = fontHeaderBig;
     ws.getCell("A1").alignment = { vertical: "middle", horizontal: "left" };
@@ -885,23 +1067,7 @@ async function exportarTarifaExcel(tipoId) {
     ws.addRow([]);
 
     // ====== CABECERAS DE COLUMNA ======
-    const headerRow = ws.addRow([
-      "2N SKU",
-      "Nombre",
-      "SubD price (EUR)",
-      "Recommended Reseller",
-      "Recommended Reseller 2",
-      "MSRP (EUR)",
-      "Nota",
-      "Anchura (mm)",
-      "Altura (mm)",
-      "Profundidad (mm)",
-      "Peso (kg)",
-      "HS code",
-      "EAN code",
-      "Website",
-    ]);
-
+    const headerRow = ws.addRow(spec.columns.map((c) => c.header));
     headerRow.eachCell((cell) => {
       cell.font = fontHeader;
       cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLOR_HEADER_LIGHT } };
@@ -909,96 +1075,259 @@ async function exportarTarifaExcel(tipoId) {
       cell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
     });
 
-    ws.columns = [
-      { key: "sku", width: 12 },
-      { key: "name", width: 45 },
-      { key: "subd", width: 14 },
-      { key: "rp2", width: 16 },
-      { key: "rp1", width: 16 },
-      { key: "msrp", width: 14 },
-      { key: "note", width: 25 },
-      { key: "w", width: 10 },
-      { key: "h", width: 10 },
-      { key: "d", width: 10 },
-      { key: "weight", width: 10 },
-      { key: "hs", width: 12 },
-      { key: "ean", width: 16 },
-      { key: "url", width: 25 },
-    ];
+    ws.columns = spec.columns.map((c) => ({ key: c.key, width: c.width || 12 }));
 
-    // ====== GENERAR FAMILIAS ======
-    function familiaDesdeSKU(sku, prod) {
-      const name = (prod.descripcion || prod.desc || "").toLowerCase();
-
-      if (name.includes("access unit")) return "Access Unit";
-      if (name.includes("intercom") || name.includes("verso") || name.includes("ip style")) return "Videoporteros";
-      if (name.includes("fortis")) return "Fortis";
-      if (name.includes("indoor")) return "Indoor Units";
-      if (name.includes("my2n")) return "Licencias My2N";
-
-      return "Otros";
-    }
-
-    const productos = Object.entries(tarifasBase).sort(([a], [b]) =>
-      a.localeCompare(b)
-    );
-
-    let familiaActual = null;
-
-    for (const [sku, prod] of productos) {
-      const fam = familiaDesdeSKU(sku, prod);
-
-      if (fam !== familiaActual) {
-        const row = ws.addRow([fam]);
+    // ====== FILAS ======
+    for (const item of filas) {
+      if (item.__section) {
+        const row = ws.addRow([item.sectionTitle]);
         row.font = fontSection;
         row.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLOR_SECTION } };
-        ws.mergeCells(`A${row.number}:N${row.number}`);
-        familiaActual = fam;
+        ws.mergeCells(`A${row.number}:${lastCol}${row.number}`);
+        continue;
       }
 
-      const pvp = Number(prod.pvp || 0);
-      const desc = prod.descripcion || prod.desc || "";
-      const gid = clasificarGrupoPorDescripcion(desc);
-      const dto = grupos[gid] || {};
-
-      const row = ws.addRow({
-        sku,
-        name: desc,
-        subd: pvp * (1 - (dto.subd || 0)),
-        rp2: pvp * (1 - (dto.rp2 || 0)),
-        rp1: pvp * (1 - (dto.rp1 || 0)),
-        msrp: pvp,
-        note: "",
-        w: prod.width || "",
-        h: prod.height || "",
-        d: prod.depth || "",
-        weight: prod.weight || "",
-        hs: prod.hs || "",
-        ean: prod.ean || "",
-        url: prod.url || "",
+      const rowData = {};
+      spec.columns.forEach((c) => {
+        rowData[c.key] = item[c.key] ?? "";
       });
 
-      row.eachCell((cell, col) => {
+      const row = ws.addRow(rowData);
+
+      const gid = item.__groupId || "GRUPO_A";
+      const groupColor = GROUP_COLORS[gid] || null;
+
+      row.eachCell((cell, colIdx) => {
         cell.font = fontBody;
         cell.border = borderThin;
-        if ([3, 4, 5, 6].includes(col)) {
+
+        const colKey = spec.columns[colIdx - 1]?.key;
+        const isMoney = !!spec.columns[colIdx - 1]?.isMoney;
+
+        if (isMoney) {
           cell.numFmt = "#,##0.00";
           cell.alignment = { horizontal: "right" };
+          if (groupColor) {
+            cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: groupColor } };
+          }
         }
       });
     }
 
-    // ====== EXPORTAR ======
     const bufOut = await wb.xlsx.writeBuffer();
-    const fileName = (tipo.nombre || tipo.id) + ".xlsx";
-    saveAs(new Blob([bufOut]), fileName);
+    const blob = new Blob([bufOut], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
 
+    // saveAs ya lo usas; fallback por si no existe
+    if (typeof saveAs === "function") saveAs(blob, `${fileName}.xlsx`);
+    else downloadBlobFallback(blob, `${fileName}.xlsx`);
   } catch (e) {
-    console.error("[Tarifas] Error exportando Excel con ExcelJS:", e);
-    alert("Error al generar la tarifa en Excel con colores.");
+    console.error("[Tarifas] Error exportando Excel:", e);
+    alert("Error al generar la tarifa en Excel.");
   }
 }
 
-console.log("%c[UI Tarifas cargada · grupos no lineales + color]", "color:#0ea5e9;");
+// ===============================================
+// EXPORTAR PDF (print) con columnas dinámicas
+// ===============================================
+async function exportarTarifaPDF(tipoId) {
+  const tipo = appState.tarifasTipos[tipoId];
+  if (!tipo) {
+    alert("Tipo de tarifa no encontrado.");
+    return;
+  }
+
+  const tarifasBase = await getTarifasBase2N();
+  if (!tarifasBase || !Object.keys(tarifasBase).length) {
+    alert("No se han encontrado productos en la tarifa base. Revisa la colección 'tarifas'.");
+    return;
+  }
+
+  try {
+    const model = await buildTarifaExportModel(tipo);
+    const { spec, filas, fileName } = model;
+
+    const thead = spec.columns
+      .map(
+        (c) =>
+          `<th style="border:1px solid #ddd;padding:6px;text-align:left;white-space:nowrap;">${escapeHtmlLite(
+            c.header
+          )}</th>`
+      )
+      .join("");
+
+    const rowsHtml = filas
+      .map((r) => {
+        if (r.__section) {
+          return `<tr>
+            <td colspan="${spec.columns.length}" style="border:1px solid #ddd;padding:6px;background:#f3f4f6;font-weight:700;">
+              ${escapeHtmlLite(r.sectionTitle)}
+            </td>
+          </tr>`;
+        }
+
+        const tds = spec.columns
+          .map((c) => {
+            const v = r[c.key] ?? "";
+            const isMoney = !!c.isMoney;
+            const txt =
+              isMoney && typeof v === "number" && isFinite(v) ? v.toFixed(2) : String(v ?? "");
+            return `<td style="border:1px solid #ddd;padding:6px;vertical-align:top;${
+              isMoney ? "text-align:right;white-space:nowrap;" : ""
+            }">${escapeHtmlLite(txt)}</td>`;
+          })
+          .join("");
+
+        return `<tr>${tds}</tr>`;
+      })
+      .join("");
+
+    const html = `
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>${escapeHtmlLite(fileName)}</title>
+        </head>
+        <body>
+          <h3 style="margin:0 0 10px 0;font-family:Arial,sans-serif;">${escapeHtmlLite(fileName)}</h3>
+          <table style="border-collapse:collapse;width:100%;font-family:Arial,sans-serif;font-size:10px;">
+            <thead><tr>${thead}</tr></thead>
+            <tbody>${rowsHtml}</tbody>
+          </table>
+          <script>window.onload=function(){window.print();};</script>
+        </body>
+      </html>
+    `;
+
+    const w = window.open("", "_blank");
+    if (!w) throw new Error("Pop-up bloqueado para imprimir PDF.");
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+  } catch (e) {
+    console.error("[Tarifas] Error exportando PDF:", e);
+    alert("Error al generar el PDF.");
+  }
+}
+
+// ===============================================
+// EXPORTAR BC3 (Presto) — SOLO PVP + CP850 (OEM)
+// ===============================================
+async function exportarTarifaBC3(tipoId) {
+  const tipo = appState.tarifasTipos[tipoId];
+  if (!tipo) {
+    alert("Tipo de tarifa no encontrado.");
+    return;
+  }
+
+  const tType = tarifaTipoFromId(tipo.id || tipo.templateId || "");
+  if (tType !== "PVP") {
+    alert("BC3 solo está disponible si has seleccionado una tarifa PVP.");
+    return;
+  }
+
+  const tarifasBase = await getTarifasBase2N();
+  if (!tarifasBase || !Object.keys(tarifasBase).length) {
+    alert("No se han encontrado productos en la tarifa base. Revisa la colección 'tarifas'.");
+    return;
+  }
+
+  try {
+    const model = await buildTarifaExportModel(tipo);
+    const { filas, fileName } = model;
+
+    // BC3 minimal (FIEBDC-3). Import en Presto depende de configuración.
+    // Incluimos: código, descripción, unidad (ud) y precio.
+    let out = "";
+    out += "~V|FIEBDC-3/2002|2N|TARIFA|1|\r\n";
+    out += "~K|0|\r\n";
+    out += "~C|TARIFA|Tarifa 2N|0|\r\n";
+
+    for (const r of filas) {
+      if (r.__section) continue;
+      const code = String(r.sku || "").trim();
+      if (!code) continue;
+      const desc = String(r.name || "").replace(/\r?\n/g, " ").trim();
+      const price = Number(r.msrp || 0);
+      const p = isFinite(price) ? price.toFixed(2) : "0.00";
+
+      // Registro concepto: ~C|<COD>|<RESUMEN>|<TIPO>|<UD>|<PRECIO>|
+      out += `~C|${escapeBC3(code)}|${escapeBC3(desc)}|0|ud|${p}|\r\n`;
+    }
+
+    // CP850 (OEM) para compatibilidad Presto
+    const bytes = encodeCP850(out);
+    const blob = new Blob([bytes], { type: "application/octet-stream" });
+    if (typeof saveAs === "function") saveAs(blob, `${fileName}.bc3`);
+    else downloadBlobFallback(blob, `${fileName}.bc3`);
+  } catch (e) {
+    console.error("[Tarifas] Error exportando BC3:", e);
+    alert("Error al generar el BC3.");
+  }
+}
+
+// -------------------- utils (mínimos) --------------------
+
+function escapeHtmlLite(v) {
+  return String(v ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function downloadBlobFallback(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename || "download.bin";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+function escapeBC3(s) {
+  // Evitar separadores del formato
+  return String(s ?? "").replace(/\|/g, " ").trim();
+}
+
+// CP850 (OEM) encoder básico (suficiente para ES habitual). No mapeado => '?'
+function encodeCP850(str) {
+  const s = String(str ?? "");
+  const map = {
+    "á": 160,
+    "í": 161,
+    "ó": 162,
+    "ú": 163,
+    "ñ": 164,
+    "Ñ": 165,
+    "Á": 181,
+    "É": 144,
+    "Í": 214,
+    "Ó": 224,
+    "Ú": 233,
+    "é": 130,
+    "ü": 129,
+    "Ü": 154,
+    "ç": 135,
+    "Ç": 128,
+    "€": 213,
+  };
+
+  const out = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    const code = ch.charCodeAt(0);
+    if (code <= 127) out[i] = code;
+    else if (map[ch] !== undefined) out[i] = map[ch];
+    else out[i] = 63; // '?'
+  }
+  return out;
+}
+
+console.log("%c[UI Tarifas cargada · export Excel/PDF/BC3 dinámico]", "color:#0ea5e9;");
 
 window.renderTarifasView = renderTarifasView;
