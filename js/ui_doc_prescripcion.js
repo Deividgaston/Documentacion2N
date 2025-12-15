@@ -3191,8 +3191,7 @@ function prescExportModelToBC3_Compat(model) {
   const prestoDate = `${dd}${mm}${yy}`;
 
   // Cabecera compatible
-  out.push(`~V|SOFT S.A.|FIEBDC-3/2002|Presupuestos2N|1.0||UTF-8|`);
-
+  out.push(`~V|SOFT S.A.|FIEBDC-3/2002|Presupuestos2N|1.0||ANSI|`);
   out.push(`~K|\\2\\2\\3\\2\\2\\2\\2\\EUR\\|0|`);
 
   // ✅ ROOT tipo “presupuesto” (como Presto)
