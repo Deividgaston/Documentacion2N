@@ -1222,18 +1222,27 @@ function colLetter(n1) {
 // ===============================================
 async function exportarTarifaExcel(tipoId) {
   const tipo = appState.tarifasTipos[tipoId];
-  if (!tipo) {
-    alert("Tipo de tarifa no encontrado.");
-    return;
-  }
+  if (!tipo) return alert("Tipo de tarifa no encontrado.");
 
   const tarifasBase = await getTarifasBase2N();
   if (!tarifasBase || !Object.keys(tarifasBase).length) {
-    alert(
-      "No se han encontrado productos en la tarifa base. Revisa la colección 'tarifas'."
-    );
+    alert("No se han encontrado productos en la tarifa base. Revisa la colección 'tarifas'.");
     return;
   }
+
+  // yield para no bloquear el navegador
+  const yieldUI = () => new Promise((r) => setTimeout(r, 0));
+
+  // ✅ evita objetos raros en ExcelJS (Timestamp, etc.)
+  const safeCell = (v) => {
+    if (v === undefined || v === null) return "";
+    if (typeof v === "number") return isFinite(v) ? v : "";
+    if (typeof v === "string") return v;
+    if (typeof v === "boolean") return v;
+    // Firestore Timestamp suele tener toDate()
+    if (v && typeof v.toDate === "function") return v.toDate().toISOString();
+    try { return String(v); } catch { return ""; }
+  };
 
   try {
     const model = await buildTarifaExportModel(tipo);
@@ -1242,35 +1251,14 @@ async function exportarTarifaExcel(tipoId) {
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet("Price List");
 
-    // ====== COLORES 2N ======
     const COLOR_HEADER = "FF1BB1C7";
     const COLOR_HEADER_LIGHT = "FFE5E7EB";
     const COLOR_SECTION = "FFF3F4F6";
 
-    // ====== ESTILOS ======
-    const fontHeaderBig = {
-      name: "Aptos Narrow",
-      size: 13,
-      bold: true,
-      color: { argb: "FFFFFFFF" },
-    };
-    const fontHeader = {
-      name: "Aptos Narrow",
-      size: 11,
-      bold: true,
-      color: { argb: "FF000000" },
-    };
-    const fontSection = {
-      name: "Aptos Narrow",
-      size: 11,
-      bold: true,
-      color: { argb: "FF374151" },
-    };
-    const fontBody = {
-      name: "Aptos Narrow",
-      size: 10,
-      color: { argb: "FF000000" },
-    };
+    const fontHeaderBig = { name: "Aptos Narrow", size: 13, bold: true, color: { argb: "FFFFFFFF" } };
+    const fontHeader = { name: "Aptos Narrow", size: 11, bold: true, color: { argb: "FF000000" } };
+    const fontSection = { name: "Aptos Narrow", size: 11, bold: true, color: { argb: "FF374151" } };
+    const fontBody = { name: "Aptos Narrow", size: 10, color: { argb: "FF000000" } };
     const borderThin = {
       top: { style: "thin", color: { argb: "FFCCCCCC" } },
       left: { style: "thin", color: { argb: "FFCCCCCC" } },
@@ -1281,87 +1269,67 @@ async function exportarTarifaExcel(tipoId) {
     const totalCols = spec.columns.length;
     const lastCol = colLetter(totalCols);
 
-    // ====== CABECERA PRINCIPAL ======
     ws.mergeCells(`A1:${lastCol}1`);
     ws.getCell("A1").value = "2N Price List";
     ws.getCell("A1").font = fontHeaderBig;
     ws.getCell("A1").alignment = { vertical: "middle", horizontal: "left" };
-    ws.getCell("A1").fill = {
-      type: "pattern",
-      pattern: "solid",
-      fgColor: { argb: COLOR_HEADER },
-    };
+    ws.getCell("A1").fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLOR_HEADER } };
 
     ws.addRow([]);
 
-    // ====== CABECERAS DE COLUMNA ======
     const headerRow = ws.addRow(spec.columns.map((c) => c.header));
     headerRow.eachCell((cell) => {
       cell.font = fontHeader;
-      cell.fill = {
-        type: "pattern",
-        pattern: "solid",
-        fgColor: { argb: COLOR_HEADER_LIGHT },
-      };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLOR_HEADER_LIGHT } };
       cell.border = borderThin;
-      cell.alignment = {
-        vertical: "middle",
-        horizontal: "center",
-        wrapText: true,
-      };
+      cell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
     });
 
     ws.columns = spec.columns.map((c) => ({ key: c.key, width: c.width || 12 }));
 
-    // ====== FILAS ======
-    for (const item of filas) {
-      if (item.__section) {
-        const row = ws.addRow([item.sectionTitle]);
-        row.font = fontSection;
-        row.getCell(1).fill = {
-          type: "pattern",
-          pattern: "solid",
-          fgColor: { argb: COLOR_SECTION },
-        };
-        ws.mergeCells(`A${row.number}:${lastCol}${row.number}`);
-        continue;
+    // ✅ CHUNK: evita que el navegador se “muera”
+    const CHUNK = 80;
+    for (let i = 0; i < filas.length; i += CHUNK) {
+      const slice = filas.slice(i, i + CHUNK);
+
+      for (const item of slice) {
+        if (item.__section) {
+          const row = ws.addRow([safeCell(item.sectionTitle)]);
+          row.font = fontSection;
+          row.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLOR_SECTION } };
+          ws.mergeCells(`A${row.number}:${lastCol}${row.number}`);
+          continue;
+        }
+
+        const rowData = {};
+        spec.columns.forEach((c) => {
+          rowData[c.key] = safeCell(item[c.key]);
+        });
+
+        const row = ws.addRow(rowData);
+        const gid = item.__groupId || "GRUPO_A";
+        const groupColor = GROUP_COLORS[gid] || null;
+
+        row.eachCell((cell, colIdx) => {
+          cell.font = fontBody;
+          cell.border = borderThin;
+
+          const colSpec = spec.columns[colIdx - 1];
+          const isMoney = !!colSpec?.isMoney;
+
+          if (isMoney) {
+            cell.numFmt = "#,##0.00";
+            cell.alignment = { horizontal: "right" };
+            if (groupColor) {
+              cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: groupColor } };
+            }
+          } else {
+            cell.alignment = { vertical: "top", horizontal: "left", wrapText: true };
+          }
+        });
       }
 
-      const rowData = {};
-      spec.columns.forEach((c) => {
-        rowData[c.key] = item[c.key] ?? "";
-      });
-
-      const row = ws.addRow(rowData);
-
-      const gid = item.__groupId || "GRUPO_A";
-      const groupColor = GROUP_COLORS[gid] || null;
-
-      row.eachCell((cell, colIdx) => {
-        cell.font = fontBody;
-        cell.border = borderThin;
-
-        const colSpec = spec.columns[colIdx - 1];
-        const isMoney = !!colSpec?.isMoney;
-
-        if (isMoney) {
-          cell.numFmt = "#,##0.00";
-          cell.alignment = { horizontal: "right" };
-          if (groupColor) {
-            cell.fill = {
-              type: "pattern",
-              pattern: "solid",
-              fgColor: { argb: groupColor },
-            };
-          }
-        } else {
-          cell.alignment = {
-            vertical: "top",
-            horizontal: "left",
-            wrapText: true,
-          };
-        }
-      });
+      await yieldUI();
     }
 
     const bufOut = await wb.xlsx.writeBuffer();
@@ -1373,9 +1341,10 @@ async function exportarTarifaExcel(tipoId) {
     else downloadBlobFallback(blob, `${fileName}.xlsx`);
   } catch (e) {
     console.error("[Tarifas] Error exportando Excel:", e);
-    alert("Error al generar la tarifa en Excel.");
+    alert("Error al generar la tarifa en Excel. Revisa consola (stacktrace).");
   }
 }
+
 
 // ===============================================
 // EXPORTAR PDF (print) con columnas dinámicas
