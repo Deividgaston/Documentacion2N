@@ -10,6 +10,17 @@ appState.tarifasTipoSeleccionadoId =
   appState.tarifasTipoSeleccionadoId || null;
 
 // ======================================================
+// 0) TARIFAS OFICIALES BLOQUEADAS (NO EDIT / NO DELETE)
+// ======================================================
+
+const TARIFAS_BLOQUEADAS = ["ES_PVP", "ES_SUBD", "ES_BBD", "EN_SUBD", "EN_VAD"];
+
+function esTarifaBloqueada(tipo) {
+  const id = String(tipo?.id || "").trim();
+  return TARIFAS_BLOQUEADAS.includes(id);
+}
+
+// ======================================================
 // 1) CONFIGURACIÓN DE PLANTILLAS BASE (solo en código)
 // ======================================================
 
@@ -408,6 +419,45 @@ async function guardarTarifaTipoEnFirestore(tipo) {
   }
 }
 
+async function borrarTarifaTipoEnFirestore(tipoId) {
+  const id = String(tipoId || "").trim();
+  if (!id) return;
+  const tipo = appState.tarifasTipos?.[id];
+  if (tipo && esTarifaBloqueada(tipo)) {
+    alert("Esta tarifa es oficial y no se puede borrar.");
+    return;
+  }
+
+  const ok = confirm("¿Borrar esta tarifa? Esta acción no se puede deshacer.");
+  if (!ok) return;
+
+  try {
+    const db = firebase.firestore();
+    await db.collection("tarifas_tipos").doc(id).delete();
+    delete appState.tarifasTipos[id];
+
+    if (appState.tarifasTipoSeleccionadoId === id) {
+      appState.tarifasTipoSeleccionadoId = null;
+      const ids = Object.values(appState.tarifasTipos || {})
+        .sort((a, b) => (a.orden || 0) - (b.orden || 0))
+        .map((t) => t.id);
+      appState.tarifasTipoSeleccionadoId = ids[0] || null;
+    }
+
+    pintarListadoTiposTarifa();
+
+    const det = document.getElementById("tarifasDetalle");
+    if (det) {
+      const sel = appState.tarifasTipoSeleccionadoId;
+      if (sel && appState.tarifasTipos[sel]) mostrarFormularioTipoTarifa(appState.tarifasTipos[sel]);
+      else det.innerHTML = "Selecciona un tipo en la lista.";
+    }
+  } catch (e) {
+    console.error("[Tarifas] Error borrando tipo:", e);
+    alert("Error borrando el tipo de tarifa. Revisa consola.");
+  }
+}
+
 // ======================================================
 // 5) TARIFA BASE (PVP) DESDE FIRESTORE
 // ======================================================
@@ -504,8 +554,6 @@ async function getTarifasBase2N() {
   }
 }
 
-
-
 // ======================================================
 // 6) RENDER PANTALLA TARIFAS
 // ======================================================
@@ -575,7 +623,7 @@ function renderTarifasView() {
 }
 
 // ======================================================
-// 7) LISTADO TIPOS
+// 7) LISTADO TIPOS (con editar / borrar)
 // ======================================================
 
 function pintarListadoTiposTarifa() {
@@ -596,18 +644,30 @@ function pintarListadoTiposTarifa() {
   }
 
   lista.innerHTML = `
+    <style>
+      .btn-icon{
+        border:0; background:transparent; cursor:pointer;
+        padding:2px 6px; font-size:14px; line-height:1;
+      }
+      .btn-icon:disabled{ opacity:.35; cursor:not-allowed; }
+      .btn-icon:hover{ filter: brightness(0.95); }
+      .actions-cell{ white-space:nowrap; text-align:right; width:80px; }
+    </style>
+
     <table class="table">
       <thead>
         <tr>
           <th></th>
           <th>Tarifa</th>
           <th>Plantilla base</th>
+          <th class="actions-cell"></th>
         </tr>
       </thead>
       <tbody>
         ${tipos
           .map((t) => {
             const tpl = TARIFA_TEMPLATES[t.templateId] || {};
+            const bloqueada = esTarifaBloqueada(t);
             return `
               <tr class="tarifa-row ${
                 t.id === appState.tarifasTipoSeleccionadoId ? "row-selected" : ""
@@ -616,13 +676,28 @@ function pintarListadoTiposTarifa() {
                   t.activo !== false ? "bg-green" : "bg-gray"
                 }"></span></td>
                 <td>
-                  <div style="font-weight:500;">${t.nombre}</div>
+                  <div style="font-weight:500; display:flex; gap:8px; align-items:center;">
+                    <span>${t.nombre}</span>
+                    ${
+                      bloqueada
+                        ? `<span style="font-size:0.72rem;color:#9ca3af;border:1px solid #e5e7eb;padding:1px 6px;border-radius:999px;">OFICIAL</span>`
+                        : ""
+                    }
+                  </div>
                   <div style="font-size:0.75rem; color:#6b7280;">
                     ${t.id} · Idioma: ${t.idioma || "-"} · ${t.moneda || "EUR"}
                   </div>
                 </td>
                 <td style="font-size:0.8rem; color:#4b5563;">
                   ${tpl.descripcion || t.templateId || "-"}
+                </td>
+                <td class="actions-cell">
+                  <button class="btn-icon btn-edit" data-id="${t.id}" title="Editar">✏️</button>
+                  ${
+                    bloqueada
+                      ? `<button class="btn-icon btn-delete" data-id="${t.id}" title="Borrar" disabled>🗑️</button>`
+                      : `<button class="btn-icon btn-delete" data-id="${t.id}" title="Borrar">🗑️</button>`
+                  }
                 </td>
               </tr>
             `;
@@ -638,6 +713,24 @@ function pintarListadoTiposTarifa() {
       appState.tarifasTipoSeleccionadoId = id;
       pintarListadoTiposTarifa();
       mostrarFormularioTipoTarifa(appState.tarifasTipos[id]);
+    });
+  });
+
+  lista.querySelectorAll(".btn-edit").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.id;
+      appState.tarifasTipoSeleccionadoId = id;
+      pintarListadoTiposTarifa();
+      mostrarFormularioTipoTarifa(appState.tarifasTipos[id]);
+    });
+  });
+
+  lista.querySelectorAll(".btn-delete").forEach((btn) => {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.id;
+      await borrarTarifaTipoEnFirestore(id);
     });
   });
 }
@@ -662,6 +755,8 @@ function mostrarFormularioTipoTarifa(tipoOriginal) {
     activo: true,
     orden: 100,
   };
+
+  const bloqueada = !esNuevo && esTarifaBloqueada(tipo);
 
   const opcionesTemplate = Object.values(TARIFA_TEMPLATES)
     .map(
@@ -696,9 +791,20 @@ function mostrarFormularioTipoTarifa(tipoOriginal) {
         background: #f9fafb; padding: 0.25rem;
       }
       .tarifas-detalle-compact table.table { margin-bottom: 0; }
+      .locked-note{
+        margin-top: 8px;
+        font-size: 0.78rem;
+        color: #9ca3af;
+      }
     </style>
 
     <div class="tarifas-detalle-compact">
+
+      ${
+        bloqueada
+          ? `<div class="locked-note">Tarifa oficial: puedes verla y exportarla, pero no modificarla.</div>`
+          : ""
+      }
 
       <div class="form-grid">
 
@@ -712,35 +818,41 @@ function mostrarFormularioTipoTarifa(tipoOriginal) {
 
         <div class="form-group">
           <label>Nombre visible</label>
-          <input id="tipoNombre" type="text" value="${tipo.nombre}" />
+          <input id="tipoNombre" type="text" value="${tipo.nombre}" ${
+    bloqueada ? "disabled" : ""
+  } style="${bloqueada ? "background:#f3f4f6;color:#9ca3af;" : ""}" />
         </div>
 
         <div class="form-group">
           <label>Idioma</label>
-          <select id="tipoIdioma">
-            <option value="ES" ${
-              tipo.idioma === "ES" ? "selected" : ""
-            }>ES</option>
-            <option value="EN" ${
-              tipo.idioma === "EN" ? "selected" : ""
-            }>EN</option>
+          <select id="tipoIdioma" ${bloqueada ? "disabled" : ""} style="${
+    bloqueada ? "background:#f3f4f6;color:#9ca3af;" : ""
+  }">
+            <option value="ES" ${tipo.idioma === "ES" ? "selected" : ""}>ES</option>
+            <option value="EN" ${tipo.idioma === "EN" ? "selected" : ""}>EN</option>
           </select>
         </div>
 
         <div class="form-group">
           <label>Moneda</label>
-          <input id="tipoMoneda" type="text" value="${tipo.moneda || "EUR"}" />
+          <input id="tipoMoneda" type="text" value="${tipo.moneda || "EUR"}" ${
+    bloqueada ? "disabled" : ""
+  } style="${bloqueada ? "background:#f3f4f6;color:#9ca3af;" : ""}" />
         </div>
 
         <div class="form-group">
           <label>Plantilla base</label>
-          <select id="tipoTemplateId">${opcionesTemplate}</select>
+          <select id="tipoTemplateId" ${bloqueada ? "disabled" : ""} style="${
+    bloqueada ? "background:#f3f4f6;color:#9ca3af;" : ""
+  }">${opcionesTemplate}</select>
           <p class="small-hint">Solo define el formato (columnas NFR/Dist/VAD/SubD/RP2/RP1/MSRP).</p>
         </div>
 
         <div class="form-group">
           <label>Orden</label>
-          <input id="tipoOrden" type="number" value="${tipo.orden || 100}" />
+          <input id="tipoOrden" type="number" value="${tipo.orden || 100}" ${
+    bloqueada ? "disabled" : ""
+  } style="${bloqueada ? "background:#f3f4f6;color:#9ca3af;" : ""}" />
         </div>
 
         <div class="form-group">
@@ -748,8 +860,8 @@ function mostrarFormularioTipoTarifa(tipoOriginal) {
           <label style="display:flex; align-items:center; gap:0.35rem;">
             <input id="tipoActivo" type="checkbox" ${
               tipo.activo !== false ? "checked" : ""
-            } />
-            <span style="font-size:0.8rem;">Disponible para exportar</span>
+            } ${bloqueada ? "disabled" : ""} />
+            <span style="font-size:0.8rem; ${bloqueada ? "color:#9ca3af;" : ""}">Disponible para exportar</span>
           </label>
         </div>
 
@@ -779,6 +891,9 @@ function mostrarFormularioTipoTarifa(tipoOriginal) {
                   <td style="white-space:nowrap;">${GRUPOS_LABELS[gid] || gid}</td>
                   ${DISCOUNT_FIELDS.map((f) => {
                     const val = typeof g[f] === "number" ? g[f] * 100 : "";
+                    const lockedStyle = bloqueada
+                      ? "background:#f3f4f6;color:#9ca3af;"
+                      : "";
                     return `
                       <td style="text-align:right;">
                         <input
@@ -790,7 +905,8 @@ function mostrarFormularioTipoTarifa(tipoOriginal) {
                           data-gid="${gid}"
                           data-field="${f}"
                           value="${val !== "" ? val : ""}"
-                          style="max-width:60px; text-align:right;"
+                          ${bloqueada ? "disabled" : ""}
+                          style="max-width:60px; text-align:right; ${lockedStyle}"
                         />
                       </td>
                     `;
@@ -803,7 +919,9 @@ function mostrarFormularioTipoTarifa(tipoOriginal) {
       </div>
 
       <div style="margin-top:0.8rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
-        <button id="btnGuardarTipoTarifa" class="btn btn-primary btn-sm">Guardar</button>
+        <button id="btnGuardarTipoTarifa" class="btn btn-primary btn-sm" ${
+          bloqueada ? "disabled" : ""
+        }>Guardar</button>
         ${
           !esNuevo
             ? `
@@ -830,6 +948,14 @@ function mostrarFormularioTipoTarifa(tipoOriginal) {
 
   if (btnGuardar) {
     btnGuardar.addEventListener("click", async () => {
+      if (bloqueada) {
+        mostrarMsgTarifaDetalle(
+          "Esta tarifa es oficial y no se puede modificar.",
+          true
+        );
+        return;
+      }
+
       const id = (document.getElementById("tipoId").value || "").trim();
       const nombre = (document.getElementById("tipoNombre").value || "").trim();
       const idioma = document.getElementById("tipoIdioma").value || "ES";
@@ -1344,7 +1470,6 @@ async function exportarTarifaExcel(tipoId) {
     alert("Error al generar la tarifa en Excel. Revisa consola (stacktrace).");
   }
 }
-
 
 // ===============================================
 // EXPORTAR PDF (print) con columnas dinámicas
