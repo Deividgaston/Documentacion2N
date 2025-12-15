@@ -3228,6 +3228,9 @@ function prescExportModelToBC3_Compat(model) {
   chapters.forEach((ch, idx) => {
     const chCodeBase = clean(ch.code || ch.codigo || ch.__importCode || `2N.${String(idx + 1).padStart(2, "0")}`);
     const chCode = chCodeBase.endsWith("#") ? chCodeBase : (chCodeBase + "#");
+
+    );
+
     const chTitle = ch.title || ch.nombre || "Capítulo";
     const chText  = ch.text  || ch.texto  || "";
 
@@ -3256,12 +3259,8 @@ function prescExportModelToBC3_Compat(model) {
       emitC(lineCode, unit, desc, price, 3);
 
       const q = qty > 0 ? qty : 1; // evita “desaparece” por 0
-        // ✅ 3 campos en descomposición
-       // Presto 8.8: ~D usa tripletas HIJO\FACTOR\CANTIDAD\
-      // ✅ como estaba antes (y Presto lo estaba leyendo)
+      // ✅ 3 campos en descomposición
       resRefs.push(`${lineCode}\\${num(q)}\\1\\`);
-
-
     });
 
     if (resRefs.length) out.push(`~D|${chCode}|${resRefs.join("")}|`);
