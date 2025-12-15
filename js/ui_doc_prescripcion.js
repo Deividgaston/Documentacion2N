@@ -3159,8 +3159,10 @@ function prescBc3TextSafe(s) {
 
 // Encoder simple Win-1252 (CP1252) para los caracteres típicos (tildes, ñ, etc.)
 function encodeWin1252(str) {
-  const s = String(str ?? "");
+  const s = String(str ?? "").normalize("NFC"); // ✅
   const out = new Uint8Array(s.length);
+  
+
 
   for (let i = 0; i < s.length; i++) {
     let code = s.charCodeAt(i);
