@@ -1,7 +1,7 @@
 // js/ui_tarifa.js
 // Pantalla TARIFA 2N: importar Excel de tarifa y cargarla en Firestore
 
-import { subirTarifaAFirestore, getTarifas } from "./firebase_tarifa.js";
+import { subirTarifaAFirestore, getTarifas, vaciarTarifaEnFirestore } from "./firebase_tarifa.js";
 
 window.appState = window.appState || {};
 appState.tarifaUpload = appState.tarifaUpload || {
@@ -36,14 +36,21 @@ function renderTarifaView() {
               </p>
               <input id="tarifaFileInput" type="file" accept=".xlsx,.xls,.csv" />
 
-              <div class="form-row mt-3">
+              <div class="form-row mt-3" style="display:flex; gap:0.5rem; flex-wrap:wrap;">
                 <button id="btnLeerTarifa" class="btn btn-secondary">
                   1 · Leer archivo y preparar tarifa
                 </button>
                 <button id="btnSubirTarifa" class="btn btn-primary" disabled>
                   2 · Cargar tarifa en Firebase
                 </button>
+                <button id="btnVaciarTarifa" class="btn btn-danger">
+                  Vaciar tarifa en Firebase
+                </button>
               </div>
+
+              <p style="font-size:0.75rem; color:#b91c1c; margin-top:0.5rem;">
+                ⚠️ “Vaciar” borra TODOS los documentos en <strong>/tarifas/v1/productos</strong>.
+              </p>
             </div>
           </div>
 
@@ -64,11 +71,12 @@ function renderTarifaView() {
 
   const btnLeer = document.getElementById("btnLeerTarifa");
   const btnSubir = document.getElementById("btnSubirTarifa");
+  const btnVaciar = document.getElementById("btnVaciarTarifa");
 
   if (btnLeer) btnLeer.addEventListener("click", onLeerTarifaClick);
   if (btnSubir) btnSubir.addEventListener("click", onSubirTarifaClick);
+  if (btnVaciar) btnVaciar.addEventListener("click", onVaciarTarifaClick);
 
-  // Estado inicial de la tarifa
   actualizarEstadoTarifaFirebase();
 }
 
@@ -107,10 +115,7 @@ async function onLeerTarifaClick() {
     const { productosMap, meta } = await leerTarifaDesdeExcel(file);
 
     const totalRefs = Object.keys(productosMap).length;
-    appState.tarifaUpload = {
-      productos: productosMap,
-      total: totalRefs,
-    };
+    appState.tarifaUpload = { productos: productosMap, total: totalRefs };
 
     if (totalRefs === 0) {
       if (msg) {
@@ -156,8 +161,6 @@ async function onLeerTarifaClick() {
   }
 }
 
-// --------- helpers de detección de cabeceras y números ---------
-
 function normalizarTextoPlano(h) {
   return String(h || "")
     .toLowerCase()
@@ -191,7 +194,6 @@ function esReferencia2N(val) {
   return true;
 }
 
-// Parser de tarifa desde Excel usando header:1 (array de filas)
 function leerTarifaDesdeExcel(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -237,7 +239,6 @@ function leerTarifaDesdeExcel(file) {
 
         const headerRow = rows[headerRowIndex];
         const headersNorm = headerRow.map((h) => normalizarTextoPlano(h));
-
         const findCol = (pred) => headersNorm.findIndex(pred);
 
         const colRef =
@@ -261,10 +262,11 @@ function leerTarifaDesdeExcel(file) {
         );
 
         const colMSRP = findCol(
-          (h) => h.includes("msrp") || h.includes("list price") || h.includes("pvp")
+          (h) =>
+            h.includes("msrp") || h.includes("list price") || h.includes("pvp")
         );
 
-        // ✅ columnas técnicas (keys del Excel “tal cual”)
+        // columnas técnicas
         const colNota = findCol((h) => h === "nota" || h === "note");
         const colAncho = findCol(
           (h) =>
@@ -280,11 +282,22 @@ function leerTarifaDesdeExcel(file) {
             h === "height (mm)" ||
             h === "height"
         );
-        const colProf = findCol((h) => h === "profundidad (mm)" || h === "depth (mm)" || h === "depth");
-        const colPeso = findCol((h) => h === "peso (kg)" || h === "weight (kg)" || h === "weight");
+        const colProf = findCol(
+          (h) =>
+            h === "profundidad (mm)" || h === "depth (mm)" || h === "depth"
+        );
+        const colPeso = findCol(
+          (h) => h === "peso (kg)" || h === "weight (kg)" || h === "weight"
+        );
         const colHS = findCol((h) => h === "hs code" || h === "hscode" || h === "hs");
         const colEAN = findCol((h) => h === "ean code" || h === "ean");
-        const colWeb = findCol((h) => h === "página web" || h === "pagina web" || h === "website" || h === "url");
+        const colWeb = findCol(
+          (h) =>
+            h === "página web" ||
+            h === "pagina web" ||
+            h === "website" ||
+            h === "url"
+        );
         const colEOL = findCol((h) => h === "eol");
         const colEOLReason = findCol(
           (h) =>
@@ -295,18 +308,14 @@ function leerTarifaDesdeExcel(file) {
         );
 
         if (colRef === -1 || colMSRP === -1) {
-          console.warn(
-            "No se detectaron correctamente columna de referencia o precio.",
-            { headerRow }
-          );
+          console.warn("No se detectaron correctamente columna de referencia o precio.", { headerRow });
         }
 
         const productos = {};
-
         const safeStr = (v) => String(v ?? "").trim();
         const safeNumOrEmpty = (v) => {
           const n = parseNumeroEuro(v);
-          return n > 0 ? n : ""; // para técnicos: si no hay valor, mejor vacío
+          return n > 0 ? n : "";
         };
 
         for (let i = headerRowIndex + 1; i < rows.length; i++) {
@@ -321,12 +330,10 @@ function leerTarifaDesdeExcel(file) {
 
           const ref = String(rawRef).trim().replace(/\s+/g, "").toUpperCase();
           const pvp = parseNumeroEuro(rawPrice);
-
           if (!ref || !pvp || pvp <= 0) continue;
 
           const desc = String(rawName || "").trim();
 
-          // ✅ guardamos técnicos con LAS KEYS que luego busca ui_tarifas.js
           productos[ref] = {
             referencia: ref,
             pvp,
@@ -388,8 +395,7 @@ async function onSubirTarifaClick() {
   if (!productos || total === 0) {
     if (msg) {
       msg.className = "alert alert-warning mt-3";
-      msg.textContent =
-        "Primero debes leer un archivo de tarifa válido (paso 1).";
+      msg.textContent = "Primero debes leer un archivo de tarifa válido (paso 1).";
       msg.style.display = "flex";
     }
     return;
@@ -422,6 +428,56 @@ async function onSubirTarifaClick() {
       msg.style.display = "flex";
     }
   } finally {
+    if (btnSubir) btnSubir.disabled = false;
+  }
+}
+
+// =============================
+// ✅ VACIAR TARIFA EN FIRESTORE
+// =============================
+
+async function onVaciarTarifaClick() {
+  const msg = document.getElementById("tarifaMensaje");
+  const btnVaciar = document.getElementById("btnVaciarTarifa");
+  const btnSubir = document.getElementById("btnSubirTarifa");
+
+  const ok = confirm(
+    "Vas a BORRAR toda la tarifa en Firebase (/tarifas/v1/productos).\n\n¿Seguro?"
+  );
+  if (!ok) return;
+
+  if (msg) {
+    msg.className = "alert alert-warning mt-3";
+    msg.textContent = "Vaciando tarifa en Firebase...";
+    msg.style.display = "flex";
+  }
+
+  if (btnVaciar) btnVaciar.disabled = true;
+  if (btnSubir) btnSubir.disabled = true;
+
+  try {
+    const borrados = await vaciarTarifaEnFirestore();
+
+    // limpiar estado local
+    appState.tarifaUpload = { productos: null, total: 0 };
+
+    if (msg) {
+      msg.className = "alert alert-success mt-3";
+      msg.textContent = `Tarifa vaciada correctamente. Documentos borrados: ${borrados}.`;
+      msg.style.display = "flex";
+    }
+
+    actualizarEstadoTarifaFirebase();
+  } catch (e) {
+    console.error("Error vaciando tarifa:", e);
+    if (msg) {
+      msg.className = "alert alert-error mt-3";
+      msg.textContent =
+        "Error al vaciar la tarifa. Revisa la consola (permisos/reglas).";
+      msg.style.display = "flex";
+    }
+  } finally {
+    if (btnVaciar) btnVaciar.disabled = false;
     if (btnSubir) btnSubir.disabled = false;
   }
 }
