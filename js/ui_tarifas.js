@@ -1587,25 +1587,6 @@ function tarifasBc3FieldSafe(s) {
     .trim();
 }
 
-function encodeCP850(str) {
-  const s = String(str ?? "").normalize("NFC");
-  const m = {
-    "á": 0xA0, "é": 0x82, "í": 0xA1, "ó": 0xA2, "ú": 0xA3, "ü": 0x81, "ñ": 0xA4, "ç": 0x87,
-    "ã": 0xC6, "õ": 0xE4, "â": 0x83, "ê": 0x88, "ô": 0x93, "à": 0x85,
-    "Á": 0xB5, "É": 0x90, "Í": 0xD6, "Ó": 0xE0, "Ú": 0xE9, "Ü": 0x9A, "Ñ": 0xA5, "Ç": 0x80,
-    "Ã": 0xC7, "Õ": 0xE5, "Â": 0xB6, "Ê": 0xD2, "Ô": 0xE2, "À": 0xB7
-  };
-
-  const out = new Uint8Array(s.length);
-  for (let i = 0; i < s.length; i++) {
-    const ch = s[i];
-    const code = s.charCodeAt(i);
-    if (code <= 0x7F) out[i] = code;
-    else if (m[ch] != null) out[i] = m[ch];
-    else out[i] = 0x3F; // '?'
-  }
-  return out;
-}
 
 function downloadBc3File(content, filename) {
   const bytes = encodeCP850(content);
