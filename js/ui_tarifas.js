@@ -443,12 +443,29 @@ async function cargarTarifasBaseRawDesdeFirestore(version = "v1") {
 // ======================================================
 
 async function getTarifasBase2N() {
-  if (appState.tarifasCache) return appState.tarifasCache;
+  // ✅ Si hay cache, úsala SOLO si parece "completa"
+  if (appState.tarifasCache) {
+    const k0 = Object.keys(appState.tarifasCache)[0];
+    const p0 = k0 ? appState.tarifasCache[k0] : null;
+
+    // Heurística: si no hay ninguno de estos campos, es la cache "recortada"
+    const looksFull =
+      p0 &&
+      (p0["Ancho (mm)"] !== undefined ||
+        p0["Anchura (mm)"] !== undefined ||
+        p0["EAN code"] !== undefined ||
+        p0["HS code"] !== undefined ||
+        p0["Página web"] !== undefined ||
+        p0["Website"] !== undefined ||
+        p0["Alto (mm)"] !== undefined ||
+        p0["Altura (mm)"] !== undefined);
+
+    if (looksFull) return appState.tarifasCache;
+  }
 
   const db = firebase.firestore();
 
   try {
-    // Leemos los docs COMPLETOS (incluye Ancho/Alto/HS/EAN/Web/EOL/etc)
     const snap = await db
       .collection("tarifas")
       .doc("v1")
@@ -461,7 +478,6 @@ async function getTarifasBase2N() {
       const sku = String(data["2N SKU"] || data.sku || d.id || "").trim();
       if (!sku) return;
 
-      // Normalizamos pvp para que el resto del código funcione siempre
       const pvp =
         Number(
           data.pvp ??
@@ -479,7 +495,6 @@ async function getTarifasBase2N() {
     return out;
   } catch (e) {
     console.warn("[Tarifas] Error leyendo tarifas/v1/productos:", e);
-    // fallback a tu loader existente si lo tienes
     if (typeof cargarTarifasDesdeFirestore === "function") {
       const legacy = await cargarTarifasDesdeFirestore();
       appState.tarifasCache = legacy || {};
@@ -488,6 +503,7 @@ async function getTarifasBase2N() {
     return {};
   }
 }
+
 
 
 // ======================================================
