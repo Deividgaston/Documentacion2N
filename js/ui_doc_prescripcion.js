@@ -932,17 +932,24 @@ function renderDocPrescripcionView() {
 });
 
 
-  // =====================
   // SUB-RENDERS
-  // =====================
-
   renderPrescSectionsList();
   renderPrescCapituloContent();
   attachPrescDropZone();
   renderPrescPlantillasList();
   renderPrescExtraRefsList();
   renderPrescPreview();
-}
+
+  // ✅ Reintento 1 vez si todavía no había presupuesto en el primer render
+  requestAnimationFrame(() => {
+    const presu = getPresupuestoActualSafe();
+    const empty = !appState.prescripcion.sectionsFromBudget?.length;
+    if (presu && empty) {
+      buildPrescSectionsFromPresupuesto();
+      renderPrescSectionsList();
+    }
+  });
+
 
 // ========================================================
 // FIN PARTE 2
