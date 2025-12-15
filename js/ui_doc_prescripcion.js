@@ -3123,18 +3123,17 @@ function downloadTextFile(content, filename, mimeType) {
 // BC3 EXPORT (FIEBDC-3) — COMPATIBLE (model.chapters o model.capitulos)
 // ========================================================
 function prescBc3TextSafe(s) {
+  // IMPORTANTE: NO convertir tildes/ñ a '='
+  // Solo limpiamos lo que rompe el formato BC3
   return String(s ?? "")
     .replace(/\u0000/g, "")
     .replace(/\r\n/g, "\n")
     .replace(/\r/g, "\n")
-    .replace(/\u00A0/g, " ")        // NBSP
-    .replace(/[“”]/g, '"')
-    .replace(/[‘’]/g, "'")
-    .replace(/[–—]/g, "-")
-    .replace(/[•·]/g, "-")
-    .replace(/\|/g, " / ")          // el separador de BC3
+    .replace(/\u00A0/g, " ")     // NBSP
+    .replace(/\|/g, " / ")       // BC3 usa | como separador
     .trim();
 }
+
 
 function downloadBc3File(content, filename) {
   const s = String(content || "");
