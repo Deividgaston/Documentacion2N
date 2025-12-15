@@ -3215,13 +3215,13 @@ function encodeWin1252(str) {
 }
 
 function downloadBc3File(content, filename) {
-  // ✅ Importantísimo: limpiar ANTES de codificar
-  const s = prescBc3TextSafe(String(content || ""));
+  const s = String(content || "");
 
+  // ✅ BC3 “ANSI” real (Windows-1252)
   const bytes = encodeWin1252(s);
 
-  // ✅ mime como texto + charset
-  const blob = new Blob([bytes], { type: "text/plain;charset=windows-1252" });
+  // puedes dejar octet-stream o texto; ambos suelen ir bien
+  const blob = new Blob([bytes], { type: "application/octet-stream" });
   const url = URL.createObjectURL(blob);
 
   const a = document.createElement("a");
@@ -3233,6 +3233,7 @@ function downloadBc3File(content, filename) {
 
   URL.revokeObjectURL(url);
 }
+
 
 
 
