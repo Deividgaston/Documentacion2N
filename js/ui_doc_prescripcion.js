@@ -3135,11 +3135,14 @@ function prescExportModelToBC3(model) {
   const m = model || {};
   const chapters = Array.isArray(m.chapters) ? m.chapters : [];
 
-  // Limpia campos para BC3 (evita pipes y saltos raros)
   const cleanField = (v) => {
     let s = String(v ?? "");
     s = s.replace(/\u0000/g, "");
-    s = s.replace(/[\r\n]+/g, " / ");
+    // IMPORTANTE: NO generamos múltiples ~T, así que aquí sí “aplanamos” saltos
+    s = s.replace(/\r\n/g, "\n");
+    s = s.replace(/\r/g, "\n");
+    // BC3 no permite saltos dentro del campo: los convertimos a separador visible
+    s = s.replace(/\n+/g, " ⏎ ");
     s = s.replace(/\|/g, " / ");
     return s.trim();
   };
@@ -3150,21 +3153,8 @@ function prescExportModelToBC3(model) {
     return String(Math.round(n * 100) / 100).replace(",", ".");
   };
 
-  // ✅ Nombre de proyecto real (para ~K)
-  const getProjectName = () => {
-    try {
-      if (typeof window.getNombreProyectoActual === "function") {
-        const n = String(window.getNombreProyectoActual() || "").trim();
-        if (n) return n;
-      }
-    } catch (_) {}
-
-    const p = window.appState?.proyecto || {};
-    const pr = window.appState?.presupuesto || {};
-    return String(
-      p.nombre || p.name || pr.nombreProyecto || pr.projectName || "Proyecto"
-    ).trim() || "Proyecto";
-  };
+  const out = [];
+  const NL = "\r\n";
 
   const today = new Date();
   const dateStr =
@@ -3172,28 +3162,17 @@ function prescExportModelToBC3(model) {
     String(today.getMonth() + 1).padStart(2, "0") +
     String(today.getDate()).padStart(2, "0");
 
-  const out = [];
-  const NL = "\r\n";
-
-  // ✅ Root para que Presto tenga “obra” + árbol claro
-  const rootCode = "PRESC2N##";
-  const rootDesc = cleanField(getProjectName());
-
-  // Cabecera
+  // Cabecera mínima
   out.push(`~V|FIEBDC-3/2020|Presupuestos2N|1.0|${dateStr}|`);
+  out.push(`~K|`);
 
-  // ✅ ~K con nombre de proyecto (más compatible que vacío)
-  // (formato simple, Presto lo acepta y ya te muestra nombre en propiedades/import)
-  out.push(`~K|${rootCode}|${rootDesc}|${dateStr}||`);
-
-  const emitted = new Set();
+  const emittedC = new Set();
 
   const emitC = (code, unit, desc, price) => {
     const c = cleanField(code);
     if (!c) return;
-    const key = "C:" + c;
-    if (emitted.has(key)) return;
-    emitted.add(key);
+    if (emittedC.has(c)) return;
+    emittedC.add(c);
 
     const u = cleanField(unit || "Ud");
     const d = cleanField(desc || "");
@@ -3202,91 +3181,75 @@ function prescExportModelToBC3(model) {
     out.push(`~C|${c}|${u}|${d}|${p}|`);
   };
 
-  const emitT = (code, text) => {
+  // ✅ UN SOLO ~T por código (Presto no concatena bien varios)
+  const emitTSingle = (code, text) => {
     const c = cleanField(code);
-    if (!c) return;
-
-    const paras = String(text || "")
-      .replace(/\u0000/g, "")
-      .split(/\n\s*\n/)
-      .map((x) => cleanField(x))
-      .filter(Boolean);
-
-    paras.forEach((p) => out.push(`~T|${c}|${p}|`));
+    const t = cleanField(text);
+    if (!c || !t) return;
+    out.push(`~T|${c}|${t}|`);
   };
 
-  const emitM = (parent, child, qty) => {
+  // ✅ ~D: aquí metemos cantidades (factor) para que SIEMPRE importe todo
+  const emitD = (parent, child, factor) => {
     const p = cleanField(parent);
     const c = cleanField(child);
-    const q = Number(qty);
+    const f = Number(factor);
     if (!p || !c) return;
-    if (!Number.isFinite(q) || q === 0) return;
-
-    out.push(`~M|${p}|${c}|${num(q)}|`);
+    if (!Number.isFinite(f) || f === 0) return;
+    out.push(`~D|${p}|${c}|${num(f)}|`);
   };
 
-  // ✅ NUEVO: ~D para crear árbol (root->capítulos, capítulo->partidas)
-  const emitD = (parent, childrenCodes) => {
-    const p = cleanField(parent);
-    if (!p || !childrenCodes?.length) return;
-    childrenCodes.forEach((ch) => {
-      const c = cleanField(ch);
-      if (!c) return;
-      // Formato simple: ~D|PADRE|HIJO|FACTOR|
-      out.push(`~D|${p}|${c}|1|`);
-    });
+  // Generador de códigos de material únicos (para evitar que Presto “pise” conceptos)
+  let matSeq = 0;
+  const nextMatCode = () => {
+    matSeq += 1;
+    return `MAT-${String(matSeq).padStart(5, "0")}`;
   };
-
-  // Root como concepto (precio 0)
-  emitC(rootCode, "Ud", rootDesc, 0);
-
-  // Capítulos
-  const chapterCodes = [];
 
   chapters.forEach((ch) => {
     const chCode = cleanField(ch.code || "");
     if (!chCode) return;
 
-    chapterCodes.push(chCode);
-
     const chTitle = cleanField(ch.title || chCode || "Capítulo");
 
-    // Capítulo como concepto (precio 0)
+    // CAPÍTULO (precio 0)
     emitC(chCode, "Ud", chTitle, 0);
 
-    // Texto capítulo
-    if (String(ch.text || "").trim()) emitT(chCode, ch.text);
+    // TEXTO del capítulo (1 solo ~T)
+    if (String(ch.text || "").trim()) emitTSingle(chCode, ch.text);
 
-    // Partidas del capítulo
     const lines = Array.isArray(ch.lines) ? ch.lines : [];
-    const lineCodes = [];
 
     lines.forEach((l) => {
-      const lc = cleanField(l.code || "");
-      if (!lc) return;
+      // PARTIDA = tu line.code (2N.01.01)
+      const partidaCode = cleanField(l.code || "");
+      if (!partidaCode) return;
 
-      lineCodes.push(lc);
+      const partidaDesc = cleanField(l.description || "");
+      const unit = cleanField(l.unit || "Ud");
 
-      emitC(
-        lc,
-        l.unit || "Ud",
-        l.description || "",
-        Number(l.price ?? 0)
-      );
+      // Partida con precio 0 (porque el coste lo llevan los materiales)
+      emitC(partidaCode, unit, partidaDesc, 0);
 
-      // Cantidad (medición)
-      emitM(chCode, lc, Number(l.qty ?? 0));
+      // Enlazar capítulo -> partida (1)
+      emitD(chCode, partidaCode, 1);
+
+      // MATERIAL (código único)
+      const matCode = nextMatCode();
+
+      const qty = Number(l.qty ?? 0);
+      const price = Number(l.price ?? 0);
+
+      emitC(matCode, unit, partidaDesc, price);
+
+      // Enlazar partida -> material con cantidad REAL
+      emitD(partidaCode, matCode, qty);
     });
-
-    // ✅ Árbol capítulo -> partidas
-    emitD(chCode, lineCodes);
   });
-
-  // ✅ Árbol root -> capítulos
-  emitD(rootCode, chapterCodes);
 
   return out.join(NL) + NL;
 }
+
 
 
 // ------------------------
