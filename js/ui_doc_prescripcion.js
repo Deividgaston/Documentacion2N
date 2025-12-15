@@ -888,7 +888,7 @@ function renderDocPrescripcionView() {
         </div>
         <div id="prescPreview" class="card-body" style="overflow:auto; min-height:0;"></div>
       </div>
-
+ </div>  <!-- ✅ ESTA LÍNEA FALTABA -->
   `;
 
   // =====================
