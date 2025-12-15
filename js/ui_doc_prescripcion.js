@@ -3111,10 +3111,34 @@ function downloadTextFile(content, filename, mimeType) {
 }
 
 function downloadBc3File(content, filename) {
-  // Forzamos bytes 0..255 (latin1) para Presto clásico
+  // Encode Windows-1252 (cp1252) para Presto clásico
   const s = String(content || "");
+
+  // Mapa mínimo cp1252 para caracteres típicos ES/PT + €
+  const map = {
+    "€": 0x80, "‚": 0x82, "ƒ": 0x83, "„": 0x84, "…": 0x85, "†": 0x86, "‡": 0x87,
+    "ˆ": 0x88, "‰": 0x89, "Š": 0x8A, "‹": 0x8B, "Œ": 0x8C, "Ž": 0x8E,
+    "‘": 0x91, "’": 0x92, "“": 0x93, "”": 0x94, "•": 0x95, "–": 0x96, "—": 0x97,
+    "˜": 0x98, "™": 0x99, "š": 0x9A, "›": 0x9B, "œ": 0x9C, "ž": 0x9E, "Ÿ": 0x9F,
+    "¡": 0xA1, "¿": 0xBF,
+    "Á": 0xC1, "É": 0xC9, "Í": 0xCD, "Ó": 0xD3, "Ú": 0xDA, "Ñ": 0xD1, "Ü": 0xDC,
+    "á": 0xE1, "é": 0xE9, "í": 0xED, "ó": 0xF3, "ú": 0xFA, "ñ": 0xF1, "ü": 0xFC,
+  };
+
   const bytes = new Uint8Array(s.length);
-  for (let i = 0; i < s.length; i++) bytes[i] = s.charCodeAt(i) & 0xff;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    const code = ch.charCodeAt(0);
+
+    if (code <= 0xFF) {
+      bytes[i] = code;
+    } else if (map[ch] != null) {
+      bytes[i] = map[ch];
+    } else {
+      // fallback seguro
+      bytes[i] = "?".charCodeAt(0);
+    }
+  }
 
   const blob = new Blob([bytes], { type: "text/plain" });
   const url = URL.createObjectURL(blob);
@@ -3126,6 +3150,7 @@ function downloadBc3File(content, filename) {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
+
 // ========================================================
 // BC3 EXPORT (FIEBDC-3) — generador estándar para Presto
 // Crea ~V, ~K, ~C, ~T, ~M
