@@ -3,14 +3,15 @@
 
 window.appState = window.appState || {};
 appState.simulador = appState.simulador || {
-  tarifaDefecto: "DIST_PRICE", // Tarifa global por defecto
-  dtoGlobal: 0, // descuento adicional global sobre tarifa
-  lineasSimuladas: [], // último resultado
-  lineDtoEdited: {}, // mapa: key -> true si el dto de esa línea se ha editado a mano
-  mgnDist: 0,
-  mgnSubdist: 0,
-  mgnInte: 0, // (lo usamos como Instalador)
-  mgnConst: 0,
+  tarifaDefecto: "DIST_PRICE", // Tarifa global por defecto (solo global)
+  dtoGlobal: 0,                // descuento adicional global sobre tarifa
+  lineasSimuladas: [],         // último resultado
+  lineDtoEdited: {},           // mapa: key -> true si el dto de esa línea se ha editado a mano
+  // % que añade CADA actor sobre el precio del actor anterior (encadenado)
+  mgnDist: 0,      // % que añade el distribuidor sobre el precio 2N
+  mgnSubdist: 0,   // % que añade el subdistribuidor sobre el precio del distribuidor
+  mgnInte: 0,      // % que añade el instalador sobre el precio del subdistribuidor
+  mgnConst: 0,     // % que añade la constructora sobre el precio del instalador
   actorTab: "DIST", // "DIST" | "SUBDIST" | "INTE" | "CONST" | "PROMO"
 };
 
@@ -27,12 +28,12 @@ const getPresupuestoActual =
  * dto = descuento sobre el PVP base (campo pvp).
  */
 const TARIFAS_2N = [
-  { id: "NFR_DIST", label: "NFR Distributor (EUR)", dto: 55 },
-  { id: "NFR_RESELLER", label: "NFR Reseller (EUR)", dto: 50 },
-  { id: "DIST_PRICE", label: "Distributor Price (EUR)", dto: 39 },
-  { id: "RRP2", label: "Recommended Reseller Price 2 (EUR)", dto: 28 },
-  { id: "RRP1", label: "Recommended Reseller Price 1 (EUR)", dto: 10 },
-  { id: "MSRP", label: "MSRP (EUR)", dto: 0 },
+  { id: "NFR_DIST",     label: "NFR Distributor (EUR)",               dto: 55 },
+  { id: "NFR_RESELLER", label: "NFR Reseller (EUR)",                  dto: 50 },
+  { id: "DIST_PRICE",   label: "Distributor Price (EUR)",             dto: 39 },
+  { id: "RRP2",         label: "Recommended Reseller Price 2 (EUR)", dto: 28 },
+  { id: "RRP1",         label: "Recommended Reseller Price 1 (EUR)", dto: 10 },
+  { id: "MSRP",         label: "MSRP (EUR)",                          dto: 0  },
 ];
 
 // Mapa id -> objeto tarifa
@@ -42,7 +43,7 @@ const TARIFAS_MAP = TARIFAS_2N.reduce((acc, t) => {
 }, {});
 
 console.log(
-  "%cUI Simulador · v4.5 · tabs por actor + dto vs PVP + export por pestaña",
+  "%cUI Simulador · v4.6 · tabs actor (DIST=2N) + dto vs PVP + export por pestaña",
   "color:#22c55e; font-weight:bold;"
 );
 
@@ -89,7 +90,7 @@ async function getTarifasBase2N() {
 }
 
 // ===============================
-// Leer configuración de líneas desde el DOM (solo Dto línea)
+// Leer configuración de líneas desde el DOM (solo dto línea)
 // ===============================
 function leerConfigLineasDesdeDOM() {
   const detalle = document.getElementById("simDetalle");
@@ -110,58 +111,46 @@ function leerConfigLineasDesdeDOM() {
 }
 
 // ===============================
-// Helpers: actor tabs
-// (cadena por suma porcentual sobre el anterior: multiplicativo 1+pct)
+// Helpers actor tabs
+// REGLA (según tu petición):
+// - DIST = precio 2N (tarifa + dto adicional)  => factor = 1
+// - SUBDIST = DIST * (1 + mgnDist)
+// - INTE = SUBDIST * (1 + mgnSubdist)
+// - CONST = INTE * (1 + mgnInte)
+// - PROMO = CONST * (1 + mgnConst)
 // ===============================
 function getLabelActor(tab) {
   switch (tab) {
-    case "DIST":
-      return "Distribuidor";
-    case "SUBDIST":
-      return "Subdistribuidor";
-    case "INTE":
-      return "Instalador";
-    case "CONST":
-      return "Constructora";
-    case "PROMO":
-      return "Promotor";
-    default:
-      return "Distribuidor";
+    case "DIST":   return "Distribuidor";
+    case "SUBDIST":return "Subdistribuidor";
+    case "INTE":   return "Instalador";
+    case "CONST":  return "Constructora";
+    case "PROMO":  return "Promotor";
+    default:       return "Distribuidor";
   }
 }
 
 function getFactorActor(tab, mgnDist, mgnSubdist, mgnInte, mgnConst) {
-  // DIST = x(1+mgnDist)
-  // SUBDIST = DIST * (1+mgnSubdist)
-  // INTE/Instalador = SUBDIST * (1+mgnInte)
-  // CONST = INTE * (1+mgnConst)
-  // PROMO = CONST (sin margen extra en UI)
-  const fDist = 1 + (Number(mgnDist) || 0) / 100;
-  const fSub = fDist * (1 + (Number(mgnSubdist) || 0) / 100);
-  const fInte = fSub * (1 + (Number(mgnInte) || 0) / 100);
-  const fConst = fInte * (1 + (Number(mgnConst) || 0) / 100);
+  const fDist    = 1; // DIST = 2N
+  const fSubdist = fDist * (1 + (Number(mgnDist) || 0) / 100);
+  const fInte    = fSubdist * (1 + (Number(mgnSubdist) || 0) / 100);
+  const fConst   = fInte * (1 + (Number(mgnInte) || 0) / 100);
+  const fPromo   = fConst * (1 + (Number(mgnConst) || 0) / 100);
 
   switch (tab) {
-    case "DIST":
-      return fDist;
-    case "SUBDIST":
-      return fSub;
-    case "INTE":
-      return fInte;
-    case "CONST":
-      return fConst;
-    case "PROMO":
-      return fConst;
-    default:
-      return fDist;
+    case "DIST":    return fDist;
+    case "SUBDIST": return fSubdist;
+    case "INTE":    return fInte;
+    case "CONST":   return fConst;
+    case "PROMO":   return fPromo;
+    default:        return fDist;
   }
 }
 
 function calcDtoVsPvp(pvpBase, precio) {
   const b = Number(pvpBase) || 0;
   const p = Number(precio) || 0;
-  if (b <= 0) return 0;
-  return (1 - p / b) * 100;
+  return b > 0 ? (1 - p / b) * 100 : 0; // <- fórmula correcta
 }
 
 // ===============================
@@ -176,14 +165,12 @@ function renderSimuladorView() {
   ).join("");
 
   container.innerHTML = `
-    <div class="simulador-layout"
-         style="display:flex; gap:1.5rem; align-items:flex-start;">
+    <div class="simulador-layout" style="display:flex; gap:1.5rem; align-items:flex-start;">
 
-      <!-- COLUMNA IZQUIERDA (3 bloques pequeños) -->
-      <div class="simulador-left-column"
-           style="flex:0 0 380px; max-width:400px;">
+      <!-- COLUMNA IZQUIERDA -->
+      <div class="simulador-left-column" style="flex:0 0 380px; max-width:400px;">
 
-        <!-- BLOQUE 1 · SIMULADOR (configuración) -->
+        <!-- BLOQUE 1 -->
         <div class="card" style="margin-bottom:0.75rem;">
           <div class="card-header" style="padding-bottom:0.5rem;">
             <div>
@@ -197,8 +184,7 @@ function renderSimuladorView() {
 
           <div class="card-body" style="padding-top:0.5rem; padding-bottom:0.75rem;">
             <p style="font-size:0.75rem; color:#6b7280; margin-bottom:0.5rem;">
-              Se usan las líneas del <strong>presupuesto actual</strong>
-              (referencias, descripciones y cantidades).
+              Se usan las líneas del <strong>presupuesto actual</strong>.
             </p>
 
             <div class="form-grid">
@@ -214,8 +200,7 @@ function renderSimuladorView() {
                 <input id="simDtoGlobal" type="number" min="0" max="90" value="0"
                        style="height:32px; font-size:0.85rem;" />
                 <p style="font-size:0.72rem; color:#6b7280; margin-top:0.2rem;">
-                  Se aplica <strong>sobre el precio de tarifa</strong> y se copia al campo
-                  "Dto línea" (puedes ajustarlo por referencia).
+                  Se aplica sobre el precio de tarifa y se copia a "Dto línea".
                 </p>
               </div>
             </div>
@@ -228,72 +213,50 @@ function renderSimuladorView() {
           </div>
         </div>
 
-        <!-- BLOQUE 2 · RESUMEN -->
+        <!-- BLOQUE 2 -->
         <div class="card" style="margin-bottom:0.75rem;">
-          <div class="card-header"
-               style="padding-bottom:0.35rem; display:flex; align-items:center; justify-content:space-between; gap:0.5rem;">
+          <div class="card-header" style="padding-bottom:0.35rem; display:flex; align-items:center; justify-content:space-between; gap:0.5rem;">
             <div class="card-title" style="font-size:0.95rem;">2 · Resumen (referencia PVP)</div>
             <div style="display:flex; gap:0.35rem;">
               <button id="btnSimPdf"
-                style="
-                  padding:0.25rem 0.75rem;
-                  font-size:0.78rem;
-                  border-radius:999px;
-                  border:1px solid #d1d5db;
-                  background:#ffffff;
-                  color:#374151;
-                  cursor:pointer;
-                ">
+                style="padding:0.25rem 0.75rem; font-size:0.78rem; border-radius:999px; border:1px solid #d1d5db; background:#ffffff; color:#374151; cursor:pointer;">
                 Exportar PDF
               </button>
               <button id="btnSimExcel"
-                style="
-                  padding:0.25rem 0.75rem;
-                  font-size:0.78rem;
-                  border-radius:999px;
-                  border:1px solid #d1d5db;
-                  background:#ffffff;
-                  color:#374151;
-                  cursor:pointer;
-                ">
+                style="padding:0.25rem 0.75rem; font-size:0.78rem; border-radius:999px; border:1px solid #d1d5db; background:#ffffff; color:#374151; cursor:pointer;">
                 Exportar Excel
               </button>
             </div>
           </div>
-          <div class="card-body" id="simResumenCard"
-               style="font-size:0.85rem; color:#111827; padding-top:0.5rem; padding-bottom:0.6rem;">
+          <div class="card-body" id="simResumenCard" style="font-size:0.85rem; color:#111827; padding-top:0.5rem; padding-bottom:0.6rem;">
             No se ha calculado todavía la simulación.
           </div>
         </div>
 
-        <!-- BLOQUE 3 · CADENA ACTORES -->
+        <!-- BLOQUE 3 -->
         <div class="card">
           <div class="card-header" style="padding-bottom:0.35rem;">
             <div class="card-title" style="font-size:0.95rem;">3 · Cadena de márgenes hasta promotor</div>
           </div>
           <div class="card-body" style="font-size:0.84rem; color:#111827; padding-top:0.5rem; padding-bottom:0.6rem;">
             <div class="form-group" style="margin-bottom:0.5rem;">
-              <label style="font-size:0.8rem;">Márgenes por actor (se suman respecto al anterior)</label>
+              <label style="font-size:0.8rem;">Márgenes por actor (cada % se aplica sobre el anterior)</label>
               <div class="form-grid" style="grid-template-columns:repeat(2,minmax(0,1fr)); gap:0.4rem;">
                 <div>
                   <div style="font-size:0.72rem; color:#6b7280;">Distribuidor (%)</div>
-                  <input id="simMgnDist" type="number" min="0" max="200" step="0.5"
-                         style="width:100%; height:28px; font-size:0.8rem;" />
+                  <input id="simMgnDist" type="number" min="0" max="200" step="0.5" style="width:100%; height:28px; font-size:0.8rem;" />
                 </div>
                 <div>
                   <div style="font-size:0.72rem; color:#6b7280;">Subdistribuidor (%)</div>
-                  <input id="simMgnSubdist" type="number" min="0" max="200" step="0.5"
-                         style="width:100%; height:28px; font-size:0.8rem;" />
+                  <input id="simMgnSubdist" type="number" min="0" max="200" step="0.5" style="width:100%; height:28px; font-size:0.8rem;" />
                 </div>
                 <div>
                   <div style="font-size:0.72rem; color:#6b7280;">Instalador (%)</div>
-                  <input id="simMgnInte" type="number" min="0" max="200" step="0.5"
-                         style="width:100%; height:28px; font-size:0.8rem;" />
+                  <input id="simMgnInte" type="number" min="0" max="200" step="0.5" style="width:100%; height:28px; font-size:0.8rem;" />
                 </div>
                 <div>
                   <div style="font-size:0.72rem; color:#6b7280;">Constructora (%)</div>
-                  <input id="simMgnConst" type="number" min="0" max="200" step="0.5"
-                         style="width:100%; height:28px; font-size:0.8rem;" />
+                  <input id="simMgnConst" type="number" min="0" max="200" step="0.5" style="width:100%; height:28px; font-size:0.8rem;" />
                 </div>
               </div>
             </div>
@@ -306,16 +269,13 @@ function renderSimuladorView() {
 
       </div>
 
-      <!-- COLUMNA DERECHA: Tabla de simulación por línea -->
-      <div class="simulador-right-column"
-           style="flex:1 1 auto; min-width:0;">
+      <!-- COLUMNA DERECHA -->
+      <div class="simulador-right-column" style="flex:1 1 auto; min-width:0;">
         <div class="card">
           <div class="card-header" style="display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap;">
             <div class="card-title">
               Líneas simuladas
-              <span id="simLineCount" style="font-size:0.8rem; color:#6b7280; font-weight:400;">
-                0 líneas simuladas
-              </span>
+              <span id="simLineCount" style="font-size:0.8rem; color:#6b7280; font-weight:400;">0 líneas simuladas</span>
             </div>
 
             <div style="display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap;">
@@ -329,28 +289,11 @@ function renderSimuladorView() {
 
               <div style="display:flex; gap:0.35rem;">
                 <button id="btnSimActorPdf"
-                  style="
-                    padding:0.25rem 0.75rem;
-                    font-size:0.78rem;
-                    border-radius:999px;
-                    border:1px solid #d1d5db;
-                    background:#ffffff;
-                    color:#374151;
-                    cursor:pointer;
-                  ">
+                  style="padding:0.25rem 0.75rem; font-size:0.78rem; border-radius:999px; border:1px solid #d1d5db; background:#ffffff; color:#374151; cursor:pointer;">
                   PDF
                 </button>
                 <button id="btnSimActorExcel"
-                  style="
-                    padding:0.25rem 0.75rem;
-                    font-size:0.78rem;
-                    border-radius:999px;
-                    border-radius:999px;
-                    border:1px solid #d1d5db;
-                    background:#ffffff;
-                    color:#374151;
-                    cursor:pointer;
-                  ">
+                  style="padding:0.25rem 0.75rem; font-size:0.78rem; border-radius:999px; border:1px solid #d1d5db; background:#ffffff; color:#374151; cursor:pointer;">
                   Excel
                 </button>
               </div>
@@ -374,12 +317,8 @@ function renderSimuladorView() {
   const inpMgnInte = document.getElementById("simMgnInte");
   const inpMgnConst = document.getElementById("simMgnConst");
 
-  if (selTarifaDefecto) {
-    selTarifaDefecto.value = appState.simulador.tarifaDefecto || "DIST_PRICE";
-  }
-  if (inpDtoGlobal) {
-    inpDtoGlobal.value = appState.simulador.dtoGlobal || 0;
-  }
+  if (selTarifaDefecto) selTarifaDefecto.value = appState.simulador.tarifaDefecto || "DIST_PRICE";
+  if (inpDtoGlobal) inpDtoGlobal.value = appState.simulador.dtoGlobal || 0;
   if (inpMgnDist) inpMgnDist.value = appState.simulador.mgnDist || 0;
   if (inpMgnSubdist) inpMgnSubdist.value = appState.simulador.mgnSubdist || 0;
   if (inpMgnInte) inpMgnInte.value = appState.simulador.mgnInte || 0;
@@ -400,35 +339,19 @@ function renderSimuladorView() {
   if (inpMgnInte) inpMgnInte.addEventListener("change", () => recalcularSimulador());
   if (inpMgnConst) inpMgnConst.addEventListener("change", () => recalcularSimulador());
 
-  // Botones izquierda: exportan la pestaña activa
+  // Export izquierda: exporta pestaña activa
   const btnPdf = document.getElementById("btnSimPdf");
-  if (btnPdf) {
-    btnPdf.addEventListener("click", async () => {
-      await exportarSimuladorPDF(appState.simulador.actorTab || "DIST");
-    });
-  }
+  if (btnPdf) btnPdf.addEventListener("click", async () => exportarSimuladorPDF(appState.simulador.actorTab || "DIST"));
   const btnExcel = document.getElementById("btnSimExcel");
-  if (btnExcel) {
-    btnExcel.addEventListener("click", () => {
-      exportarSimuladorExcel(appState.simulador.actorTab || "DIST");
-    });
-  }
+  if (btnExcel) btnExcel.addEventListener("click", () => exportarSimuladorExcel(appState.simulador.actorTab || "DIST"));
 
-  // Botones derecha por pestaña (requerido)
+  // Export derecha (por pestaña)
   const btnActorPdf = document.getElementById("btnSimActorPdf");
-  if (btnActorPdf) {
-    btnActorPdf.addEventListener("click", async () => {
-      await exportarSimuladorPDF(appState.simulador.actorTab || "DIST");
-    });
-  }
+  if (btnActorPdf) btnActorPdf.addEventListener("click", async () => exportarSimuladorPDF(appState.simulador.actorTab || "DIST"));
   const btnActorExcel = document.getElementById("btnSimActorExcel");
-  if (btnActorExcel) {
-    btnActorExcel.addEventListener("click", () => {
-      exportarSimuladorExcel(appState.simulador.actorTab || "DIST");
-    });
-  }
+  if (btnActorExcel) btnActorExcel.addEventListener("click", () => exportarSimuladorExcel(appState.simulador.actorTab || "DIST"));
 
-  // Tabs actor
+  // Tabs
   const tabs = document.getElementById("simActorTabs");
   if (tabs) {
     tabs.addEventListener("click", (e) => {
@@ -506,17 +429,18 @@ async function recalcularSimulador() {
 
     const refNorm = String(lBase.ref || "").trim().replace(/\s+/g, "");
     const infoTarifa = tarifasBase[refNorm] || {};
-    const basePvp = Number(infoTarifa.pvp) || Number(lBase.pvp || 0) || 0;
+
+    const basePvp =
+      Number(infoTarifa.pvp) || Number(lBase.pvp || 0) || 0;
+
     const cantidad = Number(lBase.cantidad || 0) || 0;
 
-    const cfg = configPrev[key] || {};
-
-    // Tarifa por línea eliminada (siempre global)
+    // Tarifa por línea eliminada: SIEMPRE global
     const tarifaId = tarifaDefecto;
 
     // Dto línea editable
     let dtoLinea;
-    if (editedMap[key]) dtoLinea = Number(cfg.dtoLinea || 0) || 0;
+    if (editedMap[key]) dtoLinea = Number((configPrev[key] || {}).dtoLinea || 0) || 0;
     else dtoLinea = dtoGlobal;
 
     const objTarifa = TARIFAS_MAP[tarifaId] || TARIFAS_MAP["DIST_PRICE"];
@@ -527,7 +451,7 @@ async function recalcularSimulador() {
 
     const subtotalPvpBase = basePvp * cantidad;
     const pvpTarifaUd = basePvp * factorTarifa;
-    const pvpFinalUd = basePvp * factorTarifa * factorLinea;
+    const pvpFinalUd = basePvp * factorTarifa * factorLinea; // <- 2N (tarifa + dto adicional)
     const subtotalTarifa = pvpTarifaUd * cantidad;
     const subtotalFinal = pvpFinalUd * cantidad;
 
@@ -538,8 +462,7 @@ async function recalcularSimulador() {
     return {
       key,
       ref: refNorm || lBase.ref || "-",
-      descripcion:
-        lBase.descripcion || infoTarifa.descripcion || "Producto sin descripción",
+      descripcion: lBase.descripcion || infoTarifa.descripcion || "Producto sin descripción",
       seccion: lBase.seccion || "",
       titulo: lBase.titulo || "",
       cantidad,
@@ -548,14 +471,13 @@ async function recalcularSimulador() {
       dtoTarifa,
       dtoLinea,
       pvpTarifaUd,
-      pvpFinalUd, // precio 2N tras tarifa + dto adicional
+      pvpFinalUd,
       subtotalTarifa,
-      subtotalFinal, // total 2N por línea
+      subtotalFinal,
     };
   });
 
   appState.simulador.lineasSimuladas = lineasSim;
-
   if (countLabel) countLabel.textContent = `${lineasSim.length} líneas simuladas`;
 
   // ===== pestaña activa =====
@@ -566,14 +488,14 @@ async function recalcularSimulador() {
   const totalActor = totalFinal2N * actorFactor;
   const dtoActorTotal = calcDtoVsPvp(totalPvpBase, totalActor);
 
-  // ===== Tabla en la derecha (sin columna Tarifa, y con dto vs PVP por pestaña) =====
+  // ===== Tabla derecha (SIN columna Tarifa, con dto vs PVP) =====
   let html = `
     <div style="display:flex; justify-content:space-between; align-items:flex-end; gap:0.75rem; margin-bottom:0.5rem; flex-wrap:wrap;">
       <div style="font-size:0.9rem; color:#111827;">
         Vista: <strong>${actorLabel}</strong>
         <div style="font-size:0.78rem; color:#6b7280; margin-top:0.15rem;">
           Total ${actorLabel}: <strong>${totalActor.toFixed(2)} €</strong>
-          <span style="color:#6b7280;">(dto vs PVP: ${dtoActorTotal.toFixed(1)} %)</span>
+          <span>(dto vs PVP: ${dtoActorTotal.toFixed(1)} %)</span>
         </div>
       </div>
       <div style="font-size:0.78rem; color:#6b7280;">
@@ -601,7 +523,9 @@ async function recalcularSimulador() {
   lineasSim.forEach((l) => {
     const precioActorUd = l.pvpFinalUd * actorFactor;
     const importeActor = l.subtotalFinal * actorFactor;
-    const dtoVsPvpLinea = calcDtoVsPvp(l.basePvp, precioActorUd);
+
+    // <- fórmula correcta (la que pediste)
+    const dtoVsPvpLinea = l.basePvp > 0 ? (1 - precioActorUd / l.basePvp) * 100 : 0;
 
     html += `
       <tr data-key="${l.key}">
@@ -611,9 +535,7 @@ async function recalcularSimulador() {
           ${
             l.seccion || l.titulo
               ? `<div style="font-size:0.75rem; color:#6b7280; margin-top:0.15rem;">
-                   ${l.seccion ? `<strong>${l.seccion}</strong>` : ""}${
-                  l.seccion && l.titulo ? " · " : ""
-                }${l.titulo || ""}
+                   ${l.seccion ? `<strong>${l.seccion}</strong>` : ""}${l.seccion && l.titulo ? " · " : ""}${l.titulo || ""}
                  </div>`
               : ""
           }
@@ -674,41 +596,28 @@ async function recalcularSimulador() {
     });
   });
 
-  // ===== BLOQUE 2: Resumen (referencia PVP) =====
+  // ===== Resumen izquierda (con total pestaña activa) =====
   const tarifaLabel = TARIFAS_MAP[tarifaDefecto]?.label || tarifaDefecto;
 
-  const dtoTarifaEf =
-    totalPvpBase > 0 ? (1 - totalBaseTarifa / totalPvpBase) * 100 : 0;
-
-  const dtoTotalEf2N =
-    totalPvpBase > 0 ? (1 - totalFinal2N / totalPvpBase) * 100 : 0;
-
-  const dtoExtraEf =
-    totalBaseTarifa > 0 ? (1 - totalFinal2N / totalBaseTarifa) * 100 : 0;
+  const dtoTarifaEf = totalPvpBase > 0 ? (1 - totalBaseTarifa / totalPvpBase) * 100 : 0;
+  const dtoTotalEf2N = totalPvpBase > 0 ? (1 - totalFinal2N / totalPvpBase) * 100 : 0;
+  const dtoExtraEf = totalBaseTarifa > 0 ? (1 - totalFinal2N / totalBaseTarifa) * 100 : 0;
 
   resumenCard.innerHTML = `
     <div style="font-size:0.84rem;">
-      <div>
-        PVP base total:
-        <strong>${totalPvpBase.toFixed(2)} €</strong>
-      </div>
+      <div>PVP base total: <strong>${totalPvpBase.toFixed(2)} €</strong></div>
       <div>
         Total tras tarifa <strong>${tarifaLabel}</strong>:
         <strong>${totalBaseTarifa.toFixed(2)} €</strong>
-        <span style="color:#6b7280;">
-          (${dtoTarifaEf.toFixed(1)} % dto vs PVP)
-        </span>
+        <span style="color:#6b7280;">(${dtoTarifaEf.toFixed(1)} % dto vs PVP)</span>
       </div>
       <div>
         Total 2N (tarifa + dto adicional):
         <strong>${totalFinal2N.toFixed(2)} €</strong>
-        <span style="color:#6b7280;">
-          (${dtoTotalEf2N.toFixed(1)} % dto vs PVP)
-        </span>
+        <span style="color:#6b7280;">(${dtoTotalEf2N.toFixed(1)} % dto vs PVP)</span>
       </div>
       <div style="font-size:0.78rem; color:#4b5563; margin-top:0.15rem;">
-        Descuento extra sobre el precio de tarifa (dto adicional de línea):
-        <strong>${dtoExtraEf.toFixed(1)} %</strong>
+        Descuento extra sobre tarifa (dto adicional de línea): <strong>${dtoExtraEf.toFixed(1)} %</strong>
       </div>
       <div style="font-size:0.78rem; color:#4b5563; margin-top:0.25rem;">
         <strong>Total ${actorLabel} (pestaña activa):</strong>
@@ -718,50 +627,51 @@ async function recalcularSimulador() {
     </div>
   `;
 
-  // ===== BLOQUE 3: Cadena (con suma porcentual respecto al anterior) =====
-  const fDist = getFactorActor("DIST", mgnDist, mgnSubdist, mgnInte, mgnConst);
-  const fSub = getFactorActor("SUBDIST", mgnDist, mgnSubdist, mgnInte, mgnConst);
-  const fInte = getFactorActor("INTE", mgnDist, mgnSubdist, mgnInte, mgnConst);
-  const fConst = getFactorActor("CONST", mgnDist, mgnSubdist, mgnInte, mgnConst);
+  // ===== Cadena izquierda (DIST=2N) =====
+  const fDist    = getFactorActor("DIST", mgnDist, mgnSubdist, mgnInte, mgnConst);
+  const fSubdist = getFactorActor("SUBDIST", mgnDist, mgnSubdist, mgnInte, mgnConst);
+  const fInte    = getFactorActor("INTE", mgnDist, mgnSubdist, mgnInte, mgnConst);
+  const fConst   = getFactorActor("CONST", mgnDist, mgnSubdist, mgnInte, mgnConst);
+  const fPromo   = getFactorActor("PROMO", mgnDist, mgnSubdist, mgnInte, mgnConst);
 
-  const precio2N = totalFinal2N;
   const precioDist = totalFinal2N * fDist;
-  const precioSubdist = totalFinal2N * fSub;
+  const precioSubdist = totalFinal2N * fSubdist;
   const precioInte = totalFinal2N * fInte;
   const precioConst = totalFinal2N * fConst;
+  const precioPromo = totalFinal2N * fPromo;
 
-  const desc2N = calcDtoVsPvp(totalPvpBase, precio2N);
-  const descDist = calcDtoVsPvp(totalPvpBase, precioDist);
-  const descSubdist = calcDtoVsPvp(totalPvpBase, precioSubdist);
-  const descInte = calcDtoVsPvp(totalPvpBase, precioInte);
-  const descConst = calcDtoVsPvp(totalPvpBase, precioConst);
+  const descDist = totalPvpBase > 0 ? (1 - precioDist / totalPvpBase) * 100 : 0;
+  const descSubdist = totalPvpBase > 0 ? (1 - precioSubdist / totalPvpBase) * 100 : 0;
+  const descInte = totalPvpBase > 0 ? (1 - precioInte / totalPvpBase) * 100 : 0;
+  const descConst = totalPvpBase > 0 ? (1 - precioConst / totalPvpBase) * 100 : 0;
+  const descPromo = totalPvpBase > 0 ? (1 - precioPromo / totalPvpBase) * 100 : 0;
 
   cadenaCard.innerHTML = `
     <div style="font-size:0.82rem;">
       <div style="margin-bottom:0.18rem;">
-        <strong>2N (precio simulado):</strong>
-        ${precio2N.toFixed(2)} €
-        <span style="color:#6b7280;">(${desc2N.toFixed(1)} % vs PVP)</span>
-      </div>
-      <div style="margin-bottom:0.18rem;">
-        <strong>Distribuidor (+${mgnDist.toFixed(1)} %):</strong>
+        <strong>Distribuidor (2N):</strong>
         ${precioDist.toFixed(2)} €
         <span style="color:#6b7280;">(${descDist.toFixed(1)} % vs PVP)</span>
       </div>
       <div style="margin-bottom:0.18rem;">
-        <strong>Subdistribuidor (+${mgnSubdist.toFixed(1)} %):</strong>
+        <strong>Subdistribuidor (+${mgnDist.toFixed(1)} %):</strong>
         ${precioSubdist.toFixed(2)} €
         <span style="color:#6b7280;">(${descSubdist.toFixed(1)} % vs PVP)</span>
       </div>
       <div style="margin-bottom:0.18rem;">
-        <strong>Instalador (+${mgnInte.toFixed(1)} %):</strong>
+        <strong>Instalador (+${mgnSubdist.toFixed(1)} %):</strong>
         ${precioInte.toFixed(2)} €
         <span style="color:#6b7280;">(${descInte.toFixed(1)} % vs PVP)</span>
       </div>
-      <div>
-        <strong>Constructora (+${mgnConst.toFixed(1)} %):</strong>
+      <div style="margin-bottom:0.18rem;">
+        <strong>Constructora (+${mgnInte.toFixed(1)} %):</strong>
         ${precioConst.toFixed(2)} €
-        <span style="color:#6b7280;">(${descConst.toFixed(1)} % vs PVP · promotor)</span>
+        <span style="color:#6b7280;">(${descConst.toFixed(1)} % vs PVP)</span>
+      </div>
+      <div>
+        <strong>Promotor (+${mgnConst.toFixed(1)} %):</strong>
+        ${precioPromo.toFixed(2)} €
+        <span style="color:#6b7280;">(${descPromo.toFixed(1)} % vs PVP)</span>
       </div>
     </div>
   `;
@@ -797,7 +707,6 @@ async function exportarSimuladorPDF(actorTab) {
   const actorLabel = getLabelActor(actor);
   const actorFactor = getFactorActor(actor, mgnDist, mgnSubdist, mgnInte, mgnConst);
 
-  // Totales base
   let totalPvpBase = 0;
   let totalActor = 0;
 
@@ -806,7 +715,7 @@ async function exportarSimuladorPDF(actorTab) {
     totalActor += (Number(l.subtotalFinal) || 0) * actorFactor;
   });
 
-  const dtoActorTotal = calcDtoVsPvp(totalPvpBase, totalActor);
+  const dtoActorTotal = totalPvpBase > 0 ? (1 - totalActor / totalPvpBase) * 100 : 0;
 
   const jsPDFGlobal = window.jspdf || window.jsPDF;
   if (!jsPDFGlobal) {
@@ -817,7 +726,6 @@ async function exportarSimuladorPDF(actorTab) {
   const jsPDFCtor = jsPDFGlobal.jsPDF || jsPDFGlobal;
   const doc = new jsPDFCtor("p", "mm", "a4");
 
-  // Cabecera
   doc.setFont("helvetica", "bold");
   doc.setFontSize(14);
   doc.text(`Simulación · ${actorLabel}`, 14, 16);
@@ -838,9 +746,7 @@ async function exportarSimuladorPDF(actorTab) {
   doc.text(`PVP base total: ${totalPvpBase.toFixed(2)} €`, 14, y);
   y += 5;
   doc.text(
-    `Total ${actorLabel}: ${totalActor.toFixed(2)} €  (dto vs PVP: ${dtoActorTotal.toFixed(
-      1
-    )} %)`,
+    `Total ${actorLabel}: ${totalActor.toFixed(2)} €  (dto vs PVP: ${dtoActorTotal.toFixed(1)} %)`,
     14,
     y
   );
@@ -859,7 +765,7 @@ async function exportarSimuladorPDF(actorTab) {
 
   const body = lineas.map((l) => {
     const precioUd = Number(l.pvpFinalUd || 0) * actorFactor;
-    const dtoVsPvp = calcDtoVsPvp(l.basePvp, precioUd);
+    const dtoVsPvp = Number(l.basePvp) > 0 ? (1 - precioUd / Number(l.basePvp)) * 100 : 0;
     const importe = Number(l.subtotalFinal || 0) * actorFactor;
 
     return [
@@ -938,18 +844,15 @@ function exportarSimuladorExcel(actorTab) {
   const actorLabel = getLabelActor(actor);
   const actorFactor = getFactorActor(actor, mgnDist, mgnSubdist, mgnInte, mgnConst);
 
-  // Totales
   let totalPvpBase = 0;
   let totalActor = 0;
   lineas.forEach((l) => {
     totalPvpBase += (Number(l.basePvp) || 0) * (Number(l.cantidad) || 0);
     totalActor += (Number(l.subtotalFinal) || 0) * actorFactor;
   });
-  const dtoActorTotal = calcDtoVsPvp(totalPvpBase, totalActor);
+  const dtoActorTotal = totalPvpBase > 0 ? (1 - totalActor / totalPvpBase) * 100 : 0;
 
   const rows = [];
-
-  // Cabecera
   rows.push([`Simulación · ${actorLabel}`]);
   rows.push([`Proyecto: ${nombreProyecto}`]);
   rows.push([`Fecha: ${fechaPresu || new Date().toLocaleDateString()}`]);
@@ -957,7 +860,6 @@ function exportarSimuladorExcel(actorTab) {
   rows.push([`Total ${actorLabel}: ${totalActor.toFixed(2)} €`, `Dto vs PVP: ${dtoActorTotal.toFixed(1)} %`]);
   rows.push([]);
 
-  // Tabla
   rows.push([
     "Ref.",
     "Descripción",
@@ -971,7 +873,7 @@ function exportarSimuladorExcel(actorTab) {
 
   lineas.forEach((l) => {
     const precioUd = Number(l.pvpFinalUd || 0) * actorFactor;
-    const dtoVsPvp = calcDtoVsPvp(l.basePvp, precioUd);
+    const dtoVsPvp = Number(l.basePvp) > 0 ? (1 - precioUd / Number(l.basePvp)) * 100 : 0;
     const importe = Number(l.subtotalFinal || 0) * actorFactor;
 
     rows.push([
