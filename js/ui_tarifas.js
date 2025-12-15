@@ -1717,9 +1717,7 @@ function downloadBlobFallback(blob, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
 
-function escapeBC3(s) {
-  return String(s ?? "").replace(/\|/g, " ").trim();
-}
+
 
 // CP850 (OEM) encoder básico (suficiente para ES habitual). No mapeado => '?'
 
