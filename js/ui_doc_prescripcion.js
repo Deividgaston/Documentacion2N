@@ -1378,7 +1378,8 @@ function setSelectedCapitulo(id) {
 function createManualCapitulo() {
   ensurePrescCapitulosArray();
 
-  const id = "manual-" + Date.now();
+  const id = "manual-" + prescUid("cap");
+
   const nuevo = {
     id,
     nombre: "Capítulo manual",
