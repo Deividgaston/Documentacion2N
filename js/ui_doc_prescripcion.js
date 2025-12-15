@@ -3137,15 +3137,7 @@ function prescBc3TextSafe(s) {
 
 function downloadBc3File(content, filename) {
   const s = String(content || "");
-  const bytes = new Uint8Array(s.length);
-
-  for (let i = 0; i < s.length; i++) {
-    const code = s.charCodeAt(i);
-
-    // Latin1/Windows-1252 básico: áéíóúñü¡¿ están <= 255
-    if (code <= 0xFF) bytes[i] = code;
-    else bytes[i] = "?".charCodeAt(0);
-  }
+  const bytes = new TextEncoder().encode(s); // ✅ UTF-8 real
 
   const blob = new Blob([bytes], { type: "application/octet-stream" });
   const url = URL.createObjectURL(blob);
@@ -3157,6 +3149,7 @@ function downloadBc3File(content, filename) {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
+
 
 
 
@@ -3198,7 +3191,8 @@ function prescExportModelToBC3_Compat(model) {
   const prestoDate = `${dd}${mm}${yy}`;
 
   // Cabecera compatible
-  out.push(`~V|SOFT S.A.|FIEBDC-3/2002|Presupuestos2N|1.0||ANSI|`);
+  out.push(`~V|SOFT S.A.|FIEBDC-3/2002|Presupuestos2N|1.0||UTF-8|`);
+
   out.push(`~K|\\2\\2\\3\\2\\2\\2\\2\\EUR\\|0|`);
 
   // ✅ ROOT tipo “presupuesto” (como Presto)
