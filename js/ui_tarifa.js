@@ -238,10 +238,12 @@ function leerTarifaDesdeExcel(file) {
         const headerRow = rows[headerRowIndex];
         const headersNorm = headerRow.map((h) => normalizarTextoPlano(h));
 
+        const findCol = (pred) => headersNorm.findIndex(pred);
+
         const colRef =
           headersNorm.findIndex((h) => h === "2n sku") !== -1
             ? headersNorm.findIndex((h) => h === "2n sku")
-            : headersNorm.findIndex(
+            : findCol(
                 (h) =>
                   h.includes("sku") ||
                   h.includes("ordering number") ||
@@ -250,15 +252,46 @@ function leerTarifaDesdeExcel(file) {
                   h.includes("referencia")
               );
 
-        const colName = headersNorm.findIndex(
+        const colName = findCol(
           (h) =>
             h.includes("nombre del producto") ||
             h === "nombre" ||
-            h.includes("product name")
+            h.includes("product name") ||
+            h === "name"
         );
 
-        const colMSRP = headersNorm.findIndex(
+        const colMSRP = findCol(
           (h) => h.includes("msrp") || h.includes("list price") || h.includes("pvp")
+        );
+
+        // ✅ columnas técnicas (keys del Excel “tal cual”)
+        const colNota = findCol((h) => h === "nota" || h === "note");
+        const colAncho = findCol(
+          (h) =>
+            h === "ancho (mm)" ||
+            h === "anchura (mm)" ||
+            h === "width (mm)" ||
+            h === "width"
+        );
+        const colAlto = findCol(
+          (h) =>
+            h === "alto (mm)" ||
+            h === "altura (mm)" ||
+            h === "height (mm)" ||
+            h === "height"
+        );
+        const colProf = findCol((h) => h === "profundidad (mm)" || h === "depth (mm)" || h === "depth");
+        const colPeso = findCol((h) => h === "peso (kg)" || h === "weight (kg)" || h === "weight");
+        const colHS = findCol((h) => h === "hs code" || h === "hscode" || h === "hs");
+        const colEAN = findCol((h) => h === "ean code" || h === "ean");
+        const colWeb = findCol((h) => h === "página web" || h === "pagina web" || h === "website" || h === "url");
+        const colEOL = findCol((h) => h === "eol");
+        const colEOLReason = findCol(
+          (h) =>
+            h === "motivo de finalización de venta" ||
+            h === "motivo finalización de venta" ||
+            h === "end of sale reason" ||
+            h.includes("end of sale")
         );
 
         if (colRef === -1 || colMSRP === -1) {
@@ -269,6 +302,12 @@ function leerTarifaDesdeExcel(file) {
         }
 
         const productos = {};
+
+        const safeStr = (v) => String(v ?? "").trim();
+        const safeNumOrEmpty = (v) => {
+          const n = parseNumeroEuro(v);
+          return n > 0 ? n : ""; // para técnicos: si no hay valor, mejor vacío
+        };
 
         for (let i = headerRowIndex + 1; i < rows.length; i++) {
           const row = rows[i];
@@ -287,9 +326,24 @@ function leerTarifaDesdeExcel(file) {
 
           const desc = String(rawName || "").trim();
 
+          // ✅ guardamos técnicos con LAS KEYS que luego busca ui_tarifas.js
           productos[ref] = {
+            referencia: ref,
             pvp,
             descripcion: desc,
+
+            "Nota": colNota !== -1 ? safeStr(row[colNota]) : "",
+            "Ancho (mm)": colAncho !== -1 ? safeNumOrEmpty(row[colAncho]) : "",
+            "Alto (mm)": colAlto !== -1 ? safeNumOrEmpty(row[colAlto]) : "",
+            "Profundidad (mm)": colProf !== -1 ? safeNumOrEmpty(row[colProf]) : "",
+            "Peso (kg)": colPeso !== -1 ? safeNumOrEmpty(row[colPeso]) : "",
+            "HS code": colHS !== -1 ? safeStr(row[colHS]) : "",
+            "EAN code": colEAN !== -1 ? safeStr(row[colEAN]) : "",
+            "Página web": colWeb !== -1 ? safeStr(row[colWeb]) : "",
+            "EOL": colEOL !== -1 ? safeStr(row[colEOL]) : "",
+            "Motivo de finalización de venta":
+              colEOLReason !== -1 ? safeStr(row[colEOLReason]) : "",
+
             rawRow: row,
           };
         }
