@@ -3727,7 +3727,3 @@ async function prescTranslateTextWithAI(text, targetLang) {
 
   return out || raw;
 }
-
-// ========================================================
-// FIN ARCHIVO ui_doc_prescripcion.js
-// ========================================================
