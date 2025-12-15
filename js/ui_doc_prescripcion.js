@@ -3259,7 +3259,7 @@ function prescExportModelToBC3_Compat(model) {
         // ✅ 3 campos en descomposición
        // Presto 8.8: ~D usa tripletas HIJO\FACTOR\CANTIDAD\
       // En ~D: HIJO\FACTOR\CANTIDAD\  (factor normalmente 1)
-      resRefs.push(`${lineCode}\\1\\${num(qty > 0 ? qty : 1)}\\`);
+      resRefs.push(`${lineCode}\\${num(qty > 0 ? qty : 1)}\\`);
 
     });
 
