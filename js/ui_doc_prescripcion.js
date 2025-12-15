@@ -3246,9 +3246,18 @@ function prescExportModelToBC3_Compat(model) {
 
   out.push(`~K|\\2\\2\\3\\2\\2\\2\\2\\EUR\\|0|`);
 
-  // ✅ ROOT tipo “presupuesto” (como Presto)
-  const ROOT = "PRESCRIPCION##";
-  const used = new Set();
+  // ==================================================
+// NOMBRE DEL PROYECTO → OBRA EN PRESTO
+// ==================================================
+const projectName =
+  (typeof window.getNombreProyectoActual === "function" && window.getNombreProyectoActual()) ||
+  (window.appState?.proyecto?.nombre) ||
+  "Proyecto";
+
+// ✅ ROOT correcto para PRESTO (obra)
+const ROOT = "0##";
+const used = new Set();
+
 
   // type: 0 = capítulo/partida, 3 = recurso/artículo
   const emitC = (code, unit, desc, price, type = 0) => {
@@ -3262,7 +3271,9 @@ function prescExportModelToBC3_Compat(model) {
   };
 
   // Concepto raíz
-  emitC(ROOT, "Ud", "Prescripción", 0, 0);
+  // ✅ Concepto raíz = nombre del proyecto (obra)
+  emitC(ROOT, "", projectName, 0, 0);
+
 
   const chapters = prescGetChaptersCompat(model);
   const rootDecomp = [];
