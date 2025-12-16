@@ -630,23 +630,14 @@ function getCurrentUidPresc() {
   return null;
 }
 
-function getUserSubcollectionRefPresc(subName) {
-  const db = getFirestorePresc();
-  const uid = getCurrentUidPresc();
-  if (!db || !uid || typeof db.collection !== "function") return null;
-  return db.collection("users").doc(uid).collection(subName);
-}
 function getPrescCollectionRefFallback(subName) {
   const db = getFirestorePresc();
   if (!db || typeof db.collection !== "function") return null;
 
-  // Preferimos por usuario si hay uid
-  const byUser = getUserSubcollectionRefPresc(subName);
-  if (byUser) return byUser;
-
-  // Fallback a colección global (compat con tu Firestore actual)
+  // ✅ SIEMPRE global en raíz (según tus rules nuevas)
   return db.collection(subName);
 }
+
 
 // ========================================================
 // Contenedor principal
