@@ -2661,6 +2661,31 @@ function waitForAuthUserOnce(auth, timeoutMs = 8000) {
     }
   });
 }
+function waitForAuthReady(timeoutMs = 2500) {
+  const auth =
+    window.auth || (window.firebase?.auth ? window.firebase.auth() : null);
+
+  if (!auth) return Promise.resolve(null);
+  if (auth.currentUser) return Promise.resolve(auth.currentUser);
+
+  return new Promise((resolve) => {
+    let done = false;
+
+    const timer = setTimeout(() => {
+      if (done) return;
+      done = true;
+      resolve(auth.currentUser || null);
+    }, timeoutMs);
+
+    const unsub = auth.onAuthStateChanged((user) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      try { unsub && unsub(); } catch (_) {}
+      resolve(user || null);
+    });
+  });
+}
 
 function ensureDocMediaLoadedOnce() {
   const d = appState.documentacion;
