@@ -703,6 +703,68 @@ function refreshDocFichasOnly() {
     });
   });
 }
+function renderDocFichasListOnlyHTML() {
+  const media = appState.documentacion.mediaLibrary || [];
+
+  const fichas = media.filter((m) => {
+    const cat = (m.docCategory || "").toLowerCase();
+    const mime = (m.mimeType || "").toLowerCase();
+    if (cat === "ficha") return true;
+    if (mime === "application/pdf") return true;
+    if (
+      mime ===
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+      mime === "application/msword"
+    ) return true;
+    return false;
+  });
+
+  const selected = new Set(appState.documentacion.selectedFichasMediaIds || []);
+  const term = (appState.documentacion.fichasSearchTerm || "").trim().toLowerCase();
+
+  const filtered = term
+    ? fichas.filter((m) => {
+        const t =
+          (m.nombre || "") +
+          " " +
+          (m.folderName || "") +
+          " " +
+          (m.docCategory || "");
+        return t.toLowerCase().includes(term);
+      })
+    : fichas;
+
+  if (!filtered.length) {
+    return `
+      <p class="text-muted" style="font-size:0.85rem;">
+        No se han encontrado fichas técnicas.
+      </p>
+    `;
+  }
+
+  return `
+    <div class="doc-fichas-list doc-fichas-media-list">
+      ${filtered
+        .map((m) => {
+          const checked = selected.has(m.id) ? "checked" : "";
+          const main = m.folderName
+            ? `<strong>${docEscapeHtml(m.folderName)}</strong> – ${docEscapeHtml(m.nombre || "")}`
+            : `<strong>${docEscapeHtml(m.nombre || "")}</strong>`;
+
+          return `
+            <label class="doc-ficha-item">
+              <input type="checkbox"
+                data-doc-ficha-media-id="${m.id}"
+                ${checked}
+              >
+              <span class="doc-ficha-main">${main}</span>
+            </label>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+}
 
 // ======================================================
 // OVERLAY FLOTANTE PARA VER UNA IMAGEN
