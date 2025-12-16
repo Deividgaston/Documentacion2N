@@ -10,43 +10,52 @@ const VIEW_STORAGE_KEY = "presup2n_currentView";
 // Helpers de router / UI
 // ==============================
 
+function _normalizeViewKey(viewKey) {
+  if (viewKey === "docs") return "documentacion";
+  if (viewKey === "docs-gestion") return "docGestion";
+  return viewKey;
+}
+
+function _isViewAllowedSafe(viewKey) {
+  const v = _normalizeViewKey(viewKey);
+  const caps = appState?.user?.capabilities;
+  if (!caps || !caps.views) return false;
+  return !!caps.views[v];
+}
+
 function setCurrentView(viewKey) {
-  // ⭐ compat: normalizar posibles claves antiguas
-  if (viewKey === "docs") viewKey = "documentacion";
-  if (viewKey === "docs-gestion") viewKey = "docGestion";
+  viewKey = _normalizeViewKey(viewKey);
+
+  // Si auth aún no está listo, no hacemos nada (evita renders antes de login)
+  if (!appState.authReady) return;
+
+  // Bloqueo por permisos
+  if (!_isViewAllowedSafe(viewKey)) {
+    // buscar primera vista permitida
+    const order = ["proyecto", "presupuesto", "simulador", "tarifa", "tarifas", "documentacion", "prescripcion", "docGestion", "usuarios"];
+    const fallback = order.find((k) => _isViewAllowedSafe(k));
+    if (!fallback) return;
+    viewKey = fallback;
+  }
 
   appState.currentView = viewKey;
 
-  // Guardar la vista actual en localStorage para mantenerla tras F5
   try {
     window.localStorage.setItem(VIEW_STORAGE_KEY, viewKey);
   } catch (e) {
     console.warn("No se pudo guardar la vista actual en localStorage:", e);
   }
 
-  // 1) Marcar pestaña activa en la topbar
   const navLinks = document.querySelectorAll(".top-nav-link[data-view]");
   navLinks.forEach((link) => {
-    const v = link.getAttribute("data-view");
+    const vRaw = link.getAttribute("data-view");
+    const v = _normalizeViewKey(vRaw);
 
-    const normalized =
-      v === "docs"
-        ? "documentacion"
-        : v === "docs-gestion"
-        ? "docGestion"
-        : v;
-
-    if (normalized === viewKey) {
-      link.classList.add("active");
-    } else {
-      link.classList.remove("active");
-    }
+    if (v === viewKey) link.classList.add("active");
+    else link.classList.remove("active");
   });
 
-  // 2) Actualizar subtítulo de la vista actual
   updateViewSubtitle(viewKey);
-
-  // 3) Renderizar la vista correspondiente
   renderViewByKey(viewKey);
 }
 
@@ -59,41 +68,30 @@ function updateViewSubtitle(viewKey) {
     case "proyecto":
       text = "Importa y gestiona el proyecto base desde Excel / Project Designer.";
       break;
-
     case "presupuesto":
       text = "Edita el presupuesto a partir del proyecto importado.";
       break;
-
     case "simulador":
       text = "Simula tarifas y descuentos sobre el presupuesto actual.";
       break;
-
     case "tarifa":
       text = "Consulta la tarifa PVP de 2N y añade partidas al presupuesto.";
       break;
-
     case "tarifas":
       text = "Gestiona los tipos de tarifa y descuentos avanzados.";
       break;
-
     case "documentacion":
-    case "docs":
       text = "Genera la memoria de calidades y documentación del proyecto.";
       break;
-
     case "prescripcion":
       text = "Vista de prescripción: resumen inteligente de documentación para memorias.";
       break;
-
     case "docGestion":
-    case "docs-gestion":
       text = "Gestiona la documentación subida: fichas, imágenes, certificados y declaraciones.";
       break;
-
     case "usuarios":
-      text = "Configuración de usuarios y permisos (solo superadministrador).";
+      text = "Configuración de usuarios y permisos.";
       break;
-
     default:
       text = "";
   }
@@ -111,9 +109,11 @@ function callIfFn(fnName) {
 }
 
 function renderViewByKey(viewKey) {
-  // compat
-  if (viewKey === "docs") viewKey = "documentacion";
-  if (viewKey === "docs-gestion") viewKey = "docGestion";
+  viewKey = _normalizeViewKey(viewKey);
+
+  // Bloqueo por permisos
+  if (!appState.authReady) return;
+  if (!_isViewAllowedSafe(viewKey)) return;
 
   switch (viewKey) {
     case "proyecto":
@@ -153,15 +153,10 @@ function renderViewByKey(viewKey) {
       break;
 
     default:
-      appState.currentView = "proyecto";
       callIfFn("renderProyectoView");
       break;
   }
 }
-
-// ==============================
-// Inicialización de navegación
-// ==============================
 
 function initTopbarNavigation() {
   const navLinks = document.querySelectorAll(".top-nav-link[data-view]");
@@ -175,21 +170,17 @@ function initTopbarNavigation() {
   });
 }
 
-// ==============================
-// Hook de arranque
-// ==============================
-
 document.addEventListener("DOMContentLoaded", () => {
   initTopbarNavigation();
+
+  // Vista inicial SOLO si ya hay authReady (si no, authGate la setea luego)
+  if (!appState.authReady) return;
 
   let initialView = "proyecto";
   try {
     const storedView = window.localStorage.getItem(VIEW_STORAGE_KEY);
-    if (storedView) {
-      initialView = storedView;
-    } else if (appState.currentView) {
-      initialView = appState.currentView;
-    }
+    if (storedView) initialView = storedView;
+    else if (appState.currentView) initialView = appState.currentView;
   } catch (e) {
     console.warn("No se pudo leer la vista actual desde localStorage:", e);
     initialView = appState.currentView || "proyecto";
@@ -198,6 +189,5 @@ document.addEventListener("DOMContentLoaded", () => {
   setCurrentView(initialView);
 });
 
-// Exponer
 window.setCurrentView = setCurrentView;
 window.renderViewByKey = renderViewByKey;
