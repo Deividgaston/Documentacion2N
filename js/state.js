@@ -11,6 +11,12 @@ const PRESUPUESTO_CACHE_KEY = "presupuestos2n_presupuesto";
 const TARIFA_CACHE_KEY = "presupuestos2n_tarifa";
 
 // ==========================
+// AUTH / USER (NUEVO)
+// ==========================
+appState.user = appState.user || null; // { uid, email, role, capabilities, active }
+appState.authReady = appState.authReady || false;
+
+// ==========================
 // ESTADO INICIAL
 // ==========================
 appState.proyecto = appState.proyecto || {
@@ -50,7 +56,6 @@ appState.tarifas = appState.tarifas || {
       appState.proyecto = data;
       console.log("%cProyecto restaurado desde cache", "color:#2563eb;");
     }
-
   } catch (e) {
     console.warn("Error cargando proyecto desde cache:", e);
   }
@@ -67,7 +72,6 @@ appState.tarifas = appState.tarifas || {
       appState.presupuesto = data;
       console.log("%cPresupuesto restaurado desde cache", "color:#2563eb;");
     }
-
   } catch (e) {
     console.warn("Error cargando presupuesto desde cache:", e);
   }
