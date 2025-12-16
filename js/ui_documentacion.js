@@ -1112,6 +1112,9 @@ async function saveMediaFileToStorageAndFirestore(file, options = {}) {
   } else {
     url = URL.createObjectURL(file);
   }
+  const proyecto = appState.proyecto || {};
+  const proyectoId =
+    proyecto.id || proyecto.proyectoId || proyecto.uid || null;
 
   const mediaData = {
     nombre: name,
