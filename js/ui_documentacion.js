@@ -1129,10 +1129,12 @@ async function saveMediaFileToStorageAndFirestore(file, options = {}) {
   };
 
   if (db) {
-    const ref = await db.collection("documentacion_media").add({
+       const ref = await db.collection("documentacion_media").add({
       ...mediaData,
       uid,
+      proyectoId, // ✅ redundante ok
     });
+
 
     mediaData.id = ref.id;
   } else {
