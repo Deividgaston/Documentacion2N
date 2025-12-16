@@ -1,5 +1,6 @@
 // js/ui_login.js
-// Lógica de la pantalla de login (email+password + Google)
+// Lógica de la pantalla de login (solo email+password)
+// Google deshabilitado + allowlist superadmin
 
 function initLoginUI() {
   const loginPage = document.getElementById("loginPage");
@@ -10,6 +11,8 @@ function initLoginUI() {
   const btnLoginGoogle = document.getElementById("btnLoginGoogle");
   const loginError = document.getElementById("loginError");
 
+  const SUPERADMIN_EMAIL = "gastonortigosa@gmail.com";
+
   if (!loginPage || !appShell) {
     console.error("Error: faltan elementos del login en HTML.");
     return;
@@ -18,6 +21,9 @@ function initLoginUI() {
   // Estado inicial: login visible
   loginPage.style.display = "flex";
   appShell.style.display = "none";
+
+  // Ocultar Google si existe en DOM
+  if (btnLoginGoogle) btnLoginGoogle.style.display = "none";
 
   function mostrarError(msg) {
     if (!loginError) return;
@@ -31,17 +37,30 @@ function initLoginUI() {
     loginError.style.display = "none";
   }
 
+  async function forceLogoutWithMsg(msg) {
+    try {
+      await auth.signOut();
+    } catch (_) {}
+    mostrarError(msg);
+  }
+
   // ============================================
   // LOGIN EMAIL + PASSWORD
   // ============================================
   async function manejarLogin() {
     limpiarError();
 
-    const email = emailInput.value.trim();
+    const email = emailInput.value.trim().toLowerCase();
     const pass = passInput.value.trim();
 
     if (!email || !pass) {
       mostrarError("Introduce email y contraseña.");
+      return;
+    }
+
+    // ✅ Allowlist antes incluso de intentar auth
+    if (email !== SUPERADMIN_EMAIL) {
+      mostrarError("Acceso no permitido.");
       return;
     }
 
@@ -51,8 +70,16 @@ function initLoginUI() {
     }
 
     try {
-      await auth.signInWithEmailAndPassword(email, pass);
-      // initOnAuthChange() cambia la vista
+      const cred = await auth.signInWithEmailAndPassword(email, pass);
+
+      // ✅ Post-check seguridad
+      const loggedEmail = (cred?.user?.email || "").toLowerCase();
+      if (loggedEmail !== SUPERADMIN_EMAIL) {
+        await forceLogoutWithMsg("Acceso no permitido.");
+        return;
+      }
+
+      // initOnAuthChange() / ui_shell se encargan de mostrar la app (según tu app.js)
     } catch (err) {
       console.error("Error login email:", err);
       let msg = "No se ha podido iniciar sesión.";
@@ -63,34 +90,10 @@ function initLoginUI() {
     }
   }
 
-  // ============================================
-  // LOGIN GOOGLE
-  // ============================================
-  async function manejarLoginGoogle() {
-    limpiarError();
-
-    try {
-      const provider = new firebase.auth.GoogleAuthProvider();
-      await auth.signInWithPopup(provider);
-    } catch (err) {
-      console.error("Error login Google:", err);
-      let msg = "Error iniciando sesión con Google.";
-      if (err.code === "auth/popup-closed-by-user") {
-        msg = "Cerraste la ventana de Google.";
-      }
-      mostrarError(msg);
-    }
-  }
-
   // Eventos
   btnLogin.addEventListener("click", (e) => {
     e.preventDefault();
     manejarLogin();
-  });
-
-  btnLoginGoogle.addEventListener("click", (e) => {
-    e.preventDefault();
-    manejarLoginGoogle();
   });
 
   // Enter para login rápido
@@ -101,7 +104,4 @@ function initLoginUI() {
   });
 }
 
-console.log(
-  "%cUI Login cargada (Google OK)",
-  "color:#1d4fd8; font-weight:600;"
-);
+console.log("%cUI Login cargada (solo email)", "color:#1d4fd8; font-weight:600;");
