@@ -641,7 +641,7 @@ function getPrescCollectionRefFallback(subName) {
   if (!db || typeof db.collection !== "function") return null;
 
   // Preferimos por usuario si hay uid
-  const byUser = getUserSubcollectionRefPresc(subName);
+  const byUser = getPrescCollectionRefFallback(subName);
   if (byUser) return byUser;
 
   // Fallback a colección global (compat con tu Firestore actual)
