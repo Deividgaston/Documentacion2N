@@ -2733,12 +2733,10 @@ function renderDocumentacionView() {
 if (!d.mediaLoaded) {
   ensureDocMediaLoadedOnce().then((ok) => {
     if (ok && typeof window.renderDocumentacionView === "function") {
-      window.renderDocumentacionView(); // re-render con media ya cargada
+      window.renderDocumentacionView();
     }
   });
 }
-
-
 
 
   
