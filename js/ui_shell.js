@@ -1,5 +1,6 @@
 // js/ui_shell.js
 // Shell de la app: navegación superior + logout + selección de vistas
+// + AUTH GATE + roles/permisos + invitaciones (invites/{emailId})
 
 window.appState = window.appState || {};
 
@@ -27,11 +28,11 @@ function buildCapabilitiesForRole(role) {
       usuarios: false,
     },
     features: {
-      tarifasWrite: false,         // add/edit/delete tarifas
-      docExportTecnico: false,     // export técnico
-      docModo: "none",             // "none" | "commercial" | "technical"
-      prescTemplatesWrite: false,  // plantillas prescripción
-      prescExtraRefsWrite: false,  // refs extra prescripción
+      tarifasWrite: false, // add/edit/delete tarifas
+      docExportTecnico: false, // export técnico
+      docModo: "none", // "none" | "commercial" | "technical"
+      prescTemplatesWrite: false, // plantillas prescripción
+      prescExtraRefsWrite: false, // refs extra prescripción
     },
   };
 
@@ -52,7 +53,6 @@ function buildCapabilitiesForRole(role) {
     base.views.tarifa = true;
     base.views.tarifas = true;
     base.views.documentacion = true;
-    base.views.prescripcion = false;
     base.views.docGestion = true;
 
     base.features.tarifasWrite = false; // solo consultar/imprimir
@@ -68,7 +68,6 @@ function buildCapabilitiesForRole(role) {
     base.views.tarifa = true;
     base.views.tarifas = true;
     base.views.documentacion = true;
-    base.views.prescripcion = false;
     base.views.docGestion = true;
 
     base.features.tarifasWrite = false;
@@ -102,7 +101,6 @@ function buildCapabilitiesForRole(role) {
     return base;
   }
 
-  // default seguro
   return base;
 }
 
@@ -113,27 +111,89 @@ function isViewAllowed(viewKey) {
 }
 
 function getFirstAllowedView() {
-  const order = ["proyecto", "presupuesto", "simulador", "tarifa", "tarifas", "documentacion", "prescripcion", "docGestion", "usuarios"];
+  const order = [
+    "proyecto",
+    "presupuesto",
+    "simulador",
+    "tarifa",
+    "tarifas",
+    "documentacion",
+    "prescripcion",
+    "docGestion",
+    "usuarios",
+  ];
   for (const v of order) if (isViewAllowed(v)) return v;
   return null;
 }
 
+function normalizeEmail(email) {
+  return String(email || "").trim().toLowerCase();
+}
+
+function inviteIdFromEmail(email) {
+  return normalizeEmail(email).replace(/[^\w.-]+/g, "_");
+}
+
 // ==========================
-// Firestore: cargar/crear user profile
+// Firestore: cargar/crear user profile (con invitación)
 // ==========================
 async function ensureAndLoadUserProfile(firebaseUser) {
   const uid = firebaseUser.uid;
-  const email = String(firebaseUser.email || "").toLowerCase();
+  const email = normalizeEmail(firebaseUser.email);
 
-  const ref = db.collection("users").doc(uid);
-  const snap = await ref.get();
+  // Seguridad: email requerido
+  if (!email) return null;
 
-  // Si no existe: lo creamos (default ACCOUNT_MANAGER salvo superadmin)
-  if (!snap.exists) {
-    const role = email === SUPERADMIN_EMAIL ? "SUPER_ADMIN" : "ACCOUNT_MANAGER";
+  const userRef = db.collection("users").doc(uid);
+  const userSnap = await userRef.get();
+
+  // ================
+  // EXISTE USER: normalizar y devolver
+  // ================
+  if (userSnap.exists) {
+    const data = userSnap.data() || {};
+    let role = String(data.role || "").toUpperCase();
+    const active = data.active !== false;
+
+    // Superadmin único por email
+    if (role === "SUPER_ADMIN" && email !== SUPERADMIN_EMAIL) {
+      return null;
+    }
+
+    if (!role) {
+      role = email === SUPERADMIN_EMAIL ? "SUPER_ADMIN" : "ACCOUNT_MANAGER";
+    }
+
+    const capabilities =
+      data.capabilities && data.capabilities.views
+        ? data.capabilities
+        : buildCapabilitiesForRole(role);
+
+    // merge de normalización
+    try {
+      await userRef.set(
+        {
+          email,
+          role,
+          capabilities,
+          active,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+    } catch (_) {}
+
+    return { uid, email, role, capabilities, active };
+  }
+
+  // ================
+  // NO EXISTE USER: crear según superadmin o invitación válida
+  // ================
+  if (email === SUPERADMIN_EMAIL) {
+    const role = "SUPER_ADMIN";
     const capabilities = buildCapabilitiesForRole(role);
 
-    await ref.set(
+    await userRef.set(
       {
         uid,
         email,
@@ -149,33 +209,76 @@ async function ensureAndLoadUserProfile(firebaseUser) {
     return { uid, email, role, capabilities, active: true };
   }
 
-  const data = snap.data() || {};
-  const role = String(data.role || "").toUpperCase() || (email === SUPERADMIN_EMAIL ? "SUPER_ADMIN" : "ACCOUNT_MANAGER");
-  const active = data.active !== false;
+  // Buscar invitación por email (id determinista)
+  const invId = inviteIdFromEmail(email);
+  const invRef = db.collection("invites").doc(invId);
+  const invSnap = await invRef.get();
 
-  // capabilities: si faltan o están incompletas, regeneramos (merge)
-  const capabilities = data.capabilities && data.capabilities.views ? data.capabilities : buildCapabilitiesForRole(role);
-
-  // Ajuste: superadmin único por email (si alguien intenta “ponerse” SUPER_ADMIN sin ser el email)
-  if (role === "SUPER_ADMIN" && email !== SUPERADMIN_EMAIL) {
-    return null; // denegamos
+  if (!invSnap.exists) {
+    // No invitado => no entra
+    return null;
   }
 
-  // Si hay que normalizar/guardar capabilities
+  const inv = invSnap.data() || {};
+  const status = String(inv.status || "pending").toLowerCase();
+  const invEmail = normalizeEmail(inv.email);
+
+  // Validaciones básicas
+  if (invEmail && invEmail !== email) return null;
+  if (status !== "pending") return null;
+
+  // Caducidad 24h
+  const nowMs = Date.now();
+  const exp = inv.expiresAt?.toDate ? inv.expiresAt.toDate().getTime() : null;
+  if (!exp || exp < nowMs) {
+    // marcar expirado (best-effort)
+    try {
+      await invRef.set(
+        {
+          status: "expired",
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+    } catch (_) {}
+    return null;
+  }
+
+  // Crear user con rol/capabilities de invitación (o default)
+  const role = String(inv.role || "ACCOUNT_MANAGER").toUpperCase();
+  const capabilities =
+    inv.capabilities && inv.capabilities.views
+      ? inv.capabilities
+      : buildCapabilitiesForRole(role);
+
+  await userRef.set(
+    {
+      uid,
+      email,
+      role,
+      capabilities,
+      active: true,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      createdFromInvite: invId,
+    },
+    { merge: true }
+  );
+
+  // Marcar invitación como usada (best-effort)
   try {
-    await ref.set(
+    await invRef.set(
       {
-        email,
-        role,
-        capabilities,
-        active,
+        status: "used",
+        usedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        usedByUid: uid,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       },
       { merge: true }
     );
   } catch (_) {}
 
-  return { uid, email, role, capabilities, active };
+  return { uid, email, role, capabilities, active: true };
 }
 
 // ==========================
@@ -187,16 +290,14 @@ function applyNavVisibility() {
     const v = a.getAttribute("data-view");
     if (!v) return;
 
-    // normalizar compat
-    const viewKey = v === "docs" ? "documentacion" : v === "docs-gestion" ? "docGestion" : v;
+    const viewKey =
+      v === "docs" ? "documentacion" : v === "docs-gestion" ? "docGestion" : v;
 
-    // Si no hay user, ocultar todo (hasta login)
     if (!appState.user) {
       a.style.display = "none";
       return;
     }
 
-    // Mostrar solo vistas permitidas
     a.style.display = isViewAllowed(viewKey) ? "" : "none";
   });
 }
@@ -214,7 +315,6 @@ function initShellUI() {
     return;
   }
 
-  // Mostrar app, ocultar login
   loginPage.style.display = "none";
   appShell.style.display = "flex";
 
@@ -224,7 +324,7 @@ function initShellUI() {
     userBadge.textContent = `${appState.user.email} · ${appState.user.role || ""}`.trim();
   }
 
-  // Listeners de navegación (evitar duplicados)
+  // Listeners nav (evitar duplicados)
   if (!appState._shellNavInited) {
     appState._shellNavInited = true;
 
@@ -234,9 +334,9 @@ function initShellUI() {
         const view = link.getAttribute("data-view");
         if (!view) return;
 
-        const viewKey = view === "docs" ? "documentacion" : view === "docs-gestion" ? "docGestion" : view;
+        const viewKey =
+          view === "docs" ? "documentacion" : view === "docs-gestion" ? "docGestion" : view;
 
-        // Bloqueo por permisos
         if (!isViewAllowed(viewKey)) return;
 
         if (typeof window.setCurrentView === "function") {
@@ -260,11 +360,10 @@ function initShellUI() {
     });
   }
 
-  // Aplicar tabs
   applyNavVisibility();
 }
 
-// Cambiar de vista y marcar pestaña activa (fallback legacy)
+// Fallback legacy
 function selectView(viewName) {
   if (viewName === "proyecto" && typeof renderProyectoView === "function") {
     renderProyectoView();
@@ -281,71 +380,75 @@ function selectView(viewName) {
   }
 
   document.querySelectorAll(".top-nav-link").forEach((el) => el.classList.remove("active"));
-
   const activeTab = document.querySelector(`.top-nav-link[data-view="${viewName}"]`);
   if (activeTab) activeTab.classList.add("active");
 }
 
 // ==========================
-// AUTH GATE (NUEVO)
+// AUTH GATE
 // ==========================
 function initAuthGate() {
   const loginPage = document.getElementById("loginPage");
   const appShell = document.getElementById("appShell");
+  const loginError = document.getElementById("loginError");
 
   if (!loginPage || !appShell) return;
 
-  // estado inicial
   loginPage.style.display = "flex";
   appShell.style.display = "none";
 
   if (typeof initLoginUI === "function") initLoginUI();
+
+  function showLoginError(msg) {
+    if (!loginError) return;
+    loginError.textContent = msg;
+    loginError.style.display = "flex";
+  }
 
   auth.onAuthStateChanged(async (user) => {
     try {
       if (!user) {
         appState.user = null;
         appState.authReady = true;
-
-        // ocultar tabs mientras no haya user
         applyNavVisibility();
-
         loginPage.style.display = "flex";
         appShell.style.display = "none";
         return;
       }
 
-      // Cargar/crear perfil
       const profile = await ensureAndLoadUserProfile(user);
 
-      // Denegado por superadmin único
       if (!profile) {
         try {
           await auth.signOut();
         } catch (_) {}
+
         appState.user = null;
         appState.authReady = true;
+        applyNavVisibility();
         loginPage.style.display = "flex";
         appShell.style.display = "none";
+        showLoginError("Acceso no autorizado o invitación caducada/no existente.");
         return;
       }
 
-      // Denegado por active=false
       if (profile.active === false) {
         try {
           await auth.signOut();
         } catch (_) {}
+
         appState.user = null;
         appState.authReady = true;
+        applyNavVisibility();
         loginPage.style.display = "flex";
         appShell.style.display = "none";
+        showLoginError("Usuario desactivado.");
         return;
       }
 
       appState.user = profile;
       appState.authReady = true;
 
-      // Mostrar app + aplicar permisos
       initShellUI();
 
       // Si la vista actual no está permitida, saltar a la primera permitida
@@ -361,10 +464,13 @@ function initAuthGate() {
       try {
         await auth.signOut();
       } catch (_) {}
+
       appState.user = null;
       appState.authReady = true;
+      applyNavVisibility();
       loginPage.style.display = "flex";
       appShell.style.display = "none";
+      showLoginError("Error de autenticación.");
     }
   });
 }
