@@ -2660,6 +2660,24 @@ function waitForAuthUserOnce(auth, timeoutMs = 8000) {
     }
   });
 }
+
+function waitForFirestoreReady(timeoutMs = 4000) {
+  return new Promise((resolve) => {
+    const start = Date.now();
+
+    (function tick() {
+      const db =
+        window.db ||
+        (window.firebase?.firestore ? window.firebase.firestore() : null);
+
+      if (db) return resolve(db);
+
+      if (Date.now() - start > timeoutMs) return resolve(null);
+      setTimeout(tick, 120);
+    })();
+  });
+}
+
 function waitForAuthReady(timeoutMs = 2500) {
   const auth =
     window.auth || (window.firebase?.auth ? window.firebase.auth() : null);
