@@ -1025,34 +1025,49 @@ async function ensureDocMediaLoaded() {
   const db =
     window.db ||
     (window.firebase?.firestore ? window.firebase.firestore() : null);
-
-  if (!db) return;
+  if (!db) return false;
 
   try {
     const auth =
       window.auth ||
       (window.firebase?.auth ? window.firebase.auth() : null);
 
-    const user = auth?.currentUser || null;
-    const uid = user ? user.uid : null;
+    // ✅ Esperar a que Auth esté resuelto (y no consultar Firestore sin uid)
+    const user =
+      auth?.currentUser || (typeof waitForAuthReady === "function"
+        ? await waitForAuthReady(8000)
+        : null);
 
-    let query = db.collection("documentacion_media");
-    if (uid) query = query.where("uid", "==", uid);
+    const uid = user?.uid || null;
 
-    const snap = await query.limit(200).get();
+    if (!uid) {
+      // No marcamos mediaLoaded: reintentará cuando Auth esté listo
+      console.warn("[DOC] Auth aún no listo: no cargo media todavía.");
+      appState.documentacion.mediaLoaded = false;
+      return false;
+    }
+
+    const snap = await db
+      .collection("documentacion_media")
+      .where("uid", "==", uid)
+      .limit(200)
+      .get();
+
     const media = [];
-
     snap.forEach((d) => media.push({ ...d.data(), id: d.id }));
 
     appState.documentacion.mediaLibrary = media;
     appState.documentacion.mediaLoaded = true;
 
     console.log("[DOC] Media cargada:", media.length);
+    return true;
   } catch (e) {
     console.error("[DOC] Error cargando documentación media:", e);
     appState.documentacion.mediaLoaded = false;
+    return false;
   }
 }
+
 
 async function saveMediaFileToStorageAndFirestore(file, options = {}) {
   const name = file.name || "archivo";
