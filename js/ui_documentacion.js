@@ -2687,27 +2687,25 @@ function waitForAuthReady(timeoutMs = 2500) {
   });
 }
 
+let __docMediaLoadPromise = null;
+let __docMediaLastAttempt = 0;
+
 function ensureDocMediaLoadedOnce() {
   const d = appState.documentacion;
 
   if (d.mediaLoaded) return Promise.resolve(true);
   if (__docMediaLoadPromise) return __docMediaLoadPromise;
 
-  const auth =
-    window.auth ||
-    (window.firebase?.auth ? window.firebase.auth() : null);
+  const now = Date.now();
+  if (now - __docMediaLastAttempt < 1200) {
+    return Promise.resolve(false); // evita bucles de re-render muy rápidos
+  }
+  __docMediaLastAttempt = now;
 
   __docMediaLoadPromise = Promise.resolve()
-    .then(async () => {
-      // ✅ esperar a auth antes de cargar (evita primera carga “vacía”)
-      await waitForAuthUserOnce(auth, 8000);
-
-      // si sigue sin user, no marcamos mediaLoaded: dejamos que se intente luego
-      if (auth && !auth.currentUser) return false;
-
-      await ensureDocMediaLoaded();
-      return !!appState.documentacion.mediaLoaded;
-    })
+    .then(() => waitForAuthReady(2500))
+    .then(() => ensureDocMediaLoaded())
+    .then(() => !!appState.documentacion.mediaLoaded)
     .catch((e) => {
       console.error("[DOC] Error en carga inicial de media:", e);
       return false;
