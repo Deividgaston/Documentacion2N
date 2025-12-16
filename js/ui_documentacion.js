@@ -1047,11 +1047,22 @@ async function ensureDocMediaLoaded() {
       return false;
     }
 
-    const snap = await db
-      .collection("documentacion_media")
-      .where("uid", "==", uid)
-      .limit(200)
-      .get();
+const proyecto = appState.proyecto || {};
+const proyectoId =
+  proyecto.id || proyecto.proyectoId || proyecto.uid || null;
+
+let query = db.collection("documentacion_media");
+
+// ✅ PRIORIDAD: por proyecto (compartido entre perfiles)
+if (proyectoId) {
+  query = query.where("proyectoId", "==", proyectoId);
+} else {
+  // fallback para datos antiguos
+  query = query.where("uid", "==", uid);
+}
+
+const snap = await query.limit(200).get();
+
 
     const media = [];
     snap.forEach((d) => media.push({ ...d.data(), id: d.id }));
