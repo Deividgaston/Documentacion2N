@@ -1032,51 +1032,47 @@ async function ensureDocMediaLoaded() {
       window.auth ||
       (window.firebase?.auth ? window.firebase.auth() : null);
 
-    // ✅ Esperar a que Auth esté resuelto (y no consultar Firestore sin uid)
+    // ✅ Esperar auth lista
     const user =
-      auth?.currentUser || (typeof waitForAuthReady === "function"
+      auth?.currentUser ||
+      (typeof waitForAuthReady === "function"
         ? await waitForAuthReady(8000)
         : null);
 
     const uid = user?.uid || null;
 
     if (!uid) {
-      // No marcamos mediaLoaded: reintentará cuando Auth esté listo
       console.warn("[DOC] Auth aún no listo: no cargo media todavía.");
       appState.documentacion.mediaLoaded = false;
       return false;
     }
 
-const proyecto = appState.proyecto || {};
-const proyectoId = proyecto.id || proyecto.proyectoId || null;
+    const proyecto = appState.proyecto || {};
+    const proyectoId = proyecto.id || proyecto.proyectoId || null;
 
-const mediaMap = new Map();
+    const mediaMap = new Map();
 
-// 1) Si hay proyectoId, traemos lo nuevo (por proyecto)
-if (proyectoId) {
-  const snapProj = await db
-    .collection("documentacion_media")
-    .where("proyectoId", "==", proyectoId)
-    .limit(200)
-    .get();
+    // 1) Por proyecto (nuevo)
+    if (proyectoId) {
+      const snapProj = await db
+        .collection("documentacion_media")
+        .where("proyectoId", "==", proyectoId)
+        .limit(200)
+        .get();
 
-  snapProj.forEach((d) => mediaMap.set(d.id, { ...d.data(), id: d.id }));
-}
+      snapProj.forEach((d) => mediaMap.set(d.id, { ...d.data(), id: d.id }));
+    }
 
-// 2) Siempre traemos lo legacy (por uid), por compatibilidad
-const snapUid = await db
-  .collection("documentacion_media")
-  .where("uid", "==", uid)
-  .limit(200)
-  .get();
+    // 2) Por uid (legacy)
+    const snapUid = await db
+      .collection("documentacion_media")
+      .where("uid", "==", uid)
+      .limit(200)
+      .get();
 
-snapUid.forEach((d) => mediaMap.set(d.id, { ...d.data(), id: d.id }));
+    snapUid.forEach((d) => mediaMap.set(d.id, { ...d.data(), id: d.id }));
 
-const media = Array.from(mediaMap.values());
-
-
-    const media = [];
-    snap.forEach((d) => media.push({ ...d.data(), id: d.id }));
+    const media = Array.from(mediaMap.values());
 
     appState.documentacion.mediaLibrary = media;
     appState.documentacion.mediaLoaded = true;
@@ -1089,6 +1085,7 @@ const media = Array.from(mediaMap.values());
     return false;
   }
 }
+
 
 
 async function saveMediaFileToStorageAndFirestore(file, options = {}) {
