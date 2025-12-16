@@ -2935,11 +2935,14 @@ if (!d.mediaLoaded) {
             </div>
           </div>
 
-          <div class="card">
-            <div class="card-body">
-              ${renderDocFichasHTML()}
-            </div>
-          </div>
+         <div class="card">
+  <div class="card-body">
+    <div id="docFichasPanel">
+      ${renderDocFichasHTML()}
+    </div>
+  </div>
+</div>
+
         </div>
       </div>
     </div>
