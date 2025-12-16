@@ -1116,7 +1116,7 @@ async function saveMediaFileToStorageAndFirestore(file, options = {}) {
   const proyectoId =
     proyecto.id || proyecto.proyectoId || proyecto.uid || null;
 
-  const mediaData = {
+   const mediaData = {
     nombre: name,
     type,
     mimeType: file.type,
@@ -1125,6 +1125,7 @@ async function saveMediaFileToStorageAndFirestore(file, options = {}) {
     uploadedAt: now,
     folderName: folderName || null,
     docCategory,
+    proyectoId, // ✅ CLAVE
   };
 
   if (db) {
