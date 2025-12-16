@@ -681,15 +681,12 @@ function refreshDocFichasOnly() {
   const container = getDocAppContent();
   if (!container) return;
 
-  const panel = container.querySelector("#docFichasPanel");
-  if (!panel) return;
+  const wrap = container.querySelector("#docFichasListWrap");
+  if (!wrap) return;
 
-  panel.innerHTML = renderDocFichasHTML();
+  wrap.innerHTML = renderDocFichasListOnlyHTML();
 
-  // reenganchar search + checks
-  attachDocSearchHandlers(container);
-
-  panel.querySelectorAll("[data-doc-ficha-media-id]").forEach((chk) => {
+  wrap.querySelectorAll("[data-doc-ficha-media-id]").forEach((chk) => {
     chk.addEventListener("change", () => {
       const id = chk.getAttribute("data-doc-ficha-media-id");
       if (!id) return;
@@ -703,6 +700,7 @@ function refreshDocFichasOnly() {
     });
   });
 }
+
 function renderDocFichasListOnlyHTML() {
   const media = appState.documentacion.mediaLibrary || [];
 
