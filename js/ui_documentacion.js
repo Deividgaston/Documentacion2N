@@ -211,14 +211,19 @@ function buildDocTokens() {
   };
 }
 
+function escapeRegExp(str) {
+  return String(str).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function applyTokensToTemplate(txt, tokens) {
   if (!txt) return "";
   let out = txt;
   Object.keys(tokens).forEach((k) => {
-    out = out.replace(new RegExp(k, "g"), tokens[k]);
+    out = out.replace(new RegExp(escapeRegExp(k), "g"), tokens[k]);
   });
   return out;
 }
+
 
 const DOC_PRESENTACION_TEMPLATES = {
   es:
