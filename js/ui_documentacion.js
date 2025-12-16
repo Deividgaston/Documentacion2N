@@ -2929,7 +2929,10 @@ if (!d.mediaLoaded) {
                     >
                   </div>
 
-                  ${renderDocMediaLibraryHTML()}
+                 <div id="docMediaListWrap">
+  ${renderDocMediaLibraryHTML()}
+</div>
+
                 </div>
               </div>
             </div>
