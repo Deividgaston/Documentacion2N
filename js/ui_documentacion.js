@@ -2635,7 +2635,6 @@ function attachDocSearchHandlers(container) {
 // CARGA MEDIA (una sola vez por entrada en la vista)
 // ======================================================
 
-let __docMediaLoadPromise = null;
 
 function waitForAuthUserOnce(auth, timeoutMs = 8000) {
   return new Promise((resolve) => {
