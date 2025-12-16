@@ -2637,15 +2637,52 @@ function attachDocSearchHandlers(container) {
 
 let __docMediaLoadPromise = null;
 
+function waitForAuthUserOnce(auth, timeoutMs = 8000) {
+  return new Promise((resolve) => {
+    try {
+      if (!auth || auth.currentUser) return resolve(auth?.currentUser || null);
+
+      let done = false;
+      const timer = setTimeout(() => {
+        if (done) return;
+        done = true;
+        resolve(auth.currentUser || null);
+      }, timeoutMs);
+
+      const unsub = auth.onAuthStateChanged((u) => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        try { unsub && unsub(); } catch (_) {}
+        resolve(u || null);
+      });
+    } catch (_) {
+      resolve(auth?.currentUser || null);
+    }
+  });
+}
+
 function ensureDocMediaLoadedOnce() {
   const d = appState.documentacion;
 
   if (d.mediaLoaded) return Promise.resolve(true);
   if (__docMediaLoadPromise) return __docMediaLoadPromise;
 
+  const auth =
+    window.auth ||
+    (window.firebase?.auth ? window.firebase.auth() : null);
+
   __docMediaLoadPromise = Promise.resolve()
-    .then(() => ensureDocMediaLoaded())
-    .then(() => true)
+    .then(async () => {
+      // ✅ esperar a auth antes de cargar (evita primera carga “vacía”)
+      await waitForAuthUserOnce(auth, 8000);
+
+      // si sigue sin user, no marcamos mediaLoaded: dejamos que se intente luego
+      if (auth && !auth.currentUser) return false;
+
+      await ensureDocMediaLoaded();
+      return !!appState.documentacion.mediaLoaded;
+    })
     .catch((e) => {
       console.error("[DOC] Error en carga inicial de media:", e);
       return false;
@@ -2656,6 +2693,7 @@ function ensureDocMediaLoadedOnce() {
 
   return __docMediaLoadPromise;
 }
+
 
 // ======================================================
 // RENDER PRINCIPAL
