@@ -357,6 +357,7 @@ async function renderDocGestionView() {
         const tipo = m.docCategory || "";
         const mime = m.mimeType || "";
         const id = String(m.id || "").trim();
+        const hasId = !!id;
 
         return `
           <div class="doc-gestion-row" data-doc-media-id="${id}">
@@ -368,6 +369,7 @@ async function renderDocGestionView() {
                 ${carpeta ? `<span class="doc-gestion-pill">${carpeta}</span>` : ""}
                 ${tipo ? `<span class="doc-gestion-pill">Tipo: ${tipo}</span>` : ""}
                 ${mime ? `<span class="doc-gestion-pill">${mime}</span>` : ""}
+                ${!hasId ? `<span class="doc-gestion-pill" style="border-color:#ef4444;color:#ef4444;">SIN ID</span>` : ""}
               </div>
             </div>
             <div class="doc-gestion-actions">
@@ -375,6 +377,7 @@ async function renderDocGestionView() {
                 type="button"
                 class="btn btn-xs btn-outline"
                 data-doc-media-edit="${id}"
+                ${!hasId ? "disabled" : ""}
               >
                 ✏️ Editar
               </button>
@@ -382,6 +385,7 @@ async function renderDocGestionView() {
                 type="button"
                 class="btn btn-xs"
                 data-doc-media-delete="${id}"
+                ${!hasId ? "disabled" : ""}
               >
                 🗑️ Borrar
               </button>
@@ -543,26 +547,32 @@ function attachDocGestionHandlers() {
         return;
       }
 
-      const newItems = [];
+      // ✅ FIX: no confiamos en el objeto devuelto (a veces viene sin id).
+      // Subimos y luego recargamos desde Firestore para garantizar doc.id.
       for (const file of files) {
         try {
           // eslint-disable-next-line no-await-in-loop
-          const media = await window.saveMediaFileToStorageAndFirestore(file, {
+          await window.saveMediaFileToStorageAndFirestore(file, {
             folderName: folderName.trim(),
             docCategory,
           });
-          newItems.push(media);
         } catch (e) {
           console.error("Error subiendo archivo de documentación (gestión):", e);
         }
       }
 
-      if (newItems.length) {
-        appState.documentacion.mediaLibrary = newItems.concat(appState.documentacion.mediaLibrary || []);
+      if (fileInput) fileInput.value = "";
+
+      // Recarga “real” desde Firestore (con ids) y render
+      try {
+        appState.documentacion.mediaLibrary = [];
+        appState.documentacion.mediaLoaded = false;
+        await loadDocMediaForGestion();
         persistDocStateSafe();
+      } catch (e) {
+        console.error("[DOC-GESTION] Error recargando tras subida:", e);
       }
 
-      if (fileInput) fileInput.value = "";
       renderDocGestionView();
     });
   }
@@ -578,6 +588,8 @@ function attachDocGestionHandlers() {
   // ✅ Borrado individual (más robusto: usa el id del row si el atributo está vacío)
   container.querySelectorAll("[data-doc-media-delete]").forEach((btn) => {
     btn.addEventListener("click", async () => {
+      if (btn.disabled) return;
+
       let id = String(btn.getAttribute("data-doc-media-delete") || "").trim();
       if (!id) {
         const row = btn.closest(".doc-gestion-row");
@@ -605,6 +617,8 @@ function attachDocGestionHandlers() {
   // Edición de metadatos
   container.querySelectorAll("[data-doc-media-edit]").forEach((btn) => {
     btn.addEventListener("click", async () => {
+      if (btn.disabled) return;
+
       const id = String(btn.getAttribute("data-doc-media-edit") || "").trim();
       if (!id) return;
 
