@@ -2730,9 +2730,10 @@ function renderDocumentacionView() {
 
     
 // 🔥 Al entrar en la vista: cargar media automáticamente (fichas + gráfica)
-if (!d.mediaLoaded) {
-  ensureDocMediaLoadedOnce().then((ok) => {
-    if (ok && typeof window.renderDocumentacionView === "function") {
+if (!d.mediaLoaded && !d._mediaLoadTried) {
+  d._mediaLoadTried = true;
+  ensureDocMediaLoadedOnce().then(() => {
+    if (typeof window.renderDocumentacionView === "function") {
       window.renderDocumentacionView();
     }
   });
