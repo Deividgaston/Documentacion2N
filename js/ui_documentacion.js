@@ -2714,15 +2714,19 @@ function ensureDocMediaLoadedOnce() {
   if (__docMediaLoadPromise) return __docMediaLoadPromise;
 
   const now = Date.now();
-  if (now - __docMediaLastAttempt < 1200) {
-    return Promise.resolve(false); // evita bucles de re-render muy rápidos
-  }
+  if (now - __docMediaLastAttempt < 1200) return Promise.resolve(false);
   __docMediaLastAttempt = now;
 
   __docMediaLoadPromise = Promise.resolve()
-    .then(() => waitForAuthReady(2500))
-    .then(() => ensureDocMediaLoaded())
-    .then(() => !!appState.documentacion.mediaLoaded)
+    .then(() => waitForFirestoreReady(4000))
+    .then((db) => {
+      if (!db) return false;
+      return waitForAuthReady(2500).then(() => true);
+    })
+    .then((ok) => {
+      if (!ok) return false;
+      return ensureDocMediaLoaded().then(() => !!appState.documentacion.mediaLoaded);
+    })
     .catch((e) => {
       console.error("[DOC] Error en carga inicial de media:", e);
       return false;
@@ -2733,6 +2737,7 @@ function ensureDocMediaLoadedOnce() {
 
   return __docMediaLoadPromise;
 }
+
 
 
 // ======================================================
