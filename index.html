@@ -39,9 +39,9 @@
           Entrar
         </button>
 
-        <div class="text-center mt-2" style="font-size:0.78rem; color:#6b7280;">o</div>
-
-        <button id="btnLoginGoogle" class="btn btn-secondary mt-2" style="width: 100%">
+        <!-- ✅ Google deshabilitado: dejamos el botón oculto para no romper CSS -->
+        <div class="text-center mt-2" style="font-size:0.78rem; color:#6b7280; display:none;">o</div>
+        <button id="btnLoginGoogle" class="btn btn-secondary mt-2" style="width: 100%; display:none;">
           Acceder con Google
         </button>
 
@@ -50,7 +50,6 @@
         <p class="login-footer">Presupuestos 2N</p>
       </div>
     </div>
-
 
     <!-- =========================================================
          APLICACIÓN PRINCIPAL (OCULTA HASTA LOGIN)
@@ -68,15 +67,12 @@
           <a href="#" class="top-nav-link" data-view="simulador">Simulador</a>
           <a href="#" class="top-nav-link" data-view="tarifa">Tarifa 2N</a>
           <a href="#" class="top-nav-link" data-view="tarifas">Tarifas</a>
-
-          <!-- 🔹 Documentación (memoria de calidades / PDF) -->
           <a href="#" class="top-nav-link" data-view="documentacion">Documentación</a>
-
-          <!-- 🔹 Nueva página: Prescripción -->
           <a href="#" class="top-nav-link" data-view="prescripcion">Prescripción</a>
-
-          <!-- 🔹 Nueva página: Gestión de documentación -->
           <a href="#" class="top-nav-link" data-view="docGestion">Gestión documentación</a>
+
+          <!-- ✅ NUEVA: Configuración de usuarios (solo superadmin; se ocultará por JS) -->
+          <a href="#" class="top-nav-link" data-view="usuarios" id="navUsuarios" style="display:none;">Usuarios</a>
         </nav>
 
         <div class="app-topbar-right">
@@ -87,7 +83,6 @@
 
       <main id="appContent" class="app-content"></main>
     </div>
-
 
     <!-- =========================================================
          LIBRERÍAS EXTERNAS
@@ -113,7 +108,6 @@
     <!-- =========================================================
          ARCHIVOS JS DEL PROYECTO
     ========================================================== -->
-
     <script src="js/firebase.js"></script>
 
     <script src="js/state.js"></script>
@@ -135,11 +129,13 @@
     <script src="js/ui_doc_gestion.js"></script>
     <script src="js/ui_dashboard_doc.js"></script>
 
+    <!-- ✅ NUEVO: vista de superadmin -->
+    <script src="js/ui_admin_users.js"></script>
+
     <script src="js/pdf_excel.js"></script>
 
     <script src="app.js"></script>
     <script src="js/main.js"></script>
-
 
     <!-- ===========================
          MODAL FLOTANTE GLOBAL
