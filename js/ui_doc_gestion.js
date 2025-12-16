@@ -38,6 +38,37 @@ function persistDocStateSafe() {
   }
 }
 
+// ==============================
+// Firestore / Storage helpers
+// ==============================
+
+function getFirestoreInstance() {
+  return (
+    window.db ||
+    (window.firebase &&
+      window.firebase.firestore &&
+      window.firebase.firestore())
+  );
+}
+
+function getStorageInstance() {
+  return (
+    window.storage ||
+    (window.firebase &&
+      window.firebase.storage &&
+      window.firebase.storage())
+  );
+}
+
+function getAuthInstance() {
+  return (
+    window.auth ||
+    (window.firebase &&
+      window.firebase.auth &&
+      window.firebase.auth())
+  );
+}
+
 // Cargar documentación para la vista de gestión desde Firestore
 async function loadDocMediaForGestion() {
   appState.documentacion = appState.documentacion || {};
@@ -80,37 +111,6 @@ async function loadDocMediaForGestion() {
   } finally {
     appState.documentacion.mediaLoaded = true;
   }
-}
-
-// ==============================
-// Firestore / Storage helpers
-// ==============================
-
-function getFirestoreInstance() {
-  return (
-    window.db ||
-    (window.firebase &&
-      window.firebase.firestore &&
-      window.firebase.firestore())
-  );
-}
-
-function getStorageInstance() {
-  return (
-    window.storage ||
-    (window.firebase &&
-      window.firebase.storage &&
-      window.firebase.storage())
-  );
-}
-
-function getAuthInstance() {
-  return (
-    window.auth ||
-    (window.firebase &&
-      window.firebase.auth &&
-      window.firebase.auth())
-  );
 }
 
 // ==============================
@@ -257,25 +257,15 @@ async function deleteAllDocMedia() {
 
   const db = getFirestoreInstance();
   const storage = getStorageInstance();
-  const auth = getAuthInstance();
 
   if (!db) {
     alert("No se ha podido acceder a Firestore para borrar la documentación.");
     return;
   }
 
-  let uid = null;
-  if (auth && auth.currentUser) {
-    uid = auth.currentUser.uid;
-  }
-
   try {
-    let query = db.collection("documentacion_media");
-    if (uid) {
-      query = query.where("uid", "==", uid);
-    }
-
-    const snap = await query.get();
+    // ✅ FIX mínimo: colección GLOBAL en raíz → NO filtrar por uid
+    const snap = await db.collection("documentacion_media").get();
     console.log(
       "[DOC-GESTION] deleteAllDocMedia – encontrados",
       snap.size,
@@ -318,10 +308,7 @@ async function deleteAllDocMedia() {
       try {
         // eslint-disable-next-line no-await-in-loop
         await db.collection("documentacion_media").doc(mediaId).delete();
-        console.log(
-          "[DOC-GESTION] [ALL] Borrado en Firestore:",
-          mediaId
-        );
+        console.log("[DOC-GESTION] [ALL] Borrado en Firestore:", mediaId);
       } catch (e) {
         console.error(
           "[DOC-GESTION] [ALL] Error borrando documento en Firestore:",
