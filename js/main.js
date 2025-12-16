@@ -90,6 +90,10 @@ function updateViewSubtitle(viewKey) {
       text = "Gestiona la documentación subida: fichas, imágenes, certificados y declaraciones.";
       break;
 
+    case "usuarios":
+      text = "Configuración de usuarios y permisos (solo superadministrador).";
+      break;
+
     default:
       text = "";
   }
@@ -136,12 +140,16 @@ function renderViewByKey(viewKey) {
       callIfFn("renderDocumentacionView");
       break;
 
-    case "prescripcion":         // ⭐ NUEVA PÁGINA
+    case "prescripcion":
       callIfFn("renderDocPrescripcionView");
       break;
 
     case "docGestion":
       callIfFn("renderDocGestionView");
+      break;
+
+    case "usuarios":
+      callIfFn("renderAdminUsersView");
       break;
 
     default:
