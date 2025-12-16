@@ -1048,20 +1048,31 @@ async function ensureDocMediaLoaded() {
     }
 
 const proyecto = appState.proyecto || {};
-const proyectoId =
-  proyecto.id || proyecto.proyectoId || proyecto.uid || null;
+const proyectoId = proyecto.id || proyecto.proyectoId || null;
 
-let query = db.collection("documentacion_media");
+const mediaMap = new Map();
 
-// ✅ PRIORIDAD: por proyecto (compartido entre perfiles)
+// 1) Si hay proyectoId, traemos lo nuevo (por proyecto)
 if (proyectoId) {
-  query = query.where("proyectoId", "==", proyectoId);
-} else {
-  // fallback para datos antiguos
-  query = query.where("uid", "==", uid);
+  const snapProj = await db
+    .collection("documentacion_media")
+    .where("proyectoId", "==", proyectoId)
+    .limit(200)
+    .get();
+
+  snapProj.forEach((d) => mediaMap.set(d.id, { ...d.data(), id: d.id }));
 }
 
-const snap = await query.limit(200).get();
+// 2) Siempre traemos lo legacy (por uid), por compatibilidad
+const snapUid = await db
+  .collection("documentacion_media")
+  .where("uid", "==", uid)
+  .limit(200)
+  .get();
+
+snapUid.forEach((d) => mediaMap.set(d.id, { ...d.data(), id: d.id }));
+
+const media = Array.from(mediaMap.values());
 
 
     const media = [];
