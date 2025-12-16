@@ -2687,15 +2687,15 @@ function attachDocSearchHandlers(container) {
     });
   }
 
-  const inputFich = container.querySelector("#docFichasSearchInput");
-  if (inputFich) {
-    inputFich.addEventListener("input", () => {
-      appState.documentacion.fichasSearchTerm =
-        inputFich.value || "";
-      saveDocStateToLocalStorage();
-      renderDocumentacionView();
-    });
-  }
+ const inputFich = container.querySelector("#docFichasSearchInput");
+if (inputFich) {
+  inputFich.addEventListener("input", () => {
+    appState.documentacion.fichasSearchTerm = inputFich.value || "";
+    saveDocStateToLocalStorage();
+    refreshDocFichasOnly();
+  });
+}
+
 }
 // ======================================================
 // CARGA MEDIA (una sola vez por entrada en la vista)
