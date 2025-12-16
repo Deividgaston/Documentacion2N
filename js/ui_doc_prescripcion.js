@@ -634,7 +634,15 @@ function getPrescCollectionRefFallback(subName) {
   const db = getFirestorePresc();
   if (!db || typeof db.collection !== "function") return null;
 
-  // ✅ SIEMPRE global en raíz (según tus rules nuevas)
+  // ✅ Prescripción: SIEMPRE global (raíz)
+  if (subName === "prescripcion_plantillas" || subName === "prescripcion_referencias_extra") {
+    return db.collection(subName);
+  }
+
+  // (Si en el futuro usas otros subName y quieres mantener “por usuario”, lo dejas aquí)
+  const byUser = getUserSubcollectionRefPresc(subName);
+  if (byUser) return byUser;
+
   return db.collection(subName);
 }
 
