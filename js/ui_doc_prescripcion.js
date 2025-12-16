@@ -1912,7 +1912,7 @@ async function ensureExtraRefsLoaded() {
 
   appState.prescripcion.extraRefs = appState.prescripcion.extraRefs || [];
 
-  const ref = getUserSubcollectionRefPresc("prescripcion_referencias_extra");
+  const ref = getPrescCollectionRefFallback("prescripcion_referencias_extra");
   if (!ref) {
     appState.prescripcion.extraRefsLoaded = true;
     return;
@@ -1976,7 +1976,7 @@ async function createExtraRef(codigo, descripcion, unidad, pvp) {
   appState.prescripcion.extraRefs = appState.prescripcion.extraRefs || [];
   appState.prescripcion.extraRefs.unshift(local);
 
-  const ref = getUserSubcollectionRefPresc("prescripcion_referencias_extra");
+  const ref = getPrescCollectionRefFallback("prescripcion_referencias_extra");
   if (!ref) return;
 
   try {
@@ -2010,7 +2010,7 @@ async function updateExtraRef(id, codigo, descripcion, unidad, pvp) {
     list[idx] = { ...list[idx], codigo, descripcion, unidad, pvp };
   }
 
-  const ref = getUserSubcollectionRefPresc("prescripcion_referencias_extra");
+  const ref = getPrescCollectionRefFallback("prescripcion_referencias_extra");
   if (!ref) return;
 
   try {
@@ -2036,7 +2036,7 @@ async function deleteExtraRef(id) {
   appState.prescripcion.extraRefs =
     (appState.prescripcion.extraRefs || []).filter((r) => r.id !== id);
 
-  const ref = getUserSubcollectionRefPresc("prescripcion_referencias_extra");
+  const ref = getPrescCollectionRefFallback("prescripcion_referencias_extra");
   if (!ref) return;
 
   try {
