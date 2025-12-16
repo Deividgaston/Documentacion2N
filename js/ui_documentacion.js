@@ -666,12 +666,13 @@ function refreshDocMediaGridOnly() {
   const container = getDocAppContent();
   if (!container) return;
 
-  const body = container.querySelector(".doc-media-body");
-  if (!body) return;
+  const wrap = container.querySelector("#docMediaListWrap");
+  if (!wrap) return;
 
-  body.innerHTML = renderDocMediaLibraryHTML();
+  wrap.innerHTML = renderDocMediaLibraryHTML();
   attachDocMediaGridHandlers(container);
 }
+
 function refreshDocFichasOnly() {
   const container = getDocAppContent();
   if (!container) return;
