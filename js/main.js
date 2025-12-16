@@ -26,13 +26,37 @@ function _isViewAllowedSafe(viewKey) {
 function setCurrentView(viewKey) {
   viewKey = _normalizeViewKey(viewKey);
 
-  // Si auth aún no está listo, no hacemos nada (evita renders antes de login)
-  if (!appState.authReady) return;
+  // Si auth aún no está listo, guardamos intención y salimos (evita salto a proyecto al refrescar)
+  if (!appState.authReady) {
+    appState.pendingView = viewKey;
+    try {
+      window.localStorage.setItem(VIEW_STORAGE_KEY, viewKey);
+    } catch (e) {
+      console.warn("No se pudo guardar la vista actual en localStorage:", e);
+    }
+    return;
+  }
+
+  // Si había una vista pendiente, priorízala (p.ej. refresco)
+  if (appState.pendingView) {
+    viewKey = _normalizeViewKey(appState.pendingView);
+    appState.pendingView = null;
+  }
 
   // Bloqueo por permisos
   if (!_isViewAllowedSafe(viewKey)) {
     // buscar primera vista permitida
-    const order = ["proyecto", "presupuesto", "simulador", "tarifa", "tarifas", "documentacion", "prescripcion", "docGestion", "usuarios"];
+    const order = [
+      "proyecto",
+      "presupuesto",
+      "simulador",
+      "tarifa",
+      "tarifas",
+      "documentacion",
+      "prescripcion",
+      "docGestion",
+      "usuarios",
+    ];
     const fallback = order.find((k) => _isViewAllowedSafe(k));
     if (!fallback) return;
     viewKey = fallback;
@@ -87,7 +111,8 @@ function updateViewSubtitle(viewKey) {
       text = "Vista de prescripción: resumen inteligente de documentación para memorias.";
       break;
     case "docGestion":
-      text = "Gestiona la documentación subida: fichas, imágenes, certificados y declaraciones.";
+      text =
+        "Gestiona la documentación subida: fichas, imágenes, certificados y declaraciones.";
       break;
     case "usuarios":
       text = "Configuración de usuarios y permisos.";
@@ -173,9 +198,7 @@ function initTopbarNavigation() {
 document.addEventListener("DOMContentLoaded", () => {
   initTopbarNavigation();
 
-  // Vista inicial SOLO si ya hay authReady (si no, authGate la setea luego)
-  if (!appState.authReady) return;
-
+  // Determinar vista inicial (aunque auth aún no esté listo)
   let initialView = "proyecto";
   try {
     const storedView = window.localStorage.getItem(VIEW_STORAGE_KEY);
@@ -186,7 +209,31 @@ document.addEventListener("DOMContentLoaded", () => {
     initialView = appState.currentView || "proyecto";
   }
 
-  setCurrentView(initialView);
+  initialView = _normalizeViewKey(initialView);
+
+  // Guardar intención para que, cuando authReady sea true, NO vuelva a proyecto
+  appState.pendingView = initialView;
+  appState.currentView = initialView;
+
+  // Si ya hay authReady, render inmediato. Si no, esperamos a authReady con un poll ligero.
+  if (appState.authReady) {
+    setCurrentView(initialView);
+    return;
+  }
+
+  const start = Date.now();
+  const maxWaitMs = 15000; // seguridad: no dejar interval infinito
+  const t = setInterval(() => {
+    if (appState.authReady) {
+      clearInterval(t);
+      // setCurrentView consumirá pendingView y marcará el botón correcto
+      setCurrentView(appState.pendingView || initialView);
+      return;
+    }
+    if (Date.now() - start > maxWaitMs) {
+      clearInterval(t);
+    }
+  }, 200);
 });
 
 window.setCurrentView = setCurrentView;
