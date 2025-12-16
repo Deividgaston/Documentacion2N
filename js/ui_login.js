@@ -1,6 +1,5 @@
 // js/ui_login.js
 // Lógica de la pantalla de login (solo email+password)
-// Google deshabilitado + allowlist superadmin
 
 function initLoginUI() {
   const loginPage = document.getElementById("loginPage");
@@ -10,8 +9,6 @@ function initLoginUI() {
   const btnLogin = document.getElementById("btnLogin");
   const btnLoginGoogle = document.getElementById("btnLoginGoogle");
   const loginError = document.getElementById("loginError");
-
-  const SUPERADMIN_EMAIL = "gastonortigosa@gmail.com";
 
   if (!loginPage || !appShell) {
     console.error("Error: faltan elementos del login en HTML.");
@@ -37,30 +34,17 @@ function initLoginUI() {
     loginError.style.display = "none";
   }
 
-  async function forceLogoutWithMsg(msg) {
-    try {
-      await auth.signOut();
-    } catch (_) {}
-    mostrarError(msg);
-  }
-
   // ============================================
   // LOGIN EMAIL + PASSWORD
   // ============================================
   async function manejarLogin() {
     limpiarError();
 
-    const email = emailInput.value.trim().toLowerCase();
+    const email = emailInput.value.trim();
     const pass = passInput.value.trim();
 
     if (!email || !pass) {
       mostrarError("Introduce email y contraseña.");
-      return;
-    }
-
-    // ✅ Allowlist antes incluso de intentar auth
-    if (email !== SUPERADMIN_EMAIL) {
-      mostrarError("Acceso no permitido.");
       return;
     }
 
@@ -70,16 +54,8 @@ function initLoginUI() {
     }
 
     try {
-      const cred = await auth.signInWithEmailAndPassword(email, pass);
-
-      // ✅ Post-check seguridad
-      const loggedEmail = (cred?.user?.email || "").toLowerCase();
-      if (loggedEmail !== SUPERADMIN_EMAIL) {
-        await forceLogoutWithMsg("Acceso no permitido.");
-        return;
-      }
-
-      // initOnAuthChange() / ui_shell se encargan de mostrar la app (según tu app.js)
+      await auth.signInWithEmailAndPassword(email, pass);
+      // onAuthStateChanged en ui_shell.js gestiona el resto
     } catch (err) {
       console.error("Error login email:", err);
       let msg = "No se ha podido iniciar sesión.";
