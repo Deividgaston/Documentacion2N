@@ -558,8 +558,12 @@ function renderDocFichasHTML() {
           Selecciona las fichas que quieras incluir en el PDF técnico.
         </p>
         ${searchInputHtml}
-        <div class="doc-fichas-list doc-fichas-media-list">
-          ${list}
+<div id="docFichasListWrap">
+  <div class="doc-fichas-list doc-fichas-media-list">
+    ${list}
+  </div>
+</div>
+
         </div>
       </div>
     </div>
