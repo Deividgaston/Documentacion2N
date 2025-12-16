@@ -1690,7 +1690,7 @@ async function ensurePrescPlantillasLoaded() {
   }
 
   try {
-    const ref = getUserSubcollectionRefPresc("prescripcion_plantillas");
+    const ref = getPrescCollectionRefFallback("prescripcion_plantillas");
     if (!ref) throw new Error("No subcollection ref");
 
     const snap = await ref.get();
@@ -1728,7 +1728,7 @@ async function createPrescPlantilla(nombre, texto) {
   appState.prescripcion.plantillas.unshift(local);
 
   const db = getFirestorePresc();
-  const ref = getUserSubcollectionRefPresc("prescripcion_plantillas");
+  const ref = getPrescCollectionRefFallback("prescripcion_plantillas");
   if (!db || !ref) return;
 
   try {
@@ -1752,7 +1752,7 @@ async function updatePrescPlantilla(id, nombre, texto) {
     list[idx] = { ...list[idx], nombre, texto };
   }
 
-  const ref = getUserSubcollectionRefPresc("prescripcion_plantillas");
+  const ref = getPrescCollectionRefFallback("prescripcion_plantillas");
   if (!ref) return;
 
   try {
@@ -1769,7 +1769,7 @@ async function deletePrescPlantilla(id) {
   appState.prescripcion.plantillas =
     (appState.prescripcion.plantillas || []).filter((p) => p.id !== id);
 
-  const ref = getUserSubcollectionRefPresc("prescripcion_plantillas");
+  const ref = getPrescCollectionRefFallback("prescripcion_plantillas");
   if (!ref) return;
 
   try {
