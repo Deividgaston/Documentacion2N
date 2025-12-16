@@ -514,20 +514,28 @@ function renderDocFichasHTML() {
     </div>
   `;
 
-  if (!filtered.length) {
-    return `
-      <div class="doc-fichas-section">
-        <div class="doc-fichas-block">
-          <div class="doc-fichas-title">Fichas técnicas</div>
-          <p class="doc-fichas-help">
-            No se han encontrado fichas técnicas. Puedes subirlas desde
-            <strong>Gestión de documentación</strong>.
+ if (!filtered.length) {
+  return `
+    <div class="doc-fichas-section">
+      <div class="doc-fichas-block">
+        <div class="doc-fichas-title">Fichas técnicas</div>
+        <p class="doc-fichas-help">
+          No se han encontrado fichas técnicas. Puedes subirlas desde
+          <strong>Gestión de documentación</strong>.
+        </p>
+        ${searchInputHtml}
+
+        <div id="docFichasListWrap">
+          <p class="text-muted" style="font-size:0.85rem;">
+            Sin resultados.
           </p>
-          ${searchInputHtml}
         </div>
+
       </div>
-    `;
-  }
+    </div>
+  `;
+}
+
 
   const list = filtered
     .map((m) => {
