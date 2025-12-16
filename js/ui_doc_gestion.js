@@ -82,7 +82,8 @@ async function loadDocMediaForGestion() {
         const list = [];
         snap.forEach((doc) => {
           const d = doc.data() || {};
-          list.push({ id: doc.id, ...d });
+          list.push({ ...d, id: doc.id }); // así doc.id SIEMPRE gana
+
         });
         appState.documentacion.mediaLibrary = list;
       }
