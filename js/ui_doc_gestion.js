@@ -44,6 +44,7 @@ async function loadDocMediaForGestion() {
   appState.documentacion.mediaLibrary =
     appState.documentacion.mediaLibrary || [];
 
+  // 1) Si existe el loader “general” de documentación, lo intentamos primero
   if (typeof window.ensureDocMediaLoaded === "function") {
     try {
       const maybePromise = window.ensureDocMediaLoaded();
@@ -53,6 +54,31 @@ async function loadDocMediaForGestion() {
     } catch (e) {
       console.error("Error al asegurar carga de media de documentación:", e);
     }
+  }
+
+  // 2) ✅ FIX mínimo: si tras el loader seguimos sin datos, cargamos DIRECTO desde raíz
+  // (muchas veces ensureDocMediaLoaded filtra por uid o usa otra estructura interna)
+  try {
+    const already =
+      Array.isArray(appState.documentacion.mediaLibrary) &&
+      appState.documentacion.mediaLibrary.length;
+
+    if (!already) {
+      const db = getFirestoreInstance();
+      if (db) {
+        const snap = await db.collection("documentacion_media").get();
+        const list = [];
+        snap.forEach((doc) => {
+          const d = doc.data() || {};
+          list.push({ id: doc.id, ...d });
+        });
+        appState.documentacion.mediaLibrary = list;
+      }
+    }
+  } catch (e) {
+    console.error("[DOC-GESTION] Error cargando documentacion_media (raíz):", e);
+  } finally {
+    appState.documentacion.mediaLoaded = true;
   }
 }
 
