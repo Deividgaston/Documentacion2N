@@ -2756,9 +2756,17 @@ if (!d.mediaLoaded) {
   ensureDocMediaLoadedOnce().then((ok) => {
     if (ok && typeof window.renderDocumentacionView === "function") {
       window.renderDocumentacionView();
+    } else {
+      // reintento suave (por si Firebase termina de inicializar justo después)
+      setTimeout(() => {
+        if (!appState.documentacion.mediaLoaded && typeof window.renderDocumentacionView === "function") {
+          window.renderDocumentacionView();
+        }
+      }, 400);
     }
   });
 }
+
 
 
 
