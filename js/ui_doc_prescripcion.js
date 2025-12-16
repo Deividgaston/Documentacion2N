@@ -3153,7 +3153,6 @@ function prescBc3FieldSafe(s) {
     .replace(/[ \t]+/g, " ")
     .trim();
 }
-function prescBc3TextSafe(s) { return prescBc3FieldSafe(s); }
 
 // Compat: si en tu código usas "prescBc3TextSafe", lo apuntamos al nuevo safe de campos
 function prescBc3TextSafe(s) {
