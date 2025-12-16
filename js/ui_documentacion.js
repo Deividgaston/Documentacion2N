@@ -672,6 +672,32 @@ function refreshDocMediaGridOnly() {
   body.innerHTML = renderDocMediaLibraryHTML();
   attachDocMediaGridHandlers(container);
 }
+function refreshDocFichasOnly() {
+  const container = getDocAppContent();
+  if (!container) return;
+
+  const panel = container.querySelector("#docFichasPanel");
+  if (!panel) return;
+
+  panel.innerHTML = renderDocFichasHTML();
+
+  // reenganchar search + checks
+  attachDocSearchHandlers(container);
+
+  panel.querySelectorAll("[data-doc-ficha-media-id]").forEach((chk) => {
+    chk.addEventListener("change", () => {
+      const id = chk.getAttribute("data-doc-ficha-media-id");
+      if (!id) return;
+
+      const set = new Set(appState.documentacion.selectedFichasMediaIds || []);
+      if (chk.checked) set.add(id);
+      else set.delete(id);
+
+      appState.documentacion.selectedFichasMediaIds = Array.from(set);
+      saveDocStateToLocalStorage();
+    });
+  });
+}
 
 // ======================================================
 // OVERLAY FLOTANTE PARA VER UNA IMAGEN
