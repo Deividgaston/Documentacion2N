@@ -2705,16 +2705,17 @@ function renderDocumentacionView() {
 
   const d = appState.documentacion;
 
-    // 🔥 Al entrar en la vista: cargar media automáticamente (fichas + gráfica)
-  if (!d.mediaLoaded && !d._mediaLoadTried) {
-    d._mediaLoadTried = true; // evitar bucle si falla
-    ensureDocMediaLoadedOnce().then(() => {
-      // Re-render cuando ya esté cargado
-      if (typeof window.renderDocumentacionView === "function") {
-        window.renderDocumentacionView();
-      }
-    });
-  }
+    
+// 🔥 Al entrar en la vista: cargar media automáticamente (fichas + gráfica)
+if (!d.mediaLoaded) {
+  ensureDocMediaLoadedOnce().then((ok) => {
+    if (ok && typeof window.renderDocumentacionView === "function") {
+      window.renderDocumentacionView(); // re-render con media ya cargada
+    }
+  });
+}
+
+
 
 
   
