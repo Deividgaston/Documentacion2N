@@ -17,16 +17,12 @@ function _normalizeViewKey(viewKey) {
 }
 
 // NUEVO: compatibilidad con caps antiguos (views) y nuevos (pages)
+// (preferimos V2 si existe)
 function _isAllowedByCapabilities(viewKey, caps) {
   const v = _normalizeViewKey(viewKey);
   if (!caps) return false;
 
-  // 1) Legacy: caps.views.{viewKey}: boolean
-  if (caps.views && typeof caps.views === "object") {
-    return !!caps.views[v];
-  }
-
-  // 2) Nuevo: caps.pages.{viewKey}
+  // 1) Nuevo: caps.pages.{viewKey}
   // - boolean: true/false
   // - string: "view" | "none" | "commercial" | "technical"
   if (caps.pages && typeof caps.pages === "object") {
@@ -35,6 +31,11 @@ function _isAllowedByCapabilities(viewKey, caps) {
     if (typeof val === "boolean") return val;
     if (typeof val === "string") return val !== "none";
     return !!val;
+  }
+
+  // 2) Legacy: caps.views.{viewKey}: boolean
+  if (caps.views && typeof caps.views === "object") {
+    return !!caps.views[v];
   }
 
   return false;
@@ -206,7 +207,7 @@ function renderViewByKey(viewKey) {
 }
 
 function initTopbarNavigation() {
-  // NUEVO: guard para no duplicar listeners si se llama 2 veces
+  // guard para no duplicar listeners si se llama 2 veces
   if (appState._mainNavInited) return;
   appState._mainNavInited = true;
 
@@ -224,7 +225,7 @@ function initTopbarNavigation() {
 document.addEventListener("DOMContentLoaded", () => {
   initTopbarNavigation();
 
-  // NUEVO (seguro): si existe applyShellPermissions y ya hay caps, aplica visibilidad de tabs
+  // (seguro): si existe applyShellPermissions y ya hay caps, aplica visibilidad de tabs
   try {
     const caps = appState?.user?.capabilities;
     if (caps && typeof window.applyShellPermissions === "function") {
