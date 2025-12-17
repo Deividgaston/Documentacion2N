@@ -276,28 +276,33 @@
     return { users, invites };
   }
 
+  // ==========================
+  // ✅ NUEVO: createInvite via Cloud Function (Callable)
+  // ==========================
   async function createInvite({ email, role }) {
     const cleanEmail = String(email || "").trim().toLowerCase();
     const cleanRole = normalizeRole(role) || "ACCOUNT_MANAGER";
 
-    const capabilities = buildCapabilitiesForRoleDual(cleanRole);
+    // fallback: si no hay auth/cargado aún
+    if (!firebase?.functions) {
+      throw new Error("Firebase Functions no está disponible en el cliente.");
+    }
 
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const fn =
+      (window.functions && typeof window.functions.httpsCallable === "function"
+        ? window.functions
+        : firebase.functions());
 
-    const payload = {
+    const call = fn.httpsCallable("adminCreateInvite");
+
+    const resp = await call({
       email: cleanEmail,
       role: cleanRole,
-      capabilities,
-      active: true,
-      status: "pending",
-      expiresAt: firebase.firestore.Timestamp.fromDate(expiresAt),
-      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      createdBy: appState?.user?.uid || null,
-    };
+      // si luego tienes URL real, la pasas aquí desde UI/config
+      // continueUrl: "https://TU-DOMINIO/..."
+    });
 
-    const inviteId = cleanEmail.replace(/[^\w.-]+/g, "_");
-    await db.collection("invites").doc(inviteId).set(payload, { merge: true });
+    return resp?.data || null;
   }
 
   async function updateUserRole(uid, role) {
@@ -685,13 +690,25 @@
         }
 
         try {
-          await createInvite({ email: cleanEmail, role });
+          const out = await createInvite({ email: cleanEmail, role });
           el("inviteEmail").value = "";
           await refresh();
-          alert("Invitación creada en Firestore (pendiente).");
+
+          const link = out?.resetLink || "";
+          if (link) {
+            // fácil de copiar
+            window.prompt("Reset link (cópialo y envíaselo al usuario):", link);
+            alert("Invitación creada (Auth + Firestore). Reset link generado.");
+          } else {
+            alert("Invitación creada (Auth + Firestore).");
+          }
         } catch (e) {
           console.error("createInvite error:", e);
-          alert("No se pudo crear la invitación.");
+          const msg =
+            e?.message ||
+            e?.details ||
+            (typeof e === "string" ? e : "No se pudo crear la invitación.");
+          alert(msg);
         }
       });
     }
@@ -728,7 +745,7 @@
 
     container.innerHTML = `
       <div class="page-title">Usuarios</div>
-      <div class="page-subtitle">Alta y gestión de roles/permisos (Firestore).</div>
+      <div class="page-subtitle">Alta y gestión de roles/permisos.</div>
 
       <div class="card">
         <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
@@ -763,7 +780,7 @@
         </div>
 
         <div style="margin-top:10px; font-size:0.85rem; color:#6b7280;">
-          Nota: Esto crea una “invitación” en Firestore. El envío de email + creación en Auth vendrá después (Cloud Functions).
+          Nota: “Crear” llama a Cloud Function (Auth + Firestore) y genera un enlace de reset de contraseña válido 24h.
         </div>
       </div>
 
