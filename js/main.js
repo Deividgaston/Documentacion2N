@@ -6,6 +6,38 @@ appState.currentView = appState.currentView || "proyecto";
 
 const VIEW_STORAGE_KEY = "presup2n_currentView";
 
+// Preferimos sessionStorage para que al cerrar pestaña se reinicie a "proyecto"
+// pero en un refresh se mantenga la pestaña actual.
+// Fallback: si existe en localStorage (versiones antiguas), lo migramos.
+function _viewStorageGet(key) {
+  try {
+    const v = window.sessionStorage ? window.sessionStorage.getItem(key) : null;
+    if (v !== null && v !== undefined) return v;
+  } catch (_) {}
+  try {
+    const v2 = window.localStorage ? window.localStorage.getItem(key) : null;
+    if (v2 !== null && v2 !== undefined) {
+      try {
+        if (window.sessionStorage) window.sessionStorage.setItem(key, v2);
+        if (window.localStorage) window.localStorage.removeItem(key);
+      } catch (_) {}
+      return v2;
+    }
+  } catch (_) {}
+  return null;
+}
+
+function _viewStorageSet(key, val) {
+  try {
+    if (window.sessionStorage) window.sessionStorage.setItem(key, val);
+    else if (window.localStorage) window.localStorage.setItem(key, val);
+  } catch (e) {
+    try {
+      if (window.localStorage) window.localStorage.setItem(key, val);
+    } catch (_) {}
+  }
+}
+
 // ==============================
 // Helpers de router / UI
 // ==============================
@@ -16,15 +48,12 @@ function _normalizeViewKey(viewKey) {
   return viewKey;
 }
 
-// NUEVO: compatibilidad con caps antiguos (views) y nuevos (pages)
-// (preferimos V2 si existe)
-function _isAllowedByCapabilities(viewKey, caps) {
+function _isViewAllowedSafe(viewKey) {
   const v = _normalizeViewKey(viewKey);
+  const caps = appState?.user?.capabilities;
   if (!caps) return false;
 
-  // 1) Nuevo: caps.pages.{viewKey}
-  // - boolean: true/false
-  // - string: "view" | "none" | "commercial" | "technical"
+  // Preferimos V2 si existe
   if (caps.pages && typeof caps.pages === "object") {
     const val = caps.pages[v];
     if (val === undefined || val === null) return false;
@@ -33,17 +62,12 @@ function _isAllowedByCapabilities(viewKey, caps) {
     return !!val;
   }
 
-  // 2) Legacy: caps.views.{viewKey}: boolean
+  // Legacy
   if (caps.views && typeof caps.views === "object") {
     return !!caps.views[v];
   }
 
   return false;
-}
-
-function _isViewAllowedSafe(viewKey) {
-  const caps = appState?.user?.capabilities;
-  return _isAllowedByCapabilities(viewKey, caps);
 }
 
 function setCurrentView(viewKey) {
@@ -53,9 +77,9 @@ function setCurrentView(viewKey) {
   if (!appState.authReady) {
     appState.pendingView = viewKey;
     try {
-      window.localStorage.setItem(VIEW_STORAGE_KEY, viewKey);
+      _viewStorageSet(VIEW_STORAGE_KEY, viewKey);
     } catch (e) {
-      console.warn("No se pudo guardar la vista actual en localStorage:", e);
+      console.warn("No se pudo guardar la vista actual en storage:", e);
     }
     return;
   }
@@ -88,9 +112,9 @@ function setCurrentView(viewKey) {
   appState.currentView = viewKey;
 
   try {
-    window.localStorage.setItem(VIEW_STORAGE_KEY, viewKey);
+    _viewStorageSet(VIEW_STORAGE_KEY, viewKey);
   } catch (e) {
-    console.warn("No se pudo guardar la vista actual en localStorage:", e);
+    console.warn("No se pudo guardar la vista actual en storage:", e);
   }
 
   const navLinks = document.querySelectorAll(".top-nav-link[data-view]");
@@ -225,24 +249,14 @@ function initTopbarNavigation() {
 document.addEventListener("DOMContentLoaded", () => {
   initTopbarNavigation();
 
-  // (seguro): si existe applyShellPermissions y ya hay caps, aplica visibilidad de tabs
-  try {
-    const caps = appState?.user?.capabilities;
-    if (caps && typeof window.applyShellPermissions === "function") {
-      window.applyShellPermissions(caps);
-    }
-  } catch (e) {
-    // no-op
-  }
-
   // Determinar vista inicial (aunque auth aún no esté listo)
   let initialView = "proyecto";
   try {
-    const storedView = window.localStorage.getItem(VIEW_STORAGE_KEY);
+    const storedView = _viewStorageGet(VIEW_STORAGE_KEY);
     if (storedView) initialView = storedView;
     else if (appState.currentView) initialView = appState.currentView;
   } catch (e) {
-    console.warn("No se pudo leer la vista actual desde localStorage:", e);
+    console.warn("No se pudo leer la vista actual desde storage:", e);
     initialView = appState.currentView || "proyecto";
   }
 
