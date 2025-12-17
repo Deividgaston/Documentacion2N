@@ -324,30 +324,7 @@ function initShellUI() {
     userBadge.textContent = `${appState.user.email} · ${appState.user.role || ""}`.trim();
   }
 
-  // Listeners nav (evitar duplicados)
-  if (!appState._shellNavInited) {
-    appState._shellNavInited = true;
-
-    document.querySelectorAll(".top-nav-link").forEach((link) => {
-      link.addEventListener("click", (e) => {
-        e.preventDefault();
-        const view = link.getAttribute("data-view");
-        if (!view) return;
-
-        const viewKey =
-          view === "docs" ? "documentacion" : view === "docs-gestion" ? "docGestion" : view;
-
-        if (!isViewAllowed(viewKey)) return;
-
-        if (typeof window.setCurrentView === "function") {
-          window.setCurrentView(viewKey);
-        } else {
-          selectView(viewKey);
-        }
-      });
-    });
-  }
-
+  
   // Logout
   if (btnLogout && !appState._logoutInited) {
     appState._logoutInited = true;
