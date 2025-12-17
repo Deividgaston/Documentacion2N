@@ -88,11 +88,12 @@
     <!-- =========================================================
          LIBRERÍAS EXTERNAS
     ========================================================== -->
-    <script src="js/ui_admin_users.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+    <!-- ✅ NUEVO (estrictamente necesario): Firebase Functions compat -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-functions-compat.js"></script>
 
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
@@ -131,7 +132,7 @@
     <script src="js/ui_doc_gestion.js"></script>
     <script src="js/ui_dashboard_doc.js"></script>
 
-    <!-- ✅ NUEVO: vista de superadmin -->
+    <!-- ✅ vista de superadmin (dejar SOLO una carga) -->
     <script src="js/ui_admin_users.js"></script>
 
     <script src="js/pdf_excel.js"></script>
