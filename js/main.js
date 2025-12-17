@@ -16,11 +16,33 @@ function _normalizeViewKey(viewKey) {
   return viewKey;
 }
 
-function _isViewAllowedSafe(viewKey) {
+// NUEVO: compatibilidad con caps antiguos (views) y nuevos (pages)
+function _isAllowedByCapabilities(viewKey, caps) {
   const v = _normalizeViewKey(viewKey);
+  if (!caps) return false;
+
+  // 1) Legacy: caps.views.{viewKey}: boolean
+  if (caps.views && typeof caps.views === "object") {
+    return !!caps.views[v];
+  }
+
+  // 2) Nuevo: caps.pages.{viewKey}
+  // - boolean: true/false
+  // - string: "view" | "none" | "commercial" | "technical"
+  if (caps.pages && typeof caps.pages === "object") {
+    const val = caps.pages[v];
+    if (val === undefined || val === null) return false;
+    if (typeof val === "boolean") return val;
+    if (typeof val === "string") return val !== "none";
+    return !!val;
+  }
+
+  return false;
+}
+
+function _isViewAllowedSafe(viewKey) {
   const caps = appState?.user?.capabilities;
-  if (!caps || !caps.views) return false;
-  return !!caps.views[v];
+  return _isAllowedByCapabilities(viewKey, caps);
 }
 
 function setCurrentView(viewKey) {
@@ -184,6 +206,10 @@ function renderViewByKey(viewKey) {
 }
 
 function initTopbarNavigation() {
+  // NUEVO: guard para no duplicar listeners si se llama 2 veces
+  if (appState._mainNavInited) return;
+  appState._mainNavInited = true;
+
   const navLinks = document.querySelectorAll(".top-nav-link[data-view]");
   navLinks.forEach((link) => {
     link.addEventListener("click", (ev) => {
@@ -197,6 +223,16 @@ function initTopbarNavigation() {
 
 document.addEventListener("DOMContentLoaded", () => {
   initTopbarNavigation();
+
+  // NUEVO (seguro): si existe applyShellPermissions y ya hay caps, aplica visibilidad de tabs
+  try {
+    const caps = appState?.user?.capabilities;
+    if (caps && typeof window.applyShellPermissions === "function") {
+      window.applyShellPermissions(caps);
+    }
+  } catch (e) {
+    // no-op
+  }
 
   // Determinar vista inicial (aunque auth aún no esté listo)
   let initialView = "proyecto";
