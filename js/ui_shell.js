@@ -361,6 +361,21 @@ function selectView(viewName) {
   if (activeTab) activeTab.classList.add("active");
 }
 
+
+function applyShellPermissions(capabilities = {}) {
+  document.querySelectorAll(".top-nav-link[data-view]").forEach(el => {
+    const view = el.dataset.view;
+    const allowed = capabilities?.pages?.[view];
+
+    if (!allowed || allowed === "none") {
+      el.style.display = "none";
+    } else {
+      el.style.display = "";
+    }
+  });
+}
+window.applyShellPermissions = applyShellPermissions;
+
 // ==========================
 // AUTH GATE
 // ==========================
