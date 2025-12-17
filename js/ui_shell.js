@@ -9,6 +9,9 @@ window.appState = window.appState || {};
 // ==========================
 const SUPERADMIN_EMAIL = "gastonortigosa@gmail.com";
 
+// Clave de vista actual (router)
+const VIEW_STORAGE_KEY = "presup2n_currentView";
+
 // ==========================
 // Helpers
 // ==========================
@@ -24,6 +27,22 @@ function normalizeEmail(email) {
 
 function inviteIdFromEmail(email) {
   return normalizeEmail(email).replace(/[^\w.-]+/g, "_");
+}
+
+function _dedupeNavLinks() {
+  // Evita pestañas duplicadas si en el HTML hay links repetidos (p.ej. "Usuarios" en dos sitios)
+  const seen = new Set();
+  document.querySelectorAll(".top-nav-link[data-view]").forEach((el) => {
+    const raw = el.getAttribute("data-view");
+    const key = _normalizeViewKey(raw);
+    if (!key) return;
+
+    if (seen.has(key)) {
+      el.style.display = "none";
+    } else {
+      seen.add(key);
+    }
+  });
 }
 
 // ==========================
@@ -203,61 +222,32 @@ function normalizeCapabilities(caps, role) {
   if (!out.documentacion) out.documentacion = base.documentacion;
   if (!out.prescripcion) out.prescripcion = base.prescripcion;
 
-  // Caso A: solo legacy -> derivar v2
+  // Si solo hay legacy, derivar pages mínimos
   if (caps && caps.views && (!caps.pages || typeof caps.pages !== "object")) {
+    // Map directo de views -> pages (tarifas/prescripcion/documentacion con defaults)
     const pages = { ...out.pages };
     Object.keys(caps.views).forEach((k) => {
       const allowed = !!caps.views[k];
       if (k === "tarifas") pages.tarifas = allowed ? "view" : "none";
-      else if (k === "documentacion") {
+      else if (k === "documentacion")
         pages.documentacion = allowed
-          ? (out.features?.docModo === "technical" ? "technical" : "commercial")
+          ? out.features?.docModo === "technical"
+            ? "technical"
+            : "commercial"
           : "none";
-      } else if (k === "prescripcion") pages.prescripcion = allowed ? "view" : "none";
+      else if (k === "prescripcion") pages.prescripcion = allowed ? "view" : "none";
       else pages[k] = allowed;
     });
     out.pages = pages;
 
+    // documentacion/exportTecnico desde features
     out.documentacion = out.documentacion || {};
     out.documentacion.exportTecnico = !!out.features?.docExportTecnico;
 
+    // prescripcion permisos desde features
     out.prescripcion = out.prescripcion || {};
     out.prescripcion.templates = out.features?.prescTemplatesWrite ? "full" : "readOnly";
     out.prescripcion.extraRefs = out.features?.prescExtraRefsWrite ? "full" : "readOnly";
-  }
-
-  // Caso B: solo v2 -> derivar legacy (para compat con código viejo)
-  if (caps && caps.pages && (!caps.views || !caps.features)) {
-    out.views = out.views || {};
-    out.features = out.features || {};
-
-    const pages = out.pages || {};
-    Object.keys(pages).forEach((k) => {
-      const val = pages[k];
-      if (typeof val === "boolean") out.views[k] = val;
-      else if (typeof val === "string") out.views[k] = val !== "none";
-      else out.views[k] = !!val;
-    });
-
-    // documentacion modo
-    if (typeof pages.documentacion === "string") {
-      out.features.docModo = pages.documentacion;
-      out.views.documentacion = pages.documentacion !== "none";
-    }
-
-    // tarifas view/none
-    if (typeof pages.tarifas === "string") out.views.tarifas = pages.tarifas !== "none";
-
-    // prescripcion view/none
-    if (typeof pages.prescripcion === "string")
-      out.views.prescripcion = pages.prescripcion !== "none";
-
-    out.documentacion = out.documentacion || {};
-    out.features.docExportTecnico = !!out.documentacion.exportTecnico;
-
-    out.prescripcion = out.prescripcion || {};
-    out.features.prescTemplatesWrite = out.prescripcion.templates === "full";
-    out.features.prescExtraRefsWrite = out.prescripcion.extraRefs === "full";
   }
 
   return out;
@@ -384,7 +374,10 @@ async function ensureAndLoadUserProfile(firebaseUser) {
   if (!exp || exp < nowMs) {
     try {
       await invRef.set(
-        { status: "expired", updatedAt: firebase.firestore.FieldValue.serverTimestamp() },
+        {
+          status: "expired",
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        },
         { merge: true }
       );
     } catch (_) {}
@@ -441,6 +434,8 @@ function applyNavVisibility() {
 
     a.style.display = isViewAllowed(viewKey) ? "" : "none";
   });
+
+  _dedupeNavLinks();
 }
 
 // Fallback legacy
@@ -484,6 +479,8 @@ function applyShellPermissions(capabilities = {}) {
 
     el.style.display = allowed ? "" : "none";
   });
+
+  _dedupeNavLinks();
 }
 window.applyShellPermissions = applyShellPermissions;
 
@@ -514,6 +511,18 @@ function initShellUI() {
     appState._logoutInited = true;
     btnLogout.addEventListener("click", async () => {
       try {
+        // Reset de vista: nuevo inicio debe empezar en "proyecto"
+        try {
+          if (window.sessionStorage) window.sessionStorage.removeItem(VIEW_STORAGE_KEY);
+        } catch (_) {}
+        try {
+          if (window.localStorage) window.localStorage.removeItem(VIEW_STORAGE_KEY);
+          if (window.localStorage) window.localStorage.removeItem("presupuestos2n_last_view");
+        } catch (_) {}
+
+        appState.currentView = "proyecto";
+        appState.pendingView = "proyecto";
+
         await auth.signOut();
       } catch (e) {
         console.error("Error al cerrar sesión:", e);
@@ -627,7 +636,8 @@ document.addEventListener("DOMContentLoaded", () => {
 console.log("%cUI Shell inicializada (ui_shell.js)", "color:#4f46e5; font-weight:600;");
 
 /*
-DUPLICATED BLOCK DISABLED (was accidentally pasted twice). Keeping it commented to avoid runtime overrides.
+DUPLICATED BLOCK DISABLED (file was pasted twice). Everything below is commented to avoid overrides.
 
-[... aquí va tu segunda copia completa tal cual estaba pegada ...]
+(El bloque duplicado que tenías pegado por segunda vez quedaría aquí dentro si existía.
+Si ya lo borraste, este comentario no molesta y puedes eliminarlo también.)
 */
