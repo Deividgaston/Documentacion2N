@@ -37,9 +37,9 @@
         usuarios: false,
       },
       features: {
-        tarifasWrite: false, // add/edit/delete
+        tarifasWrite: false,
         docExportTecnico: false,
-        docModo: "none", // "none" | "commercial" | "technical"
+        docModo: "none",
         prescTemplatesWrite: false,
         prescExtraRefsWrite: false,
       },
@@ -52,9 +52,9 @@
         presupuesto: false,
         simulador: false,
         tarifa: false,
-        tarifas: "none", // "view" | "none"
-        documentacion: "none", // "commercial" | "technical" | "none"
-        prescripcion: "none", // "view" | "none"
+        tarifas: "none",
+        documentacion: "none",
+        prescripcion: "none",
         docGestion: false,
         usuarios: false,
       },
@@ -62,8 +62,8 @@
         exportTecnico: false,
       },
       prescripcion: {
-        templates: "readOnly", // "readOnly" | "full"
-        extraRefs: "readOnly", // "readOnly" | "full"
+        templates: "readOnly",
+        extraRefs: "readOnly",
       },
     };
 
@@ -154,8 +154,8 @@
       legacy.features.tarifasWrite = false;
       legacy.features.docExportTecnico = true;
       legacy.features.docModo = "technical";
-      legacy.features.prescTemplatesWrite = false; // read-only
-      legacy.features.prescExtraRefsWrite = false; // read-only
+      legacy.features.prescTemplatesWrite = false;
+      legacy.features.prescExtraRefsWrite = false;
 
       v2.pages.documentacion = "technical";
       v2.documentacion.exportTecnico = true;
@@ -199,7 +199,6 @@
     return out;
   }
 
-  // Sincroniza legacy desde v2 (para compat con router actual y otras pantallas)
   function syncLegacyFromV2(caps) {
     const out = { ...(caps || {}) };
 
@@ -347,7 +346,7 @@
         { merge: true }
       );
 
-    return synced; // ✅ para aplicar en vivo si es el mismo usuario
+    return synced;
   }
 
   async function setUserActive(uid, active) {
@@ -372,7 +371,7 @@
     return normalizeCapabilitiesDual(u.capabilities || {}, role);
   }
 
-  // ✅ APLICAR CAMBIOS EN VIVO SI EDITAS TU PROPIO USUARIO
+  // ✅ aplicar cambios en vivo si editas tu propio usuario
   function applyLivePermissionsIfSelf(uid, { role, capabilities } = {}) {
     try {
       if (!uid || !appState?.user?.uid) return;
@@ -385,11 +384,8 @@
         window.applyShellPermissions(appState.user.capabilities);
       }
 
-      // Si la vista actual queda no permitida, cae a la primera permitida
       if (typeof window.setCurrentView === "function") {
         const current = appState.currentView || "proyecto";
-        // setCurrentView ya hace fallback por permisos en main.js (y en shell),
-        // así que basta con re-setear la actual.
         window.setCurrentView(current);
       }
     } catch (e) {
@@ -606,7 +602,6 @@
 
           await updateUserRole(id, role);
 
-          // ✅ aplicar al momento si es el propio usuario
           applyLivePermissionsIfSelf(id, {
             role,
             capabilities: buildCapabilitiesForRoleDual(role),
@@ -657,10 +652,14 @@
 
           const newCaps = await updateUserCapabilities(id, role, partial);
 
-          // ✅ aplicar al momento si es el propio usuario
           applyLivePermissionsIfSelf(id, { role, capabilities: newCaps });
 
           await refresh();
+
+          // ✅ CERRAR PANEL TRAS GUARDAR
+          const panel = container.querySelector(`[data-perms-panel="${id}"]`);
+          if (panel) panel.style.display = "none";
+
           alert("Permisos guardados.");
           return;
         }
