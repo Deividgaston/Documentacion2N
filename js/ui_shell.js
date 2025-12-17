@@ -104,10 +104,33 @@ function buildCapabilitiesForRole(role) {
   return base;
 }
 
+function _normalizeViewKey(viewKey) {
+  if (viewKey === "docs") return "documentacion";
+  if (viewKey === "docs-gestion") return "docGestion";
+  return viewKey;
+}
+
 function isViewAllowed(viewKey) {
   const caps = appState?.user?.capabilities;
-  if (!caps || !caps.views) return false;
-  return !!caps.views[viewKey];
+  if (!caps) return false;
+
+  const v = _normalizeViewKey(viewKey);
+
+  // Legacy
+  if (caps.views && typeof caps.views === "object") {
+    return !!caps.views[v];
+  }
+
+  // Nuevo (si algún día migras)
+  if (caps.pages && typeof caps.pages === "object") {
+    const val = caps.pages[v];
+    if (val === undefined || val === null) return false;
+    if (typeof val === "boolean") return val;
+    if (typeof val === "string") return val !== "none";
+    return !!val;
+  }
+
+  return false;
 }
 
 function getFirstAllowedView() {
@@ -165,7 +188,7 @@ async function ensureAndLoadUserProfile(firebaseUser) {
     }
 
     const capabilities =
-      data.capabilities && data.capabilities.views
+      data.capabilities && (data.capabilities.views || data.capabilities.pages)
         ? data.capabilities
         : buildCapabilitiesForRole(role);
 
@@ -247,7 +270,7 @@ async function ensureAndLoadUserProfile(firebaseUser) {
   // Crear user con rol/capabilities de invitación (o default)
   const role = String(inv.role || "ACCOUNT_MANAGER").toUpperCase();
   const capabilities =
-    inv.capabilities && inv.capabilities.views
+    inv.capabilities && (inv.capabilities.views || inv.capabilities.pages)
       ? inv.capabilities
       : buildCapabilitiesForRole(role);
 
@@ -287,11 +310,10 @@ async function ensureAndLoadUserProfile(firebaseUser) {
 function applyNavVisibility() {
   const links = document.querySelectorAll(".top-nav-link[data-view]");
   links.forEach((a) => {
-    const v = a.getAttribute("data-view");
-    if (!v) return;
+    const vRaw = a.getAttribute("data-view");
+    if (!vRaw) return;
 
-    const viewKey =
-      v === "docs" ? "documentacion" : v === "docs-gestion" ? "docGestion" : v;
+    const viewKey = _normalizeViewKey(vRaw);
 
     if (!appState.user) {
       a.style.display = "none";
@@ -300,44 +322,6 @@ function applyNavVisibility() {
 
     a.style.display = isViewAllowed(viewKey) ? "" : "none";
   });
-}
-
-// ==========================
-// Inicializar shell (se llama tras login correcto)
-// ==========================
-function initShellUI() {
-  const loginPage = document.getElementById("loginPage");
-  const appShell = document.getElementById("appShell");
-  const btnLogout = document.getElementById("btnLogout");
-
-  if (!loginPage || !appShell) {
-    console.error("Faltan loginPage o appShell en el HTML.");
-    return;
-  }
-
-  loginPage.style.display = "none";
-  appShell.style.display = "flex";
-
-  // Badge usuario
-  const userBadge = document.getElementById("userBadge");
-  if (userBadge && appState.user?.email) {
-    userBadge.textContent = `${appState.user.email} · ${appState.user.role || ""}`.trim();
-  }
-
-  
-  // Logout
-  if (btnLogout && !appState._logoutInited) {
-    appState._logoutInited = true;
-    btnLogout.addEventListener("click", async () => {
-      try {
-        await auth.signOut();
-      } catch (e) {
-        console.error("Error al cerrar sesión:", e);
-      }
-    });
-  }
-
-  applyNavVisibility();
 }
 
 // Fallback legacy
@@ -361,20 +345,70 @@ function selectView(viewName) {
   if (activeTab) activeTab.classList.add("active");
 }
 
-
+// ==========================
+// NUEVO: API única para que main.js pueda pedir "aplica permisos"
+// Compatible con caps.pages y caps.views, y normaliza data-view.
+// ==========================
 function applyShellPermissions(capabilities = {}) {
-  document.querySelectorAll(".top-nav-link[data-view]").forEach(el => {
-    const view = el.dataset.view;
-    const allowed = capabilities?.pages?.[view];
+  document.querySelectorAll(".top-nav-link[data-view]").forEach((el) => {
+    const raw = el.dataset.view;
+    const view = _normalizeViewKey(raw);
 
-    if (!allowed || allowed === "none") {
-      el.style.display = "none";
+    let allowed = null;
+
+    // Nuevo: pages
+    if (capabilities.pages && typeof capabilities.pages === "object") {
+      allowed = capabilities.pages[view];
+      if (typeof allowed === "string") allowed = allowed !== "none";
+      else allowed = !!allowed;
+    } else if (capabilities.views && typeof capabilities.views === "object") {
+      // Legacy: views
+      allowed = !!capabilities.views[view];
     } else {
-      el.style.display = "";
+      allowed = false;
     }
+
+    el.style.display = allowed ? "" : "none";
   });
 }
 window.applyShellPermissions = applyShellPermissions;
+
+// ==========================
+// Inicializar shell (se llama tras login correcto)
+// ==========================
+function initShellUI() {
+  const loginPage = document.getElementById("loginPage");
+  const appShell = document.getElementById("appShell");
+  const btnLogout = document.getElementById("btnLogout");
+
+  if (!loginPage || !appShell) {
+    console.error("Faltan loginPage o appShell en el HTML.");
+    return;
+  }
+
+  loginPage.style.display = "none";
+  appShell.style.display = "flex";
+
+  // Badge usuario
+  const userBadge = document.getElementById("userBadge");
+  if (userBadge && appState.user?.email) {
+    userBadge.textContent = `${appState.user.email} · ${appState.user.role || ""}`.trim();
+  }
+
+  // Logout
+  if (btnLogout && !appState._logoutInited) {
+    appState._logoutInited = true;
+    btnLogout.addEventListener("click", async () => {
+      try {
+        await auth.signOut();
+      } catch (e) {
+        console.error("Error al cerrar sesión:", e);
+      }
+    });
+  }
+
+  applyNavVisibility();
+}
 
 // ==========================
 // AUTH GATE
@@ -444,7 +478,7 @@ function initAuthGate() {
       initShellUI();
 
       // Si la vista actual no está permitida, saltar a la primera permitida
-      const current = appState.currentView || "proyecto";
+      const current = _normalizeViewKey(appState.currentView || "proyecto");
       if (typeof window.setCurrentView === "function") {
         if (!isViewAllowed(current)) {
           const fallback = getFirstAllowedView() || "proyecto";
