@@ -62,7 +62,6 @@
         </div>
 
         <nav class="app-topbar-center">
-          <a href="#" class="top-nav-link" data-view="usuarios">Usuarios</a>
           <a href="#" class="top-nav-link active" data-view="proyecto" id="navProyecto">Proyecto</a>
           <a href="#" class="top-nav-link" data-view="presupuesto">Presupuesto</a>
           <a href="#" class="top-nav-link" data-view="simulador">Simulador</a>
@@ -72,7 +71,7 @@
           <a href="#" class="top-nav-link" data-view="prescripcion">Prescripción</a>
           <a href="#" class="top-nav-link" data-view="docGestion">Gestión documentación</a>
 
-          <!-- ✅ NUEVA: Configuración de usuarios (solo superadmin; se ocultará por JS) -->
+          <!-- ✅ Configuración de usuarios (solo superadmin; se ocultará por JS) -->
           <a href="#" class="top-nav-link" data-view="usuarios" id="navUsuarios" style="display:none;">Usuarios</a>
         </nav>
 
@@ -92,7 +91,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
-    <!-- ✅ NUEVO (estrictamente necesario): Firebase Functions compat -->
+    <!-- ✅ Firebase Functions compat -->
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-functions-compat.js"></script>
 
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -132,7 +131,7 @@
     <script src="js/ui_doc_gestion.js"></script>
     <script src="js/ui_dashboard_doc.js"></script>
 
-    <!-- ✅ vista de superadmin (dejar SOLO una carga) -->
+    <!-- ✅ vista de superadmin (una sola carga) -->
     <script src="js/ui_admin_users.js"></script>
 
     <script src="js/pdf_excel.js"></script>
@@ -200,6 +199,5 @@
         width:100%;
       }
     </style>
-
   </body>
 </html>
