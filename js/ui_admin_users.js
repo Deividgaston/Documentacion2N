@@ -17,10 +17,14 @@
     return String(r || "").trim().toUpperCase();
   }
 
-  function buildCapabilitiesForRole(role) {
+  // ==========================
+  // Capabilities DUAL (legacy + v2)
+  // ==========================
+  function buildCapabilitiesForRoleDual(role) {
     const r = normalizeRole(role);
 
-    const base = {
+    // Legacy
+    const legacy = {
       views: {
         proyecto: false,
         presupuesto: false,
@@ -41,72 +45,199 @@
       },
     };
 
+    // v2 pactado
+    const v2 = {
+      pages: {
+        proyecto: false,
+        presupuesto: false,
+        simulador: false,
+        tarifa: false,
+        tarifas: "none", // "view" | "none"
+        documentacion: "none", // "commercial" | "technical" | "none"
+        prescripcion: "none", // "view" | "none"
+        docGestion: false,
+        usuarios: false,
+      },
+      documentacion: {
+        exportTecnico: false,
+      },
+      prescripcion: {
+        templates: "readOnly", // "readOnly" | "full"
+        extraRefs: "readOnly", // "readOnly" | "full"
+      },
+    };
+
+    function allowView(k) {
+      legacy.views[k] = true;
+      if (k === "tarifas") v2.pages.tarifas = "view";
+      else if (k === "documentacion") v2.pages.documentacion = "commercial";
+      else if (k === "prescripcion") v2.pages.prescripcion = "view";
+      else if (k === "docGestion") v2.pages.docGestion = true;
+      else if (k === "usuarios") v2.pages.usuarios = true;
+      else v2.pages[k] = true;
+    }
+
     if (r === "SUPER_ADMIN") {
-      Object.keys(base.views).forEach((k) => (base.views[k] = true));
-      base.features.tarifasWrite = true;
-      base.features.docExportTecnico = true;
-      base.features.docModo = "technical";
-      base.features.prescTemplatesWrite = true;
-      base.features.prescExtraRefsWrite = true;
-      return base;
+      Object.keys(legacy.views).forEach((k) => allowView(k));
+      legacy.features.tarifasWrite = true;
+      legacy.features.docExportTecnico = true;
+      legacy.features.docModo = "technical";
+      legacy.features.prescTemplatesWrite = true;
+      legacy.features.prescExtraRefsWrite = true;
+
+      v2.pages.tarifas = "view";
+      v2.pages.documentacion = "technical";
+      v2.documentacion.exportTecnico = true;
+      v2.pages.prescripcion = "view";
+      v2.prescripcion.templates = "full";
+      v2.prescripcion.extraRefs = "full";
+
+      return { ...legacy, ...v2 };
     }
 
     if (r === "ACCOUNT_MANAGER") {
-      base.views.proyecto = true;
-      base.views.presupuesto = true;
-      base.views.simulador = true;
-      base.views.tarifa = true;
-      base.views.tarifas = true;
-      base.views.documentacion = true;
-      base.views.docGestion = true;
+      allowView("proyecto");
+      allowView("presupuesto");
+      allowView("simulador");
+      allowView("tarifa");
+      allowView("tarifas");
+      allowView("documentacion");
+      allowView("docGestion");
 
-      base.features.tarifasWrite = false;
-      base.features.docExportTecnico = false;
-      base.features.docModo = "commercial";
-      return base;
+      legacy.features.tarifasWrite = false;
+      legacy.features.docExportTecnico = false;
+      legacy.features.docModo = "commercial";
+
+      v2.pages.documentacion = "commercial";
+      v2.documentacion.exportTecnico = false;
+      v2.pages.prescripcion = "none";
+      v2.prescripcion.templates = "readOnly";
+      v2.prescripcion.extraRefs = "readOnly";
+
+      return { ...legacy, ...v2 };
     }
 
     if (r === "PRESCRIPTOR") {
-      base.views.proyecto = true;
-      base.views.presupuesto = true;
-      base.views.simulador = true;
-      base.views.tarifa = true;
-      base.views.tarifas = true;
-      base.views.documentacion = true;
-      base.views.docGestion = true;
+      allowView("proyecto");
+      allowView("presupuesto");
+      allowView("simulador");
+      allowView("tarifa");
+      allowView("tarifas");
+      allowView("documentacion");
+      allowView("docGestion");
 
-      base.features.tarifasWrite = false;
-      base.features.docExportTecnico = true;
-      base.features.docModo = "technical";
-      return base;
+      legacy.features.tarifasWrite = false;
+      legacy.features.docExportTecnico = true;
+      legacy.features.docModo = "technical";
+      legacy.features.prescTemplatesWrite = true;
+      legacy.features.prescExtraRefsWrite = true;
+
+      v2.pages.documentacion = "technical";
+      v2.documentacion.exportTecnico = true;
+      v2.pages.prescripcion = "none";
+      v2.prescripcion.templates = "full";
+      v2.prescripcion.extraRefs = "full";
+
+      return { ...legacy, ...v2 };
     }
 
     if (r === "SUPER_PRESCRIPTOR") {
-      base.views.proyecto = true;
-      base.views.presupuesto = true;
-      base.views.simulador = true;
-      base.views.tarifa = true;
-      base.views.tarifas = true;
-      base.views.documentacion = true;
-      base.views.prescripcion = true;
-      base.views.docGestion = true;
+      allowView("proyecto");
+      allowView("presupuesto");
+      allowView("simulador");
+      allowView("tarifa");
+      allowView("tarifas");
+      allowView("documentacion");
+      allowView("prescripcion");
+      allowView("docGestion");
 
-      base.features.tarifasWrite = false;
-      base.features.docExportTecnico = true;
-      base.features.docModo = "technical";
-      base.features.prescTemplatesWrite = false; // read-only
-      base.features.prescExtraRefsWrite = false; // read-only
-      return base;
+      legacy.features.tarifasWrite = false;
+      legacy.features.docExportTecnico = true;
+      legacy.features.docModo = "technical";
+      legacy.features.prescTemplatesWrite = false; // read-only
+      legacy.features.prescExtraRefsWrite = false; // read-only
+
+      v2.pages.documentacion = "technical";
+      v2.documentacion.exportTecnico = true;
+      v2.pages.prescripcion = "view";
+      v2.prescripcion.templates = "readOnly";
+      v2.prescripcion.extraRefs = "readOnly";
+
+      return { ...legacy, ...v2 };
     }
 
     if (r === "DOC_MANAGER") {
-      base.views.documentacion = true;
-      base.views.docGestion = true;
-      base.features.docModo = "technical";
-      return base;
+      allowView("documentacion");
+      allowView("docGestion");
+
+      legacy.features.docModo = "technical";
+      legacy.features.docExportTecnico = false;
+
+      v2.pages.documentacion = "technical";
+      v2.documentacion.exportTecnico = false;
+      v2.pages.prescripcion = "none";
+      v2.prescripcion.templates = "readOnly";
+      v2.prescripcion.extraRefs = "readOnly";
+
+      return { ...legacy, ...v2 };
     }
 
-    return base;
+    return { ...legacy, ...v2 };
+  }
+
+  function normalizeCapabilitiesDual(caps, role) {
+    const base = buildCapabilitiesForRoleDual(role);
+    const out = { ...(caps || {}) };
+
+    if (!out.views) out.views = base.views;
+    if (!out.features) out.features = base.features;
+
+    if (!out.pages) out.pages = base.pages;
+    if (!out.documentacion) out.documentacion = base.documentacion;
+    if (!out.prescripcion) out.prescripcion = base.prescripcion;
+
+    return out;
+  }
+
+  // Sincroniza legacy desde v2 (para compat con router actual y otras pantallas)
+  function syncLegacyFromV2(caps) {
+    const out = { ...(caps || {}) };
+
+    out.views = out.views || {};
+    out.features = out.features || {};
+
+    const pages = out.pages || {};
+    const doc = out.documentacion || {};
+    const presc = out.prescripcion || {};
+
+    // pages -> views
+    Object.keys(pages).forEach((k) => {
+      const val = pages[k];
+      if (typeof val === "boolean") out.views[k] = val;
+      else if (typeof val === "string") out.views[k] = val !== "none";
+      else out.views[k] = !!val;
+    });
+
+    // tarifas: v2 "view/none" -> views.tarifas
+    if (pages.tarifas !== undefined) out.views.tarifas = pages.tarifas !== "none";
+
+    // documentacion: "commercial/technical/none"
+    if (pages.documentacion) {
+      out.views.documentacion = pages.documentacion !== "none";
+      out.features.docModo = pages.documentacion; // "commercial" | "technical" | "none"
+    }
+
+    // prescripcion: "view/none"
+    if (pages.prescripcion) out.views.prescripcion = pages.prescripcion !== "none";
+
+    // documentacion.exportTecnico
+    out.features.docExportTecnico = !!doc.exportTecnico;
+
+    // prescripcion perms
+    out.features.prescTemplatesWrite = presc.templates === "full";
+    out.features.prescExtraRefsWrite = presc.extraRefs === "full";
+
+    return out;
   }
 
   function isSuperAdmin() {
@@ -148,9 +279,7 @@
     usersSnap.forEach((doc) => users.push({ id: doc.id, ...(doc.data() || {}) }));
 
     const invites = [];
-    invitesSnap.forEach((doc) =>
-      invites.push({ id: doc.id, ...(doc.data() || {}) })
-    );
+    invitesSnap.forEach((doc) => invites.push({ id: doc.id, ...(doc.data() || {}) }));
 
     return { users, invites };
   }
@@ -158,7 +287,8 @@
   async function createInvite({ email, role }) {
     const cleanEmail = String(email || "").trim().toLowerCase();
     const cleanRole = normalizeRole(role) || "ACCOUNT_MANAGER";
-    const capabilities = buildCapabilitiesForRole(cleanRole);
+
+    const capabilities = buildCapabilitiesForRoleDual(cleanRole);
 
     // 24h desde ahora
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
@@ -182,7 +312,8 @@
 
   async function updateUserRole(uid, role) {
     const cleanRole = normalizeRole(role);
-    const capabilities = buildCapabilitiesForRole(cleanRole);
+    const capabilities = buildCapabilitiesForRoleDual(cleanRole);
+
     await db
       .collection("users")
       .doc(uid)
@@ -190,6 +321,36 @@
         {
           role: cleanRole,
           capabilities,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+  }
+
+  async function updateUserCapabilities(uid, role, partialCapsV2) {
+    const base = normalizeCapabilitiesDual({}, role);
+    const merged = {
+      ...base,
+      ...(partialCapsV2 || {}),
+      pages: { ...(base.pages || {}), ...((partialCapsV2 && partialCapsV2.pages) || {}) },
+      documentacion: {
+        ...(base.documentacion || {}),
+        ...((partialCapsV2 && partialCapsV2.documentacion) || {}),
+      },
+      prescripcion: {
+        ...(base.prescripcion || {}),
+        ...((partialCapsV2 && partialCapsV2.prescripcion) || {}),
+      },
+    };
+
+    const synced = syncLegacyFromV2(merged);
+
+    await db
+      .collection("users")
+      .doc(uid)
+      .set(
+        {
+          capabilities: synced,
           updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
         },
         { merge: true }
@@ -211,6 +372,15 @@
 
   async function deleteInvite(inviteId) {
     await db.collection("invites").doc(inviteId).delete();
+  }
+
+  function safeGetUserCapsV2(u) {
+    const role = normalizeRole(u.role);
+    const caps = normalizeCapabilitiesDual(u.capabilities || {}, role);
+
+    // Si viniera legacy-only, rellenamos v2 de base (sin intentar inferir)
+    // y dejamos que la UI sea la fuente para ajustes.
+    return caps;
   }
 
   async function refresh() {
@@ -265,10 +435,17 @@
 
                   const roleOptions = ROLES.map(
                     (r) =>
-                      `<option value="${r}" ${
-                        r === role ? "selected" : ""
-                      }>${r}</option>`
+                      `<option value="${r}" ${r === role ? "selected" : ""}>${r}</option>`
                   ).join("");
+
+                  const caps = safeGetUserCapsV2(u);
+                  const p = caps.pages || {};
+                  const docMode = p.documentacion || "none";
+                  const tarifasMode = p.tarifas || "none";
+                  const prescPage = p.prescripcion || "none";
+                  const exportTec = !!caps.documentacion?.exportTecnico;
+                  const prescTpl = caps.prescripcion?.templates || "readOnly";
+                  const prescExtra = caps.prescripcion?.extraRefs || "readOnly";
 
                   return `
                   <div class="card" style="margin-top:10px;">
@@ -283,12 +460,10 @@
                         </div>
                       </div>
 
-                      <div style="min-width:280px; display:flex; flex-direction:column; gap:8px;">
+                      <div style="min-width:320px; display:flex; flex-direction:column; gap:10px;">
                         <div style="display:flex; gap:8px; align-items:center;">
                           <label style="font-size:0.85rem; color:#6b7280; min-width:44px;">Rol</label>
-                          <select class="form-control" data-role-select="${escapeHtml(
-                            uid
-                          )}">
+                          <select class="form-control" data-role-select="${escapeHtml(uid)}">
                             ${roleOptions}
                           </select>
                           <button class="btn btn-primary btn-sm" data-action="saveRole" data-id="${escapeHtml(
@@ -296,13 +471,88 @@
                           )}">Guardar</button>
                         </div>
 
-                        <div style="display:flex; gap:8px;">
+                        <div style="display:flex; gap:8px; flex-wrap:wrap;">
                           <button class="btn btn-secondary btn-sm" data-action="toggleActive" data-id="${escapeHtml(
                             uid
                           )}" data-active="${active ? "1" : "0"}">
                             ${active ? "Desactivar" : "Activar"}
                           </button>
+
+                          <button class="btn btn-secondary btn-sm" data-action="togglePerms" data-id="${escapeHtml(
+                            uid
+                          )}">
+                            Permisos (v2)
+                          </button>
                         </div>
+                      </div>
+                    </div>
+
+                    <div class="card" style="margin-top:10px; padding:12px; display:none;" data-perms-panel="${escapeHtml(
+                      uid
+                    )}">
+                      <div style="font-weight:700; margin-bottom:8px;">Permisos (v2)</div>
+
+                      <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
+                        <div style="min-width:220px;">
+                          <label style="font-size:0.85rem; color:#6b7280;">Documentación</label>
+                          <select class="form-control" data-doc-mode="${escapeHtml(uid)}">
+                            <option value="none" ${docMode === "none" ? "selected" : ""}>none</option>
+                            <option value="commercial" ${docMode === "commercial" ? "selected" : ""}>commercial</option>
+                            <option value="technical" ${docMode === "technical" ? "selected" : ""}>technical</option>
+                          </select>
+                        </div>
+
+                        <div style="min-width:220px;">
+                          <label style="font-size:0.85rem; color:#6b7280;">Tarifas</label>
+                          <select class="form-control" data-tarifas-mode="${escapeHtml(uid)}">
+                            <option value="none" ${tarifasMode === "none" ? "selected" : ""}>none</option>
+                            <option value="view" ${tarifasMode === "view" ? "selected" : ""}>view</option>
+                          </select>
+                        </div>
+
+                        <div style="min-width:220px;">
+                          <label style="font-size:0.85rem; color:#6b7280;">Prescripción (página)</label>
+                          <select class="form-control" data-presc-page="${escapeHtml(uid)}">
+                            <option value="none" ${prescPage === "none" ? "selected" : ""}>none</option>
+                            <option value="view" ${prescPage === "view" ? "selected" : ""}>view</option>
+                          </select>
+                        </div>
+
+                        <div style="min-width:220px;">
+                          <label style="font-size:0.85rem; color:#6b7280;">Prescripción · Plantillas</label>
+                          <select class="form-control" data-presc-templates="${escapeHtml(uid)}">
+                            <option value="readOnly" ${prescTpl === "readOnly" ? "selected" : ""}>readOnly</option>
+                            <option value="full" ${prescTpl === "full" ? "selected" : ""}>full</option>
+                          </select>
+                        </div>
+
+                        <div style="min-width:220px;">
+                          <label style="font-size:0.85rem; color:#6b7280;">Prescripción · Extra refs</label>
+                          <select class="form-control" data-presc-extrarefs="${escapeHtml(uid)}">
+                            <option value="readOnly" ${prescExtra === "readOnly" ? "selected" : ""}>readOnly</option>
+                            <option value="full" ${prescExtra === "full" ? "selected" : ""}>full</option>
+                          </select>
+                        </div>
+
+                        <div style="min-width:240px;">
+                          <label style="font-size:0.85rem; color:#6b7280;">Export técnico (Documentación)</label>
+                          <div style="display:flex; gap:8px; align-items:center;">
+                            <input type="checkbox" data-doc-export="${escapeHtml(uid)}" ${
+                    exportTec ? "checked" : ""
+                  } />
+                            <span style="font-size:0.85rem; color:#6b7280;">exportTecnico</span>
+                          </div>
+                        </div>
+
+                        <div style="display:flex; gap:8px;">
+                          <button class="btn btn-primary btn-sm" data-action="savePerms" data-id="${escapeHtml(
+                            uid
+                          )}">Guardar permisos</button>
+                        </div>
+                      </div>
+
+                      <div style="margin-top:10px; font-size:0.82rem; color:#6b7280;">
+                        Nota: al guardar permisos v2, también se sincroniza legacy (views/features) para compatibilidad.
                       </div>
                     </div>
                   </div>
@@ -348,6 +598,46 @@
           const current = btn.getAttribute("data-active") === "1";
           await setUserActive(id, !current);
           await refresh();
+          return;
+        }
+
+        if (action === "togglePerms") {
+          const panel = container.querySelector(`[data-perms-panel="${id}"]`);
+          if (panel) panel.style.display = panel.style.display === "none" ? "block" : "none";
+          return;
+        }
+
+        if (action === "savePerms") {
+          // tomamos role actual del select para completar base
+          const selRole = container.querySelector(`select[data-role-select="${id}"]`);
+          const role = selRole ? normalizeRole(selRole.value) : "ACCOUNT_MANAGER";
+
+          const docMode = container.querySelector(`select[data-doc-mode="${id}"]`)?.value || "none";
+          const tarifasMode =
+            container.querySelector(`select[data-tarifas-mode="${id}"]`)?.value || "none";
+          const prescPage =
+            container.querySelector(`select[data-presc-page="${id}"]`)?.value || "none";
+          const prescTpl =
+            container.querySelector(`select[data-presc-templates="${id}"]`)?.value || "readOnly";
+          const prescExtra =
+            container.querySelector(`select[data-presc-extrarefs="${id}"]`)?.value || "readOnly";
+          const exportTec =
+            !!container.querySelector(`input[type="checkbox"][data-doc-export="${id}"]`)?.checked;
+
+          const partial = {
+            pages: {
+              // mantenemos el resto desde base; aquí solo seteamos los editables
+              tarifas: tarifasMode,
+              documentacion: docMode,
+              prescripcion: prescPage,
+            },
+            documentacion: { exportTecnico: exportTec },
+            prescripcion: { templates: prescTpl, extraRefs: prescExtra },
+          };
+
+          await updateUserCapabilities(id, role, partial);
+          await refresh();
+          alert("Permisos guardados.");
           return;
         }
       } catch (e) {
