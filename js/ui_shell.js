@@ -9,9 +9,6 @@ window.appState = window.appState || {};
 // ==========================
 const SUPERADMIN_EMAIL = "gastonortigosa@gmail.com";
 
-// Clave de vista actual (router)
-const VIEW_STORAGE_KEY = "presup2n_currentView";
-
 // ==========================
 // Helpers
 // ==========================
@@ -224,7 +221,6 @@ function normalizeCapabilities(caps, role) {
 
   // Si solo hay legacy, derivar pages mínimos
   if (caps && caps.views && (!caps.pages || typeof caps.pages !== "object")) {
-    // Map directo de views -> pages (tarifas/prescripcion/documentacion con defaults)
     const pages = { ...out.pages };
     Object.keys(caps.views).forEach((k) => {
       const allowed = !!caps.views[k];
@@ -240,11 +236,9 @@ function normalizeCapabilities(caps, role) {
     });
     out.pages = pages;
 
-    // documentacion/exportTecnico desde features
     out.documentacion = out.documentacion || {};
     out.documentacion.exportTecnico = !!out.features?.docExportTecnico;
 
-    // prescripcion permisos desde features
     out.prescripcion = out.prescripcion || {};
     out.prescripcion.templates = out.features?.prescTemplatesWrite ? "full" : "readOnly";
     out.prescripcion.extraRefs = out.features?.prescExtraRefsWrite ? "full" : "readOnly";
@@ -259,7 +253,6 @@ function isViewAllowed(viewKey) {
 
   const v = _normalizeViewKey(viewKey);
 
-  // Preferimos V2 si existe
   if (caps.pages && typeof caps.pages === "object") {
     const val = caps.pages[v];
     if (val === undefined || val === null) return false;
@@ -268,7 +261,6 @@ function isViewAllowed(viewKey) {
     return !!val;
   }
 
-  // Legacy
   if (caps.views && typeof caps.views === "object") {
     return !!caps.views[v];
   }
@@ -317,7 +309,6 @@ async function ensureAndLoadUserProfile(firebaseUser) {
 
     const capabilities = normalizeCapabilities(data.capabilities || null, role);
 
-    // merge normalización
     try {
       await userRef.set(
         {
@@ -513,10 +504,10 @@ function initShellUI() {
       try {
         // Reset de vista: nuevo inicio debe empezar en "proyecto"
         try {
-          if (window.sessionStorage) window.sessionStorage.removeItem(VIEW_STORAGE_KEY);
+          if (window.sessionStorage) window.sessionStorage.removeItem("presup2n_currentView");
         } catch (_) {}
         try {
-          if (window.localStorage) window.localStorage.removeItem(VIEW_STORAGE_KEY);
+          if (window.localStorage) window.localStorage.removeItem("presup2n_currentView");
           if (window.localStorage) window.localStorage.removeItem("presupuestos2n_last_view");
         } catch (_) {}
 
