@@ -210,7 +210,6 @@
     const doc = out.documentacion || {};
     const presc = out.prescripcion || {};
 
-    // pages -> views
     Object.keys(pages).forEach((k) => {
       const val = pages[k];
       if (typeof val === "boolean") out.views[k] = val;
@@ -218,22 +217,17 @@
       else out.views[k] = !!val;
     });
 
-    // tarifas: v2 "view/none" -> views.tarifas
     if (pages.tarifas !== undefined) out.views.tarifas = pages.tarifas !== "none";
 
-    // documentacion: "commercial/technical/none"
     if (pages.documentacion) {
       out.views.documentacion = pages.documentacion !== "none";
-      out.features.docModo = pages.documentacion; // "commercial" | "technical" | "none"
+      out.features.docModo = pages.documentacion;
     }
 
-    // prescripcion: "view/none"
     if (pages.prescripcion) out.views.prescripcion = pages.prescripcion !== "none";
 
-    // documentacion.exportTecnico
     out.features.docExportTecnico = !!doc.exportTecnico;
 
-    // prescripcion perms
     out.features.prescTemplatesWrite = presc.templates === "full";
     out.features.prescExtraRefsWrite = presc.extraRefs === "full";
 
@@ -269,7 +263,6 @@
   }
 
   async function loadUsersAndInvitesOnce() {
-    // 1 lectura por colección (sin listeners)
     const [usersSnap, invitesSnap] = await Promise.all([
       db.collection("users").orderBy("updatedAt", "desc").limit(50).get(),
       db.collection("invites").orderBy("createdAt", "desc").limit(50).get(),
@@ -290,7 +283,6 @@
 
     const capabilities = buildCapabilitiesForRoleDual(cleanRole);
 
-    // 24h desde ahora
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
     const payload = {
@@ -305,7 +297,6 @@
       createdBy: appState?.user?.uid || null,
     };
 
-    // ID determinista por email (para evitar duplicados)
     const inviteId = cleanEmail.replace(/[^\w.-]+/g, "_");
     await db.collection("invites").doc(inviteId).set(payload, { merge: true });
   }
@@ -355,6 +346,8 @@
         },
         { merge: true }
       );
+
+    return synced; // ✅ para aplicar en vivo si es el mismo usuario
   }
 
   async function setUserActive(uid, active) {
@@ -376,11 +369,32 @@
 
   function safeGetUserCapsV2(u) {
     const role = normalizeRole(u.role);
-    const caps = normalizeCapabilitiesDual(u.capabilities || {}, role);
+    return normalizeCapabilitiesDual(u.capabilities || {}, role);
+  }
 
-    // Si viniera legacy-only, rellenamos v2 de base (sin intentar inferir)
-    // y dejamos que la UI sea la fuente para ajustes.
-    return caps;
+  // ✅ APLICAR CAMBIOS EN VIVO SI EDITAS TU PROPIO USUARIO
+  function applyLivePermissionsIfSelf(uid, { role, capabilities } = {}) {
+    try {
+      if (!uid || !appState?.user?.uid) return;
+      if (String(uid) !== String(appState.user.uid)) return;
+
+      if (role) appState.user.role = normalizeRole(role);
+      if (capabilities) appState.user.capabilities = capabilities;
+
+      if (typeof window.applyShellPermissions === "function" && appState.user.capabilities) {
+        window.applyShellPermissions(appState.user.capabilities);
+      }
+
+      // Si la vista actual queda no permitida, cae a la primera permitida
+      if (typeof window.setCurrentView === "function") {
+        const current = appState.currentView || "proyecto";
+        // setCurrentView ya hace fallback por permisos en main.js (y en shell),
+        // así que basta con re-setear la actual.
+        window.setCurrentView(current);
+      }
+    } catch (e) {
+      console.warn("applyLivePermissionsIfSelf error:", e);
+    }
   }
 
   async function refresh() {
@@ -589,7 +603,15 @@
         if (action === "saveRole") {
           const sel = container.querySelector(`select[data-role-select="${id}"]`);
           const role = sel ? sel.value : "ACCOUNT_MANAGER";
+
           await updateUserRole(id, role);
+
+          // ✅ aplicar al momento si es el propio usuario
+          applyLivePermissionsIfSelf(id, {
+            role,
+            capabilities: buildCapabilitiesForRoleDual(role),
+          });
+
           await refresh();
           return;
         }
@@ -608,7 +630,6 @@
         }
 
         if (action === "savePerms") {
-          // tomamos role actual del select para completar base
           const selRole = container.querySelector(`select[data-role-select="${id}"]`);
           const role = selRole ? normalizeRole(selRole.value) : "ACCOUNT_MANAGER";
 
@@ -626,7 +647,6 @@
 
           const partial = {
             pages: {
-              // mantenemos el resto desde base; aquí solo seteamos los editables
               tarifas: tarifasMode,
               documentacion: docMode,
               prescripcion: prescPage,
@@ -635,7 +655,11 @@
             prescripcion: { templates: prescTpl, extraRefs: prescExtra },
           };
 
-          await updateUserCapabilities(id, role, partial);
+          const newCaps = await updateUserCapabilities(id, role, partial);
+
+          // ✅ aplicar al momento si es el propio usuario
+          applyLivePermissionsIfSelf(id, { role, capabilities: newCaps });
+
           await refresh();
           alert("Permisos guardados.");
           return;
@@ -646,7 +670,6 @@
       }
     });
 
-    // Crear invitación
     const btnCreate = el("btnCreateInvite");
     if (btnCreate && !btnCreate._wired) {
       btnCreate._wired = true;
