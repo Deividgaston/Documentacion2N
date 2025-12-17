@@ -265,11 +265,21 @@
   // ✅ NUEVO: estado local para filtro (sin lecturas extra)
   // ==========================
   let _usersCache = [];
-  let _invitesCache = [];
   let _usersSearch = "";
 
   function _norm(s) {
     return String(s || "").trim().toLowerCase();
+  }
+
+  function _applyUsersFilter(users) {
+    const t = _norm(_usersSearch);
+    if (!t) return users;
+
+    return (users || []).filter((u) => {
+      const email = _norm(u.email);
+      const alias = _norm(u.alias || u.aliasLower);
+      return email.includes(t) || alias.includes(t);
+    });
   }
 
   async function loadUsersAndInvitesOnce() {
@@ -322,13 +332,12 @@
   }
 
   // ==========================
-  // ✅ NUEVO: createInvite via Cloud Function (Callable)
+  // ✅ createInvite via Cloud Function (Callable)
   // ==========================
   async function createInvite({ email, role }) {
     const cleanEmail = String(email || "").trim().toLowerCase();
     const cleanRole = normalizeRole(role) || "ACCOUNT_MANAGER";
 
-    // fallback: si no hay auth/cargado aún
     if (!firebase?.functions) {
       throw new Error("Firebase Functions no está disponible en el cliente.");
     }
@@ -343,8 +352,6 @@
     const resp = await call({
       email: cleanEmail,
       role: cleanRole,
-      // si luego tienes URL real, la pasas aquí desde UI/config
-      // continueUrl: "https://TU-DOMINIO/..."
     });
 
     return resp?.data || null;
@@ -443,17 +450,6 @@
     }
   }
 
-  function _applyUsersFilter(users) {
-    const t = _norm(_usersSearch);
-    if (!t) return users;
-
-    return (users || []).filter((u) => {
-      const email = _norm(u.email);
-      const alias = _norm(u.alias || u.aliasLower);
-      return email.includes(t) || alias.includes(t);
-    });
-  }
-
   async function refresh() {
     const status = el("adminUsersStatus");
     const usersWrap = el("adminUsersList");
@@ -464,9 +460,7 @@
     try {
       const { users, invites } = await loadUsersAndInvitesOnce();
 
-      // cache para el buscador (sin más lecturas)
       _usersCache = users || [];
-      _invitesCache = invites || [];
 
       if (invitesWrap) {
         invitesWrap.innerHTML =
@@ -533,13 +527,16 @@
                         <div style="font-weight:700;">${escapeHtml(email)}</div>
                         <div style="font-size:0.85rem; color:#6b7280;">UID: ${escapeHtml(uid)}</div>
 
-                        <!-- ✅ NUEVO: alias/apodo (manteniendo diseño: misma columna info) -->
+                        <!-- ✅ Alias con mismo estilo que buscador (sin form-control) -->
                         <div style="margin-top:8px;">
                           <label style="font-size:0.85rem; color:#6b7280;">Alias / apodo</label>
-                          <input class="form-control" style="max-width:260px;"
+                          <input
                             data-alias-input="${escapeHtml(uid)}"
+                            type="text"
                             placeholder="Ej: Juan (Obra X)"
-                            value="${escapeHtml(aliasVal)}" />
+                            value="${escapeHtml(aliasVal)}"
+                            style="max-width:260px;"
+                          />
                         </div>
 
                         <div style="font-size:0.85rem; color:#6b7280; margin-top:6px;">
@@ -573,7 +570,6 @@
                             Permisos (v2)
                           </button>
 
-                          <!-- ✅ NUEVO: borrar usuario (mismo bloque de botones, sin romper diseño) -->
                           <button class="btn btn-secondary btn-sm" data-action="deleteUser" data-id="${escapeHtml(
                             uid
                           )}">
@@ -668,26 +664,21 @@
     if (!container || container._wiredAdminUsers) return;
     container._wiredAdminUsers = true;
 
-    // ✅ NUEVO: buscador (input)
+    // ✅ buscador (sin lecturas extra)
     container.addEventListener("input", (ev) => {
       const inp = ev.target?.closest?.("#adminUsersSearch");
       if (!inp) return;
       _usersSearch = inp.value || "";
-      // re-render sin tocar Firestore: reutiliza cache
-      // (llamamos a refresh() para reutilizar el mismo render ya implementado)
-      // pero sin lecturas extra: refresh() lee; así que hacemos render local:
-      // solución mínima: render local = reusar refresh con cache? => hacemos un render local aquí.
-      // Para cambios mínimos, hacemos una mini-reconstrucción llamando a refresh pero NO queremos lecturas.
-      // Por eso: forzamos un "render" manual usando el último cache.
+
       const usersWrap = el("adminUsersList");
       if (!usersWrap) return;
 
-      const filtered = _applyUsersFilter(_usersCache);
+      const filteredUsers = _applyUsersFilter(_usersCache);
 
       usersWrap.innerHTML =
-        filtered.length === 0
+        filteredUsers.length === 0
           ? `<div style="color:#6b7280; font-size:0.9rem;">Sin usuarios.</div>`
-          : filtered
+          : filteredUsers
               .map((u) => {
                 const uid = u.id;
                 const email = u.email || "";
@@ -718,10 +709,13 @@
 
                       <div style="margin-top:8px;">
                         <label style="font-size:0.85rem; color:#6b7280;">Alias / apodo</label>
-                        <input class="form-control" style="max-width:260px;"
+                        <input
                           data-alias-input="${escapeHtml(uid)}"
+                          type="text"
                           placeholder="Ej: Juan (Obra X)"
-                          value="${escapeHtml(aliasVal)}" />
+                          value="${escapeHtml(aliasVal)}"
+                          style="max-width:260px;"
+                        />
                       </div>
 
                       <div style="font-size:0.85rem; color:#6b7280; margin-top:6px;">
@@ -815,8 +809,8 @@
                         <label style="font-size:0.85rem; color:#6b7280;">Export técnico (Documentación)</label>
                         <div style="display:flex; gap:8px; align-items:center;">
                           <input type="checkbox" data-doc-export="${escapeHtml(uid)}" ${
-                  exportTec ? "checked" : ""
-                } />
+                    exportTec ? "checked" : ""
+                  } />
                           <span style="font-size:0.85rem; color:#6b7280;">exportTecnico</span>
                         </div>
                       </div>
@@ -838,30 +832,34 @@
               .join("");
     });
 
-    // ✅ NUEVO: guardar alias (blur) sin recargar toda la lista
-    container.addEventListener("blur", async (ev) => {
-      const inp = ev.target?.closest?.("input[data-alias-input]");
-      if (!inp) return;
+    // ✅ guardar alias al salir del input (blur)
+    container.addEventListener(
+      "blur",
+      async (ev) => {
+        const inp = ev.target?.closest?.("input[data-alias-input]");
+        if (!inp) return;
 
-      const uid = inp.getAttribute("data-alias-input");
-      const alias = inp.value || "";
+        const uid = inp.getAttribute("data-alias-input");
+        const alias = inp.value || "";
 
-      try {
-        await setUserAlias(uid, alias);
+        try {
+          await setUserAlias(uid, alias);
 
-        // actualiza cache local para que el buscador refleje sin nueva lectura
-        const ix = _usersCache.findIndex((u) => String(u.id) === String(uid));
-        if (ix >= 0) {
-          _usersCache[ix].alias = String(alias || "").trim() || null;
-          _usersCache[ix].aliasLower = _usersCache[ix].alias
-            ? _usersCache[ix].alias.toLowerCase()
-            : null;
+          // actualizar cache local (para buscador)
+          const ix = _usersCache.findIndex((u) => String(u.id) === String(uid));
+          if (ix >= 0) {
+            _usersCache[ix].alias = String(alias || "").trim() || null;
+            _usersCache[ix].aliasLower = _usersCache[ix].alias
+              ? _usersCache[ix].alias.toLowerCase()
+              : null;
+          }
+        } catch (e) {
+          console.error("setUserAlias error:", e);
+          alert("No se pudo guardar el alias.");
         }
-      } catch (e) {
-        console.error("setUserAlias error:", e);
-        alert("No se pudo guardar el alias.");
-      }
-    }, true);
+      },
+      true
+    );
 
     container.addEventListener("click", async (ev) => {
       const btn = ev.target?.closest?.("button[data-action]");
@@ -905,7 +903,6 @@
           return;
         }
 
-        // ✅ NUEVO: borrar usuario
         if (action === "deleteUser") {
           if (String(id) === String(appState?.user?.uid || "")) {
             alert("No puedes borrarte a ti mismo.");
@@ -952,7 +949,6 @@
 
           await refresh();
 
-          // ✅ CERRAR PANEL TRAS GUARDAR
           const panel = container.querySelector(`[data-perms-panel="${id}"]`);
           if (panel) panel.style.display = "none";
 
@@ -987,7 +983,6 @@
 
           const link = out?.resetLink || "";
           if (link) {
-            // fácil de copiar
             window.prompt("Reset link (cópialo y envíaselo al usuario):", link);
             alert("Invitación creada (Auth + Firestore). Reset link generado.");
           } else {
@@ -1078,7 +1073,6 @@
       <div class="page-title" style="margin-top:18px; font-size:1.05rem;">Invitaciones</div>
       <div id="adminInvitesList"></div>
 
-      <!-- ✅ NUEVO: buscador (sin cambiar diseño, solo un bloque card-like minimal) -->
       <div class="card" style="margin-top:18px;">
         <div class="card-header">Buscar usuarios</div>
         <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
