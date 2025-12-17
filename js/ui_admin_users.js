@@ -13,29 +13,17 @@
     "SUPER_ADMIN",
   ];
 
-  let _cacheUsers = [];
-  let _cacheInvites = [];
-  let _searchTerm = "";
-
   function normalizeRole(r) {
     return String(r || "").trim().toUpperCase();
   }
 
-  function normalizeAlias(a) {
-    return String(a || "").trim();
-  }
-
-  function lower(s) {
-    return String(s || "").toLowerCase();
-  }
-
   // ==========================
-  // Capabilities (SIN CAMBIOS)
+  // Capabilities DUAL (legacy + v2)
   // ==========================
   function buildCapabilitiesForRoleDual(role) {
-    /* === TU CÓDIGO ORIGINAL SIN CAMBIOS === */
     const r = normalizeRole(role);
 
+    // Legacy
     const legacy = {
       views: {
         proyecto: false,
@@ -57,6 +45,7 @@
       },
     };
 
+    // v2 pactado
     const v2 = {
       pages: {
         proyecto: false,
@@ -69,8 +58,13 @@
         docGestion: false,
         usuarios: false,
       },
-      documentacion: { exportTecnico: false },
-      prescripcion: { templates: "readOnly", extraRefs: "readOnly" },
+      documentacion: {
+        exportTecnico: false,
+      },
+      prescripcion: {
+        templates: "readOnly",
+        extraRefs: "readOnly",
+      },
     };
 
     function allowView(k) {
@@ -97,6 +91,7 @@
       v2.pages.prescripcion = "view";
       v2.prescripcion.templates = "full";
       v2.prescripcion.extraRefs = "full";
+
       return { ...legacy, ...v2 };
     }
 
@@ -108,7 +103,17 @@
       allowView("tarifas");
       allowView("documentacion");
       allowView("docGestion");
+
+      legacy.features.tarifasWrite = false;
+      legacy.features.docExportTecnico = false;
       legacy.features.docModo = "commercial";
+
+      v2.pages.documentacion = "commercial";
+      v2.documentacion.exportTecnico = false;
+      v2.pages.prescripcion = "none";
+      v2.prescripcion.templates = "readOnly";
+      v2.prescripcion.extraRefs = "readOnly";
+
       return { ...legacy, ...v2 };
     }
 
@@ -120,8 +125,19 @@
       allowView("tarifas");
       allowView("documentacion");
       allowView("docGestion");
-      legacy.features.docModo = "technical";
+
+      legacy.features.tarifasWrite = false;
       legacy.features.docExportTecnico = true;
+      legacy.features.docModo = "technical";
+      legacy.features.prescTemplatesWrite = true;
+      legacy.features.prescExtraRefsWrite = true;
+
+      v2.pages.documentacion = "technical";
+      v2.documentacion.exportTecnico = true;
+      v2.pages.prescripcion = "none";
+      v2.prescripcion.templates = "full";
+      v2.prescripcion.extraRefs = "full";
+
       return { ...legacy, ...v2 };
     }
 
@@ -134,23 +150,92 @@
       allowView("documentacion");
       allowView("prescripcion");
       allowView("docGestion");
-      legacy.features.docModo = "technical";
+
+      legacy.features.tarifasWrite = false;
       legacy.features.docExportTecnico = true;
+      legacy.features.docModo = "technical";
+      legacy.features.prescTemplatesWrite = false;
+      legacy.features.prescExtraRefsWrite = false;
+
+      v2.pages.documentacion = "technical";
+      v2.documentacion.exportTecnico = true;
+      v2.pages.prescripcion = "view";
+      v2.prescripcion.templates = "readOnly";
+      v2.prescripcion.extraRefs = "readOnly";
+
       return { ...legacy, ...v2 };
     }
 
     if (r === "DOC_MANAGER") {
       allowView("documentacion");
       allowView("docGestion");
+
       legacy.features.docModo = "technical";
+      legacy.features.docExportTecnico = false;
+
+      v2.pages.documentacion = "technical";
+      v2.documentacion.exportTecnico = false;
+      v2.pages.prescripcion = "none";
+      v2.prescripcion.templates = "readOnly";
+      v2.prescripcion.extraRefs = "readOnly";
+
       return { ...legacy, ...v2 };
     }
 
     return { ...legacy, ...v2 };
   }
 
+  function normalizeCapabilitiesDual(caps, role) {
+    const base = buildCapabilitiesForRoleDual(role);
+    const out = { ...(caps || {}) };
+
+    if (!out.views) out.views = base.views;
+    if (!out.features) out.features = base.features;
+
+    if (!out.pages) out.pages = base.pages;
+    if (!out.documentacion) out.documentacion = base.documentacion;
+    if (!out.prescripcion) out.prescripcion = base.prescripcion;
+
+    return out;
+  }
+
+  function syncLegacyFromV2(caps) {
+    const out = { ...(caps || {}) };
+
+    out.views = out.views || {};
+    out.features = out.features || {};
+
+    const pages = out.pages || {};
+    const doc = out.documentacion || {};
+    const presc = out.prescripcion || {};
+
+    Object.keys(pages).forEach((k) => {
+      const val = pages[k];
+      if (typeof val === "boolean") out.views[k] = val;
+      else if (typeof val === "string") out.views[k] = val !== "none";
+      else out.views[k] = !!val;
+    });
+
+    if (pages.tarifas !== undefined) out.views.tarifas = pages.tarifas !== "none";
+
+    if (pages.documentacion) {
+      out.views.documentacion = pages.documentacion !== "none";
+      out.features.docModo = pages.documentacion;
+    }
+
+    if (pages.prescripcion) out.views.prescripcion = pages.prescripcion !== "none";
+
+    out.features.docExportTecnico = !!doc.exportTecnico;
+
+    out.features.prescTemplatesWrite = presc.templates === "full";
+    out.features.prescExtraRefsWrite = presc.extraRefs === "full";
+
+    return out;
+  }
+
   function isSuperAdmin() {
-    return normalizeRole(appState?.user?.role) === "SUPER_ADMIN";
+    const role = normalizeRole(appState?.user?.role);
+    return role === "SUPER_ADMIN";
   }
 
   function el(id) {
@@ -161,151 +246,859 @@
     return String(str ?? "")
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
   }
 
-  async function loadOnce() {
-    const [u, i] = await Promise.all([
-      db.collection("users").orderBy("updatedAt", "desc").limit(100).get(),
+  function formatDate(ts) {
+    try {
+      if (!ts) return "";
+      const d = ts.toDate ? ts.toDate() : new Date(ts);
+      return d.toLocaleString();
+    } catch (_) {
+      return "";
+    }
+  }
+
+  // ==========================
+  // ✅ NUEVO: estado local para filtro (sin lecturas extra)
+  // ==========================
+  let _usersCache = [];
+  let _invitesCache = [];
+  let _usersSearch = "";
+
+  function _norm(s) {
+    return String(s || "").trim().toLowerCase();
+  }
+
+  async function loadUsersAndInvitesOnce() {
+    const [usersSnap, invitesSnap] = await Promise.all([
+      db.collection("users").orderBy("updatedAt", "desc").limit(50).get(),
       db.collection("invites").orderBy("createdAt", "desc").limit(50).get(),
     ]);
 
-    _cacheUsers = u.docs.map((d) => ({ id: d.id, ...d.data() }));
-    _cacheInvites = i.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const users = [];
+    usersSnap.forEach((doc) => users.push({ id: doc.id, ...(doc.data() || {}) }));
+
+    const invites = [];
+    invitesSnap.forEach((doc) => invites.push({ id: doc.id, ...(doc.data() || {}) }));
+
+    return { users, invites };
   }
 
   // ==========================
-  // NUEVO: update alias
+  // ✅ NUEVO: guardar alias/apodo
   // ==========================
-  async function updateUserAlias(uid, alias) {
-    const a = normalizeAlias(alias);
-    await db.collection("users").doc(uid).set(
-      {
-        alias: a || null,
-        aliasLower: a ? lower(a) : null,
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      },
-      { merge: true }
-    );
+  async function setUserAlias(uid, alias) {
+    const a = String(alias || "").trim();
+    await db
+      .collection("users")
+      .doc(uid)
+      .set(
+        {
+          alias: a || null,
+          aliasLower: a ? a.toLowerCase() : null,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
   }
 
   // ==========================
-  // NUEVO: borrar usuario (CF)
+  // ✅ NUEVO: borrar usuario (Cloud Function)
   // ==========================
   async function deleteUser(uid) {
+    if (!firebase?.functions) {
+      throw new Error("Firebase Functions no está disponible en el cliente.");
+    }
     const fn =
-      window.functions && typeof window.functions.httpsCallable === "function"
+      (window.functions && typeof window.functions.httpsCallable === "function"
         ? window.functions
-        : firebase.functions();
+        : firebase.functions());
     const call = fn.httpsCallable("adminDeleteUser");
-    await call({ uid });
+    const resp = await call({ uid });
+    return resp?.data || null;
   }
 
-  function render() {
-    const usersWrap = el("adminUsersList");
-    if (!usersWrap) return;
+  // ==========================
+  // ✅ NUEVO: createInvite via Cloud Function (Callable)
+  // ==========================
+  async function createInvite({ email, role }) {
+    const cleanEmail = String(email || "").trim().toLowerCase();
+    const cleanRole = normalizeRole(role) || "ACCOUNT_MANAGER";
 
-    const term = lower(_searchTerm);
+    // fallback: si no hay auth/cargado aún
+    if (!firebase?.functions) {
+      throw new Error("Firebase Functions no está disponible en el cliente.");
+    }
 
-    const users = _cacheUsers.filter((u) => {
-      if (!term) return true;
-      return (
-        lower(u.email).includes(term) ||
-        lower(u.alias).includes(term)
-      );
+    const fn =
+      (window.functions && typeof window.functions.httpsCallable === "function"
+        ? window.functions
+        : firebase.functions());
+
+    const call = fn.httpsCallable("adminCreateInvite");
+
+    const resp = await call({
+      email: cleanEmail,
+      role: cleanRole,
+      // si luego tienes URL real, la pasas aquí desde UI/config
+      // continueUrl: "https://TU-DOMINIO/..."
     });
 
-    usersWrap.innerHTML =
-      users.length === 0
-        ? `<div style="color:#6b7280;">Sin usuarios.</div>`
-        : users
-            .map((u) => {
-              const uid = u.id;
-              const role = normalizeRole(u.role);
-              return `
-              <div class="card" style="margin-top:10px;">
-                <div style="display:flex; justify-content:space-between; gap:12px;">
-                  <div>
-                    <div style="font-weight:700;">${escapeHtml(u.email)}</div>
-                    <div style="font-size:0.85rem;">UID: ${escapeHtml(uid)}</div>
+    return resp?.data || null;
+  }
+
+  async function updateUserRole(uid, role) {
+    const cleanRole = normalizeRole(role);
+    const capabilities = buildCapabilitiesForRoleDual(cleanRole);
+
+    await db
+      .collection("users")
+      .doc(uid)
+      .set(
+        {
+          role: cleanRole,
+          capabilities,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+  }
+
+  async function updateUserCapabilities(uid, role, partialCapsV2) {
+    const base = normalizeCapabilitiesDual({}, role);
+    const merged = {
+      ...base,
+      ...(partialCapsV2 || {}),
+      pages: { ...(base.pages || {}), ...((partialCapsV2 && partialCapsV2.pages) || {}) },
+      documentacion: {
+        ...(base.documentacion || {}),
+        ...((partialCapsV2 && partialCapsV2.documentacion) || {}),
+      },
+      prescripcion: {
+        ...(base.prescripcion || {}),
+        ...((partialCapsV2 && partialCapsV2.prescripcion) || {}),
+      },
+    };
+
+    const synced = syncLegacyFromV2(merged);
+
+    await db
+      .collection("users")
+      .doc(uid)
+      .set(
+        {
+          capabilities: synced,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+
+    return synced;
+  }
+
+  async function setUserActive(uid, active) {
+    await db
+      .collection("users")
+      .doc(uid)
+      .set(
+        {
+          active: !!active,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+  }
+
+  async function deleteInvite(inviteId) {
+    await db.collection("invites").doc(inviteId).delete();
+  }
+
+  function safeGetUserCapsV2(u) {
+    const role = normalizeRole(u.role);
+    return normalizeCapabilitiesDual(u.capabilities || {}, role);
+  }
+
+  // ✅ aplicar cambios en vivo si editas tu propio usuario
+  function applyLivePermissionsIfSelf(uid, { role, capabilities } = {}) {
+    try {
+      if (!uid || !appState?.user?.uid) return;
+      if (String(uid) !== String(appState.user.uid)) return;
+
+      if (role) appState.user.role = normalizeRole(role);
+      if (capabilities) appState.user.capabilities = capabilities;
+
+      if (typeof window.applyShellPermissions === "function" && appState.user.capabilities) {
+        window.applyShellPermissions(appState.user.capabilities);
+      }
+
+      if (typeof window.setCurrentView === "function") {
+        const current = appState.currentView || "proyecto";
+        window.setCurrentView(current);
+      }
+    } catch (e) {
+      console.warn("applyLivePermissionsIfSelf error:", e);
+    }
+  }
+
+  function _applyUsersFilter(users) {
+    const t = _norm(_usersSearch);
+    if (!t) return users;
+
+    return (users || []).filter((u) => {
+      const email = _norm(u.email);
+      const alias = _norm(u.alias || u.aliasLower);
+      return email.includes(t) || alias.includes(t);
+    });
+  }
+
+  async function refresh() {
+    const status = el("adminUsersStatus");
+    const usersWrap = el("adminUsersList");
+    const invitesWrap = el("adminInvitesList");
+
+    if (status) status.textContent = "Cargando…";
+
+    try {
+      const { users, invites } = await loadUsersAndInvitesOnce();
+
+      // cache para el buscador (sin más lecturas)
+      _usersCache = users || [];
+      _invitesCache = invites || [];
+
+      if (invitesWrap) {
+        invitesWrap.innerHTML =
+          invites.length === 0
+            ? `<div style="color:#6b7280; font-size:0.9rem;">Sin invitaciones.</div>`
+            : invites
+                .map((inv) => {
+                  const exp = inv.expiresAt ? formatDate(inv.expiresAt) : "";
+                  return `
+                  <div class="card" style="margin-top:10px;">
+                    <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
+                      <div>
+                        <div style="font-weight:700;">${escapeHtml(inv.email || "")}</div>
+                        <div style="font-size:0.85rem; color:#6b7280;">
+                          Rol: <b>${escapeHtml(inv.role || "")}</b> · Estado: <b>${escapeHtml(inv.status || "")}</b>
+                        </div>
+                        <div style="font-size:0.85rem; color:#6b7280;">Caduca: ${escapeHtml(exp)}</div>
+                      </div>
+                      <div style="display:flex; gap:8px;">
+                        <button class="btn btn-secondary btn-sm" data-action="deleteInvite" data-id="${escapeHtml(
+                          inv.id
+                        )}">Borrar</button>
+                      </div>
+                    </div>
+                  </div>
+                `;
+                })
+                .join("");
+      }
+
+      const filteredUsers = _applyUsersFilter(users);
+
+      if (usersWrap) {
+        usersWrap.innerHTML =
+          filteredUsers.length === 0
+            ? `<div style="color:#6b7280; font-size:0.9rem;">Sin usuarios.</div>`
+            : filteredUsers
+                .map((u) => {
+                  const uid = u.id;
+                  const email = u.email || "";
+                  const role = normalizeRole(u.role) || "";
+                  const active = u.active !== false;
+
+                  const roleOptions = ROLES.map(
+                    (r) =>
+                      `<option value="${r}" ${r === role ? "selected" : ""}>${r}</option>`
+                  ).join("");
+
+                  const caps = safeGetUserCapsV2(u);
+                  const p = caps.pages || {};
+                  const docMode = p.documentacion || "none";
+                  const tarifasMode = p.tarifas || "none";
+                  const prescPage = p.prescripcion || "none";
+                  const exportTec = !!caps.documentacion?.exportTecnico;
+                  const prescTpl = caps.prescripcion?.templates || "readOnly";
+                  const prescExtra = caps.prescripcion?.extraRefs || "readOnly";
+
+                  const aliasVal = u.alias || "";
+
+                  return `
+                  <div class="card" style="margin-top:10px;">
+                    <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
+                      <div>
+                        <div style="font-weight:700;">${escapeHtml(email)}</div>
+                        <div style="font-size:0.85rem; color:#6b7280;">UID: ${escapeHtml(uid)}</div>
+
+                        <!-- ✅ NUEVO: alias/apodo (manteniendo diseño: misma columna info) -->
+                        <div style="margin-top:8px;">
+                          <label style="font-size:0.85rem; color:#6b7280;">Alias / apodo</label>
+                          <input class="form-control" style="max-width:260px;"
+                            data-alias-input="${escapeHtml(uid)}"
+                            placeholder="Ej: Juan (Obra X)"
+                            value="${escapeHtml(aliasVal)}" />
+                        </div>
+
+                        <div style="font-size:0.85rem; color:#6b7280; margin-top:6px;">
+                          Activo: <b style="color:${active ? "#16a34a" : "#ef4444"};">${
+                    active ? "Sí" : "No"
+                  }</b>
+                        </div>
+                      </div>
+
+                      <div style="min-width:320px; display:flex; flex-direction:column; gap:10px;">
+                        <div style="display:flex; gap:8px; align-items:center;">
+                          <label style="font-size:0.85rem; color:#6b7280; min-width:44px;">Rol</label>
+                          <select class="form-control" data-role-select="${escapeHtml(uid)}">
+                            ${roleOptions}
+                          </select>
+                          <button class="btn btn-primary btn-sm" data-action="saveRole" data-id="${escapeHtml(
+                            uid
+                          )}">Guardar</button>
+                        </div>
+
+                        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                          <button class="btn btn-secondary btn-sm" data-action="toggleActive" data-id="${escapeHtml(
+                            uid
+                          )}" data-active="${active ? "1" : "0"}">
+                            ${active ? "Desactivar" : "Activar"}
+                          </button>
+
+                          <button class="btn btn-secondary btn-sm" data-action="togglePerms" data-id="${escapeHtml(
+                            uid
+                          )}">
+                            Permisos (v2)
+                          </button>
+
+                          <!-- ✅ NUEVO: borrar usuario (mismo bloque de botones, sin romper diseño) -->
+                          <button class="btn btn-secondary btn-sm" data-action="deleteUser" data-id="${escapeHtml(
+                            uid
+                          )}">
+                            Borrar usuario
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="card" style="margin-top:10px; padding:12px; display:none;" data-perms-panel="${escapeHtml(
+                      uid
+                    )}">
+                      <div style="font-weight:700; margin-bottom:8px;">Permisos (v2)</div>
+
+                      <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
+                        <div style="min-width:220px;">
+                          <label style="font-size:0.85rem; color:#6b7280;">Documentación</label>
+                          <select class="form-control" data-doc-mode="${escapeHtml(uid)}">
+                            <option value="none" ${docMode === "none" ? "selected" : ""}>none</option>
+                            <option value="commercial" ${docMode === "commercial" ? "selected" : ""}>commercial</option>
+                            <option value="technical" ${docMode === "technical" ? "selected" : ""}>technical</option>
+                          </select>
+                        </div>
+
+                        <div style="min-width:220px;">
+                          <label style="font-size:0.85rem; color:#6b7280;">Tarifas</label>
+                          <select class="form-control" data-tarifas-mode="${escapeHtml(uid)}">
+                            <option value="none" ${tarifasMode === "none" ? "selected" : ""}>none</option>
+                            <option value="view" ${tarifasMode === "view" ? "selected" : ""}>view</option>
+                          </select>
+                        </div>
+
+                        <div style="min-width:220px;">
+                          <label style="font-size:0.85rem; color:#6b7280;">Prescripción (página)</label>
+                          <select class="form-control" data-presc-page="${escapeHtml(uid)}">
+                            <option value="none" ${prescPage === "none" ? "selected" : ""}>none</option>
+                            <option value="view" ${prescPage === "view" ? "selected" : ""}>view</option>
+                          </select>
+                        </div>
+
+                        <div style="min-width:220px;">
+                          <label style="font-size:0.85rem; color:#6b7280;">Prescripción · Plantillas</label>
+                          <select class="form-control" data-presc-templates="${escapeHtml(uid)}">
+                            <option value="readOnly" ${prescTpl === "readOnly" ? "selected" : ""}>readOnly</option>
+                            <option value="full" ${prescTpl === "full" ? "selected" : ""}>full</option>
+                          </select>
+                        </div>
+
+                        <div style="min-width:220px;">
+                          <label style="font-size:0.85rem; color:#6b7280;">Prescripción · Extra refs</label>
+                          <select class="form-control" data-presc-extrarefs="${escapeHtml(uid)}">
+                            <option value="readOnly" ${prescExtra === "readOnly" ? "selected" : ""}>readOnly</option>
+                            <option value="full" ${prescExtra === "full" ? "selected" : ""}>full</option>
+                          </select>
+                        </div>
+
+                        <div style="min-width:240px;">
+                          <label style="font-size:0.85rem; color:#6b7280;">Export técnico (Documentación)</label>
+                          <div style="display:flex; gap:8px; align-items:center;">
+                            <input type="checkbox" data-doc-export="${escapeHtml(uid)}" ${
+                    exportTec ? "checked" : ""
+                  } />
+                            <span style="font-size:0.85rem; color:#6b7280;">exportTecnico</span>
+                          </div>
+                        </div>
+
+                        <div style="display:flex; gap:8px;">
+                          <button class="btn btn-primary btn-sm" data-action="savePerms" data-id="${escapeHtml(
+                            uid
+                          )}">Guardar permisos</button>
+                        </div>
+                      </div>
+
+                      <div style="margin-top:10px; font-size:0.82rem; color:#6b7280;">
+                        Nota: al guardar permisos v2, también se sincroniza legacy (views/features) para compatibilidad.
+                      </div>
+                    </div>
+                  </div>
+                `;
+                })
+                .join("");
+      }
+
+      if (status) status.textContent = "OK";
+    } catch (e) {
+      console.error("AdminUsers refresh error:", e);
+      if (status) status.textContent = "Error cargando datos.";
+    }
+  }
+
+  function wireActions(container) {
+    if (!container || container._wiredAdminUsers) return;
+    container._wiredAdminUsers = true;
+
+    // ✅ NUEVO: buscador (input)
+    container.addEventListener("input", (ev) => {
+      const inp = ev.target?.closest?.("#adminUsersSearch");
+      if (!inp) return;
+      _usersSearch = inp.value || "";
+      // re-render sin tocar Firestore: reutiliza cache
+      // (llamamos a refresh() para reutilizar el mismo render ya implementado)
+      // pero sin lecturas extra: refresh() lee; así que hacemos render local:
+      // solución mínima: render local = reusar refresh con cache? => hacemos un render local aquí.
+      // Para cambios mínimos, hacemos una mini-reconstrucción llamando a refresh pero NO queremos lecturas.
+      // Por eso: forzamos un "render" manual usando el último cache.
+      const usersWrap = el("adminUsersList");
+      if (!usersWrap) return;
+
+      const filtered = _applyUsersFilter(_usersCache);
+
+      usersWrap.innerHTML =
+        filtered.length === 0
+          ? `<div style="color:#6b7280; font-size:0.9rem;">Sin usuarios.</div>`
+          : filtered
+              .map((u) => {
+                const uid = u.id;
+                const email = u.email || "";
+                const role = normalizeRole(u.role) || "";
+                const active = u.active !== false;
+
+                const roleOptions = ROLES.map(
+                  (r) =>
+                    `<option value="${r}" ${r === role ? "selected" : ""}>${r}</option>`
+                ).join("");
+
+                const caps = safeGetUserCapsV2(u);
+                const p = caps.pages || {};
+                const docMode = p.documentacion || "none";
+                const tarifasMode = p.tarifas || "none";
+                const prescPage = p.prescripcion || "none";
+                const exportTec = !!caps.documentacion?.exportTecnico;
+                const prescTpl = caps.prescripcion?.templates || "readOnly";
+                const prescExtra = caps.prescripcion?.extraRefs || "readOnly";
+                const aliasVal = u.alias || "";
+
+                return `
+                <div class="card" style="margin-top:10px;">
+                  <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
+                    <div>
+                      <div style="font-weight:700;">${escapeHtml(email)}</div>
+                      <div style="font-size:0.85rem; color:#6b7280;">UID: ${escapeHtml(uid)}</div>
+
+                      <div style="margin-top:8px;">
+                        <label style="font-size:0.85rem; color:#6b7280;">Alias / apodo</label>
+                        <input class="form-control" style="max-width:260px;"
+                          data-alias-input="${escapeHtml(uid)}"
+                          placeholder="Ej: Juan (Obra X)"
+                          value="${escapeHtml(aliasVal)}" />
+                      </div>
+
+                      <div style="font-size:0.85rem; color:#6b7280; margin-top:6px;">
+                        Activo: <b style="color:${active ? "#16a34a" : "#ef4444"};">${
+                  active ? "Sí" : "No"
+                }</b>
+                      </div>
+                    </div>
+
+                    <div style="min-width:320px; display:flex; flex-direction:column; gap:10px;">
+                      <div style="display:flex; gap:8px; align-items:center;">
+                        <label style="font-size:0.85rem; color:#6b7280; min-width:44px;">Rol</label>
+                        <select class="form-control" data-role-select="${escapeHtml(uid)}">
+                          ${roleOptions}
+                        </select>
+                        <button class="btn btn-primary btn-sm" data-action="saveRole" data-id="${escapeHtml(
+                          uid
+                        )}">Guardar</button>
+                      </div>
+
+                      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                        <button class="btn btn-secondary btn-sm" data-action="toggleActive" data-id="${escapeHtml(
+                          uid
+                        )}" data-active="${active ? "1" : "0"}">
+                          ${active ? "Desactivar" : "Activar"}
+                        </button>
+
+                        <button class="btn btn-secondary btn-sm" data-action="togglePerms" data-id="${escapeHtml(
+                          uid
+                        )}">
+                          Permisos (v2)
+                        </button>
+
+                        <button class="btn btn-secondary btn-sm" data-action="deleteUser" data-id="${escapeHtml(
+                          uid
+                        )}">
+                          Borrar usuario
+                        </button>
+                      </div>
+                    </div>
                   </div>
 
-                  <div style="min-width:360px; display:flex; flex-direction:column; gap:8px;">
-                    <input
-                      placeholder="Alias / apodo"
-                      value="${escapeHtml(u.alias || "")}"
-                      data-alias="${escapeHtml(uid)}"
-                    />
+                  <div class="card" style="margin-top:10px; padding:12px; display:none;" data-perms-panel="${escapeHtml(
+                    uid
+                  )}">
+                    <div style="font-weight:700; margin-bottom:8px;">Permisos (v2)</div>
 
-                    <div style="display:flex; gap:8px;">
-                      <select data-role="${escapeHtml(uid)}">
-                        ${ROLES.map(
-                          (r) =>
-                            `<option value="${r}" ${
-                              r === role ? "selected" : ""
-                            }>${r}</option>`
-                        ).join("")}
-                      </select>
+                    <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
+                      <div style="min-width:220px;">
+                        <label style="font-size:0.85rem; color:#6b7280;">Documentación</label>
+                        <select class="form-control" data-doc-mode="${escapeHtml(uid)}">
+                          <option value="none" ${docMode === "none" ? "selected" : ""}>none</option>
+                          <option value="commercial" ${docMode === "commercial" ? "selected" : ""}>commercial</option>
+                          <option value="technical" ${docMode === "technical" ? "selected" : ""}>technical</option>
+                        </select>
+                      </div>
 
-                      <button class="btn btn-primary btn-sm" data-save-role="${escapeHtml(
-                        uid
-                      )}">Guardar</button>
+                      <div style="min-width:220px;">
+                        <label style="font-size:0.85rem; color:#6b7280;">Tarifas</label>
+                        <select class="form-control" data-tarifas-mode="${escapeHtml(uid)}">
+                          <option value="none" ${tarifasMode === "none" ? "selected" : ""}>none</option>
+                          <option value="view" ${tarifasMode === "view" ? "selected" : ""}>view</option>
+                        </select>
+                      </div>
 
-                      <button class="btn btn-danger btn-sm" data-delete-user="${escapeHtml(
-                        uid
-                      )}">Borrar</button>
+                      <div style="min-width:220px;">
+                        <label style="font-size:0.85rem; color:#6b7280;">Prescripción (página)</label>
+                        <select class="form-control" data-presc-page="${escapeHtml(uid)}">
+                          <option value="none" ${prescPage === "none" ? "selected" : ""}>none</option>
+                          <option value="view" ${prescPage === "view" ? "selected" : ""}>view</option>
+                        </select>
+                      </div>
+
+                      <div style="min-width:220px;">
+                        <label style="font-size:0.85rem; color:#6b7280;">Prescripción · Plantillas</label>
+                        <select class="form-control" data-presc-templates="${escapeHtml(uid)}">
+                          <option value="readOnly" ${prescTpl === "readOnly" ? "selected" : ""}>readOnly</option>
+                          <option value="full" ${prescTpl === "full" ? "selected" : ""}>full</option>
+                        </select>
+                      </div>
+
+                      <div style="min-width:220px;">
+                        <label style="font-size:0.85rem; color:#6b7280;">Prescripción · Extra refs</label>
+                        <select class="form-control" data-presc-extrarefs="${escapeHtml(uid)}">
+                          <option value="readOnly" ${prescExtra === "readOnly" ? "selected" : ""}>readOnly</option>
+                          <option value="full" ${prescExtra === "full" ? "selected" : ""}>full</option>
+                        </select>
+                      </div>
+
+                      <div style="min-width:240px;">
+                        <label style="font-size:0.85rem; color:#6b7280;">Export técnico (Documentación)</label>
+                        <div style="display:flex; gap:8px; align-items:center;">
+                          <input type="checkbox" data-doc-export="${escapeHtml(uid)}" ${
+                  exportTec ? "checked" : ""
+                } />
+                          <span style="font-size:0.85rem; color:#6b7280;">exportTecnico</span>
+                        </div>
+                      </div>
+
+                      <div style="display:flex; gap:8px;">
+                        <button class="btn btn-primary btn-sm" data-action="savePerms" data-id="${escapeHtml(
+                          uid
+                        )}">Guardar permisos</button>
+                      </div>
+                    </div>
+
+                    <div style="margin-top:10px; font-size:0.82rem; color:#6b7280;">
+                      Nota: al guardar permisos v2, también se sincroniza legacy (views/features) para compatibilidad.
                     </div>
                   </div>
                 </div>
-              </div>
-            `;
-            })
-            .join("");
+              `;
+              })
+              .join("");
+    });
+
+    // ✅ NUEVO: guardar alias (blur) sin recargar toda la lista
+    container.addEventListener("blur", async (ev) => {
+      const inp = ev.target?.closest?.("input[data-alias-input]");
+      if (!inp) return;
+
+      const uid = inp.getAttribute("data-alias-input");
+      const alias = inp.value || "";
+
+      try {
+        await setUserAlias(uid, alias);
+
+        // actualiza cache local para que el buscador refleje sin nueva lectura
+        const ix = _usersCache.findIndex((u) => String(u.id) === String(uid));
+        if (ix >= 0) {
+          _usersCache[ix].alias = String(alias || "").trim() || null;
+          _usersCache[ix].aliasLower = _usersCache[ix].alias
+            ? _usersCache[ix].alias.toLowerCase()
+            : null;
+        }
+      } catch (e) {
+        console.error("setUserAlias error:", e);
+        alert("No se pudo guardar el alias.");
+      }
+    }, true);
+
+    container.addEventListener("click", async (ev) => {
+      const btn = ev.target?.closest?.("button[data-action]");
+      if (!btn) return;
+
+      const action = btn.getAttribute("data-action");
+      const id = btn.getAttribute("data-id");
+
+      try {
+        if (action === "deleteInvite") {
+          await deleteInvite(id);
+          await refresh();
+          return;
+        }
+
+        if (action === "saveRole") {
+          const sel = container.querySelector(`select[data-role-select="${id}"]`);
+          const role = sel ? sel.value : "ACCOUNT_MANAGER";
+
+          await updateUserRole(id, role);
+
+          applyLivePermissionsIfSelf(id, {
+            role,
+            capabilities: buildCapabilitiesForRoleDual(role),
+          });
+
+          await refresh();
+          return;
+        }
+
+        if (action === "toggleActive") {
+          const current = btn.getAttribute("data-active") === "1";
+          await setUserActive(id, !current);
+          await refresh();
+          return;
+        }
+
+        if (action === "togglePerms") {
+          const panel = container.querySelector(`[data-perms-panel="${id}"]`);
+          if (panel) panel.style.display = panel.style.display === "none" ? "block" : "none";
+          return;
+        }
+
+        // ✅ NUEVO: borrar usuario
+        if (action === "deleteUser") {
+          if (String(id) === String(appState?.user?.uid || "")) {
+            alert("No puedes borrarte a ti mismo.");
+            return;
+          }
+          const ok = window.confirm("¿Seguro que quieres BORRAR este usuario? (Auth + Firestore)");
+          if (!ok) return;
+
+          await deleteUser(id);
+          await refresh();
+          alert("Usuario borrado.");
+          return;
+        }
+
+        if (action === "savePerms") {
+          const selRole = container.querySelector(`select[data-role-select="${id}"]`);
+          const role = selRole ? normalizeRole(selRole.value) : "ACCOUNT_MANAGER";
+
+          const docMode = container.querySelector(`select[data-doc-mode="${id}"]`)?.value || "none";
+          const tarifasMode =
+            container.querySelector(`select[data-tarifas-mode="${id}"]`)?.value || "none";
+          const prescPage =
+            container.querySelector(`select[data-presc-page="${id}"]`)?.value || "none";
+          const prescTpl =
+            container.querySelector(`select[data-presc-templates="${id}"]`)?.value || "readOnly";
+          const prescExtra =
+            container.querySelector(`select[data-presc-extrarefs="${id}"]`)?.value || "readOnly";
+          const exportTec =
+            !!container.querySelector(`input[type="checkbox"][data-doc-export="${id}"]`)?.checked;
+
+          const partial = {
+            pages: {
+              tarifas: tarifasMode,
+              documentacion: docMode,
+              prescripcion: prescPage,
+            },
+            documentacion: { exportTecnico: exportTec },
+            prescripcion: { templates: prescTpl, extraRefs: prescExtra },
+          };
+
+          const newCaps = await updateUserCapabilities(id, role, partial);
+
+          applyLivePermissionsIfSelf(id, { role, capabilities: newCaps });
+
+          await refresh();
+
+          // ✅ CERRAR PANEL TRAS GUARDAR
+          const panel = container.querySelector(`[data-perms-panel="${id}"]`);
+          if (panel) panel.style.display = "none";
+
+          alert("Permisos guardados.");
+          return;
+        }
+      } catch (e) {
+        console.error("AdminUsers action error:", e);
+        alert("No se pudo completar la acción.");
+      }
+    });
+
+    const btnCreate = el("btnCreateInvite");
+    if (btnCreate && !btnCreate._wired) {
+      btnCreate._wired = true;
+      btnCreate.addEventListener("click", async (ev) => {
+        ev.preventDefault();
+
+        const email = el("inviteEmail")?.value || "";
+        const role = el("inviteRole")?.value || "ACCOUNT_MANAGER";
+
+        const cleanEmail = String(email).trim().toLowerCase();
+        if (!cleanEmail || !cleanEmail.includes("@")) {
+          alert("Email no válido.");
+          return;
+        }
+
+        try {
+          const out = await createInvite({ email: cleanEmail, role });
+          el("inviteEmail").value = "";
+          await refresh();
+
+          const link = out?.resetLink || "";
+          if (link) {
+            // fácil de copiar
+            window.prompt("Reset link (cópialo y envíaselo al usuario):", link);
+            alert("Invitación creada (Auth + Firestore). Reset link generado.");
+          } else {
+            alert("Invitación creada (Auth + Firestore).");
+          }
+        } catch (e) {
+          console.error("createInvite error:", e);
+          const msg =
+            e?.message ||
+            e?.details ||
+            (typeof e === "string" ? e : "No se pudo crear la invitación.");
+          alert(msg);
+        }
+      });
+    }
+
+    const btnReload = el("btnReloadUsers");
+    if (btnReload && !btnReload._wired) {
+      btnReload._wired = true;
+      btnReload.addEventListener("click", async (ev) => {
+        ev.preventDefault();
+        await refresh();
+      });
+    }
   }
 
-  function wire(container) {
-    container.addEventListener("input", (e) => {
-      if (e.target?.id === "userSearch") {
-        _searchTerm = e.target.value || "";
-        render();
-      }
-    });
-
-    container.addEventListener("change", async (e) => {
-      const uid = e.target?.getAttribute("data-alias");
-      if (uid) {
-        await updateUserAlias(uid, e.target.value);
-      }
-    });
-
-    container.addEventListener("click", async (e) => {
-      const del = e.target?.getAttribute("data-delete-user");
-      if (del) {
-        if (!confirm("¿BORRAR USUARIO DEFINITIVAMENTE?")) return;
-        await deleteUser(del);
-        await loadOnce();
-        render();
-      }
-    });
-  }
-
-  window.renderAdminUsersView = async function () {
-    const c = el("appContent");
-    if (!c) return;
+  // ==========================
+  // Render principal
+  // ==========================
+  window.renderAdminUsersView = function renderAdminUsersView() {
+    const container = document.getElementById("appContent");
+    if (!container) return;
 
     if (!isSuperAdmin()) {
-      c.innerHTML = `<div class="card">Acceso denegado</div>`;
+      container.innerHTML = `
+        <div class="page-title">Usuarios</div>
+        <div class="card">
+          <div class="card-header">Acceso denegado</div>
+          <div style="color:#6b7280; font-size:0.9rem;">
+            Esta página es solo para SUPER_ADMIN.
+          </div>
+        </div>
+      `;
       return;
     }
 
-    c.innerHTML = `
+    container.innerHTML = `
       <div class="page-title">Usuarios</div>
-      <input id="userSearch" placeholder="Buscar por email o alias…" />
+      <div class="page-subtitle">Alta y gestión de roles/permisos.</div>
+
+      <div class="card">
+        <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+          <span>Crear invitación (por defecto: ACCOUNT_MANAGER)</span>
+          <span id="adminUsersStatus" style="font-size:0.85rem; color:#6b7280;">—</span>
+        </div>
+
+        <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
+          <div style="flex:1; min-width:240px;">
+            <label style="font-size:0.85rem; color:#6b7280;">Email</label>
+            <input id="inviteEmail" type="email" placeholder="usuario@empresa.com" />
+          </div>
+
+          <div style="min-width:220px;">
+            <label style="font-size:0.85rem; color:#6b7280;">Rol</label>
+            <select id="inviteRole">
+              ${ROLES.filter((r) => r !== "SUPER_ADMIN")
+                .map(
+                  (r) =>
+                    `<option value="${r}" ${
+                      r === "ACCOUNT_MANAGER" ? "selected" : ""
+                    }>${r}</option>`
+                )
+                .join("")}
+            </select>
+          </div>
+
+          <div style="display:flex; gap:8px;">
+            <button id="btnCreateInvite" class="btn btn-primary">Crear</button>
+            <button id="btnReloadUsers" class="btn btn-secondary">Refrescar</button>
+          </div>
+        </div>
+
+        <div style="margin-top:10px; font-size:0.85rem; color:#6b7280;">
+          Nota: “Crear” llama a Cloud Function (Auth + Firestore) y genera un enlace de reset de contraseña válido 24h.
+        </div>
+      </div>
+
+      <div class="page-title" style="margin-top:18px; font-size:1.05rem;">Invitaciones</div>
+      <div id="adminInvitesList"></div>
+
+      <!-- ✅ NUEVO: buscador (sin cambiar diseño, solo un bloque card-like minimal) -->
+      <div class="card" style="margin-top:18px;">
+        <div class="card-header">Buscar usuarios</div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
+          <div style="flex:1; min-width:240px;">
+            <label style="font-size:0.85rem; color:#6b7280;">Email o alias</label>
+            <input id="adminUsersSearch" type="text" placeholder="Ej: juan / empresa.com" />
+          </div>
+        </div>
+      </div>
+
+      <div class="page-title" style="margin-top:18px; font-size:1.05rem;">Usuarios (Auth ya creado)</div>
       <div id="adminUsersList"></div>
     `;
 
-    wire(c);
-    await loadOnce();
-    render();
+    wireActions(container);
+    refresh();
   };
+
+  console.log(
+    "%cUI Admin Users cargada (ui_admin_users.js)",
+    "color:#0ea5e9; font-weight:600;"
+  );
 })();
