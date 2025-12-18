@@ -2268,22 +2268,29 @@ if (includePresentacion) {
   const dims2 = getDocPageDimensions(doc);
   const pw2 = dims2.width;
 
-  let y2 = marginTop;
-
-  const sectionLabel = ...;
-
-  doc.setFont(...);
-  doc.text(sectionLabel, marginX, y2);
-  doc.setDrawColor(...);
-  doc.line(...);
-
-  y2 += 10;
+  const sectionLabel =
+    idioma === "en"
+      ? "Company introduction"
+      : idioma === "pt"
+      ? "Apresentação da empresa"
+      : "Presentación de empresa";
 
   const bodyText = secciones["presentacion_empresa"] || "";
 
-  drawSalesforceCard({ ... y: y2, title: sectionLabel, ... });
+  // 👇 IMPORTANTÍSIMO: arrancar desde arriba sin header externo
+  drawSalesforceCard({
+    x: marginX,
+    y: marginTop,
+    width: pw2 - marginX * 2,
+    title: sectionLabel,  // 👈 el “encabezado” va dentro de la card
+    body: bodyText,
+    doc,
+    maxBodyWidth: pw2 - marginX * 2 - 16,
+    minHeight: 60,
+    marginTop,
+    marginBottom,
+  });
 }
-
 
 
   // Página 3 – Resumen + Sistema
