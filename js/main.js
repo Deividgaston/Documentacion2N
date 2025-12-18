@@ -6,9 +6,10 @@ appState.currentView = appState.currentView || "proyecto";
 
 const VIEW_STORAGE_KEY = "presup2n_currentView";
 
-// Preferimos sessionStorage para que al cerrar pestaña se reinicie a "proyecto"
-// pero en un refresh se mantenga la pestaña actual.
-// Fallback: si existe en localStorage (versiones antiguas), lo migramos.
+// ==============================
+// Helpers storage
+// ==============================
+
 function _viewStorageGet(key) {
   try {
     const v = window.sessionStorage ? window.sessionStorage.getItem(key) : null;
@@ -53,7 +54,6 @@ function _isViewAllowedSafe(viewKey) {
   const caps = appState?.user?.capabilities;
   if (!caps) return false;
 
-  // Preferimos V2 si existe
   if (caps.pages && typeof caps.pages === "object") {
     const val = caps.pages[v];
     if (val === undefined || val === null) return false;
@@ -62,7 +62,6 @@ function _isViewAllowedSafe(viewKey) {
     return !!val;
   }
 
-  // Legacy
   if (caps.views && typeof caps.views === "object") {
     return !!caps.views[v];
   }
@@ -70,29 +69,72 @@ function _isViewAllowedSafe(viewKey) {
   return false;
 }
 
+// ==============================
+// 🔐 VALIDACIÓN DE INVITACIÓN (m2)
+// ==============================
+
+async function validateInviteIfNeeded() {
+  if (appState._inviteValidated) return;
+  appState._inviteValidated = true;
+
+  try {
+    const user = appState.user;
+    if (!user || !user.email || user.role === "SUPER_ADMIN") return;
+
+    const email = String(user.email).trim().toLowerCase();
+    const inviteId = email.replace(/[^\w.-]+/g, "_");
+
+    const ref = await db.collection("invites").doc(inviteId).get();
+    if (!ref.exists) throw new Error("invite_not_found");
+
+    const inv = ref.data() || {};
+    const now = Date.now();
+    const exp = inv.expiresAt?.toDate?.()?.getTime?.() || 0;
+
+    if (!inv.active || inv.status !== "pending" || exp < now) {
+      throw new Error("invite_invalid");
+    }
+
+    // marcar aceptada (best-effort)
+    ref.ref.set(
+      {
+        status: "accepted",
+        acceptedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+  } catch (e) {
+    console.warn("Invitación no válida:", e.message || e);
+    alert("Tu invitación no es válida o ha caducado.");
+    firebase.auth().signOut();
+  }
+}
+
+// ==============================
+// Router principal
+// ==============================
+
 function setCurrentView(viewKey) {
   viewKey = _normalizeViewKey(viewKey);
 
-  // Si auth aún no está listo, guardamos intención y salimos (evita salto a proyecto al refrescar)
   if (!appState.authReady) {
     appState.pendingView = viewKey;
-    try {
-      _viewStorageSet(VIEW_STORAGE_KEY, viewKey);
-    } catch (e) {
-      console.warn("No se pudo guardar la vista actual en storage:", e);
-    }
+    _viewStorageSet(VIEW_STORAGE_KEY, viewKey);
     return;
   }
 
-  // Si había una vista pendiente, priorízala (p.ej. refresco)
   if (appState.pendingView) {
     viewKey = _normalizeViewKey(appState.pendingView);
     appState.pendingView = null;
   }
 
-  // Bloqueo por permisos
+  // 🔒 Refuerzo explícito para TARIFA
+  if (viewKey === "tarifa" && !_isViewAllowedSafe("tarifa")) {
+    viewKey = "proyecto";
+  }
+
   if (!_isViewAllowedSafe(viewKey)) {
-    // buscar primera vista permitida
     const order = [
       "proyecto",
       "presupuesto",
@@ -110,20 +152,11 @@ function setCurrentView(viewKey) {
   }
 
   appState.currentView = viewKey;
+  _viewStorageSet(VIEW_STORAGE_KEY, viewKey);
 
-  try {
-    _viewStorageSet(VIEW_STORAGE_KEY, viewKey);
-  } catch (e) {
-    console.warn("No se pudo guardar la vista actual en storage:", e);
-  }
-
-  const navLinks = document.querySelectorAll(".top-nav-link[data-view]");
-  navLinks.forEach((link) => {
-    const vRaw = link.getAttribute("data-view");
-    const v = _normalizeViewKey(vRaw);
-
-    if (v === viewKey) link.classList.add("active");
-    else link.classList.remove("active");
+  document.querySelectorAll(".top-nav-link[data-view]").forEach((link) => {
+    const v = _normalizeViewKey(link.getAttribute("data-view"));
+    link.classList.toggle("active", v === viewKey);
   });
 
   updateViewSubtitle(viewKey);
@@ -131,50 +164,27 @@ function setCurrentView(viewKey) {
 }
 
 function updateViewSubtitle(viewKey) {
-  const subtitleEl = document.getElementById("currentViewSubtitle");
-  if (!subtitleEl) return;
+  const el = document.getElementById("currentViewSubtitle");
+  if (!el) return;
 
-  let text = "";
-  switch (viewKey) {
-    case "proyecto":
-      text = "Importa y gestiona el proyecto base desde Excel / Project Designer.";
-      break;
-    case "presupuesto":
-      text = "Edita el presupuesto a partir del proyecto importado.";
-      break;
-    case "simulador":
-      text = "Simula tarifas y descuentos sobre el presupuesto actual.";
-      break;
-    case "tarifa":
-      text = "Consulta la tarifa PVP de 2N y añade partidas al presupuesto.";
-      break;
-    case "tarifas":
-      text = "Gestiona los tipos de tarifa y descuentos avanzados.";
-      break;
-    case "documentacion":
-      text = "Genera la memoria de calidades y documentación del proyecto.";
-      break;
-    case "prescripcion":
-      text = "Vista de prescripción: resumen inteligente de documentación para memorias.";
-      break;
-    case "docGestion":
-      text =
-        "Gestiona la documentación subida: fichas, imágenes, certificados y declaraciones.";
-      break;
-    case "usuarios":
-      text = "Configuración de usuarios y permisos.";
-      break;
-    default:
-      text = "";
-  }
+  const map = {
+    proyecto: "Importa y gestiona el proyecto base desde Excel / Project Designer.",
+    presupuesto: "Edita el presupuesto a partir del proyecto importado.",
+    simulador: "Simula tarifas y descuentos sobre el presupuesto actual.",
+    tarifa: "Consulta la tarifa PVP de 2N y añade partidas al presupuesto.",
+    tarifas: "Gestiona los tipos de tarifa y descuentos avanzados.",
+    documentacion: "Genera la memoria de calidades y documentación del proyecto.",
+    prescripcion: "Vista de prescripción: resumen inteligente de documentación.",
+    docGestion: "Gestiona la documentación subida.",
+    usuarios: "Configuración de usuarios y permisos.",
+  };
 
-  subtitleEl.textContent = text;
+  el.textContent = map[viewKey] || "";
 }
 
 function callIfFn(fnName) {
-  const fn = window[fnName];
-  if (typeof fn === "function") {
-    fn();
+  if (typeof window[fnName] === "function") {
+    window[fnName]();
     return true;
   }
   return false;
@@ -182,108 +192,60 @@ function callIfFn(fnName) {
 
 function renderViewByKey(viewKey) {
   viewKey = _normalizeViewKey(viewKey);
-
-  // Bloqueo por permisos
   if (!appState.authReady) return;
   if (!_isViewAllowedSafe(viewKey)) return;
 
   switch (viewKey) {
-    case "proyecto":
-      callIfFn("renderProyectoView");
-      break;
-
-    case "presupuesto":
-      callIfFn("renderPresupuestoView");
-      break;
-
-    case "simulador":
-      callIfFn("renderSimuladorView");
-      break;
-
+    case "proyecto": callIfFn("renderProyectoView"); break;
+    case "presupuesto": callIfFn("renderPresupuestoView"); break;
+    case "simulador": callIfFn("renderSimuladorView"); break;
     case "tarifa":
       if (!callIfFn("renderTarifaView")) callIfFn("renderTarifa2NView");
       break;
-
     case "tarifas":
       if (!callIfFn("renderTarifasView")) callIfFn("renderTarifasTiposView");
       break;
-
-    case "documentacion":
-      callIfFn("renderDocumentacionView");
-      break;
-
-    case "prescripcion":
-      callIfFn("renderDocPrescripcionView");
-      break;
-
-    case "docGestion":
-      callIfFn("renderDocGestionView");
-      break;
-
-    case "usuarios":
-      callIfFn("renderAdminUsersView");
-      break;
-
-    default:
-      callIfFn("renderProyectoView");
-      break;
+    case "documentacion": callIfFn("renderDocumentacionView"); break;
+    case "prescripcion": callIfFn("renderDocPrescripcionView"); break;
+    case "docGestion": callIfFn("renderDocGestionView"); break;
+    case "usuarios": callIfFn("renderAdminUsersView"); break;
+    default: callIfFn("renderProyectoView");
   }
 }
 
 function initTopbarNavigation() {
-  // guard para no duplicar listeners si se llama 2 veces
   if (appState._mainNavInited) return;
   appState._mainNavInited = true;
 
-  const navLinks = document.querySelectorAll(".top-nav-link[data-view]");
-  navLinks.forEach((link) => {
+  document.querySelectorAll(".top-nav-link[data-view]").forEach((link) => {
     link.addEventListener("click", (ev) => {
       ev.preventDefault();
-      const viewKey = link.getAttribute("data-view");
-      if (!viewKey) return;
-      setCurrentView(viewKey);
+      setCurrentView(link.getAttribute("data-view"));
     });
   });
 }
 
+// ==============================
+// Boot
+// ==============================
+
 document.addEventListener("DOMContentLoaded", () => {
   initTopbarNavigation();
 
-  // Determinar vista inicial (aunque auth aún no esté listo)
-  let initialView = "proyecto";
-  try {
-    const storedView = _viewStorageGet(VIEW_STORAGE_KEY);
-    if (storedView) initialView = storedView;
-    else if (appState.currentView) initialView = appState.currentView;
-  } catch (e) {
-    console.warn("No se pudo leer la vista actual desde storage:", e);
-    initialView = appState.currentView || "proyecto";
-  }
-
+  let initialView = _viewStorageGet(VIEW_STORAGE_KEY) || appState.currentView || "proyecto";
   initialView = _normalizeViewKey(initialView);
 
-  // Guardar intención para que, cuando authReady sea true, NO vuelva a proyecto
   appState.pendingView = initialView;
   appState.currentView = initialView;
 
-  // Si ya hay authReady, render inmediato. Si no, esperamos a authReady con un poll ligero.
-  if (appState.authReady) {
-    setCurrentView(initialView);
-    return;
-  }
-
   const start = Date.now();
-  const maxWaitMs = 15000; // seguridad: no dejar interval infinito
-  const t = setInterval(() => {
+  const t = setInterval(async () => {
     if (appState.authReady) {
       clearInterval(t);
-      // setCurrentView consumirá pendingView y marcará el botón correcto
+      await validateInviteIfNeeded();
       setCurrentView(appState.pendingView || initialView);
-      return;
     }
-    if (Date.now() - start > maxWaitMs) {
-      clearInterval(t);
-    }
+    if (Date.now() - start > 15000) clearInterval(t);
   }, 200);
 });
 
