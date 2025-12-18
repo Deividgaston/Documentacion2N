@@ -116,7 +116,7 @@
       // allowView("tarifa");  // ❌ quitado (manual)
       allowView("tarifas");
       allowView("documentacion");
-      allowView("docGestion");
+      //allowView("docGestion");
 
       legacy.features.tarifasWrite = false;
       legacy.features.docExportTecnico = false;
