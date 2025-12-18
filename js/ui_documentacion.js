@@ -2106,11 +2106,8 @@ async function exportarPDFComercial() {
         const next = lines[i + 1] || "";
         const isLastOfParagraph = !next.trim();
 
-        if (isLastOfParagraph) {
-          doc.text(line, xBody, yy);
-        } else {
-          drawJustifiedLine(doc, line, xBody, yy, maxW);
-        }
+       doc.text(line, xBody, yy);
+
 
         yy += lh;
       }
