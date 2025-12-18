@@ -2274,16 +2274,17 @@ async function exportarPDFComercial() {
         ? "Apresentação da empresa"
         : "Presentación de empresa";
 
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(12);
-    doc.setTextColor(31, 41, 55);
-    doc.text(sectionLabel, marginX, y2);
+    // quitamos el encabezado
+   // doc.setFont("helvetica", "bold");
+    //doc.setFontSize(12);
+    //doc.setTextColor(31, 41, 55);
+    //doc.text(sectionLabel, marginX, y2);
 
-    doc.setDrawColor(209, 213, 219);
-    doc.setLineWidth(0.4);
-    doc.line(marginX, y2 + 2.5, pw2 - marginX, y2 + 2.5);
+    //doc.setDrawColor(209, 213, 219);
+    //doc.setLineWidth(0.4);
+    //doc.line(marginX, y2 + 2.5, pw2 - marginX, y2 + 2.5);
 
-    y2 += 10;
+   // y2 += 10;
 
     const bodyText = secciones["presentacion_empresa"] || "";
 
