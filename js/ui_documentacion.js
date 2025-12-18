@@ -3019,18 +3019,9 @@ function renderDocumentacionView() {
   // - Export técnico SOLO si caps.documentacion.exportTecnico === true
   // ======================================================
 
-  function getCurrentCapsSafe() {
-    // Intentamos varias ubicaciones habituales sin romper nada
-    return (
-      appState?.caps ||
-      appState?.userCaps ||
-      appState?.authCaps ||
-      window?.caps ||
-      window?.userCaps ||
-      window?.authCaps ||
-      null
-    );
-  }
+function getCurrentCapsSafe() {
+  return appState?.user?.capabilities || null;
+}
 
   const caps = getCurrentCapsSafe();
   const canTechMode = caps?.pages?.documentacion === "technical";
