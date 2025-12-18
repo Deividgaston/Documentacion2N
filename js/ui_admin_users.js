@@ -63,7 +63,7 @@
         proyecto: false,
         presupuesto: false,
         simulador: false,
-        tarifa: false,
+        tarifa: false, // ✅ por defecto OFF (se activa por usuario desde permisos)
         tarifas: "none",
         documentacion: "none",
         prescripcion: "none",
@@ -104,6 +104,10 @@
       v2.prescripcion.templates = "full";
       v2.prescripcion.extraRefs = "full";
 
+      // SUPER_ADMIN sí ve tarifa siempre
+      v2.pages.tarifa = true;
+      legacy.views.tarifa = true;
+
       return { ...legacy, ...v2 };
     }
 
@@ -111,7 +115,7 @@
       allowView("proyecto");
       allowView("presupuesto");
       allowView("simulador");
-      allowView("tarifa");
+      // ✅ NO allowView("tarifa") por defecto (se gestiona por checkbox)
       allowView("tarifas");
       allowView("documentacion");
       allowView("docGestion");
@@ -126,6 +130,10 @@
       v2.prescripcion.templates = "readOnly";
       v2.prescripcion.extraRefs = "readOnly";
 
+      // ✅ tarifa OFF por defecto
+      v2.pages.tarifa = false;
+      legacy.views.tarifa = false;
+
       return { ...legacy, ...v2 };
     }
 
@@ -133,7 +141,7 @@
       allowView("proyecto");
       allowView("presupuesto");
       allowView("simulador");
-      allowView("tarifa");
+      // ✅ NO allowView("tarifa") por defecto
       allowView("tarifas");
       allowView("documentacion");
       allowView("docGestion");
@@ -150,6 +158,10 @@
       v2.prescripcion.templates = "full";
       v2.prescripcion.extraRefs = "full";
 
+      // ✅ tarifa OFF por defecto
+      v2.pages.tarifa = false;
+      legacy.views.tarifa = false;
+
       return { ...legacy, ...v2 };
     }
 
@@ -157,7 +169,7 @@
       allowView("proyecto");
       allowView("presupuesto");
       allowView("simulador");
-      allowView("tarifa");
+      // ✅ NO allowView("tarifa") por defecto
       allowView("tarifas");
       allowView("documentacion");
       allowView("prescripcion");
@@ -175,6 +187,10 @@
       v2.prescripcion.templates = "readOnly";
       v2.prescripcion.extraRefs = "readOnly";
 
+      // ✅ tarifa OFF por defecto
+      v2.pages.tarifa = false;
+      legacy.views.tarifa = false;
+
       return { ...legacy, ...v2 };
     }
 
@@ -190,6 +206,10 @@
       v2.pages.prescripcion = "none";
       v2.prescripcion.templates = "readOnly";
       v2.prescripcion.extraRefs = "readOnly";
+
+      // ✅ tarifa OFF por defecto
+      v2.pages.tarifa = false;
+      legacy.views.tarifa = false;
 
       return { ...legacy, ...v2 };
     }
@@ -531,8 +551,8 @@
                   const prescTpl = caps.prescripcion?.templates || "readOnly";
                   const prescExtra = caps.prescripcion?.extraRefs || "readOnly";
 
-                  // ✅ NUEVO: docGestion ON/OFF
                   const docGestionOn = !!p.docGestion;
+                  const tarifa2NOn = !!p.tarifa; // ✅ NUEVO
 
                   const aliasVal = u.alias || "";
 
@@ -610,6 +630,18 @@
                       <div style="font-weight:700; margin-bottom:8px;">Permisos (v2)</div>
 
                       <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
+
+                        <!-- ✅ NUEVO: Tarifa 2N ON/OFF -->
+                        <div style="min-width:240px;">
+                          <label style="font-size:0.85rem; color:#6b7280;">Tarifa 2N (pestaña)</label>
+                          <div style="display:flex; gap:8px; align-items:center;">
+                            <input type="checkbox" data-tarifa2n="${escapeHtml(uid)}" ${
+                              tarifa2NOn ? "checked" : ""
+                            } />
+                            <span style="font-size:0.85rem; color:#6b7280;">pages.tarifa</span>
+                          </div>
+                        </div>
+
                         <div style="min-width:220px;">
                           <label style="font-size:0.85rem; color:#6b7280;">Documentación</label>
                           <select class="form-control" data-doc-mode="${escapeHtml(uid)}">
@@ -631,7 +663,7 @@
                           </select>
                         </div>
 
-                        <!-- ✅ NUEVO: Gestión documentación ON/OFF -->
+                        <!-- ✅ Gestión documentación ON/OFF -->
                         <div style="min-width:240px;">
                           <label style="font-size:0.85rem; color:#6b7280;">Gestión de documentación (pestaña)</label>
                           <div style="display:flex; gap:8px; align-items:center;">
@@ -710,7 +742,7 @@
     if (!container || container._wiredAdminUsers) return;
     container._wiredAdminUsers = true;
 
-    // ✅ buscador (sin lecturas extra)
+    // ✅ buscador
     container.addEventListener("input", (ev) => {
       const inp = ev.target?.closest?.("#adminUsersSearch");
       if (!inp) return;
@@ -718,7 +750,7 @@
       refresh();
     });
 
-    // ✅ guardar alias al salir del input (blur)
+    // ✅ guardar alias (blur)
     container.addEventListener(
       "blur",
       async (ev) => {
@@ -731,7 +763,6 @@
         try {
           await setUserAlias(uid, alias);
 
-          // actualizar cache local (para buscador)
           const ix = _usersCache.findIndex((u) => String(u.id) === String(uid));
           if (ix >= 0) {
             _usersCache[ix].alias = String(alias || "").trim() || null;
@@ -812,6 +843,9 @@
           const selRole = container.querySelector(`select[data-role-select="${id}"]`);
           const role = selRole ? normalizeRole(selRole.value) : "ACCOUNT_MANAGER";
 
+          const tarifa2N =
+            !!container.querySelector(`input[type="checkbox"][data-tarifa2n="${id}"]`)?.checked;
+
           const docMode = container.querySelector(`select[data-doc-mode="${id}"]`)?.value || "none";
           const tarifasMode =
             container.querySelector(`select[data-tarifas-mode="${id}"]`)?.value || "none";
@@ -824,12 +858,12 @@
           const exportTec =
             !!container.querySelector(`input[type="checkbox"][data-doc-export="${id}"]`)?.checked;
 
-          // ✅ NUEVO: docGestion toggle
           const docGestion =
             !!container.querySelector(`input[type="checkbox"][data-doc-gestion="${id}"]`)?.checked;
 
           const partial = {
             pages: {
+              tarifa: tarifa2N,
               tarifas: tarifasMode,
               documentacion: docMode,
               prescripcion: prescPage,
