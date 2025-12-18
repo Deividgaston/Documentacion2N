@@ -3106,14 +3106,8 @@ function getCurrentCapsSafe() {
   const _orig = exportarDocumentacionPDF;
 
   exportarDocumentacionPDF = async function () {
-    const caps =
-      appState?.caps ||
-      appState?.userCaps ||
-      appState?.authCaps ||
-      window?.caps ||
-      window?.userCaps ||
-      window?.authCaps ||
-      null;
+   const caps = appState?.user?.capabilities || null;
+
 
     const canTechMode = caps?.pages?.documentacion === "technical";
     const canExportTech = caps?.documentacion?.exportTecnico === true;
