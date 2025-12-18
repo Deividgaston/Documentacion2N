@@ -69,6 +69,23 @@ function _isViewAllowedSafe(viewKey) {
   return false;
 }
 
+// ✅ Oculta/enseña pestañas según permisos (menú real, no solo router)
+function syncTopbarVisibility() {
+  const links = document.querySelectorAll(".top-nav-link[data-view]");
+  if (!links || !links.length) return;
+
+  links.forEach((link) => {
+    const raw = link.getAttribute("data-view");
+    const v = _normalizeViewKey(raw);
+
+    // Si aún no hay auth/caps, ocultamos todo (evita flashes)
+    const allowed = appState.authReady ? _isViewAllowedSafe(v) : false;
+
+    // Ocultar completamente
+    link.style.display = allowed ? "" : "none";
+  });
+}
+
 // ==============================
 // 🔐 VALIDACIÓN DE INVITACIÓN (m2)
 // ==============================
@@ -129,7 +146,11 @@ function setCurrentView(viewKey) {
     appState.pendingView = null;
   }
 
+  // ✅ Siempre sincronizamos el menú con permisos al navegar
+  syncTopbarVisibility();
+
   // 🔒 Refuerzo explícito para TARIFA
+  // (por defecto no hay acceso si caps.pages.tarifa no es true)
   if (viewKey === "tarifa" && !_isViewAllowedSafe("tarifa")) {
     viewKey = "proyecto";
   }
@@ -196,20 +217,35 @@ function renderViewByKey(viewKey) {
   if (!_isViewAllowedSafe(viewKey)) return;
 
   switch (viewKey) {
-    case "proyecto": callIfFn("renderProyectoView"); break;
-    case "presupuesto": callIfFn("renderPresupuestoView"); break;
-    case "simulador": callIfFn("renderSimuladorView"); break;
+    case "proyecto":
+      callIfFn("renderProyectoView");
+      break;
+    case "presupuesto":
+      callIfFn("renderPresupuestoView");
+      break;
+    case "simulador":
+      callIfFn("renderSimuladorView");
+      break;
     case "tarifa":
       if (!callIfFn("renderTarifaView")) callIfFn("renderTarifa2NView");
       break;
     case "tarifas":
       if (!callIfFn("renderTarifasView")) callIfFn("renderTarifasTiposView");
       break;
-    case "documentacion": callIfFn("renderDocumentacionView"); break;
-    case "prescripcion": callIfFn("renderDocPrescripcionView"); break;
-    case "docGestion": callIfFn("renderDocGestionView"); break;
-    case "usuarios": callIfFn("renderAdminUsersView"); break;
-    default: callIfFn("renderProyectoView");
+    case "documentacion":
+      callIfFn("renderDocumentacionView");
+      break;
+    case "prescripcion":
+      callIfFn("renderDocPrescripcionView");
+      break;
+    case "docGestion":
+      callIfFn("renderDocGestionView");
+      break;
+    case "usuarios":
+      callIfFn("renderAdminUsersView");
+      break;
+    default:
+      callIfFn("renderProyectoView");
   }
 }
 
@@ -223,6 +259,9 @@ function initTopbarNavigation() {
       setCurrentView(link.getAttribute("data-view"));
     });
   });
+
+  // ✅ Evita flashes: al arrancar, ocultamos hasta que haya authReady
+  syncTopbarVisibility();
 }
 
 // ==============================
@@ -232,7 +271,8 @@ function initTopbarNavigation() {
 document.addEventListener("DOMContentLoaded", () => {
   initTopbarNavigation();
 
-  let initialView = _viewStorageGet(VIEW_STORAGE_KEY) || appState.currentView || "proyecto";
+  let initialView =
+    _viewStorageGet(VIEW_STORAGE_KEY) || appState.currentView || "proyecto";
   initialView = _normalizeViewKey(initialView);
 
   appState.pendingView = initialView;
@@ -242,6 +282,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const t = setInterval(async () => {
     if (appState.authReady) {
       clearInterval(t);
+
+      // ✅ ya hay usuario/caps: mostramos lo permitido
+      syncTopbarVisibility();
+
       await validateInviteIfNeeded();
       setCurrentView(appState.pendingView || initialView);
     }
