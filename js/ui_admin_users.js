@@ -63,7 +63,7 @@
         proyecto: false,
         presupuesto: false,
         simulador: false,
-        tarifa: false,          // ✅ por defecto OFF (solo lo activas manualmente)
+        tarifa: false,
         tarifas: "none",
         documentacion: "none",
         prescripcion: "none",
@@ -104,19 +104,17 @@
       v2.prescripcion.templates = "full";
       v2.prescripcion.extraRefs = "full";
 
-      // SUPER_ADMIN mantiene tarifa ON (por allowView("tarifa") al iterar)
       return { ...legacy, ...v2 };
     }
 
-    // ✅ IMPORTANTe: TARIFA NO se da por rol. Solo manual desde permisos.
     if (r === "ACCOUNT_MANAGER") {
       allowView("proyecto");
       allowView("presupuesto");
       allowView("simulador");
-      // allowView("tarifa");  // ❌ quitado (manual)
+      allowView("tarifa");
       allowView("tarifas");
       allowView("documentacion");
-      //allowView("docGestion");
+      allowView("docGestion");
 
       legacy.features.tarifasWrite = false;
       legacy.features.docExportTecnico = false;
@@ -128,7 +126,6 @@
       v2.prescripcion.templates = "readOnly";
       v2.prescripcion.extraRefs = "readOnly";
 
-      // v2.pages.tarifa queda false por defecto
       return { ...legacy, ...v2 };
     }
 
@@ -136,7 +133,7 @@
       allowView("proyecto");
       allowView("presupuesto");
       allowView("simulador");
-      // allowView("tarifa");  // ❌ quitado (manual)
+      allowView("tarifa");
       allowView("tarifas");
       allowView("documentacion");
       allowView("docGestion");
@@ -160,7 +157,7 @@
       allowView("proyecto");
       allowView("presupuesto");
       allowView("simulador");
-      // allowView("tarifa");  // ❌ quitado (manual)
+      allowView("tarifa");
       allowView("tarifas");
       allowView("documentacion");
       allowView("prescripcion");
@@ -534,8 +531,8 @@
                   const prescTpl = caps.prescripcion?.templates || "readOnly";
                   const prescExtra = caps.prescripcion?.extraRefs || "readOnly";
 
-                  // ✅ Tarifa (2N) controlada por booleano
-                  const tarifa2n = !!p.tarifa;
+                  // ✅ NUEVO: docGestion ON/OFF
+                  const docGestionOn = !!p.docGestion;
 
                   const aliasVal = u.alias || "";
 
@@ -613,18 +610,6 @@
                       <div style="font-weight:700; margin-bottom:8px;">Permisos (v2)</div>
 
                       <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
-
-                        <!-- ✅ TARIFA 2N (pages.tarifa) -->
-                        <div style="min-width:240px;">
-                          <label style="font-size:0.85rem; color:#6b7280;">Tarifa 2N (página)</label>
-                          <div style="display:flex; gap:8px; align-items:center;">
-                            <input type="checkbox" data-tarifa2n="${escapeHtml(uid)}" ${
-                    tarifa2n ? "checked" : ""
-                  } />
-                            <span style="font-size:0.85rem; color:#6b7280;">pages.tarifa</span>
-                          </div>
-                        </div>
-
                         <div style="min-width:220px;">
                           <label style="font-size:0.85rem; color:#6b7280;">Documentación</label>
                           <select class="form-control" data-doc-mode="${escapeHtml(uid)}">
@@ -644,6 +629,17 @@
                             <option value="none" ${tarifasMode === "none" ? "selected" : ""}>none</option>
                             <option value="view" ${tarifasMode === "view" ? "selected" : ""}>view</option>
                           </select>
+                        </div>
+
+                        <!-- ✅ NUEVO: Gestión documentación ON/OFF -->
+                        <div style="min-width:240px;">
+                          <label style="font-size:0.85rem; color:#6b7280;">Gestión de documentación (pestaña)</label>
+                          <div style="display:flex; gap:8px; align-items:center;">
+                            <input type="checkbox" data-doc-gestion="${escapeHtml(uid)}" ${
+                              docGestionOn ? "checked" : ""
+                            } />
+                            <span style="font-size:0.85rem; color:#6b7280;">pages.docGestion</span>
+                          </div>
                         </div>
 
                         <div style="min-width:220px;">
@@ -719,7 +715,7 @@
       const inp = ev.target?.closest?.("#adminUsersSearch");
       if (!inp) return;
       _usersSearch = inp.value || "";
-      refresh(); // (ya lo tienes así)
+      refresh();
     });
 
     // ✅ guardar alias al salir del input (blur)
@@ -735,6 +731,7 @@
         try {
           await setUserAlias(uid, alias);
 
+          // actualizar cache local (para buscador)
           const ix = _usersCache.findIndex((u) => String(u.id) === String(uid));
           if (ix >= 0) {
             _usersCache[ix].alias = String(alias || "").trim() || null;
@@ -764,12 +761,8 @@
           return;
         }
 
-        if (
-          action === "deleteUser" ||
-          action === "toggleActive" ||
-          action === "saveRole" ||
-          action === "savePerms"
-        ) {
+        // ✅ bloqueo por “superadmin fijo”
+        if (action === "deleteUser" || action === "toggleActive" || action === "saveRole" || action === "savePerms") {
           const u = _usersCache.find((x) => String(x.id) === String(id));
           if (isProtectedSuperAdminUser(u)) {
             alert("Esta cuenta SUPER_ADMIN está protegida.");
@@ -831,16 +824,16 @@
           const exportTec =
             !!container.querySelector(`input[type="checkbox"][data-doc-export="${id}"]`)?.checked;
 
-          // ✅ Tarifa 2N (boolean)
-          const tarifa2n =
-            !!container.querySelector(`input[type="checkbox"][data-tarifa2n="${id}"]`)?.checked;
+          // ✅ NUEVO: docGestion toggle
+          const docGestion =
+            !!container.querySelector(`input[type="checkbox"][data-doc-gestion="${id}"]`)?.checked;
 
           const partial = {
             pages: {
-              tarifa: tarifa2n,       // ✅ NUEVO
               tarifas: tarifasMode,
               documentacion: docMode,
               prescripcion: prescPage,
+              docGestion: docGestion,
             },
             documentacion: { exportTecnico: exportTec },
             prescripcion: { templates: prescTpl, extraRefs: prescExtra },
