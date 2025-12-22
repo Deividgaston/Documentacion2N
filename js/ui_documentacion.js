@@ -1104,6 +1104,34 @@ if (typeof window.handleDocSectionAI !== "function") {
 // CARGA MEDIA (Firestore + Storage)
 // ======================================================
 
+// ✅ Nuevo helper: intenta sacar proyectoId de varias fuentes (proyecto + presupuesto)
+function getCurrentProyectoIdSafe() {
+  const proyecto = appState.proyecto || {};
+  let proyectoId = proyecto.id || proyecto.proyectoId || proyecto.projectId || null;
+
+  if (!proyectoId && typeof window.getPresupuestoActual === "function") {
+    const p = window.getPresupuestoActual() || {};
+    proyectoId = p.proyectoId || p.projectId || p.id || null;
+  }
+
+  // último recurso: si guardaste el proyecto en localStorage con alguna clave típica
+  if (!proyectoId) {
+    try {
+      const raw =
+        window?.localStorage &&
+        (localStorage.getItem("presupuestos2n_proyecto_v1") ||
+          localStorage.getItem("proyectoState_v1") ||
+          localStorage.getItem("proyecto_v1"));
+      if (raw) {
+        const obj = JSON.parse(raw);
+        proyectoId = obj?.id || obj?.proyectoId || obj?.projectId || null;
+      }
+    } catch (_) {}
+  }
+
+  return proyectoId || null;
+}
+
 async function ensureDocMediaLoaded() {
   const db =
     window.db ||
@@ -1130,23 +1158,39 @@ async function ensureDocMediaLoaded() {
       return false;
     }
 
-    const proyecto = appState.proyecto || {};
-    const proyectoId = proyecto.id || proyecto.proyectoId || null;
+    // ✅ Clave: obtener proyectoId de forma robusta (aunque no hayas pasado por Proyecto)
+    const proyectoId = getCurrentProyectoIdSafe();
 
     const mediaMap = new Map();
 
-    // 1) Por proyecto (nuevo)
+    // 1) Por proyecto (nuevo + legacy field name)
     if (proyectoId) {
-      const snapProj = await db
-        .collection("documentacion_media")
-        .where("proyectoId", "==", proyectoId)
-        .limit(200)
-        .get();
+      const [snapProjA, snapProjB] = await Promise.all([
+        db
+          .collection("documentacion_media")
+          .where("proyectoId", "==", proyectoId)
+          .limit(300)
+          .get(),
+        db
+          .collection("documentacion_media")
+          .where("projectId", "==", proyectoId) // ✅ compatibilidad legacy
+          .limit(300)
+          .get(),
+      ]);
 
-      snapProj.forEach((d) => mediaMap.set(d.id, { ...d.data(), id: d.id }));
+      snapProjA.forEach((d) => mediaMap.set(d.id, { ...d.data(), id: d.id }));
+      snapProjB.forEach((d) => mediaMap.set(d.id, { ...d.data(), id: d.id }));
+    } else {
+      // ✅ Si no hay proyectoId todavía, NO dependemos del uid (porque no coincide con quien subió)
+      // Devolvemos false para que el render reintente cuando el proyecto se cargue.
+      console.warn(
+        "[DOC] proyectoId no disponible aún. Reintentaré carga de media cuando haya proyecto."
+      );
+      appState.documentacion.mediaLoaded = false;
+      return false;
     }
 
-    // 2) Por uid (legacy)
+    // 2) Por uid (legacy) — lo mantenemos por si hay media antigua por usuario
     const snapUid = await db
       .collection("documentacion_media")
       .where("uid", "==", uid)
@@ -1160,7 +1204,7 @@ async function ensureDocMediaLoaded() {
     appState.documentacion.mediaLibrary = media;
     appState.documentacion.mediaLoaded = true;
 
-    console.log("[DOC] Media cargada:", media.length);
+    console.log("[DOC] Media cargada:", media.length, "proyectoId:", proyectoId);
     return true;
   } catch (e) {
     console.error("[DOC] Error cargando documentación media:", e);
