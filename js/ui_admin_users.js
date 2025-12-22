@@ -45,6 +45,7 @@
         tarifas: false,
         documentacion: false,
         prescripcion: false,
+        diagramas: false, // ✅ NUEVO
         docGestion: false,
         usuarios: false,
       },
@@ -64,10 +65,10 @@
         presupuesto: false,
         simulador: false,
         tarifa: false, // ✅ por defecto OFF (se activa por usuario desde permisos)
-        diagramas: false, // ✅ NUEVO: por defecto OFF (solo por usuario)
         tarifas: "none",
         documentacion: "none",
         prescripcion: "none",
+        diagramas: false, // ✅ NUEVO
         docGestion: false,
         usuarios: false,
       },
@@ -87,7 +88,7 @@
       else if (k === "prescripcion") v2.pages.prescripcion = "view";
       else if (k === "docGestion") v2.pages.docGestion = true;
       else if (k === "usuarios") v2.pages.usuarios = true;
-      else v2.pages[k] = true;
+      else v2.pages[k] = true; // incluye diagramas si se activa por rol
     }
 
     if (r === "SUPER_ADMIN") {
@@ -109,7 +110,7 @@
       v2.pages.tarifa = true;
       legacy.views.tarifa = true;
 
-      // ✅ Diagrama: permitido para SUPER_ADMIN (puedes desactivarlo luego si quieres por checkbox)
+      // ✅ SUPER_ADMIN ve diagramas
       v2.pages.diagramas = true;
       legacy.views.diagramas = true;
 
@@ -120,7 +121,6 @@
       allowView("proyecto");
       allowView("presupuesto");
       allowView("simulador");
-      // ✅ NO allowView("tarifa") por defecto (se gestiona por checkbox)
       allowView("tarifas");
       allowView("documentacion");
       allowView("docGestion");
@@ -150,7 +150,6 @@
       allowView("proyecto");
       allowView("presupuesto");
       allowView("simulador");
-      // ✅ NO allowView("tarifa") por defecto
       allowView("tarifas");
       allowView("documentacion");
       allowView("docGestion");
@@ -182,7 +181,6 @@
       allowView("proyecto");
       allowView("presupuesto");
       allowView("simulador");
-      // ✅ NO allowView("tarifa") por defecto
       allowView("tarifas");
       allowView("documentacion");
       allowView("prescripcion");
@@ -248,6 +246,13 @@
     if (!out.pages) out.pages = base.pages;
     if (!out.documentacion) out.documentacion = base.documentacion;
     if (!out.prescripcion) out.prescripcion = base.prescripcion;
+
+    // ✅ completar claves nuevas aunque ya existan
+    out.views = { ...(base.views || {}), ...(out.views || {}) };
+    out.features = { ...(base.features || {}), ...(out.features || {}) };
+    out.pages = { ...(base.pages || {}), ...(out.pages || {}) };
+    out.documentacion = { ...(base.documentacion || {}), ...(out.documentacion || {}) };
+    out.prescripcion = { ...(base.prescripcion || {}), ...(out.prescripcion || {}) };
 
     return out;
   }
@@ -565,18 +570,25 @@
 
                   const caps = safeGetUserCapsV2(u);
                   const p = caps.pages || {};
-                  const docMode = p.documentacion || "none";
-                  const tarifasMode = p.tarifas || "none";
-                  const prescPage = p.prescripcion || "none";
-                  const exportTec = !!caps.documentacion?.exportTecnico;
-                  const prescTpl = caps.prescripcion?.templates || "readOnly";
-                  const prescExtra = caps.prescripcion?.extraRefs || "readOnly";
-
-                  const docGestionOn = !!p.docGestion;
-                  const tarifa2NOn = !!p.tarifa;
-                  const diagramasOn = !!p.diagramas; // ✅ NUEVO
 
                   const aliasVal = u.alias || "";
+
+                  // ✅ valores actuales -> checkboxes
+                  const tarifa2NOn = !!p.tarifa;
+                  const diagramasOn = !!p.diagramas;
+                  const docGestionOn = !!p.docGestion;
+
+                  const docMode = p.documentacion || "none";
+                  const docCommercialOn = docMode === "commercial";
+                  const docTechnicalOn = docMode === "technical";
+
+                  const tarifasOn = (p.tarifas || "none") === "view";
+
+                  const prescOn = (p.prescripcion || "none") === "view";
+                  const prescTplFull = (caps.prescripcion?.templates || "readOnly") === "full";
+                  const prescExtraFull = (caps.prescripcion?.extraRefs || "readOnly") === "full";
+
+                  const exportTec = !!caps.documentacion?.exportTecnico;
 
                   return `
                   <div class="card" style="margin-top:10px;">
@@ -646,112 +658,110 @@
                       </div>
                     </div>
 
-                    <div class="card" style="margin-top:10px; padding:12px; display:none;" data-perms-panel="${escapeHtml(
+                    <!-- ✅ Panel permisos ordenado + SOLO CHECKBOX -->
+                    <div class="card" style="margin-top:10px; padding:14px; display:none;" data-perms-panel="${escapeHtml(
                       uid
                     )}">
-                      <div style="font-weight:700; margin-bottom:8px;">Permisos (v2)</div>
+                      <div style="font-weight:700; margin-bottom:10px;">Permisos (v2)</div>
 
-                      <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
+                      <div style="
+                        display:grid;
+                        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+                        gap:12px 16px;
+                        align-items:start;
+                      ">
 
-                        <!-- ✅ Tarifa 2N ON/OFF -->
-                        <div style="min-width:240px;">
-                          <label style="font-size:0.85rem; color:#6b7280;">Tarifa 2N (pestaña)</label>
-                          <div style="display:flex; gap:8px; align-items:center;">
+                        <div>
+                          <div style="font-weight:600; font-size:0.9rem; margin-bottom:6px;">Pestañas</div>
+
+                          <label style="display:flex; gap:10px; align-items:center; margin:6px 0;">
                             <input type="checkbox" data-tarifa2n="${escapeHtml(uid)}" ${
                               tarifa2NOn ? "checked" : ""
                             } />
-                            <span style="font-size:0.85rem; color:#6b7280;">pages.tarifa</span>
-                          </div>
-                        </div>
+                            <span>Tarifa 2N <span style="color:#6b7280; font-size:0.85rem;">(pages.tarifa)</span></span>
+                          </label>
 
-                        <!-- ✅ NUEVO: Diagramas ON/OFF -->
-                        <div style="min-width:240px;">
-                          <label style="font-size:0.85rem; color:#6b7280;">Diagramas (IA / DXF)</label>
-                          <div style="display:flex; gap:8px; align-items:center;">
+                          <label style="display:flex; gap:10px; align-items:center; margin:6px 0;">
                             <input type="checkbox" data-diagramas="${escapeHtml(uid)}" ${
                               diagramasOn ? "checked" : ""
                             } />
-                            <span style="font-size:0.85rem; color:#6b7280;">pages.diagramas</span>
-                          </div>
-                        </div>
+                            <span>Diagramas (IA / DXF) <span style="color:#6b7280; font-size:0.85rem;">(pages.diagramas)</span></span>
+                          </label>
 
-                        <div style="min-width:220px;">
-                          <label style="font-size:0.85rem; color:#6b7280;">Documentación</label>
-                          <select class="form-control" data-doc-mode="${escapeHtml(uid)}">
-                            <option value="none" ${docMode === "none" ? "selected" : ""}>none</option>
-                            <option value="commercial" ${
-                              docMode === "commercial" ? "selected" : ""
-                            }>commercial</option>
-                            <option value="technical" ${
-                              docMode === "technical" ? "selected" : ""
-                            }>technical</option>
-                          </select>
-                        </div>
-
-                        <div style="min-width:220px;">
-                          <label style="font-size:0.85rem; color:#6b7280;">Tarifas</label>
-                          <select class="form-control" data-tarifas-mode="${escapeHtml(uid)}">
-                            <option value="none" ${tarifasMode === "none" ? "selected" : ""}>none</option>
-                            <option value="view" ${tarifasMode === "view" ? "selected" : ""}>view</option>
-                          </select>
-                        </div>
-
-                        <!-- ✅ Gestión documentación ON/OFF -->
-                        <div style="min-width:240px;">
-                          <label style="font-size:0.85rem; color:#6b7280;">Gestión de documentación (pestaña)</label>
-                          <div style="display:flex; gap:8px; align-items:center;">
+                          <label style="display:flex; gap:10px; align-items:center; margin:6px 0;">
                             <input type="checkbox" data-doc-gestion="${escapeHtml(uid)}" ${
                               docGestionOn ? "checked" : ""
                             } />
-                            <span style="font-size:0.85rem; color:#6b7280;">pages.docGestion</span>
-                          </div>
+                            <span>Gestión documentación <span style="color:#6b7280; font-size:0.85rem;">(pages.docGestion)</span></span>
+                          </label>
                         </div>
 
-                        <div style="min-width:220px;">
-                          <label style="font-size:0.85rem; color:#6b7280;">Prescripción (página)</label>
-                          <select class="form-control" data-presc-page="${escapeHtml(uid)}">
-                            <option value="none" ${prescPage === "none" ? "selected" : ""}>none</option>
-                            <option value="view" ${prescPage === "view" ? "selected" : ""}>view</option>
-                          </select>
-                        </div>
+                        <div>
+                          <div style="font-weight:600; font-size:0.9rem; margin-bottom:6px;">Documentación</div>
 
-                        <div style="min-width:220px;">
-                          <label style="font-size:0.85rem; color:#6b7280;">Prescripción · Plantillas</label>
-                          <select class="form-control" data-presc-templates="${escapeHtml(uid)}">
-                            <option value="readOnly" ${
-                              prescTpl === "readOnly" ? "selected" : ""
-                            }>readOnly</option>
-                            <option value="full" ${prescTpl === "full" ? "selected" : ""}>full</option>
-                          </select>
-                        </div>
+                          <label style="display:flex; gap:10px; align-items:center; margin:6px 0;">
+                            <input type="checkbox" data-doc-commercial="${escapeHtml(uid)}" ${
+                              docCommercialOn ? "checked" : ""
+                            } />
+                            <span>Modo comercial <span style="color:#6b7280; font-size:0.85rem;">(commercial)</span></span>
+                          </label>
 
-                        <div style="min-width:220px;">
-                          <label style="font-size:0.85rem; color:#6b7280;">Prescripción · Extra refs</label>
-                          <select class="form-control" data-presc-extrarefs="${escapeHtml(uid)}">
-                            <option value="readOnly" ${
-                              prescExtra === "readOnly" ? "selected" : ""
-                            }>readOnly</option>
-                            <option value="full" ${
-                              prescExtra === "full" ? "selected" : ""
-                            }>full</option>
-                          </select>
-                        </div>
+                          <label style="display:flex; gap:10px; align-items:center; margin:6px 0;">
+                            <input type="checkbox" data-doc-technical="${escapeHtml(uid)}" ${
+                              docTechnicalOn ? "checked" : ""
+                            } />
+                            <span>Modo técnico <span style="color:#6b7280; font-size:0.85rem;">(technical)</span></span>
+                          </label>
 
-                        <div style="min-width:240px;">
-                          <label style="font-size:0.85rem; color:#6b7280;">Export técnico (Documentación)</label>
-                          <div style="display:flex; gap:8px; align-items:center;">
+                          <label style="display:flex; gap:10px; align-items:center; margin:10px 0 6px;">
                             <input type="checkbox" data-doc-export="${escapeHtml(uid)}" ${
-                    exportTec ? "checked" : ""
-                  } />
-                            <span style="font-size:0.85rem; color:#6b7280;">exportTecnico</span>
-                          </div>
+                              exportTec ? "checked" : ""
+                            } />
+                            <span>Export técnico <span style="color:#6b7280; font-size:0.85rem;">(documentacion.exportTecnico)</span></span>
+                          </label>
                         </div>
 
-                        <div style="display:flex; gap:8px;">
-                          <button class="btn btn-primary btn-sm" data-action="savePerms" data-id="${escapeHtml(
-                            uid
-                          )}">Guardar permisos</button>
+                        <div>
+                          <div style="font-weight:600; font-size:0.9rem; margin-bottom:6px;">Tarifas</div>
+
+                          <label style="display:flex; gap:10px; align-items:center; margin:6px 0;">
+                            <input type="checkbox" data-tarifas-view="${escapeHtml(uid)}" ${
+                              tarifasOn ? "checked" : ""
+                            } />
+                            <span>Acceso <span style="color:#6b7280; font-size:0.85rem;">(pages.tarifas=view)</span></span>
+                          </label>
                         </div>
+
+                        <div>
+                          <div style="font-weight:600; font-size:0.9rem; margin-bottom:6px;">Prescripción</div>
+
+                          <label style="display:flex; gap:10px; align-items:center; margin:6px 0;">
+                            <input type="checkbox" data-presc-page="${escapeHtml(uid)}" ${
+                              prescOn ? "checked" : ""
+                            } />
+                            <span>Página prescripción <span style="color:#6b7280; font-size:0.85rem;">(pages.prescripcion=view)</span></span>
+                          </label>
+
+                          <label style="display:flex; gap:10px; align-items:center; margin:6px 0;">
+                            <input type="checkbox" data-presc-templates-full="${escapeHtml(uid)}" ${
+                              prescTplFull ? "checked" : ""
+                            } />
+                            <span>Plantillas: full <span style="color:#6b7280; font-size:0.85rem;">(prescripcion.templates)</span></span>
+                          </label>
+
+                          <label style="display:flex; gap:10px; align-items:center; margin:6px 0;">
+                            <input type="checkbox" data-presc-extrarefs-full="${escapeHtml(uid)}" ${
+                              prescExtraFull ? "checked" : ""
+                            } />
+                            <span>Extra refs: full <span style="color:#6b7280; font-size:0.85rem;">(prescripcion.extraRefs)</span></span>
+                          </label>
+                        </div>
+                      </div>
+
+                      <div style="display:flex; justify-content:flex-end; margin-top:12px; gap:10px;">
+                        <button class="btn btn-primary btn-sm" data-action="savePerms" data-id="${escapeHtml(
+                          uid
+                        )}">Guardar permisos</button>
                       </div>
 
                       <div style="margin-top:10px; font-size:0.82rem; color:#6b7280;">
@@ -781,6 +791,27 @@
       if (!inp) return;
       _usersSearch = inp.value || "";
       refresh();
+    });
+
+    // ✅ exclusividad: doc comercial vs doc técnico
+    container.addEventListener("change", (ev) => {
+      const c = ev.target;
+
+      const docC = c?.closest?.('input[type="checkbox"][data-doc-commercial]');
+      if (docC) {
+        const uid = docC.getAttribute("data-doc-commercial");
+        const tech = container.querySelector(`input[type="checkbox"][data-doc-technical="${uid}"]`);
+        if (docC.checked && tech) tech.checked = false;
+        return;
+      }
+
+      const docT = c?.closest?.('input[type="checkbox"][data-doc-technical]');
+      if (docT) {
+        const uid = docT.getAttribute("data-doc-technical");
+        const comm = container.querySelector(`input[type="checkbox"][data-doc-commercial="${uid}"]`);
+        if (docT.checked && comm) comm.checked = false;
+        return;
+      }
     });
 
     // ✅ guardar alias (blur)
@@ -826,12 +857,7 @@
         }
 
         // ✅ bloqueo por “superadmin fijo”
-        if (
-          action === "deleteUser" ||
-          action === "toggleActive" ||
-          action === "saveRole" ||
-          action === "savePerms"
-        ) {
+        if (action === "deleteUser" || action === "toggleActive" || action === "saveRole" || action === "savePerms") {
           const u = _usersCache.find((x) => String(x.id) === String(id));
           if (isProtectedSuperAdminUser(u)) {
             alert("Esta cuenta SUPER_ADMIN está protegida.");
@@ -887,25 +913,41 @@
           const diagramas =
             !!container.querySelector(`input[type="checkbox"][data-diagramas="${id}"]`)?.checked;
 
-          const docMode = container.querySelector(`select[data-doc-mode="${id}"]`)?.value || "none";
-          const tarifasMode =
-            container.querySelector(`select[data-tarifas-mode="${id}"]`)?.value || "none";
-          const prescPage =
-            container.querySelector(`select[data-presc-page="${id}"]`)?.value || "none";
-          const prescTpl =
-            container.querySelector(`select[data-presc-templates="${id}"]`)?.value || "readOnly";
-          const prescExtra =
-            container.querySelector(`select[data-presc-extrarefs="${id}"]`)?.value || "readOnly";
-          const exportTec =
-            !!container.querySelector(`input[type="checkbox"][data-doc-export="${id}"]`)?.checked;
-
           const docGestion =
             !!container.querySelector(`input[type="checkbox"][data-doc-gestion="${id}"]`)?.checked;
+
+          const docCommercial =
+            !!container.querySelector(`input[type="checkbox"][data-doc-commercial="${id}"]`)?.checked;
+
+          const docTechnical =
+            !!container.querySelector(`input[type="checkbox"][data-doc-technical="${id}"]`)?.checked;
+
+          const docMode = docTechnical ? "technical" : docCommercial ? "commercial" : "none";
+
+          const tarifasView =
+            !!container.querySelector(`input[type="checkbox"][data-tarifas-view="${id}"]`)?.checked;
+          const tarifasMode = tarifasView ? "view" : "none";
+
+          const prescOn =
+            !!container.querySelector(`input[type="checkbox"][data-presc-page="${id}"]`)?.checked;
+          const prescPage = prescOn ? "view" : "none";
+
+          const prescTplFull =
+            !!container.querySelector(`input[type="checkbox"][data-presc-templates-full="${id}"]`)?.checked;
+
+          const prescExtraFull =
+            !!container.querySelector(`input[type="checkbox"][data-presc-extrarefs-full="${id}"]`)?.checked;
+
+          const prescTpl = prescTplFull ? "full" : "readOnly";
+          const prescExtra = prescExtraFull ? "full" : "readOnly";
+
+          const exportTec =
+            !!container.querySelector(`input[type="checkbox"][data-doc-export="${id}"]`)?.checked;
 
           const partial = {
             pages: {
               tarifa: tarifa2N,
-              diagramas: diagramas, // ✅ NUEVO
+              diagramas: diagramas,
               tarifas: tarifasMode,
               documentacion: docMode,
               prescripcion: prescPage,
