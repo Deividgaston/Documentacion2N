@@ -157,6 +157,7 @@ function setCurrentView(viewKey) {
       "tarifas",
       "documentacion",
       "prescripcion",
+      "diagramas",      // ✅ NUEVO
       "docGestion",
       "usuarios",
     ];
@@ -189,6 +190,7 @@ function updateViewSubtitle(viewKey) {
     tarifas: "Gestiona los tipos de tarifa y descuentos avanzados.",
     documentacion: "Genera la memoria de calidades y documentación del proyecto.",
     prescripcion: "Vista de prescripción: resumen inteligente de documentación.",
+    diagramas: "Genera diagramas de red a partir del proyecto (IA) y exporta a DXF.", // ✅ NUEVO
     docGestion: "Gestiona la documentación subida.",
     usuarios: "Configuración de usuarios y permisos.",
   };
@@ -221,6 +223,11 @@ function renderViewByKey(viewKey) {
       break;
     case "documentacion": callIfFn("renderDocumentacionView"); break;
     case "prescripcion": callIfFn("renderDocPrescripcionView"); break;
+
+    case "diagramas": // ✅ NUEVO
+      callIfFn("renderDiagramasView");
+      break;
+
     case "docGestion": callIfFn("renderDocGestionView"); break;
     case "usuarios": callIfFn("renderAdminUsersView"); break;
     default: callIfFn("renderProyectoView");
