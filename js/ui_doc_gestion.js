@@ -78,14 +78,28 @@ async function loadDocMediaForGestion() {
     if (!okIds) {
       const db = getFirestoreInstance();
       if (db) {
-        const snap = await db.collection("documentacion_media").get();
-        const list = [];
-        snap.forEach((doc) => {
-          const d = doc.data() || {};
-          delete d.id; 
-          list.push({ ...d, id: doc.id }); // así doc.id SIEMPRE gana
-        });
-        appState.documentacion.mediaLibrary = list;
+        const proyectoId =
+  (typeof window.getCurrentProyectoIdSafe === "function"
+    ? window.getCurrentProyectoIdSafe()
+    : (appState.proyecto?.id || appState.proyecto?.proyectoId || appState.proyecto?.projectId || null));
+
+if (!proyectoId) {
+  console.warn("[DOC-GESTION] Sin proyectoId: no cargo documentacion_media aún.");
+  appState.documentacion.mediaLibrary = [];
+  return;
+}
+
+const [snapA, snapB] = await Promise.all([
+  db.collection("documentacion_media").where("proyectoId", "==", proyectoId).limit(500).get(),
+  db.collection("documentacion_media").where("projectId", "==", proyectoId).limit(500).get(), // legacy
+]);
+
+const map = new Map();
+snapA.forEach((doc) => map.set(doc.id, { ...(doc.data() || {}), id: doc.id }));
+snapB.forEach((doc) => map.set(doc.id, { ...(doc.data() || {}), id: doc.id }));
+
+appState.documentacion.mediaLibrary = Array.from(map.values());
+
       }
     } else {
       // Normalizamos: si hay items con "id" pero alguno viene raro, lo filtramos
