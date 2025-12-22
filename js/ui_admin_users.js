@@ -64,6 +64,7 @@
         presupuesto: false,
         simulador: false,
         tarifa: false, // ✅ por defecto OFF (se activa por usuario desde permisos)
+        diagramas: false, // ✅ NUEVO: por defecto OFF (solo por usuario)
         tarifas: "none",
         documentacion: "none",
         prescripcion: "none",
@@ -108,6 +109,10 @@
       v2.pages.tarifa = true;
       legacy.views.tarifa = true;
 
+      // ✅ Diagrama: permitido para SUPER_ADMIN (puedes desactivarlo luego si quieres por checkbox)
+      v2.pages.diagramas = true;
+      legacy.views.diagramas = true;
+
       return { ...legacy, ...v2 };
     }
 
@@ -133,6 +138,10 @@
       // ✅ tarifa OFF por defecto
       v2.pages.tarifa = false;
       legacy.views.tarifa = false;
+
+      // ✅ diagramas OFF por defecto
+      v2.pages.diagramas = false;
+      legacy.views.diagramas = false;
 
       return { ...legacy, ...v2 };
     }
@@ -161,6 +170,10 @@
       // ✅ tarifa OFF por defecto
       v2.pages.tarifa = false;
       legacy.views.tarifa = false;
+
+      // ✅ diagramas OFF por defecto
+      v2.pages.diagramas = false;
+      legacy.views.diagramas = false;
 
       return { ...legacy, ...v2 };
     }
@@ -191,6 +204,10 @@
       v2.pages.tarifa = false;
       legacy.views.tarifa = false;
 
+      // ✅ diagramas OFF por defecto
+      v2.pages.diagramas = false;
+      legacy.views.diagramas = false;
+
       return { ...legacy, ...v2 };
     }
 
@@ -210,6 +227,10 @@
       // ✅ tarifa OFF por defecto
       v2.pages.tarifa = false;
       legacy.views.tarifa = false;
+
+      // ✅ diagramas OFF por defecto
+      v2.pages.diagramas = false;
+      legacy.views.diagramas = false;
 
       return { ...legacy, ...v2 };
     }
@@ -552,7 +573,8 @@
                   const prescExtra = caps.prescripcion?.extraRefs || "readOnly";
 
                   const docGestionOn = !!p.docGestion;
-                  const tarifa2NOn = !!p.tarifa; // ✅ NUEVO
+                  const tarifa2NOn = !!p.tarifa;
+                  const diagramasOn = !!p.diagramas; // ✅ NUEVO
 
                   const aliasVal = u.alias || "";
 
@@ -631,7 +653,7 @@
 
                       <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
 
-                        <!-- ✅ NUEVO: Tarifa 2N ON/OFF -->
+                        <!-- ✅ Tarifa 2N ON/OFF -->
                         <div style="min-width:240px;">
                           <label style="font-size:0.85rem; color:#6b7280;">Tarifa 2N (pestaña)</label>
                           <div style="display:flex; gap:8px; align-items:center;">
@@ -639,6 +661,17 @@
                               tarifa2NOn ? "checked" : ""
                             } />
                             <span style="font-size:0.85rem; color:#6b7280;">pages.tarifa</span>
+                          </div>
+                        </div>
+
+                        <!-- ✅ NUEVO: Diagramas ON/OFF -->
+                        <div style="min-width:240px;">
+                          <label style="font-size:0.85rem; color:#6b7280;">Diagramas (IA / DXF)</label>
+                          <div style="display:flex; gap:8px; align-items:center;">
+                            <input type="checkbox" data-diagramas="${escapeHtml(uid)}" ${
+                              diagramasOn ? "checked" : ""
+                            } />
+                            <span style="font-size:0.85rem; color:#6b7280;">pages.diagramas</span>
                           </div>
                         </div>
 
@@ -793,7 +826,12 @@
         }
 
         // ✅ bloqueo por “superadmin fijo”
-        if (action === "deleteUser" || action === "toggleActive" || action === "saveRole" || action === "savePerms") {
+        if (
+          action === "deleteUser" ||
+          action === "toggleActive" ||
+          action === "saveRole" ||
+          action === "savePerms"
+        ) {
           const u = _usersCache.find((x) => String(x.id) === String(id));
           if (isProtectedSuperAdminUser(u)) {
             alert("Esta cuenta SUPER_ADMIN está protegida.");
@@ -846,6 +884,9 @@
           const tarifa2N =
             !!container.querySelector(`input[type="checkbox"][data-tarifa2n="${id}"]`)?.checked;
 
+          const diagramas =
+            !!container.querySelector(`input[type="checkbox"][data-diagramas="${id}"]`)?.checked;
+
           const docMode = container.querySelector(`select[data-doc-mode="${id}"]`)?.value || "none";
           const tarifasMode =
             container.querySelector(`select[data-tarifas-mode="${id}"]`)?.value || "none";
@@ -864,6 +905,7 @@
           const partial = {
             pages: {
               tarifa: tarifa2N,
+              diagramas: diagramas, // ✅ NUEVO
               tarifas: tarifasMode,
               documentacion: docMode,
               prescripcion: prescPage,
