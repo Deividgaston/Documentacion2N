@@ -49,13 +49,52 @@ function _normalizeViewKey(viewKey) {
   return viewKey;
 }
 
+// ✅ NUEVO (cambio mínimo): compatibilidad con claves legacy en capabilities.pages
+function _getCapsPageVal(pages, v) {
+  if (!pages || typeof pages !== "object") return undefined;
+
+  // clave “normal”
+  let val = pages[v];
+
+  if (val !== undefined && val !== null) return val;
+
+  // fallbacks legacy
+  if (v === "documentacion") {
+    // a veces se guardó como "docs"
+    val = pages.docs;
+    if (val !== undefined && val !== null) return val;
+    // por si alguien lo llamó "documentos"
+    val = pages.documentos;
+    if (val !== undefined && val !== null) return val;
+  }
+
+  if (v === "docGestion") {
+    // distintas variantes vistas en proyectos
+    val = pages["docs-gestion"];
+    if (val !== undefined && val !== null) return val;
+
+    val = pages.docsGestion;
+    if (val !== undefined && val !== null) return val;
+
+    val = pages.doc_gestion;
+    if (val !== undefined && val !== null) return val;
+
+    val = pages.docGestion;
+    if (val !== undefined && val !== null) return val;
+  }
+
+  return undefined;
+}
+
 function _isViewAllowedSafe(viewKey) {
   const v = _normalizeViewKey(viewKey);
   const caps = appState?.user?.capabilities;
   if (!caps) return false;
 
   if (caps.pages && typeof caps.pages === "object") {
-    const val = caps.pages[v];
+    // ✅ aquí aplicamos compatibilidad legacy
+    const val = _getCapsPageVal(caps.pages, v);
+
     if (val === undefined || val === null) return false;
     if (typeof val === "boolean") return val;
     if (typeof val === "string") return val !== "none";
