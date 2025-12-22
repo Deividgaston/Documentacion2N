@@ -58,6 +58,7 @@ function buildCapabilitiesForRole(role) {
       tarifas: false,
       documentacion: false,
       prescripcion: false,
+      diagramas: false, // ✅ NUEVO (por defecto NO)
       docGestion: false,
       usuarios: false,
     },
@@ -80,6 +81,7 @@ function buildCapabilitiesForRole(role) {
       tarifas: "none", // "view" | "none"
       documentacion: "none", // "commercial" | "technical" | "none"
       prescripcion: "none", // "view" | "none"
+      diagramas: false, // ✅ NUEVO (por defecto NO)
       docGestion: false,
       usuarios: false,
     },
@@ -100,7 +102,7 @@ function buildCapabilitiesForRole(role) {
     else if (k === "prescripcion") v2.pages.prescripcion = "view";
     else if (k === "docGestion") v2.pages.docGestion = true;
     else if (k === "usuarios") v2.pages.usuarios = true;
-    else v2.pages[k] = true;
+    else v2.pages[k] = true; // incluye diagramas si se llamase
   }
 
   if (r === "SUPER_ADMIN") {
@@ -116,6 +118,10 @@ function buildCapabilitiesForRole(role) {
     v2.documentacion.exportTecnico = true;
     v2.prescripcion.templates = "full";
     v2.prescripcion.extraRefs = "full";
+
+    // ✅ Diagrama: permitido para SUPER_ADMIN (recomendado)
+    legacy.views.diagramas = true;
+    v2.pages.diagramas = true;
 
     return { ...legacy, ...v2 };
   }
@@ -138,6 +144,10 @@ function buildCapabilitiesForRole(role) {
     v2.prescripcion.templates = "readOnly";
     v2.prescripcion.extraRefs = "readOnly";
 
+    // ✅ diagramas: NO por rol (solo si tú lo activas en capabilities)
+    legacy.views.diagramas = false;
+    v2.pages.diagramas = false;
+
     return { ...legacy, ...v2 };
   }
 
@@ -158,6 +168,9 @@ function buildCapabilitiesForRole(role) {
     v2.documentacion.exportTecnico = true;
     v2.prescripcion.templates = "full";
     v2.prescripcion.extraRefs = "full";
+
+    legacy.views.diagramas = false;
+    v2.pages.diagramas = false;
 
     return { ...legacy, ...v2 };
   }
@@ -184,6 +197,9 @@ function buildCapabilitiesForRole(role) {
     v2.prescripcion.templates = "readOnly";
     v2.prescripcion.extraRefs = "readOnly";
 
+    legacy.views.diagramas = false;
+    v2.pages.diagramas = false;
+
     return { ...legacy, ...v2 };
   }
 
@@ -197,6 +213,9 @@ function buildCapabilitiesForRole(role) {
     v2.documentacion.exportTecnico = false;
     v2.prescripcion.templates = "readOnly";
     v2.prescripcion.extraRefs = "readOnly";
+
+    legacy.views.diagramas = false;
+    v2.pages.diagramas = false;
 
     return { ...legacy, ...v2 };
   }
@@ -232,7 +251,7 @@ function normalizeCapabilities(caps, role) {
             : "commercial"
           : "none";
       else if (k === "prescripcion") pages.prescripcion = allowed ? "view" : "none";
-      else pages[k] = allowed;
+      else pages[k] = allowed; // incluye diagramas
     });
     out.pages = pages;
 
@@ -277,6 +296,7 @@ function getFirstAllowedView() {
     "tarifas",
     "documentacion",
     "prescripcion",
+    "diagramas", // ✅ NUEVO
     "docGestion",
     "usuarios",
   ];
@@ -625,10 +645,3 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 console.log("%cUI Shell inicializada (ui_shell.js)", "color:#4f46e5; font-weight:600;");
-
-/*
-DUPLICATED BLOCK DISABLED (file was pasted twice). Everything below is commented to avoid overrides.
-
-(El bloque duplicado que tenías pegado por segunda vez quedaría aquí dentro si existía.
-Si ya lo borraste, este comentario no molesta y puedes eliminarlo también.)
-*/
