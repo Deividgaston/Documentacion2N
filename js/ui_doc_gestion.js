@@ -48,70 +48,7 @@ function persistDocStateSafe() {
 // Helper: valida si hay ids “buenos”
 function hasValidMediaIds(list) {
   if (!Array.isArray(list) || !list.length) return false;
-  // tiene que haber al menos 1 item con id string no vacío
   return list.some((m) => m && typeof m.id === "string" && m.id.trim().length > 0);
-}
-
-// Cargar documentación para la vista de gestión desde Firestore
-async function loadDocMediaForGestion() {
-  appState.documentacion = appState.documentacion || {};
-  appState.documentacion.mediaLibrary = appState.documentacion.mediaLibrary || [];
-
-  // 1) Si existe el loader “general” de documentación, lo intentamos primero
-  if (typeof window.ensureDocMediaLoaded === "function") {
-    try {
-      const maybePromise = window.ensureDocMediaLoaded();
-      if (maybePromise && typeof maybePromise.then === "function") {
-        await maybePromise;
-      }
-    } catch (e) {
-      console.error("Error al asegurar carga de media de documentación:", e);
-    }
-  }
-
-  // 2) ✅ FIX: si no hay datos O si los datos vienen sin "id", cargamos DIRECTO desde raíz
-  // (si no, el borrado apunta a docId incorrecto y “no borra” realmente)
-  try {
-    const lib = appState.documentacion.mediaLibrary || [];
-    const okIds = hasValidMediaIds(lib);
-
-    if (!okIds) {
-      const db = getFirestoreInstance();
-      if (db) {
-        const proyectoId =
-  (typeof window.getCurrentProyectoIdSafe === "function"
-    ? window.getCurrentProyectoIdSafe()
-    : (appState.proyecto?.id || appState.proyecto?.proyectoId || appState.proyecto?.projectId || null));
-
-if (!proyectoId) {
-  console.warn("[DOC-GESTION] Sin proyectoId: no cargo documentacion_media aún.");
-  appState.documentacion.mediaLibrary = [];
-  return;
-}
-
-const [snapA, snapB] = await Promise.all([
-  db.collection("documentacion_media").where("proyectoId", "==", proyectoId).limit(500).get(),
-  db.collection("documentacion_media").where("projectId", "==", proyectoId).limit(500).get(), // legacy
-]);
-
-const map = new Map();
-snapA.forEach((doc) => map.set(doc.id, { ...(doc.data() || {}), id: doc.id }));
-snapB.forEach((doc) => map.set(doc.id, { ...(doc.data() || {}), id: doc.id }));
-
-appState.documentacion.mediaLibrary = Array.from(map.values());
-
-      }
-    } else {
-      // Normalizamos: si hay items con "id" pero alguno viene raro, lo filtramos
-      appState.documentacion.mediaLibrary = lib.filter(
-        (m) => m && typeof m.id === "string" && m.id.trim().length > 0
-      );
-    }
-  } catch (e) {
-    console.error("[DOC-GESTION] Error cargando documentacion_media (raíz):", e);
-  } finally {
-    appState.documentacion.mediaLoaded = true;
-  }
 }
 
 // ==============================
@@ -138,6 +75,121 @@ function getAuthInstance() {
   );
 }
 
+// ✅ NUEVO: esperar a que Firestore exista (evita "no se ven archivos")
+function waitForFirestoreReady(timeoutMs = 6000) {
+  return new Promise((resolve) => {
+    const start = Date.now();
+    (function tick() {
+      const db = getFirestoreInstance();
+      if (db) return resolve(db);
+      if (Date.now() - start > timeoutMs) return resolve(null);
+      setTimeout(tick, 120);
+    })();
+  });
+}
+
+// ✅ NUEVO: esperar auth (evita escrituras/lecturas antes de estar logueado)
+function waitForAuthReady(timeoutMs = 6000) {
+  const auth = getAuthInstance();
+  if (!auth) return Promise.resolve(null);
+  if (auth.currentUser) return Promise.resolve(auth.currentUser);
+
+  return new Promise((resolve) => {
+    let done = false;
+
+    const timer = setTimeout(() => {
+      if (done) return;
+      done = true;
+      resolve(auth.currentUser || null);
+    }, timeoutMs);
+
+    try {
+      const unsub = auth.onAuthStateChanged((u) => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        try {
+          unsub && unsub();
+        } catch (_) {}
+        resolve(u || null);
+      });
+    } catch (_) {
+      clearTimeout(timer);
+      resolve(auth.currentUser || null);
+    }
+  });
+}
+
+// ==============================
+// Cargar documentación para la vista de gestión desde Firestore
+// ==============================
+
+async function loadDocMediaForGestion() {
+  appState.documentacion = appState.documentacion || {};
+  appState.documentacion.mediaLibrary = appState.documentacion.mediaLibrary || [];
+
+  // ✅ Esperar a Firestore/Auth antes de nada
+  const dbReady = await waitForFirestoreReady(6000);
+  const user = await waitForAuthReady(6000);
+
+  if (!dbReady) {
+    console.warn("[DOC-GESTION] Firestore no está listo aún. No puedo cargar la biblioteca.");
+    appState.documentacion.mediaLoaded = false;
+    return;
+  }
+  if (!user) {
+    console.warn("[DOC-GESTION] Auth no está listo (o no logueado). No cargo biblioteca todavía.");
+    appState.documentacion.mediaLoaded = false;
+    return;
+  }
+
+  // 1) Si existe el loader “general” de documentación, lo intentamos primero
+  if (typeof window.ensureDocMediaLoaded === "function") {
+    try {
+      const maybePromise = window.ensureDocMediaLoaded();
+      if (maybePromise && typeof maybePromise.then === "function") {
+        await maybePromise;
+      }
+    } catch (e) {
+      console.error("Error al asegurar carga de media de documentación:", e);
+    }
+  }
+
+  // 2) ✅ FIX: si no hay datos O si los datos vienen sin "id", cargamos DIRECTO desde raíz
+  try {
+    const lib = appState.documentacion.mediaLibrary || [];
+    const okIds = hasValidMediaIds(lib);
+
+    const db = dbReady || getFirestoreInstance();
+    if (!db) {
+      console.warn("[DOC-GESTION] No hay db disponible tras esperar. Abort.");
+      appState.documentacion.mediaLoaded = false;
+      return;
+    }
+
+    if (!okIds) {
+      const snap = await db.collection("documentacion_media").get();
+      const list = [];
+      snap.forEach((doc) => {
+        const d = doc.data() || {};
+        delete d.id;
+        list.push({ ...d, id: doc.id });
+      });
+      appState.documentacion.mediaLibrary = list;
+    } else {
+      appState.documentacion.mediaLibrary = lib.filter(
+        (m) => m && typeof m.id === "string" && m.id.trim().length > 0
+      );
+    }
+  } catch (e) {
+    console.error("[DOC-GESTION] Error cargando documentacion_media (raíz):", e);
+    // Señal útil para ti
+    alert("No se pudo cargar la biblioteca de documentación. Revisa consola (posible Firestore no listo o permisos).");
+  } finally {
+    appState.documentacion.mediaLoaded = true;
+  }
+}
+
 // ==============================
 // UPDATE METADATOS
 // ==============================
@@ -158,7 +210,7 @@ async function updateDocMediaMetaById(mediaId, updates) {
 
   persistDocStateSafe();
 
-  const db = getFirestoreInstance();
+  const db = getFirestoreInstance() || (await waitForFirestoreReady(4000));
   if (!db) return;
 
   try {
@@ -166,6 +218,7 @@ async function updateDocMediaMetaById(mediaId, updates) {
     console.log("[DOC-GESTION] Metadatos actualizados en Firestore:", mediaId);
   } catch (e) {
     console.error("Error actualizando metadatos de documentación en Firestore:", e);
+    alert("No se pudieron actualizar metadatos. Revisa consola.");
   }
 }
 
@@ -177,7 +230,7 @@ async function deleteDocMediaById(mediaId) {
   mediaId = String(mediaId || "").trim();
   if (!mediaId) return false;
 
-  const db = getFirestoreInstance();
+  const db = getFirestoreInstance() || (await waitForFirestoreReady(4000));
   const storage = getStorageInstance();
 
   if (!db) {
@@ -197,7 +250,6 @@ async function deleteDocMediaById(mediaId) {
       storagePath = data.storagePath || null;
     } else {
       console.warn("[DOC-GESTION] Documento a borrar no existe en Firestore:", mediaId);
-      // Si no existe, devolvemos false porque es un id incorrecto (típico si venía sin id real)
       return false;
     }
   } catch (e) {
@@ -260,7 +312,7 @@ async function deleteAllDocMedia() {
   const ok = window.confirm(confirmText);
   if (!ok) return;
 
-  const db = getFirestoreInstance();
+  const db = getFirestoreInstance() || (await waitForFirestoreReady(6000));
   const storage = getStorageInstance();
 
   if (!db) {
@@ -269,7 +321,6 @@ async function deleteAllDocMedia() {
   }
 
   try {
-    // ✅ IMPORTANTE: NO filtramos por uid (tu librería es global en raíz)
     const snap = await db.collection("documentacion_media").get();
     console.log("[DOC-GESTION] deleteAllDocMedia – encontrados", snap.size, "documentos");
 
@@ -324,7 +375,6 @@ async function deleteAllDocMedia() {
 // ==============================
 
 async function renderDocGestionView() {
-  // ✅ guardamos “vista actual”
   setLastViewSafe("doc_gestion");
 
   const container = getDocGestionAppContent();
@@ -562,8 +612,17 @@ function attachDocGestionHandlers() {
         return;
       }
 
-      // ✅ FIX: no confiamos en el objeto devuelto (a veces viene sin id).
-      // Subimos y luego recargamos desde Firestore para garantizar doc.id.
+      // ✅ Esperar auth/firestore antes de subir (evita subidas “silenciosas”)
+      await waitForFirestoreReady(6000);
+      const user = await waitForAuthReady(6000);
+      if (!user) {
+        alert("No estás autenticado aún. Espera 1 segundo y prueba otra vez.");
+        return;
+      }
+
+      let okCount = 0;
+      let failCount = 0;
+
       for (const file of files) {
         try {
           // eslint-disable-next-line no-await-in-loop
@@ -571,8 +630,10 @@ function attachDocGestionHandlers() {
             folderName: folderName.trim(),
             docCategory,
           });
+          okCount++;
         } catch (e) {
           console.error("Error subiendo archivo de documentación (gestión):", e);
+          failCount++;
         }
       }
 
@@ -588,6 +649,13 @@ function attachDocGestionHandlers() {
         console.error("[DOC-GESTION] Error recargando tras subida:", e);
       }
 
+      // ✅ Confirmación que echabas de menos
+      if (okCount > 0) {
+        alert(`✅ Subidos ${okCount} archivo(s) correctamente.${failCount ? " (" + failCount + " fallidos)" : ""}`);
+      } else {
+        alert("❌ No se pudo subir ningún archivo. Revisa consola.");
+      }
+
       renderDocGestionView();
     });
   }
@@ -600,7 +668,7 @@ function attachDocGestionHandlers() {
     });
   }
 
-  // ✅ Borrado individual (más robusto: usa el id del row si el atributo está vacío)
+  // Borrado individual
   container.querySelectorAll("[data-doc-media-delete]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       if (btn.disabled) return;
@@ -625,7 +693,7 @@ function attachDocGestionHandlers() {
       }
 
       alert("✅ Archivo eliminado correctamente.");
-      renderDocGestionView(); // refrescamos desde estado real
+      renderDocGestionView();
     });
   });
 
@@ -665,3 +733,6 @@ console.log(
   "%cUI Gestión de documentación inicializada (ui_doc_gestion.js)",
   "color:#06b6d4; font-weight:600;"
 );
+
+// Exponer vista pública (por si app.js la llama)
+window.renderDocGestionView = renderDocGestionView;
