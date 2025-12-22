@@ -2863,24 +2863,18 @@ function renderDocumentacionView() {
 
   const d = appState.documentacion;
 
-  // 🔥 Al entrar en la vista: cargar media automáticamente (fichas + gráfica)
+    // 🔥 Cargar media SOLO cuando ya existe proyectoId (evita bucle infinito)
   if (!d.mediaLoaded) {
-    ensureDocMediaLoadedOnce().then((ok) => {
-      if (ok && typeof window.renderDocumentacionView === "function") {
-        window.renderDocumentacionView();
-      } else {
-        // reintento suave (por si Firebase termina de inicializar justo después)
-        setTimeout(() => {
-          if (
-            !appState.documentacion.mediaLoaded &&
-            typeof window.renderDocumentacionView === "function"
-          ) {
-            window.renderDocumentacionView();
-          }
-        }, 400);
-      }
-    });
+    const pidNow = getCurrentProyectoIdSafe();
+    if (pidNow) {
+      ensureDocMediaLoadedOnce().then((ok) => {
+        if (ok && typeof window.renderDocumentacionView === "function") {
+          window.renderDocumentacionView();
+        }
+      });
+    }
   }
+
 
   const idioma = d.idioma || "es";
 
