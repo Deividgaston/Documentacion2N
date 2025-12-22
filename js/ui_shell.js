@@ -119,7 +119,7 @@ function buildCapabilitiesForRole(role) {
     v2.prescripcion.templates = "full";
     v2.prescripcion.extraRefs = "full";
 
-    // ✅ Diagrama: permitido para SUPER_ADMIN (recomendado)
+    // ✅ Diagrama: permitido para SUPER_ADMIN
     legacy.views.diagramas = true;
     v2.pages.diagramas = true;
 
@@ -144,7 +144,7 @@ function buildCapabilitiesForRole(role) {
     v2.prescripcion.templates = "readOnly";
     v2.prescripcion.extraRefs = "readOnly";
 
-    // ✅ diagramas: NO por rol (solo si tú lo activas en capabilities)
+    // ✅ diagramas: NO por rol (solo si tú lo activas)
     legacy.views.diagramas = false;
     v2.pages.diagramas = false;
 
@@ -229,18 +229,24 @@ function normalizeCapabilities(caps, role) {
   const base = buildCapabilitiesForRole(r);
   const out = { ...(caps || {}) };
 
-  // Asegurar legacy
+  // Asegurar legacy/v2 (crear si no existen)
   if (!out.views) out.views = base.views;
   if (!out.features) out.features = base.features;
-
-  // Asegurar v2
   if (!out.pages) out.pages = base.pages;
   if (!out.documentacion) out.documentacion = base.documentacion;
   if (!out.prescripcion) out.prescripcion = base.prescripcion;
 
+  // ✅ CAMBIO MÍNIMO CLAVE:
+  // Completar claves nuevas aunque ya existan (p.ej. diagramas)
+  out.views = { ...(base.views || {}), ...(out.views || {}) };
+  out.features = { ...(base.features || {}), ...(out.features || {}) };
+  out.pages = { ...(base.pages || {}), ...(out.pages || {}) };
+  out.documentacion = { ...(base.documentacion || {}), ...(out.documentacion || {}) };
+  out.prescripcion = { ...(base.prescripcion || {}), ...(out.prescripcion || {}) };
+
   // Si solo hay legacy, derivar pages mínimos
   if (caps && caps.views && (!caps.pages || typeof caps.pages !== "object")) {
-    const pages = { ...out.pages };
+    const pages = { ...(out.pages || {}) };
     Object.keys(caps.views).forEach((k) => {
       const allowed = !!caps.views[k];
       if (k === "tarifas") pages.tarifas = allowed ? "view" : "none";
@@ -253,7 +259,7 @@ function normalizeCapabilities(caps, role) {
       else if (k === "prescripcion") pages.prescripcion = allowed ? "view" : "none";
       else pages[k] = allowed; // incluye diagramas
     });
-    out.pages = pages;
+    out.pages = { ...(base.pages || {}), ...pages };
 
     out.documentacion = out.documentacion || {};
     out.documentacion.exportTecnico = !!out.features?.docExportTecnico;
