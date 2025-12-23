@@ -2867,6 +2867,10 @@ function renderDocumentacionView() {
   if (!container) return;
 
   const d = appState.documentacion;
+  // ✅ FORZAR recarga de media al entrar (evita depender de haber pasado por Gestión)
+d.mediaLoaded = false;
+d.mediaLibrary = [];
+
 
     // 🔥 Cargar media SOLO cuando ya existe proyectoId (evita bucle infinito)
   if (!d.mediaLoaded) {
