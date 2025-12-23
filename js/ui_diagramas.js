@@ -1,13 +1,9 @@
 // js/ui_diagramas.js
 // Vista: DIAGRAMAS (IA)
-// V2.1 (Hito 16):
-// - Carga referencias del proyecto (presupuesto) -> paleta draggable
-// - Carga plantilla DXF -> biblioteca de iconos (BLOCKS)
-// - Zonas drop: entrada, portales, comunes, refugio + NUEVO armario/CPD
-// - Botón AUTO: sugiere iconos (BLOCK) por heurística (ref/descripcion)
-// - IA: diseña red UTP Cat6 en base a asignaciones (no inventa dispositivos finales)
-// - Exportar DXF: esquema (CIRCLE+TEXT + LINE cables) con coords artificiales por zonas
-// - Editor de prompt opcional
+// V2.2 (Hito nuevo - opción 2):
+// - Fix IA: envía sectionKey + aliases + sectionText para compatibilidad con handleDocSectionAI
+// - Anclaje en plano por click (canvas con rejilla)
+// - Export DXF: usa anchors si existen; si no, esquema por zonas
 
 window.appState = window.appState || {};
 appState.diagramas = appState.diagramas || {
@@ -26,10 +22,25 @@ appState.diagramas = appState.diagramas || {
     { key: "portales_interiores", label: "Portales interiores" },
     { key: "zonas_comunes", label: "Zonas comunes" },
     { key: "zonas_refugio", label: "Zonas refugio" },
-    { key: "armario_cpd", label: "Armario / CPD" }, // <-- NUEVO
+    { key: "armario_cpd", label: "Armario / CPD" },
   ],
   assignments: {
     // zoneKey: [{id, ref, descripcion, qty, iconBlock}]
+  },
+
+  // Plano (anclaje por click)
+  plan: {
+    // No parseamos DXF aún: esto es un canvas con rejilla para anclar
+    w: 960,
+    h: 520,
+    grid: 40,
+    anchors: {}, // id -> {x,y} en coords de canvas
+    selectedPlacementId: null, // id seleccionado para anclar
+    invertYForDxf: true, // DXF típico: Y hacia arriba. Canvas: Y hacia abajo.
+    scale: 1, // factor simple (canvas -> dxf units)
+    offsetX: 0,
+    offsetY: 0,
+    show: true,
   },
 
   // Prompt editor
@@ -62,6 +73,7 @@ function _setBusy(b) {
   appState.diagramas.busy = !!b;
   const btn = _el("btnDiagGenerate");
   if (btn) btn.disabled = !!b;
+
   const sp = _el("diagBusy");
   if (sp) sp.style.display = b ? "" : "none";
 }
@@ -76,7 +88,7 @@ function _renderResult() {
   }
 
   if (!appState.diagramas.lastResult) {
-    out.innerHTML = `<div class="muted">Arrastra referencias a las zonas y pulsa <b>Generar diseño</b>.</div>`;
+    out.innerHTML = `<div class="muted">Asigna referencias a zonas, ancla posiciones en el plano (opcional) y pulsa <b>Generar diseño</b>.</div>`;
     return;
   }
 
@@ -92,14 +104,13 @@ function _renderResult() {
 
 /* ======================================================
    1) Cargar referencias del proyecto (presupuesto)
-   - Usa appState.presupuesto.lineas[]: {ref, descripcion, cantidad}
  ====================================================== */
 
 function diagLoadProjectRefs() {
   const presu = appState?.presupuesto;
   const lineas = Array.isArray(presu?.lineas) ? presu.lineas : [];
 
-  const map = new Map(); // ref -> {ref, descripcion, qty}
+  const map = new Map();
   for (const l of lineas) {
     const ref = String(l?.ref || "").trim();
     if (!ref) continue;
@@ -115,10 +126,8 @@ function diagLoadProjectRefs() {
     }
   }
 
-  const refs = Array.from(map.values()).sort((a, b) => a.ref.localeCompare(b.ref));
-  appState.diagramas.refs = refs;
+  appState.diagramas.refs = Array.from(map.values()).sort((a, b) => a.ref.localeCompare(b.ref));
 
-  // init assignments por zonas (incluye Armario/CPD)
   appState.diagramas.assignments = appState.diagramas.assignments || {};
   for (const z of appState.diagramas.zones) {
     if (!Array.isArray(appState.diagramas.assignments[z.key])) {
@@ -200,8 +209,7 @@ async function diagImportDxfFile(file) {
   appState.diagramas.dxfText = "";
   appState.diagramas.dxfBlocks = [];
 
-  const okExt = /\.dxf$/i.test(file.name || "");
-  if (!okExt) {
+  if (!/\.dxf$/i.test(file.name || "")) {
     appState.diagramas.lastError = "El archivo no parece DXF (.dxf).";
     _renderResult();
     return;
@@ -217,10 +225,9 @@ async function diagImportDxfFile(file) {
 
     const pairs = _dxfToPairs(text);
     const blocks = _dxfExtractBlocks(pairs);
-
     appState.diagramas.dxfBlocks = blocks.sort((a, b) => a.localeCompare(b));
 
-    _renderDiagramasUI(); // refresca selects de iconos
+    _renderDiagramasUI();
     _renderResult();
   } catch (e) {
     appState.diagramas.lastError = e.message || String(e);
@@ -273,10 +280,9 @@ function _onZoneDrop(ev, zoneKey) {
   const source = (appState.diagramas.refs || []).find((r) => r.ref === ref);
   if (!source) return;
 
-  const list = (appState.diagramas.assignments[zoneKey] =
-    appState.diagramas.assignments[zoneKey] || []);
-
+  const list = (appState.diagramas.assignments[zoneKey] = appState.diagramas.assignments[zoneKey] || []);
   const existing = list.find((x) => x.ref === ref);
+
   if (existing) {
     existing.qty = Number(existing.qty || 0) + 1;
   } else {
@@ -296,7 +302,17 @@ function _removeAssignment(zoneKey, id) {
   const list = appState.diagramas.assignments[zoneKey] || [];
   const idx = list.findIndex((x) => x.id === id);
   if (idx >= 0) list.splice(idx, 1);
+
+  // borra anclaje si existía
+  if (appState.diagramas.plan?.anchors && appState.diagramas.plan.anchors[id]) {
+    delete appState.diagramas.plan.anchors[id];
+  }
+  if (appState.diagramas.plan?.selectedPlacementId === id) {
+    appState.diagramas.plan.selectedPlacementId = null;
+  }
+
   _renderDiagramasUI();
+  _drawPlan();
 }
 
 function _updateAssignment(zoneKey, id, patch) {
@@ -316,8 +332,6 @@ function _norm(s) {
 
 function _suggestIconBlockForItem(item, blocks) {
   const text = `${item.ref || ""} ${item.descripcion || ""}`.toLowerCase();
-
-  // Mapa de patrones -> keywords esperadas en nombre de BLOCK
   const rules = [
     { patterns: ["ip style", "ipstyle"], blockHints: ["ip style", "ipstyle"] },
     { patterns: ["ip one", "ipone"], blockHints: ["ip one", "ipone"] },
@@ -332,22 +346,19 @@ function _suggestIconBlockForItem(item, blocks) {
 
   for (const r of rules) {
     if (!r.patterns.some((p) => text.includes(p))) continue;
-
-    // 1) intenta match por hints en block
     for (const hint of r.blockHints) {
       const hit = bNorm.find((x) => x.n.includes(_norm(hint)));
       if (hit) return hit.raw;
     }
   }
 
-  // fallback: si ref contiene algo parecido al block
   const refNorm = _norm(item.ref);
   if (refNorm) {
     const hit2 = bNorm.find((x) => x.n.includes(refNorm));
     if (hit2) return hit2.raw;
   }
 
-  return ""; // sin sugerencia
+  return "";
 }
 
 function diagAutoAssignIcons() {
@@ -363,7 +374,7 @@ function diagAutoAssignIcons() {
   for (const z of appState.diagramas.zones) {
     const list = appState.diagramas.assignments[z.key] || [];
     for (const it of list) {
-      if (it.iconBlock) continue; // respeta lo que ya eligió el usuario
+      if (it.iconBlock) continue;
       const sug = _suggestIconBlockForItem(it, blocks);
       if (sug) it.iconBlock = sug;
     }
@@ -385,6 +396,7 @@ Contexto:
 - El usuario ha asignado referencias (ref) del presupuesto a zonas del edificio:
   entrada_principal, portales_interiores, zonas_comunes, zonas_refugio, armario_cpd.
 - Solo se permite cableado UTP categoría 6 (Cat6).
+- El usuario puede anclar posiciones (x,y) en el plano: si existen anchors, NO propongas posiciones.
 
 Objetivo:
 - Diseña la red más eficiente y mantenible.
@@ -396,7 +408,7 @@ Objetivo:
 DEVUELVE SOLO JSON válido con este formato exacto:
 {
   "placements":[
-    { "id":"...", "ref":"...", "zone":"...", "icon_block":"...", "qty":1, "meta":{ "source":"USER"|"VIRTUAL" } }
+    { "id":"...", "ref":"...", "zone":"...", "icon_block":"...", "qty":1, "meta":{ "source":"USER"|"VIRTUAL", "pos": {"x":0,"y":0} } }
   ],
   "infra":[
     { "id":"...", "type":"VIRTUAL_SWITCH_POE"|"VIRTUAL_SWITCH"|"VIRTUAL_CORE"|"VIRTUAL_ROUTER", "zone":"...", "meta":{...} }
@@ -419,6 +431,7 @@ function _getEffectiveInstructions() {
 function _buildAiPayload() {
   const zones = appState.diagramas.zones || [];
   const assignments = appState.diagramas.assignments || {};
+  const anchors = appState.diagramas.plan?.anchors || {};
 
   const placements = [];
   for (const z of zones) {
@@ -431,7 +444,10 @@ function _buildAiPayload() {
         zone: z.key,
         icon_block: it.iconBlock || "",
         qty: Number(it.qty || 0) || 0,
-        meta: { source: "USER" },
+        meta: {
+          source: "USER",
+          pos: anchors[it.id] ? { x: anchors[it.id].x, y: anchors[it.id].y } : null,
+        },
       });
     }
   }
@@ -444,6 +460,7 @@ function _buildAiPayload() {
     cable: "UTP_CAT6",
     zones: zones.map((z) => ({ key: z.key, label: z.label })),
     placements,
+    has_anchors: Object.keys(anchors).length > 0,
     icon_library_blocks: iconLibrary.slice(0, 2000),
   };
 
@@ -456,10 +473,44 @@ function _buildAiPayload() {
     },
   };
 
+  return { instructions: _getEffectiveInstructions(), spec, network_rules };
+}
+
+// --- FIX compat handler: sectionKey + aliases + sectionText ---
+function _buildHandlerEnvelope(payload) {
+  const sectionKey = "diagramas_network";
+  const docKey = "diagramas";
+
+  // Algunos handlers de Documentación esperan un "texto de sección"
+  const sectionText = [
+    "DIAGRAMAS / NETWORK",
+    payload.instructions,
+    JSON.stringify({ spec: payload.spec, network_rules: payload.network_rules }).slice(0, 6000),
+  ].join("\n\n");
+
   return {
-    instructions: _getEffectiveInstructions(),
-    spec,
-    network_rules,
+    // claves "doc" / "section" en todas las variantes típicas
+    docKey,
+    doc_key: docKey,
+    documentKey: docKey,
+
+    sectionKey,
+    section_key: sectionKey,
+    sectionId: sectionKey,
+    section_id: sectionKey,
+
+    // contenido en variantes típicas
+    sectionText,
+    section_text: sectionText,
+    content: sectionText,
+    text: sectionText,
+
+    // tu payload real
+    mode: "diagram_network_v5_zones_cpd",
+    instructions: payload.instructions,
+    spec: payload.spec,
+    network_rules: payload.network_rules,
+    user: { email: appState?.user?.email || "", role: appState?.user?.role || "" },
   };
 }
 
@@ -468,7 +519,6 @@ async function diagGenerateDesign() {
   appState.diagramas.lastResult = null;
   _renderResult();
 
-  // Sync prompt UI
   appState.diagramas.useCustomPrompt = !!(_el("diagUseCustomPrompt") && _el("diagUseCustomPrompt").checked);
   appState.diagramas.customPromptText = _el("diagPromptText")
     ? String(_el("diagPromptText").value || "")
@@ -486,20 +536,16 @@ async function diagGenerateDesign() {
   const handler = window.handleDocSectionAI || window.handleAI || window.callGemini || null;
   if (typeof handler !== "function") {
     appState.diagramas.lastError =
-      "No encuentro el handler de IA (ej. window.handleDocSectionAI). Pásame el archivo donde lo defines y lo conectamos.";
+      "No encuentro el handler de IA (ej. window.handleDocSectionAI).";
     _renderResult();
     return;
   }
 
   _setBusy(true);
   try {
-    const res = await handler({
-      mode: "diagram_network_v5_zones_cpd",
-      instructions: payload.instructions,
-      spec: payload.spec,
-      network_rules: payload.network_rules,
-      user: { email: appState?.user?.email || "", role: appState?.user?.role || "" },
-    });
+    const env = _buildHandlerEnvelope(payload);
+
+    const res = await handler(env);
 
     let obj = res;
     if (typeof res === "string") {
@@ -520,7 +566,7 @@ async function diagGenerateDesign() {
     _renderResult();
   } catch (e) {
     console.error(e);
-    appState.diagramas.lastError = e.message || String(e);
+    appState.diagramas.lastError = e?.message || String(e);
     appState.diagramas.lastResult = null;
     _renderResult();
   } finally {
@@ -529,84 +575,187 @@ async function diagGenerateDesign() {
 }
 
 /* ======================================================
-   6) Export DXF (esquemático)
-   - Sin coords reales de plano: generamos layout por zonas y “nodos”
-   - Dibuja: CIRCLE nodes + TEXT label + LINE connections
+   6) Plano (canvas) - anclaje por click
+ ====================================================== */
+
+function _getAllAssignmentsFlat() {
+  const out = [];
+  for (const z of appState.diagramas.zones) {
+    const list = appState.diagramas.assignments[z.key] || [];
+    for (const it of list) out.push({ zoneKey: z.key, zoneLabel: z.label, it });
+  }
+  return out;
+}
+
+function _selectForAnchoring(id) {
+  appState.diagramas.plan.selectedPlacementId = id || null;
+  _renderDiagramasUI();
+  _drawPlan();
+}
+
+function _drawPlan() {
+  const cv = _el("diagPlanCanvas");
+  if (!cv) return;
+  const ctx = cv.getContext("2d");
+  if (!ctx) return;
+
+  const plan = appState.diagramas.plan;
+  const w = plan.w, h = plan.h;
+  if (cv.width !== w) cv.width = w;
+  if (cv.height !== h) cv.height = h;
+
+  // background
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, w, h);
+
+  // grid
+  const g = Math.max(10, Number(plan.grid || 40));
+  ctx.strokeStyle = "rgba(15,23,42,0.08)";
+  ctx.lineWidth = 1;
+  for (let x = 0; x <= w; x += g) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, h);
+    ctx.stroke();
+  }
+  for (let y = 0; y <= h; y += g) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(w, y);
+    ctx.stroke();
+  }
+
+  // anchors
+  const anchors = plan.anchors || {};
+  const selected = plan.selectedPlacementId;
+
+  const flat = _getAllAssignmentsFlat();
+  const idToLabel = new Map(flat.map((x) => [x.it.id, `${x.it.ref}`]));
+
+  for (const id of Object.keys(anchors)) {
+    const p = anchors[id];
+    if (!p) continue;
+
+    const isSel = id === selected;
+    ctx.beginPath();
+    ctx.fillStyle = isSel ? "rgba(29,79,216,0.9)" : "rgba(17,24,39,0.75)";
+    ctx.arc(p.x, p.y, isSel ? 7 : 5, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.font = "12px system-ui, sans-serif";
+    ctx.fillStyle = "rgba(17,24,39,0.85)";
+    const label = idToLabel.get(id) || id;
+    ctx.fillText(label, p.x + 10, p.y - 8);
+  }
+
+  // hint selected
+  if (selected) {
+    ctx.font = "12px system-ui, sans-serif";
+    ctx.fillStyle = "rgba(29,79,216,0.95)";
+    ctx.fillText("Click en el plano para anclar el elemento seleccionado", 12, h - 12);
+  } else {
+    ctx.font = "12px system-ui, sans-serif";
+    ctx.fillStyle = "rgba(107,114,128,0.95)";
+    ctx.fillText("Selecciona un elemento (en las zonas) para anclarlo aquí", 12, h - 12);
+  }
+}
+
+function _planCanvasClick(ev) {
+  const plan = appState.diagramas.plan;
+  const id = plan.selectedPlacementId;
+  if (!id) return;
+
+  const cv = ev.currentTarget;
+  const rect = cv.getBoundingClientRect();
+  const x = Math.round((ev.clientX - rect.left) * (cv.width / rect.width));
+  const y = Math.round((ev.clientY - rect.top) * (cv.height / rect.height));
+
+  plan.anchors = plan.anchors || {};
+  plan.anchors[id] = { x, y };
+
+  _drawPlan();
+}
+
+/* ======================================================
+   7) Export DXF
+   - Si hay anchors: usa anchors (coords canvas -> dxf)
+   - Si no: esquema por zonas (legacy)
  ====================================================== */
 
 function _dxfLine(x1, y1, x2, y2, layer = "CABLE") {
-  return [
-    "0",
-    "LINE",
-    "8",
-    layer,
-    "10",
-    String(x1),
-    "20",
-    String(y1),
-    "30",
-    "0",
-    "11",
-    String(x2),
-    "21",
-    String(y2),
-    "31",
-    "0",
-  ].join("\n");
+  return ["0","LINE","8",layer,"10",String(x1),"20",String(y1),"30","0","11",String(x2),"21",String(y2),"31","0"].join("\n");
 }
-
 function _dxfCircle(x, y, r, layer = "NODES") {
-  return [
-    "0",
-    "CIRCLE",
-    "8",
-    layer,
-    "10",
-    String(x),
-    "20",
-    String(y),
-    "30",
-    "0",
-    "40",
-    String(r),
-  ].join("\n");
+  return ["0","CIRCLE","8",layer,"10",String(x),"20",String(y),"30","0","40",String(r)].join("\n");
 }
-
 function _dxfText(x, y, h, text, layer = "LABELS") {
   const t = String(text || "").replaceAll("\n", " ");
-  return [
-    "0",
-    "TEXT",
-    "8",
-    layer,
-    "10",
-    String(x),
-    "20",
-    String(y),
-    "30",
-    "0",
-    "40",
-    String(h),
-    "1",
-    t,
-  ].join("\n");
+  return ["0","TEXT","8",layer,"10",String(x),"20",String(y),"30","0","40",String(h),"1",t].join("\n");
+}
+
+function _canvasToDxf(x, y) {
+  const plan = appState.diagramas.plan;
+  const sx = Number(plan.scale || 1);
+  const ox = Number(plan.offsetX || 0);
+  const oy = Number(plan.offsetY || 0);
+
+  let dx = x * sx + ox;
+  let dy = y * sx + oy;
+
+  if (plan.invertYForDxf) {
+    dy = (plan.h - y) * sx + oy;
+  }
+  return { x: dx, y: dy };
+}
+
+function _buildCoordsFromAnchorsOrSchematic(result) {
+  const plan = appState.diagramas.plan;
+  const anchors = plan.anchors || {};
+  const hasAnchors = Object.keys(anchors).length > 0;
+
+  if (hasAnchors) {
+    const map = new Map();
+    const placements = Array.isArray(result?.placements) ? result.placements : [];
+    const infra = Array.isArray(result?.infra) ? result.infra : [];
+
+    for (const p of placements) {
+      const a = anchors[p.id];
+      if (!a) continue; // solo exporta colocados
+      const d = _canvasToDxf(a.x, a.y);
+      const label = `${p.ref || p.id || ""}${p.qty ? ` x${p.qty}` : ""}`;
+      map.set(p.id, { x: d.x, y: d.y, label });
+    }
+
+    // Infra: si no hay anclaje, lo colocamos por defecto en CPD (centro)
+    const cpdCenterCanvas = { x: Math.round(plan.w * 0.82), y: Math.round(plan.h * 0.18) };
+    const cpdCenterDxf = _canvasToDxf(cpdCenterCanvas.x, cpdCenterCanvas.y);
+
+    for (const n of infra) {
+      const a = anchors[n.id];
+      const d = a ? _canvasToDxf(a.x, a.y) : cpdCenterDxf;
+      const label = `${n.type || n.id || ""}`;
+      map.set(n.id, { x: d.x, y: d.y, label });
+    }
+
+    return { map, mode: "anchors" };
+  }
+
+  // fallback a esquema por zonas
+  return { map: _buildSchematicCoordsFromResult(result), mode: "schematic" };
 }
 
 function _buildSchematicCoordsFromResult(result) {
   const zones = appState.diagramas.zones || [];
   const zoneIndex = new Map(zones.map((z, i) => [z.key, i]));
-
-  // Layout: columnas por zona
   const colW = 280;
   const rowH = 80;
   const startX = 100;
   const startY = 100;
 
-  // placements result + infra result
   const placements = Array.isArray(result?.placements) ? result.placements : [];
   const infra = Array.isArray(result?.infra) ? result.infra : [];
 
-  // contamos items por zona para distribuir
   const perZoneCount = {};
   for (const z of zones) perZoneCount[z.key] = 0;
 
@@ -619,21 +768,20 @@ function _buildSchematicCoordsFromResult(result) {
     return { x, y };
   }
 
-  // id -> {x,y,label}
   const map = new Map();
 
   for (const p of placements) {
     const zone = String(p.zone || "entrada_principal");
     const pos = nextPos(zone);
     const label = `${p.ref || p.id || ""}${p.qty ? ` x${p.qty}` : ""}`;
-    map.set(p.id, { x: pos.x, y: pos.y, label, kind: "placement", zone });
+    map.set(p.id, { x: pos.x, y: pos.y, label });
   }
 
   for (const n of infra) {
     const zone = String(n.zone || "armario_cpd");
     const pos = nextPos(zone);
     const label = `${n.type || n.id || ""}`;
-    map.set(n.id, { x: pos.x, y: pos.y, label, kind: "infra", zone });
+    map.set(n.id, { x: pos.x, y: pos.y, label });
   }
 
   return map;
@@ -647,9 +795,10 @@ function diagExportDxf() {
     return;
   }
 
-  const coords = _buildSchematicCoordsFromResult(r);
+  const { map: coords, mode } = _buildCoordsFromAnchorsOrSchematic(r);
   if (!coords.size) {
-    appState.diagramas.lastError = "No hay nodos en el resultado para exportar.";
+    appState.diagramas.lastError =
+      "No hay nodos exportables. Si usas anclaje, coloca al menos un elemento en el plano.";
     _renderResult();
     return;
   }
@@ -657,13 +806,11 @@ function diagExportDxf() {
   const connections = Array.isArray(r.connections) ? r.connections : [];
   const ents = [];
 
-  // Nodos
-  for (const [id, p] of coords.entries()) {
+  for (const [, p] of coords.entries()) {
     ents.push(_dxfCircle(p.x, p.y, 10, "NODES"));
     ents.push(_dxfText(p.x + 16, p.y + 4, 10, p.label, "LABELS"));
   }
 
-  // Cables
   for (const c of connections) {
     const a = coords.get(c.from);
     const b = coords.get(c.to);
@@ -671,42 +818,19 @@ function diagExportDxf() {
     ents.push(_dxfLine(a.x, a.y, b.x, b.y, "CABLE"));
   }
 
-  // Título / zonas como headers
-  const zones = appState.diagramas.zones || [];
-  const colW = 280;
-  const startX = 100;
-  const titleY = 40;
-  ents.push(_dxfText(100, 20, 14, "DIAGRAMA RED UTP CAT6 (ESQUEMA)", "LABELS"));
-  zones.forEach((z, i) => {
-    ents.push(_dxfText(startX + i * colW, titleY, 12, z.label, "LABELS"));
-  });
+  const title = mode === "anchors" ? "DIAGRAMA RED UTP CAT6 (ANCLADO)" : "DIAGRAMA RED UTP CAT6 (ESQUEMA)";
+  ents.push(_dxfText(100, 20, 14, title, "LABELS"));
 
   const dxf = [
-    "0",
-    "SECTION",
-    "2",
-    "HEADER",
-    "0",
-    "ENDSEC",
-    "0",
-    "SECTION",
-    "2",
-    "TABLES",
-    "0",
-    "ENDSEC",
-    "0",
-    "SECTION",
-    "2",
-    "ENTITIES",
+    "0","SECTION","2","HEADER","0","ENDSEC",
+    "0","SECTION","2","TABLES","0","ENDSEC",
+    "0","SECTION","2","ENTITIES",
     ents.join("\n"),
-    "0",
-    "ENDSEC",
-    "0",
-    "EOF",
+    "0","ENDSEC","0","EOF",
   ].join("\n");
 
   const nameBase = (appState.diagramas.dxfFileName || "diagrama").replace(/\.dxf$/i, "");
-  const fileName = `${nameBase}_red_cat6_esquema.dxf`;
+  const fileName = `${nameBase}_red_cat6_${mode}.dxf`;
 
   try {
     const blob = new Blob([dxf], { type: "application/dxf" });
@@ -718,14 +842,14 @@ function diagExportDxf() {
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1500);
-  } catch (e) {
+  } catch (_) {
     appState.diagramas.lastError = "No se pudo descargar el DXF.";
     _renderResult();
   }
 }
 
 /* ======================================================
-   7) Render UI
+   8) Render UI
  ====================================================== */
 
 function _renderDiagramasUI() {
@@ -745,36 +869,36 @@ function _renderDiagramasUI() {
     const list = Array.isArray(s.assignments[z.key]) ? s.assignments[z.key] : [];
     const items = list
       .map((it) => {
+        const isSelected = s.plan.selectedPlacementId === it.id;
+        const hasAnchor = !!(s.plan.anchors && s.plan.anchors[it.id]);
+
         const blockOptions =
           `<option value="">(sin icono)</option>` +
           blocks
             .slice(0, 800)
             .map(
               (b) =>
-                `<option value="${_escapeHtmlAttr(b)}"${
-                  it.iconBlock === b ? " selected" : ""
-                }>${_escapeHtml(b)}</option>`
+                `<option value="${_escapeHtmlAttr(b)}"${it.iconBlock === b ? " selected" : ""}>${_escapeHtml(b)}</option>`
             )
             .join("");
 
         return `
-          <div class="card" style="padding:10px; margin-top:8px;">
+          <div class="card" style="padding:10px; margin-top:8px; border:${isSelected ? "1px solid rgba(29,79,216,.55)" : "none"};">
             <div style="display:flex; justify-content:space-between; gap:10px; align-items:flex-start;">
-              <div style="min-width:0;">
-                <div style="font-weight:600;">${_escapeHtml(it.ref)}</div>
+              <div style="min-width:0; cursor:pointer;" data-act="selectAnchor" data-id="${_escapeHtmlAttr(it.id)}">
+                <div style="font-weight:600; display:flex; gap:8px; align-items:center;">
+                  ${_escapeHtml(it.ref)}
+                  <span class="chip" style="font-size:11px; padding:.12rem .45rem;">${hasAnchor ? "Anclado" : "Sin anclar"}</span>
+                </div>
                 <div class="muted" style="font-size:12px;">${_escapeHtml(it.descripcion || "")}</div>
               </div>
-              <button class="btn btn-sm" data-act="remove" data-zone="${_escapeHtmlAttr(z.key)}" data-id="${_escapeHtmlAttr(
-          it.id
-        )}">Quitar</button>
+              <button class="btn btn-sm" data-act="remove" data-zone="${_escapeHtmlAttr(z.key)}" data-id="${_escapeHtmlAttr(it.id)}">Quitar</button>
             </div>
 
             <div class="grid mt-2" style="display:grid; grid-template-columns: 120px 1fr; gap:10px; align-items:center;">
               <div class="form-group" style="margin:0;">
                 <label style="font-size:12px;">Cantidad</label>
-                <input type="number" min="1" value="${Number(it.qty || 1)}" data-act="qty" data-zone="${_escapeHtmlAttr(
-          z.key
-        )}" data-id="${_escapeHtmlAttr(it.id)}"/>
+                <input type="number" min="1" value="${Number(it.qty || 1)}" data-act="qty" data-zone="${_escapeHtmlAttr(z.key)}" data-id="${_escapeHtmlAttr(it.id)}"/>
               </div>
               <div class="form-group" style="margin:0;">
                 <label style="font-size:12px;">Icono DXF (BLOCK)</label>
@@ -782,6 +906,11 @@ function _renderDiagramasUI() {
                   ${blockOptions}
                 </select>
               </div>
+            </div>
+
+            <div class="mt-2" style="display:flex; gap:8px; align-items:center;">
+              <button class="btn btn-sm" data-act="selectAnchor" data-id="${_escapeHtmlAttr(it.id)}">${isSelected ? "Seleccionado" : "Anclar en plano"}</button>
+              ${hasAnchor ? `<button class="btn btn-sm" data-act="clearAnchor" data-id="${_escapeHtmlAttr(it.id)}">Quitar anclaje</button>` : ""}
             </div>
           </div>
         `;
@@ -802,18 +931,18 @@ function _renderDiagramasUI() {
     `;
   }
 
+  const plan = s.plan;
+
   host.innerHTML = `
     <div class="grid" style="display:grid; grid-template-columns: 360px 1fr; gap:14px;">
-      <!-- LEFT: PALETA -->
+      <!-- LEFT -->
       <div class="card" style="padding:12px;">
         <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
           <h3 style="margin:0;">Referencias del proyecto</h3>
           <button id="btnDiagReloadRefs" class="btn btn-sm">Recargar</button>
         </div>
 
-        <div class="muted mt-1" style="font-size:12px;">
-          Fuente: presupuesto (appState.presupuesto.lineas). Arrastra a zonas.
-        </div>
+        <div class="muted mt-1" style="font-size:12px;">Fuente: presupuesto (appState.presupuesto.lineas). Arrastra a zonas.</div>
 
         <div class="form-group mt-2">
           <input id="diagRefsSearch" type="text" placeholder="Buscar ref/descripcion..." value="${_escapeHtml(s.refsSearch || "")}"/>
@@ -824,8 +953,8 @@ function _renderDiagramasUI() {
             filtered.length
               ? filtered
                   .slice(0, 300)
-                  .map((r) => {
-                    return `
+                  .map(
+                    (r) => `
                       <div class="card diag-draggable" style="padding:10px; margin-bottom:8px;"
                            draggable="true" data-ref="${_escapeHtmlAttr(r.ref)}">
                         <div style="display:flex; justify-content:space-between; gap:10px; align-items:center;">
@@ -838,8 +967,8 @@ function _renderDiagramasUI() {
                           <span class="chip">${Number(r.qty || 0)}</span>
                         </div>
                       </div>
-                    `;
-                  })
+                    `
+                  )
                   .join("")
               : `<div class="muted">No hay referencias. Genera un presupuesto primero.</div>`
           }
@@ -860,12 +989,12 @@ function _renderDiagramasUI() {
         </div>
       </div>
 
-      <!-- RIGHT: ZONAS -->
+      <!-- RIGHT -->
       <div>
         <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
           <div>
             <h3 style="margin:0;">Ubicación de dispositivos</h3>
-            <div class="muted" style="font-size:12px;">Arrastra referencias a zonas. Usa AUTO para sugerir iconos. Genera diseño y exporta DXF.</div>
+            <div class="muted" style="font-size:12px;">Arrastra refs a zonas. Selecciona un elemento y haz click en el plano para anclarlo.</div>
           </div>
           <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
             <button id="btnDiagAuto" class="btn btn-secondary btn-sm">Auto</button>
@@ -876,6 +1005,31 @@ function _renderDiagramasUI() {
           </div>
         </div>
 
+        <!-- PLANO -->
+        <div class="card mt-3" style="padding:12px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+            <div>
+              <div style="font-weight:700;">Plano (anclaje por click)</div>
+              <div class="muted" style="font-size:12px;">
+                Selecciona un elemento (botón “Anclar en plano”) y haz click para fijar posición. (Aún sin render DXF real)
+              </div>
+            </div>
+            <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+              <label style="display:flex; gap:8px; align-items:center; font-size:12px;">
+                <input id="diagInvertY" type="checkbox"${plan.invertYForDxf ? " checked" : ""}/>
+                Invertir Y (DXF)
+              </label>
+              <button id="btnDiagClearSelected" class="btn btn-sm">Limpiar selección</button>
+              <button id="btnDiagClearAllAnchors" class="btn btn-sm">Borrar anclajes</button>
+            </div>
+          </div>
+
+          <div class="mt-2" style="overflow:auto; border-radius:12px; border:1px solid rgba(15,23,42,.10);">
+            <canvas id="diagPlanCanvas" width="${plan.w}" height="${plan.h}" style="display:block; width:100%; height:auto; background:#fff;"></canvas>
+          </div>
+        </div>
+
+        <!-- PROMPT -->
         <div id="diagPromptBox" class="card mt-3" style="padding:12px; display:${s.promptUiOpen ? "" : "none"};">
           <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
             <h4 style="margin:0;">Prompt</h4>
@@ -909,14 +1063,9 @@ function _renderDiagramasUI() {
 
   // Reload refs
   const btnReload = _el("btnDiagReloadRefs");
-  if (btnReload) {
-    btnReload.addEventListener("click", () => {
-      diagLoadProjectRefs();
-      _renderDiagramasUI();
-    });
-  }
+  if (btnReload) btnReload.addEventListener("click", () => { diagLoadProjectRefs(); _renderDiagramasUI(); });
 
-  // DXF import
+  // DXF icons import
   const inpDxf = _el("diagDxfFile");
   if (inpDxf) {
     inpDxf.addEventListener("change", async () => {
@@ -927,13 +1076,7 @@ function _renderDiagramasUI() {
 
   // Prompt toggle
   const btnPrompt = _el("btnDiagTogglePrompt");
-  if (btnPrompt) {
-    btnPrompt.addEventListener("click", () => {
-      appState.diagramas.promptUiOpen = !appState.diagramas.promptUiOpen;
-      _renderDiagramasUI();
-      _renderResult();
-    });
-  }
+  if (btnPrompt) btnPrompt.addEventListener("click", () => { appState.diagramas.promptUiOpen = !appState.diagramas.promptUiOpen; _renderDiagramasUI(); _renderResult(); });
 
   // Auto
   const btnAuto = _el("btnDiagAuto");
@@ -975,11 +1118,44 @@ function _renderDiagramasUI() {
         _updateAssignment(zoneKey, id, { qty: Math.max(1, Number.isFinite(v) ? v : 1) });
       });
     } else if (act === "icon") {
-      node.addEventListener("change", () => {
-        _updateAssignment(zoneKey, id, { iconBlock: String(node.value || "") });
+      node.addEventListener("change", () => _updateAssignment(zoneKey, id, { iconBlock: String(node.value || "") }));
+    } else if (act === "selectAnchor") {
+      node.addEventListener("click", () => _selectForAnchoring(id));
+    } else if (act === "clearAnchor") {
+      node.addEventListener("click", () => {
+        if (appState.diagramas.plan.anchors && appState.diagramas.plan.anchors[id]) delete appState.diagramas.plan.anchors[id];
+        if (appState.diagramas.plan.selectedPlacementId === id) appState.diagramas.plan.selectedPlacementId = null;
+        _renderDiagramasUI();
+        _drawPlan();
       });
     }
   });
+
+  // Plan canvas
+  const cv = _el("diagPlanCanvas");
+  if (cv) {
+    cv.addEventListener("click", _planCanvasClick);
+  }
+  const invY = _el("diagInvertY");
+  if (invY) {
+    invY.addEventListener("change", () => {
+      appState.diagramas.plan.invertYForDxf = !!invY.checked;
+      _drawPlan();
+    });
+  }
+  const btnClearSel = _el("btnDiagClearSelected");
+  if (btnClearSel) btnClearSel.addEventListener("click", () => { appState.diagramas.plan.selectedPlacementId = null; _renderDiagramasUI(); _drawPlan(); });
+
+  const btnClearAll = _el("btnDiagClearAllAnchors");
+  if (btnClearAll) btnClearAll.addEventListener("click", () => {
+    appState.diagramas.plan.anchors = {};
+    appState.diagramas.plan.selectedPlacementId = null;
+    _renderDiagramasUI();
+    _drawPlan();
+  });
+
+  // Paint plan
+  _drawPlan();
 }
 
 /* ======================================================
@@ -1009,8 +1185,8 @@ function renderDiagramasView() {
     <div class="card">
       <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
         <div>
-          <h2 style="margin-bottom:4px;">Diagramas · Drag & Drop</h2>
-          <div class="muted">Asignas referencias a zonas (incluye Armario/CPD) y la IA diseña la red UTP Cat6.</div>
+          <h2 style="margin-bottom:4px;">Diagramas · Anclaje en plano</h2>
+          <div class="muted">Arrastras refs a zonas y anclas posiciones con click. La IA diseña red UTP Cat6.</div>
         </div>
       </div>
       <div id="diagMain" class="mt-3"></div>
