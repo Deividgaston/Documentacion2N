@@ -43,6 +43,9 @@ const DOC_STORAGE_KEY = "docState_v1";
     appState.documentacion = {
       ...appState.documentacion,
       ...saved,
+        // 🔒 nunca persistimos media cache
+  mediaLoaded: false,
+  mediaLibrary: [],
     };
   } catch (e) {
     console.error("[DOC] Error cargando estado de documentación:", e);
