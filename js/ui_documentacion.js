@@ -1122,7 +1122,8 @@ function getCurrentProyectoIdSafe() {
     try {
       const raw =
         window?.localStorage &&
-        (localStorage.getItem("presupuestos2n_proyecto_v1") ||
+        (localStorage.getItem("presupuestos2n_proyecto") ||  
+          localStorage.getItem("presupuestos2n_proyecto_v1") ||
           localStorage.getItem("proyectoState_v1") ||
           localStorage.getItem("proyecto_v1"));
       if (raw) {
