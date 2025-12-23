@@ -2854,28 +2854,21 @@ function renderDocumentacionView() {
 
   const d = appState.documentacion;
 
-const pidNow = getCurrentProyectoIdSafe();
-if (!pidNow) {
-  console.warn("[DOC] Sin proyectoId: esperando carga de proyecto antes de renderizar media.");
-  // aquí puedes dejar el HTML normal si quieres, pero NO intentes cargar media
-}
+
 
 
   // 🔥 Cargar media si NO está cargada O si está vacía (evita depender de haber pasado por Gestión)
 const mediaLen = Array.isArray(d.mediaLibrary) ? d.mediaLibrary.length : 0;
+
 if (!d.mediaLoaded || mediaLen === 0) {
-  const pidNow = getCurrentProyectoIdSafe();
-  if (pidNow) {
-    ensureDocMediaLoadedOnce().then((ok) => {
-      if (ok && typeof window.renderDocumentacionView === "function") {
-        window.renderDocumentacionView();
-      }
-    });
-  } else {
-    // sin proyectoId no podemos filtrar por proyecto -> no cargamos todavía
-    console.warn("[DOC] Sin proyectoId: no puedo cargar documentacion_media aún.");
-  }
+  ensureDocMediaLoadedOnce().then((ok) => {
+    if (ok && typeof window.renderDocumentacionView === "function") {
+      window.renderDocumentacionView();
+    }
+  });
 }
+
+
 
 
 
