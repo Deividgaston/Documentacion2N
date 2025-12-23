@@ -123,43 +123,60 @@ function _applyNavVisibility() {
 // 🔐 VALIDACIÓN DE INVITACIÓN (m2)
 // ==============================
 
-async function validateInviteIfNeeded() {
+async function validateInviteIfNeeded(user) {
+  if (!user?.email) return;
   if (appState._inviteValidated) return;
-  appState._inviteValidated = true;
 
   try {
-    const user = appState.user;
-    if (!user || !user.email || user.role === "SUPER_ADMIN") return;
-
     const email = String(user.email).trim().toLowerCase();
-    const inviteId = email.replace(/[^\w.-]+/g, "_");
+    const inviteId = email.replace(/[^a-z0-9]/g, "_");
 
-    const ref = await db.collection("invites").doc(inviteId).get();
-    if (!ref.exists) throw new Error("invite_not_found");
+    const db =
+      window.db ||
+      (window.firebase?.firestore ? window.firebase.firestore() : null);
+    if (!db) return;
 
-    const inv = ref.data() || {};
-    const now = Date.now();
-    const exp = inv.expiresAt?.toDate?.()?.getTime?.() || 0;
+    const ref = db.collection("invites").doc(inviteId);
+    const snap = await ref.get();
 
-    if (!inv.active || inv.status !== "pending" || exp < now) {
-      throw new Error("invite_invalid");
+    // Si no hay invitación, no molestamos (usuario normal)
+    if (!snap.exists) {
+      appState._inviteValidated = true;
+      return;
     }
 
-    // marcar aceptada (best-effort)
-    ref.ref.set(
-      {
-        status: "accepted",
-        acceptedAt: firebase.firestore.FieldValue.serverTimestamp(),
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      },
+    const inv = snap.data() || {};
+    const now = Date.now();
+    const expMs = inv.expiresAt?.toMillis ? inv.expiresAt.toMillis() : null;
+
+    // ✅ Si ya fue aceptada, NO expulses al usuario en refresh
+    if (inv.status === "accepted") {
+      appState._inviteValidated = true;
+      return;
+    }
+
+    // 🔒 Si está desactivada, o expirada (y aún pendiente), sí bloqueamos
+    const isActive = inv.active !== false; // por defecto true si no existe
+    const isExpired = expMs && expMs < now;
+
+    if (!isActive) throw new Error("invite_disabled");
+    if (inv.status !== "pending") throw new Error("invite_not_pending");
+    if (isExpired) throw new Error("invite_expired");
+
+    // ✅ Primera vez: la marcamos como aceptada
+    await ref.set(
+      { status: "accepted", acceptedAt: window.firebase.firestore.FieldValue.serverTimestamp() },
       { merge: true }
     );
+
+    appState._inviteValidated = true;
   } catch (e) {
-    console.warn("Invitación no válida:", e.message || e);
+    console.warn("[INVITE] inválida:", e);
     alert("Tu invitación no es válida o ha caducado.");
-    firebase.auth().signOut();
+    window.firebase?.auth && window.firebase.auth().signOut();
   }
 }
+
 
 // ==============================
 // Router principal
