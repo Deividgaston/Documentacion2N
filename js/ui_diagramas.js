@@ -1,24 +1,17 @@
 // js/ui_diagramas.js
-// Nueva vista: DIAGRAMAS (IA)
-// V1: genera un "preview" (JSON) usando Gemini y muestra el resultado.
-// V1.2 (Hito 16): Import DXF (lite) -> extrae BLOCKS/LAYERS/INSERTS y pasa INSERTS a la IA
-// para que diseñe red UTP Cat6 optimizando cableado.
+// DIAGRAMAS (IA)
+// V1.3: Import DXF (BLOCKS/LAYERS/INSERTS) + preview visual SVG + editor de prompt
 
 window.appState = window.appState || {};
 appState.diagramas = appState.diagramas || {
-  projectType: "residencial", // residencial | retail | hotel | villa
+  projectType: "residencial",
   drawMode: "residencial",
   buildings: 1,
   placasPorEdificio: 2,
   placaExteriorPorEdificio: 1,
   viviendasPorEdificio: 15,
   monitoresPorVivienda: 2,
-  zones: {
-    comunes: true,
-    refugio: false,
-    domotica: false,
-    controlAccesos: true,
-  },
+  zones: { comunes: true, refugio: false, domotica: false, controlAccesos: true },
   skusText: "IPSTYLE-CA\nSWITCH-POE-8\nMONITOR-7",
 
   // DXF import state
@@ -31,19 +24,25 @@ appState.diagramas = appState.diagramas || {
   dxfLayerFilter: "__ALL__",
   catalogFromDxf: false,
 
-  // Catálogo (simulado por defecto; luego puede venir del DXF)
+  // Prompt editor
+  useCustomPrompt: false,
+  customPromptText: "", // si vacío, se usa default
+  promptUiOpen: false,
+
+  // Catálogo
   catalogJsonText: JSON.stringify(
     {
       catalog_blocks: [
         { name: "VP_STD", device_type: "videoportero", sku_set: ["IPSTYLE-B", "IPSTYLE-S"] },
         { name: "VP_CA", device_type: "videoportero", sku_set: ["IPSTYLE-CA"] },
-        { name: "SWITCH_POE", device_type: "switch", sku_set: ["SWITCH-POE-8", "SWITCH-POE-16"] },
+        { name: "SWITCH_POE", device_type: "switch_poe", sku_set: ["SWITCH-POE-8", "SWITCH-POE-16"] },
         { name: "MONITOR", device_type: "monitor", sku_set: ["MONITOR-7"] },
       ],
     },
     null,
     2
   ),
+
   lastResult: null,
   lastError: null,
   busy: false,
@@ -92,35 +91,8 @@ function _setBusy(b) {
   if (sp) sp.style.display = b ? "" : "none";
 }
 
-function _renderResult() {
-  const out = _el("diagOutput");
-  if (!out) return;
-
-  if (appState.diagramas.lastError) {
-    out.innerHTML = `<div class="alert alert-error">${_escapeHtml(appState.diagramas.lastError)}</div>`;
-    return;
-  }
-
-  if (!appState.diagramas.lastResult) {
-    out.innerHTML = `<div class="muted">Pulsa <b>Generar preview</b> para ver el JSON.</div>`;
-    return;
-  }
-
-  const pretty = _escapeHtml(JSON.stringify(appState.diagramas.lastResult, null, 2));
-  out.innerHTML = `
-    <div class="mb-2"><span class="badge">Preview JSON</span></div>
-    <pre style="white-space:pre-wrap; background:#0b1020; color:#e5e7eb; padding:12px; border-radius:10px; overflow:auto;">${pretty}</pre>
-  `;
-}
-
 /* ======================================================
    DXF (lite) parsing helpers
-   - ASCII DXF is "group code" lines alternating with value lines.
-   - Parse:
-     - BLOCK names from SECTION BLOCKS (group code 2 after "BLOCK")
-     - LAYER names from TABLE LAYER (records start with "LAYER", group code 2 is name)
-     - INSERT entities from SECTION ENTITIES:
-       0 INSERT + 2 blockName + 10/20/30 coords + 8 layer + 50 rot + 41/42 scale
  ====================================================== */
 
 function _dxfToPairs(dxfText) {
@@ -294,7 +266,6 @@ function _dxfExtractInserts(pairs, maxItems = 5000) {
 
   flush();
 
-  // normaliza números
   for (const it of inserts) {
     if (!Number.isFinite(it.x)) it.x = null;
     if (!Number.isFinite(it.y)) it.y = null;
@@ -313,14 +284,133 @@ function _buildCatalogFromBlocks(blockNames) {
   const catalog_blocks = blocks
     .map((name) => String(name || "").trim())
     .filter(Boolean)
-    .map((name) => ({
-      name,
-      device_type: "unknown",
-      sku_set: [],
-    }));
+    .map((name) => ({ name, device_type: "unknown", sku_set: [] }));
 
   return JSON.stringify({ catalog_blocks }, null, 2);
 }
+
+/* ======================================================
+   Preview SVG
+ ====================================================== */
+
+function _safeNum(x) {
+  return Number.isFinite(x) ? x : null;
+}
+
+function _computeBounds(points) {
+  let minX = Infinity,
+    minY = Infinity,
+    maxX = -Infinity,
+    maxY = -Infinity;
+  for (const p of points) {
+    if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
+    if (p.x < minX) minX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y > maxY) maxY = p.y;
+  }
+  if (!Number.isFinite(minX)) return null;
+  const w = Math.max(1, maxX - minX);
+  const h = Math.max(1, maxY - minY);
+  return { minX, minY, maxX, maxY, w, h };
+}
+
+function _renderSvgPreview() {
+  const host = _el("diagPreview");
+  if (!host) return;
+
+  const s = appState.diagramas;
+  const layerFilter = s.dxfLayerFilter || "__ALL__";
+  const raw = Array.isArray(s.dxfInserts) ? s.dxfInserts : [];
+  const pts = raw
+    .filter((it) => it && it.block)
+    .filter((it) => layerFilter === "__ALL__" || (it.layer || "0") === layerFilter)
+    .slice(0, 2000)
+    .map((it, idx) => ({
+      id: `I${idx + 1}`,
+      block: it.block,
+      x: _safeNum(it.x),
+      y: _safeNum(it.y),
+      layer: it.layer || "0",
+    }))
+    .filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y));
+
+  if (!pts.length) {
+    host.innerHTML = `<div class="muted">Preview: carga un DXF con INSERTS para ver el plano.</div>`;
+    return;
+  }
+
+  const bounds = _computeBounds(pts);
+  if (!bounds) {
+    host.innerHTML = `<div class="muted">Preview: no hay coordenadas válidas.</div>`;
+    return;
+  }
+
+  // Map id -> point
+  const pointMap = new Map();
+  for (const p of pts) pointMap.set(p.id, p);
+
+  // Connections: si la IA devuelve from/to como ids de inserts o placements,
+  // intentamos pintar si existen coords en meta o si el id coincide con I*
+  const connections = Array.isArray(s.lastResult?.connections) ? s.lastResult.connections : [];
+
+  // Construimos un map de coords para placements si vienen en meta
+  const placements = Array.isArray(s.lastResult?.placements) ? s.lastResult.placements : [];
+  const placementMap = new Map();
+  for (const pl of placements) {
+    const x = _safeNum(pl?.meta?.x);
+    const y = _safeNum(pl?.meta?.y);
+    if (pl?.id && Number.isFinite(x) && Number.isFinite(y)) {
+      placementMap.set(pl.id, { x, y });
+    }
+  }
+
+  function getXY(id) {
+    if (pointMap.has(id)) return pointMap.get(id);
+    if (placementMap.has(id)) return placementMap.get(id);
+    return null;
+  }
+
+  // SVG viewBox: invertimos Y para que se vea “como CAD” (opcional),
+  // aquí lo dejamos sin invertir para no liar; si lo quieres invertimos luego.
+  const pad = 20;
+  const vbX = bounds.minX - pad;
+  const vbY = bounds.minY - pad;
+  const vbW = bounds.w + pad * 2;
+  const vbH = bounds.h + pad * 2;
+
+  let linesSvg = "";
+  for (const c of connections) {
+    const a = c?.from;
+    const b = c?.to;
+    if (!a || !b) continue;
+    const pa = getXY(a);
+    const pb = getXY(b);
+    if (!pa || !pb) continue;
+    linesSvg += `<line x1="${pa.x}" y1="${pa.y}" x2="${pb.x}" y2="${pb.y}" stroke="rgba(99,102,241,.8)" stroke-width="2" />`;
+  }
+
+  let pointsSvg = "";
+  for (const p of pts) {
+    pointsSvg += `<circle cx="${p.x}" cy="${p.y}" r="6" fill="rgba(16,185,129,.85)">
+      <title>${_escapeHtml(p.id)} · ${_escapeHtml(p.block)}</title>
+    </circle>`;
+  }
+
+  host.innerHTML = `
+    <div class="muted mb-2">Preview (SVG): puntos=INSERTS · líneas=conexiones IA (si hay)</div>
+    <div style="border:1px solid rgba(255,255,255,.08); border-radius:12px; overflow:hidden;">
+      <svg viewBox="${vbX} ${vbY} ${vbW} ${vbH}" width="100%" height="420" preserveAspectRatio="xMidYMid meet" style="background:rgba(255,255,255,.02)">
+        ${linesSvg}
+        ${pointsSvg}
+      </svg>
+    </div>
+  `;
+}
+
+/* ======================================================
+   DXF Info UI
+ ====================================================== */
 
 function _renderDxfInfo() {
   const host = _el("diagDxfInfo");
@@ -340,22 +430,20 @@ function _renderDxfInfo() {
 
       <div class="grid mt-2" style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
         <div class="card" style="padding:10px;">
-          <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
-            <h4 style="margin:0;">Blocks (${filteredBlocks.length}/${blocks.length})</h4>
-          </div>
+          <h4 style="margin:0;">Blocks (${filteredBlocks.length}/${blocks.length})</h4>
           <div class="form-group mt-2">
             <input id="diagDxfSearch" type="text" placeholder="Buscar block..." value="${_escapeHtml(s.dxfSearch || "")}" />
           </div>
-          <div style="max-height:220px; overflow:auto; border:1px solid rgba(255,255,255,.08); border-radius:10px; padding:8px;">
+          <div style="max-height:180px; overflow:auto; border:1px solid rgba(255,255,255,.08); border-radius:10px; padding:8px;">
             ${
               filteredBlocks.length
                 ? filteredBlocks
-                    .slice(0, 400)
+                    .slice(0, 250)
                     .map((b) => `<div class="muted" style="padding:2px 0;">• ${_escapeHtml(b)}</div>`)
                     .join("")
                 : `<div class="muted">No hay blocks detectados.</div>`
             }
-            ${filteredBlocks.length > 400 ? `<div class="muted mt-2">Mostrando 400. Refina la búsqueda.</div>` : ""}
+            ${filteredBlocks.length > 250 ? `<div class="muted mt-2">Mostrando 250.</div>` : ""}
           </div>
         </div>
 
@@ -375,31 +463,7 @@ function _renderDxfInfo() {
                 .join("")}
             </select>
           </div>
-          <div class="muted">Filtro (lo aplicaremos a inserts/placements en siguientes pasos).</div>
-        </div>
-      </div>
-
-      <div class="card mt-2" style="padding:10px;">
-        <h4 style="margin:0;">Inserts (dispositivos colocados) (${inserts.length})</h4>
-        <div class="muted">Se envían a la IA para diseñar la red optimizando cableado (distancia XY).</div>
-        <div style="max-height:170px; overflow:auto; border:1px solid rgba(255,255,255,.08); border-radius:10px; padding:8px; margin-top:8px;">
-          ${
-            inserts.length
-              ? inserts
-                  .slice(0, 300)
-                  .map((it, idx) => {
-                    const xy =
-                      Number.isFinite(it.x) && Number.isFinite(it.y)
-                        ? `(${it.x.toFixed(1)}, ${it.y.toFixed(1)})`
-                        : "(sin XY)";
-                    return `<div class="muted" style="padding:2px 0;">• #${idx + 1} ${_escapeHtml(
-                      it.block
-                    )} <span class="muted">layer:${_escapeHtml(it.layer || "0")} ${_escapeHtml(xy)}</span></div>`;
-                  })
-                  .join("")
-              : `<div class="muted">No hay INSERTS detectados.</div>`
-          }
-          ${inserts.length > 300 ? `<div class="muted mt-2">Mostrando 300.</div>` : ""}
+          <div class="muted">Filtro aplicado al preview y a inserts que se envían a la IA.</div>
         </div>
       </div>
     </div>
@@ -417,9 +481,14 @@ function _renderDxfInfo() {
   if (sel) {
     sel.addEventListener("change", () => {
       appState.diagramas.dxfLayerFilter = _strVal("diagDxfLayerFilter", "__ALL__");
+      _renderSvgPreview();
     });
   }
 }
+
+/* ======================================================
+   DXF Import
+ ====================================================== */
 
 async function diagImportDxfFile(file) {
   if (!file) return;
@@ -440,13 +509,9 @@ async function diagImportDxfFile(file) {
 
   try {
     const text = await file.text();
-
-    // Heurística de binario
     const sample = text.slice(0, 2000);
     const nonPrintable = (sample.match(/[^\x09\x0A\x0D\x20-\x7E]/g) || []).length;
-    if (nonPrintable > 50) {
-      throw new Error("DXF parece binario o no-ASCII. Exporta como DXF ASCII y reintenta.");
-    }
+    if (nonPrintable > 50) throw new Error("DXF parece binario/no-ASCII. Exporta como DXF ASCII.");
 
     appState.diagramas.dxfText = text;
 
@@ -459,7 +524,6 @@ async function diagImportDxfFile(file) {
     appState.diagramas.dxfLayers = layers;
     appState.diagramas.dxfInserts = inserts;
 
-    // Auto-catálogo por blocks
     if (blocks.length) {
       appState.diagramas.catalogJsonText = _buildCatalogFromBlocks(blocks);
       appState.diagramas.catalogFromDxf = true;
@@ -468,6 +532,7 @@ async function diagImportDxfFile(file) {
     }
 
     _renderDxfInfo();
+    _renderSvgPreview();
     _renderResult();
   } catch (e) {
     appState.diagramas.lastError = e.message || String(e);
@@ -493,11 +558,41 @@ function diagUseCatalogFromDxf() {
 }
 
 /* ======================================================
-   IA prompt payload
+   Prompt builder (default + override)
+ ====================================================== */
+
+function _defaultInstructions() {
+  return `
+Eres un diseñador de redes Ethernet para videoportero/control de accesos.
+
+OBJETIVO: Diseñar la red MÁS EFICIENTE usando SOLO cable UTP Cat6.
+- Minimiza longitud total de cable aproximando por distancia Euclídea con coordenadas (x,y) de spec.dxf.inserts[].
+- Topología: estrella o estrella jerárquica (dispositivos -> switches -> core -> router).
+- No inventes dispositivos finales. Trabaja con spec.dxf.inserts[] como dispositivos existentes.
+- Si falta infraestructura (router/switches), puedes crearla como VIRTUAL_* en placements.
+- Devuelve SOLO JSON VÁLIDO.
+
+Formato exacto:
+{
+  "placements":[ { "id":"...", "block":"...", "device_type":"...", "meta":{ "source":"DXF"|"VIRTUAL", "x":0, "y":0 } } ],
+  "connections":[ { "from":"...", "to":"...", "type":"UTP_CAT6", "approx_len": 12.3 } ],
+  "summary": { "total_devices":0, "total_switches":0, "approx_total_cable":0 },
+  "errors":[ ... ]
+}
+  `.trim();
+}
+
+function _getEffectiveInstructions() {
+  const s = appState.diagramas;
+  if (s.useCustomPrompt && String(s.customPromptText || "").trim()) return String(s.customPromptText).trim();
+  return _defaultInstructions();
+}
+
+/* ======================================================
+   IA payload
  ====================================================== */
 
 function _buildDiagramPromptPayload() {
-  // 1) Catalog
   let catalogObj = null;
   try {
     catalogObj = JSON.parse(appState.diagramas.catalogJsonText || "{}");
@@ -508,14 +603,9 @@ function _buildDiagramPromptPayload() {
   const catalogBlocks = Array.isArray(catalogObj?.catalog_blocks) ? catalogObj.catalog_blocks : [];
   if (!catalogBlocks.length) throw new Error("El catálogo está vacío (catalog_blocks).");
 
-  // 2) Project spec
-  const projectType = appState.diagramas.projectType;
-  const drawMode = appState.diagramas.drawMode;
-
   const skus = _parseSkus(appState.diagramas.skusText);
   if (!skus.length) throw new Error("Añade al menos 1 SKU para la prueba.");
 
-  // Inserts (dispositivos en plano) -> para que la IA optimice cableado
   const layerFilter = appState.diagramas.dxfLayerFilter || "__ALL__";
   const rawInserts = Array.isArray(appState.diagramas.dxfInserts) ? appState.diagramas.dxfInserts : [];
   const inserts = rawInserts
@@ -531,8 +621,8 @@ function _buildDiagramPromptPayload() {
     }));
 
   const spec = {
-    project_type: projectType,
-    draw_mode: drawMode,
+    project_type: appState.diagramas.projectType,
+    draw_mode: appState.diagramas.drawMode,
     buildings: appState.diagramas.buildings,
     per_building: {
       placas_totales: appState.diagramas.placasPorEdificio,
@@ -547,67 +637,26 @@ function _buildDiagramPromptPayload() {
       control_accesos: !!appState.diagramas.zones.controlAccesos,
     },
     skus,
-
-    // DXF context (real)
     dxf: {
       file: appState.diagramas.dxfFileName || "",
       layer_filter: layerFilter,
-      blocks_count: Array.isArray(appState.diagramas.dxfBlocks) ? appState.diagramas.dxfBlocks.length : 0,
       inserts_count: inserts.length,
-      inserts, // <-- lo más importante para diseñar red en plano
-      cable: { type: "UTP_CAT6", max_segment_m: 90 }, // heurística típica Ethernet
+      inserts,
+      cable: { type: "UTP_CAT6", max_segment_m: 90 },
     },
   };
 
-  // 3) Network rules base
   const network_rules = {
-    // Todo por Cat6
     default_cable: "UTP_CAT6",
-    topologies: ["star", "hierarchical_star"],
-
-    // Si detectas PoE (placas / videoportero), conectar a switch PoE
     videoportero: { connects_to: ["switch_poe"], connection: "UTP_CAT6_PoE" },
     access_unit: { connects_to: ["switch_poe"], connection: "UTP_CAT6_PoE" },
-
-    // Monitores normalmente LAN (no PoE o PoE depende), dejamos LAN
     monitor: { connects_to: ["switch"], connection: "UTP_CAT6" },
-
-    // Switches
     switch_poe: { connects_to: ["switch_core", "router"], connection: "UTP_CAT6" },
     switch: { connects_to: ["switch_core", "router"], connection: "UTP_CAT6" },
     switch_core: { connects_to: ["router"], connection: "UTP_CAT6" },
-
-    router: { connects_to: ["internet"], connection: "WAN" },
   };
 
-  // 4) Strict instruction: diseñador de redes, optimiza distancia XY (aprox cable)
-  const instructions = `
-Eres un diseñador de redes (Ethernet) para videoportero/control de accesos.
-
-OBJETIVO: Diseñar la red MÁS EFICIENTE usando SOLO cable UTP Cat6.
-- Minimiza longitud total de cable aproximando por distancia Euclídea con coordenadas (x,y) del DXF inserts[].
-- Usa topología estrella o estrella jerárquica: dispositivos -> switches (PoE si aplica) -> core -> router.
-- No inventes dispositivos que no existan. Trabaja con spec.dxf.inserts[] como “dispositivos en plano”.
-- Si falta algún elemento imprescindible (ej. switch/router), puedes crear EXACTAMENTE 1 router y N switches necesarios,
-  pero deben aparecer en placements con block="VIRTUAL_*" (p.ej. "VIRTUAL_SWITCH_POE") para que el usuario lo añada al plano luego.
-- Conecta cada dispositivo al switch más cercano (o al mejor candidato) respetando capacidad lógica:
-  - videoporteros/access units preferiblemente a switch PoE
-  - monitores a switch normal o PoE si no hay otro
-- Evita cadenas largas device->device. No hagas daisy-chain salvo switches.
-- DEVUELVE SOLO JSON VÁLIDO. Nada de texto fuera del JSON.
-
-Formato exacto:
-{
-  "placements":[
-    { "id":"...", "block":"...", "device_type":"...", "meta":{ "source":"DXF"|"VIRTUAL", "x":0, "y":0 } }
-  ],
-  "connections":[
-    { "from":"...", "to":"...", "type":"UTP_CAT6", "approx_len": 12.3 }
-  ],
-  "summary": { "total_devices":0, "total_switches":0, "approx_total_cable":0 },
-  "errors":[ ... ]
-}
-  `.trim();
+  const instructions = _getEffectiveInstructions();
 
   return { instructions, catalog_blocks: catalogBlocks, spec, network_rules };
 }
@@ -632,6 +681,10 @@ async function diagGeneratePreview() {
   appState.diagramas.skusText = _strVal("diagSkus", appState.diagramas.skusText);
   appState.diagramas.catalogJsonText = _strVal("diagCatalog", appState.diagramas.catalogJsonText);
 
+  // sync prompt UI
+  appState.diagramas.useCustomPrompt = _boolVal("diagUseCustomPrompt");
+  appState.diagramas.customPromptText = _strVal("diagPromptText", appState.diagramas.customPromptText);
+
   let payload;
   try {
     payload = _buildDiagramPromptPayload();
@@ -652,7 +705,7 @@ async function diagGeneratePreview() {
   _setBusy(true);
   try {
     const res = await handler({
-      mode: "diagram_network_v2_cat6",
+      mode: "diagram_network_v3_preview",
       instructions: payload.instructions,
       catalog_blocks: payload.catalog_blocks,
       spec: payload.spec,
@@ -677,15 +730,42 @@ async function diagGeneratePreview() {
     appState.diagramas.lastResult = obj;
     appState.diagramas.lastError = null;
     _renderResult();
+    _renderSvgPreview();
   } catch (e) {
     console.error(e);
     appState.diagramas.lastError = e.message || String(e);
     appState.diagramas.lastResult = null;
     _renderResult();
+    _renderSvgPreview();
   } finally {
     _setBusy(false);
   }
 }
+
+function _renderResult() {
+  const out = _el("diagOutput");
+  if (!out) return;
+
+  if (appState.diagramas.lastError) {
+    out.innerHTML = `<div class="alert alert-error">${_escapeHtml(appState.diagramas.lastError)}</div>`;
+    return;
+  }
+
+  if (!appState.diagramas.lastResult) {
+    out.innerHTML = `<div class="muted">Pulsa <b>Generar preview</b> para ver el JSON.</div>`;
+    return;
+  }
+
+  const pretty = _escapeHtml(JSON.stringify(appState.diagramas.lastResult, null, 2));
+  out.innerHTML = `
+    <div class="mb-2"><span class="badge">Preview JSON</span></div>
+    <pre style="white-space:pre-wrap; background:#0b1020; color:#e5e7eb; padding:12px; border-radius:10px; overflow:auto;">${pretty}</pre>
+  `;
+}
+
+/* ======================================================
+   View
+ ====================================================== */
 
 function renderDiagramasView() {
   const root = document.getElementById("appContent");
@@ -693,7 +773,6 @@ function renderDiagramasView() {
 
   const caps = appState?.user?.capabilities;
   const allowed = (caps?.pages && !!caps.pages.diagramas) || (caps?.views && !!caps.views.diagramas);
-
   if (!allowed) {
     root.innerHTML = `
       <div class="card">
@@ -710,30 +789,43 @@ function renderDiagramasView() {
     <div class="card">
       <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
         <div>
-          <h2 style="margin-bottom:4px;">Diagrama (IA) · DXF + Red Cat6</h2>
-          <div class="muted">Importa DXF (BLOCKS/INSERTS) y genera el diseño de red UTP Cat6 optimizado.</div>
+          <h2 style="margin-bottom:4px;">Diagrama (IA) · Preview</h2>
+          <div class="muted">DXF + red UTP Cat6. Preview visual + editor de prompt.</div>
         </div>
-        <div>
+        <div style="display:flex; gap:10px; align-items:center;">
+          <button id="btnDiagTogglePrompt" class="btn">Prompt</button>
           <button id="btnDiagGenerate" class="btn btn-primary">Generar preview</button>
-          <span id="diagBusy" class="muted" style="display:none; margin-left:8px;">Generando…</span>
+          <span id="diagBusy" class="muted" style="display:none;">Generando…</span>
         </div>
       </div>
 
       <div class="card mt-3" style="padding:12px;">
         <h3>DXF (import)</h3>
-        <div class="muted mb-2">Carga un DXF ASCII. Extraemos <b>BLOCKS</b> e <b>INSERTS</b> (posiciones) y se lo pasamos a la IA.</div>
-
+        <div class="muted mb-2">Carga un DXF ASCII. Extraemos INSERTS (puntos) y la IA devuelve conexiones.</div>
         <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
           <input id="diagDxfFile" type="file" accept=".dxf" />
           <button id="btnDiagUseDxfCatalog" class="btn">Usar catálogo DXF</button>
           <span class="muted">${
             s.dxfFileName
-              ? `Cargado: <b>${_escapeHtml(s.dxfFileName)}</b> · blocks: ${(s.dxfBlocks || []).length} · inserts: ${(s.dxfInserts || []).length}`
+              ? `Cargado: <b>${_escapeHtml(s.dxfFileName)}</b> · inserts: ${(s.dxfInserts || []).length}`
               : "Sin DXF cargado"
           }</span>
         </div>
-
         <div id="diagDxfInfo"></div>
+      </div>
+
+      <div id="diagPromptBox" class="card mt-3" style="padding:12px; display:${s.promptUiOpen ? "" : "none"};">
+        <h3>Prompt</h3>
+        <div class="muted mb-2">Activa “usar prompt personalizado” si quieres controlar exactamente el comportamiento.</div>
+        <label style="display:flex; gap:8px; align-items:center;">
+          <input id="diagUseCustomPrompt" type="checkbox"${s.useCustomPrompt ? " checked" : ""}/> Usar prompt personalizado
+        </label>
+        <div class="form-group mt-2">
+          <textarea id="diagPromptText" rows="10" placeholder="Pega aquí tu prompt...">${_escapeHtml(
+            s.customPromptText || _defaultInstructions()
+          )}</textarea>
+        </div>
+        <div class="muted">Si está desactivado, se usa el prompt por defecto.</div>
       </div>
 
       <div class="grid mt-3" style="display:grid; grid-template-columns: 1fr 1fr; gap:14px;">
@@ -800,28 +892,39 @@ function renderDiagramasView() {
 
           <div class="form-group mt-3">
             <label>SKUs (una por línea)</label>
-            <textarea id="diagSkus" rows="6" placeholder="IPSTYLE-CA&#10;SWITCH-POE-8&#10;MONITOR-7">${_escapeHtml(s.skusText)}</textarea>
+            <textarea id="diagSkus" rows="6">${_escapeHtml(s.skusText)}</textarea>
           </div>
         </div>
 
         <div class="card" style="padding:12px;">
           <h3>Catálogo</h3>
-          <div class="muted mb-2">${s.catalogFromDxf ? "Catálogo generado desde DXF (editable)." : "Catálogo manual (editable)."}</div>
+          <div class="muted mb-2">${s.catalogFromDxf ? "Generado desde DXF (editable)." : "Manual (editable)."}</div>
           <div class="form-group">
             <textarea id="diagCatalog" rows="18">${_escapeHtml(s.catalogJsonText)}</textarea>
           </div>
-          <div class="muted">
-            Tip: para que la IA use un bloque, rellena <b>sku_set</b> con SKUs reales y pon un <b>device_type</b> coherente.
-          </div>
         </div>
+      </div>
+
+      <div class="card mt-3" style="padding:12px;">
+        <h3>Preview visual</h3>
+        <div id="diagPreview"></div>
       </div>
 
       <div class="mt-3" id="diagOutput"></div>
     </div>
   `;
 
+  // binds
   const btn = _el("btnDiagGenerate");
   if (btn) btn.addEventListener("click", diagGeneratePreview);
+
+  const btnToggle = _el("btnDiagTogglePrompt");
+  if (btnToggle) {
+    btnToggle.addEventListener("click", () => {
+      appState.diagramas.promptUiOpen = !appState.diagramas.promptUiOpen;
+      renderDiagramasView(); // re-render simple
+    });
+  }
 
   const inpFile = _el("diagDxfFile");
   if (inpFile) {
@@ -835,6 +938,7 @@ function renderDiagramasView() {
   if (btnUse) btnUse.addEventListener("click", diagUseCatalogFromDxf);
 
   _renderDxfInfo();
+  _renderSvgPreview();
   _renderResult();
 }
 
