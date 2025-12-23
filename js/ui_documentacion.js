@@ -2828,7 +2828,11 @@ let __docMediaLastAttempt = 0;
 function ensureDocMediaLoadedOnce() {
   const d = appState.documentacion;
 
-  if (d.mediaLoaded) return Promise.resolve(true);
+  const mediaLen = Array.isArray(d.mediaLibrary) ? d.mediaLibrary.length : 0;
+
+  // ✅ Solo consideramos “loaded” si hay contenido (o sea, no bloqueamos recarga si está vacío)
+  if (d.mediaLoaded && mediaLen > 0) return Promise.resolve(true);
+
   if (__docMediaLoadPromise) return __docMediaLoadPromise;
 
   const now = Date.now();
@@ -2843,9 +2847,7 @@ function ensureDocMediaLoadedOnce() {
     })
     .then((ok) => {
       if (!ok) return false;
-      return ensureDocMediaLoaded().then(
-        () => !!appState.documentacion.mediaLoaded
-      );
+      return ensureDocMediaLoaded().then(() => !!appState.documentacion.mediaLoaded);
     })
     .catch((e) => {
       console.error("[DOC] Error en carga inicial de media:", e);
@@ -2857,6 +2859,7 @@ function ensureDocMediaLoadedOnce() {
 
   return __docMediaLoadPromise;
 }
+
 
 // ======================================================
 // RENDER PRINCIPAL
