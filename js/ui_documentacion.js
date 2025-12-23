@@ -1147,68 +1147,49 @@ async function ensureDocMediaLoaded() {
       window.auth ||
       (window.firebase?.auth ? window.firebase.auth() : null);
 
-    // ✅ Esperar auth lista
     const user =
       auth?.currentUser ||
       (typeof waitForAuthReady === "function"
         ? await waitForAuthReady(8000)
         : null);
 
-    const uid = user?.uid || null;
-
-    if (!uid) {
-      console.warn("[DOC] Auth aún no listo: no cargo media todavía.");
+    if (!user) {
       appState.documentacion.mediaLoaded = false;
       return false;
     }
-
-    // ✅ Clave: obtener proyectoId de forma robusta (aunque no hayas pasado por Proyecto)
-    const proyectoId = getCurrentProyectoIdSafe();
 
     const mediaMap = new Map();
 
-    // 1) Por proyecto (nuevo + legacy field name)
-    if (proyectoId) {
-      const [snapProjA, snapProjB] = await Promise.all([
-        db
-          .collection("documentacion_media")
-          .where("proyectoId", "==", proyectoId)
-          .limit(300)
-          .get(),
-        db
-          .collection("documentacion_media")
-          .where("projectId", "==", proyectoId) // ✅ compatibilidad legacy
-          .limit(300)
-          .get(),
-      ]);
+    // ✅ 1) CARGA GLOBAL DE LIBRERÍA (lo subido en Gestión)
+    const snapAll = await db
+      .collection("documentacion_media")
+      .orderBy("uploadedAt", "desc")
+      .limit(500)
+      .get();
 
-      snapProjA.forEach((d) => mediaMap.set(d.id, { ...d.data(), id: d.id }));
-      snapProjB.forEach((d) => mediaMap.set(d.id, { ...d.data(), id: d.id }));
-    } else {
-      // ✅ Si no hay proyectoId todavía, NO dependemos del uid (porque no coincide con quien subió)
-      // Devolvemos false para que el render reintente cuando el proyecto se cargue.
-      console.warn(
-        "[DOC] proyectoId no disponible aún. Reintentaré carga de media cuando haya proyecto."
-      );
-      appState.documentacion.mediaLoaded = false;
-      return false;
-    }
+    snapAll.forEach((d) =>
+      mediaMap.set(d.id, { ...d.data(), id: d.id })
+    );
 
-    // 2) Por uid (legacy) — lo mantenemos por si hay media antigua por usuario
+    // ✅ 2) Compatibilidad legacy por uid (media antigua)
     const snapUid = await db
       .collection("documentacion_media")
-      .where("uid", "==", uid)
+      .where("uid", "==", user.uid)
       .limit(200)
       .get();
 
-    snapUid.forEach((d) => mediaMap.set(d.id, { ...d.data(), id: d.id }));
+    snapUid.forEach((d) =>
+      mediaMap.set(d.id, { ...d.data(), id: d.id })
+    );
 
-    const media = Array.from(mediaMap.values());
-
-    appState.documentacion.mediaLibrary = media;
+    appState.documentacion.mediaLibrary = Array.from(mediaMap.values());
     appState.documentacion.mediaLoaded = true;
 
-    console.log("[DOC] Media cargada:", media.length, "proyectoId:", proyectoId);
+    console.log(
+      "[DOC] Librería de documentación cargada:",
+      appState.documentacion.mediaLibrary.length
+    );
+
     return true;
   } catch (e) {
     console.error("[DOC] Error cargando documentación media:", e);
@@ -1216,6 +1197,7 @@ async function ensureDocMediaLoaded() {
     return false;
   }
 }
+
 
 async function saveMediaFileToStorageAndFirestore(file, options = {}) {
   const name = file.name || "archivo";
