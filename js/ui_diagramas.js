@@ -1,48 +1,40 @@
 // js/ui_diagramas.js
-// DIAGRAMAS (IA)
-// V1.3: Import DXF (BLOCKS/LAYERS/INSERTS) + preview visual SVG + editor de prompt
+// Vista: DIAGRAMAS (IA)
+// V2 (Hito 16):
+// - Carga referencias del proyecto (presupuesto) -> paleta draggable
+// - Carga plantilla DXF -> biblioteca de iconos (BLOCKS)
+// - Zonas drop (entrada/portales/comunes/refugio) para asignar dispositivos
+// - IA: diseña red UTP Cat6 optimizando eficiencia (topología + switches) en base a asignaciones
+// - Editor de prompt opcional
 
 window.appState = window.appState || {};
 appState.diagramas = appState.diagramas || {
-  projectType: "residencial",
-  drawMode: "residencial",
-  buildings: 1,
-  placasPorEdificio: 2,
-  placaExteriorPorEdificio: 1,
-  viviendasPorEdificio: 15,
-  monitoresPorVivienda: 2,
-  zones: { comunes: true, refugio: false, domotica: false, controlAccesos: true },
-  skusText: "IPSTYLE-CA\nSWITCH-POE-8\nMONITOR-7",
-
-  // DXF import state
+  // Biblioteca DXF (iconos)
   dxfFileName: "",
   dxfText: "",
   dxfBlocks: [],
-  dxfLayers: [],
-  dxfInserts: [], // [{block, layer, x, y, z, rot, sx, sy}]
-  dxfSearch: "",
-  dxfLayerFilter: "__ALL__",
-  catalogFromDxf: false,
+
+  // Paleta refs proyecto
+  refs: [], // [{ref, descripcion, qty}]
+  refsSearch: "",
+
+  // Zonas y asignaciones
+  zones: [
+    { key: "entrada_principal", label: "Entrada principal" },
+    { key: "portales_interiores", label: "Portales interiores" },
+    { key: "zonas_comunes", label: "Zonas comunes" },
+    { key: "zonas_refugio", label: "Zonas refugio" },
+  ],
+  assignments: {
+    // zoneKey: [{id, ref, descripcion, qty, iconBlock}]
+  },
 
   // Prompt editor
-  useCustomPrompt: false,
-  customPromptText: "", // si vacío, se usa default
   promptUiOpen: false,
+  useCustomPrompt: false,
+  customPromptText: "",
 
-  // Catálogo
-  catalogJsonText: JSON.stringify(
-    {
-      catalog_blocks: [
-        { name: "VP_STD", device_type: "videoportero", sku_set: ["IPSTYLE-B", "IPSTYLE-S"] },
-        { name: "VP_CA", device_type: "videoportero", sku_set: ["IPSTYLE-CA"] },
-        { name: "SWITCH_POE", device_type: "switch_poe", sku_set: ["SWITCH-POE-8", "SWITCH-POE-16"] },
-        { name: "MONITOR", device_type: "monitor", sku_set: ["MONITOR-7"] },
-      ],
-    },
-    null,
-    2
-  ),
-
+  // Resultado IA
   lastResult: null,
   lastError: null,
   busy: false,
@@ -59,40 +51,81 @@ function _escapeHtml(s) {
     .replaceAll(">", "&gt;");
 }
 
-function _parseSkus(text) {
-  return String(text || "")
-    .split(/\r?\n|,/g)
-    .map((x) => String(x).trim())
-    .filter(Boolean);
-}
-
-function _boolVal(id) {
-  const el = _el(id);
-  return !!(el && el.checked);
-}
-
-function _numVal(id, def = 0) {
-  const el = _el(id);
-  const n = Number(el ? el.value : def);
-  return Number.isFinite(n) ? n : def;
-}
-
-function _strVal(id, def = "") {
-  const el = _el(id);
-  return el ? String(el.value || def) : def;
+function _escapeHtmlAttr(s) {
+  return _escapeHtml(s).replaceAll('"', "&quot;");
 }
 
 function _setBusy(b) {
   appState.diagramas.busy = !!b;
   const btn = _el("btnDiagGenerate");
   if (btn) btn.disabled = !!b;
-
   const sp = _el("diagBusy");
   if (sp) sp.style.display = b ? "" : "none";
 }
 
+function _renderResult() {
+  const out = _el("diagOutput");
+  if (!out) return;
+
+  if (appState.diagramas.lastError) {
+    out.innerHTML = `<div class="alert alert-error">${_escapeHtml(appState.diagramas.lastError)}</div>`;
+    return;
+  }
+
+  if (!appState.diagramas.lastResult) {
+    out.innerHTML = `<div class="muted">Arrastra referencias a las zonas y pulsa <b>Generar diseño</b>.</div>`;
+    return;
+  }
+
+  const pretty = _escapeHtml(JSON.stringify(appState.diagramas.lastResult, null, 2));
+  out.innerHTML = `
+    <div class="mb-2" style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+      <span class="badge">Diseño IA (JSON)</span>
+      <span class="muted">UTP Cat6 · topología eficiente</span>
+    </div>
+    <pre style="white-space:pre-wrap; background:#0b1020; color:#e5e7eb; padding:12px; border-radius:10px; overflow:auto;">${pretty}</pre>
+  `;
+}
+
 /* ======================================================
-   DXF (lite) parsing helpers
+   1) Cargar referencias del proyecto (presupuesto)
+   - Usa appState.presupuesto.lineas[]: {ref, descripcion, cantidad}
+ ====================================================== */
+
+function diagLoadProjectRefs() {
+  const presu = appState?.presupuesto;
+  const lineas = Array.isArray(presu?.lineas) ? presu.lineas : [];
+
+  const map = new Map(); // ref -> {ref, descripcion, qty}
+  for (const l of lineas) {
+    const ref = String(l?.ref || "").trim();
+    if (!ref) continue;
+    const qty = Number(l?.cantidad || l?.qty || 0) || 0;
+    const desc = String(l?.descripcion || "").trim();
+
+    if (!map.has(ref)) {
+      map.set(ref, { ref, descripcion: desc, qty: qty > 0 ? qty : 0 });
+    } else {
+      const it = map.get(ref);
+      it.qty += qty > 0 ? qty : 0;
+      if (!it.descripcion && desc) it.descripcion = desc;
+    }
+  }
+
+  const refs = Array.from(map.values()).sort((a, b) => a.ref.localeCompare(b.ref));
+  appState.diagramas.refs = refs;
+
+  // Si no existe assignments, init
+  appState.diagramas.assignments = appState.diagramas.assignments || {};
+  for (const z of appState.diagramas.zones) {
+    if (!Array.isArray(appState.diagramas.assignments[z.key])) {
+      appState.diagramas.assignments[z.key] = [];
+    }
+  }
+}
+
+/* ======================================================
+   2) DXF (lite): extrae BLOCKS (biblioteca de iconos)
  ====================================================== */
 
 function _dxfToPairs(dxfText) {
@@ -156,340 +189,6 @@ function _dxfExtractBlocks(pairs) {
   return blocks;
 }
 
-function _dxfExtractLayers(pairs) {
-  const layers = [];
-  let inTables = false;
-  let inLayerTable = false;
-  let inLayerRecord = false;
-
-  for (let i = 0; i < pairs.length; i++) {
-    const [c, v] = pairs[i];
-
-    if (c === "0" && v === "SECTION") {
-      const next = pairs[i + 1];
-      if (next && next[0] === "2") {
-        inTables = next[1] === "TABLES";
-        inLayerTable = false;
-        inLayerRecord = false;
-      }
-      continue;
-    }
-
-    if (!inTables) continue;
-
-    if (c === "0" && v === "ENDSEC") {
-      inTables = false;
-      inLayerTable = false;
-      inLayerRecord = false;
-      continue;
-    }
-
-    if (c === "0" && v === "TABLE") {
-      const next = pairs[i + 1];
-      inLayerTable = !!(next && next[0] === "2" && next[1] === "LAYER");
-      inLayerRecord = false;
-      continue;
-    }
-
-    if (inLayerTable && c === "0" && v === "ENDTAB") {
-      inLayerTable = false;
-      inLayerRecord = false;
-      continue;
-    }
-
-    if (!inLayerTable) continue;
-
-    if (c === "0" && v === "LAYER") {
-      inLayerRecord = true;
-      continue;
-    }
-
-    if (inLayerRecord && c === "2") {
-      const name = String(v || "").trim();
-      if (name && !layers.includes(name)) layers.push(name);
-      inLayerRecord = false;
-    }
-  }
-
-  return layers;
-}
-
-function _dxfExtractInserts(pairs, maxItems = 5000) {
-  const inserts = [];
-  let inEntities = false;
-  let cur = null;
-
-  function flush() {
-    if (cur && cur.block) inserts.push(cur);
-    cur = null;
-  }
-
-  for (let i = 0; i < pairs.length; i++) {
-    const [c, v] = pairs[i];
-
-    if (c === "0" && v === "SECTION") {
-      const next = pairs[i + 1];
-      if (next && next[0] === "2") {
-        inEntities = next[1] === "ENTITIES";
-        cur = null;
-      }
-      continue;
-    }
-
-    if (!inEntities) continue;
-
-    if (c === "0" && v === "ENDSEC") {
-      flush();
-      inEntities = false;
-      continue;
-    }
-
-    if (c === "0" && v === "INSERT") {
-      flush();
-      cur = { block: null, layer: null, x: null, y: null, z: 0, rot: 0, sx: 1, sy: 1 };
-      continue;
-    }
-
-    if (!cur) continue;
-
-    if (c === "2") cur.block = String(v || "").trim();
-    else if (c === "8") cur.layer = String(v || "").trim();
-    else if (c === "10") cur.x = Number(v);
-    else if (c === "20") cur.y = Number(v);
-    else if (c === "30") cur.z = Number(v);
-    else if (c === "50") cur.rot = Number(v);
-    else if (c === "41") cur.sx = Number(v);
-    else if (c === "42") cur.sy = Number(v);
-
-    if (inserts.length >= maxItems) break;
-  }
-
-  flush();
-
-  for (const it of inserts) {
-    if (!Number.isFinite(it.x)) it.x = null;
-    if (!Number.isFinite(it.y)) it.y = null;
-    if (!Number.isFinite(it.z)) it.z = 0;
-    if (!Number.isFinite(it.rot)) it.rot = 0;
-    if (!Number.isFinite(it.sx)) it.sx = 1;
-    if (!Number.isFinite(it.sy)) it.sy = 1;
-    if (!it.layer) it.layer = "0";
-  }
-
-  return inserts;
-}
-
-function _buildCatalogFromBlocks(blockNames) {
-  const blocks = Array.isArray(blockNames) ? blockNames : [];
-  const catalog_blocks = blocks
-    .map((name) => String(name || "").trim())
-    .filter(Boolean)
-    .map((name) => ({ name, device_type: "unknown", sku_set: [] }));
-
-  return JSON.stringify({ catalog_blocks }, null, 2);
-}
-
-/* ======================================================
-   Preview SVG
- ====================================================== */
-
-function _safeNum(x) {
-  return Number.isFinite(x) ? x : null;
-}
-
-function _computeBounds(points) {
-  let minX = Infinity,
-    minY = Infinity,
-    maxX = -Infinity,
-    maxY = -Infinity;
-  for (const p of points) {
-    if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
-    if (p.x < minX) minX = p.x;
-    if (p.y < minY) minY = p.y;
-    if (p.x > maxX) maxX = p.x;
-    if (p.y > maxY) maxY = p.y;
-  }
-  if (!Number.isFinite(minX)) return null;
-  const w = Math.max(1, maxX - minX);
-  const h = Math.max(1, maxY - minY);
-  return { minX, minY, maxX, maxY, w, h };
-}
-
-function _renderSvgPreview() {
-  const host = _el("diagPreview");
-  if (!host) return;
-
-  const s = appState.diagramas;
-  const layerFilter = s.dxfLayerFilter || "__ALL__";
-  const raw = Array.isArray(s.dxfInserts) ? s.dxfInserts : [];
-  const pts = raw
-    .filter((it) => it && it.block)
-    .filter((it) => layerFilter === "__ALL__" || (it.layer || "0") === layerFilter)
-    .slice(0, 2000)
-    .map((it, idx) => ({
-      id: `I${idx + 1}`,
-      block: it.block,
-      x: _safeNum(it.x),
-      y: _safeNum(it.y),
-      layer: it.layer || "0",
-    }))
-    .filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y));
-
-  if (!pts.length) {
-    host.innerHTML = `<div class="muted">Preview: carga un DXF con INSERTS para ver el plano.</div>`;
-    return;
-  }
-
-  const bounds = _computeBounds(pts);
-  if (!bounds) {
-    host.innerHTML = `<div class="muted">Preview: no hay coordenadas válidas.</div>`;
-    return;
-  }
-
-  // Map id -> point
-  const pointMap = new Map();
-  for (const p of pts) pointMap.set(p.id, p);
-
-  // Connections: si la IA devuelve from/to como ids de inserts o placements,
-  // intentamos pintar si existen coords en meta o si el id coincide con I*
-  const connections = Array.isArray(s.lastResult?.connections) ? s.lastResult.connections : [];
-
-  // Construimos un map de coords para placements si vienen en meta
-  const placements = Array.isArray(s.lastResult?.placements) ? s.lastResult.placements : [];
-  const placementMap = new Map();
-  for (const pl of placements) {
-    const x = _safeNum(pl?.meta?.x);
-    const y = _safeNum(pl?.meta?.y);
-    if (pl?.id && Number.isFinite(x) && Number.isFinite(y)) {
-      placementMap.set(pl.id, { x, y });
-    }
-  }
-
-  function getXY(id) {
-    if (pointMap.has(id)) return pointMap.get(id);
-    if (placementMap.has(id)) return placementMap.get(id);
-    return null;
-  }
-
-  // SVG viewBox: invertimos Y para que se vea “como CAD” (opcional),
-  // aquí lo dejamos sin invertir para no liar; si lo quieres invertimos luego.
-  const pad = 20;
-  const vbX = bounds.minX - pad;
-  const vbY = bounds.minY - pad;
-  const vbW = bounds.w + pad * 2;
-  const vbH = bounds.h + pad * 2;
-
-  let linesSvg = "";
-  for (const c of connections) {
-    const a = c?.from;
-    const b = c?.to;
-    if (!a || !b) continue;
-    const pa = getXY(a);
-    const pb = getXY(b);
-    if (!pa || !pb) continue;
-    linesSvg += `<line x1="${pa.x}" y1="${pa.y}" x2="${pb.x}" y2="${pb.y}" stroke="rgba(99,102,241,.8)" stroke-width="2" />`;
-  }
-
-  let pointsSvg = "";
-  for (const p of pts) {
-    pointsSvg += `<circle cx="${p.x}" cy="${p.y}" r="6" fill="rgba(16,185,129,.85)">
-      <title>${_escapeHtml(p.id)} · ${_escapeHtml(p.block)}</title>
-    </circle>`;
-  }
-
-  host.innerHTML = `
-    <div class="muted mb-2">Preview (SVG): puntos=INSERTS · líneas=conexiones IA (si hay)</div>
-    <div style="border:1px solid rgba(255,255,255,.08); border-radius:12px; overflow:hidden;">
-      <svg viewBox="${vbX} ${vbY} ${vbW} ${vbH}" width="100%" height="420" preserveAspectRatio="xMidYMid meet" style="background:rgba(255,255,255,.02)">
-        ${linesSvg}
-        ${pointsSvg}
-      </svg>
-    </div>
-  `;
-}
-
-/* ======================================================
-   DXF Info UI
- ====================================================== */
-
-function _renderDxfInfo() {
-  const host = _el("diagDxfInfo");
-  if (!host) return;
-
-  const s = appState.diagramas;
-  const blocks = Array.isArray(s.dxfBlocks) ? s.dxfBlocks : [];
-  const layers = Array.isArray(s.dxfLayers) ? s.dxfLayers : [];
-  const inserts = Array.isArray(s.dxfInserts) ? s.dxfInserts : [];
-
-  const q = String(s.dxfSearch || "").toLowerCase().trim();
-  const filteredBlocks = q ? blocks.filter((b) => String(b).toLowerCase().includes(q)) : blocks;
-
-  host.innerHTML = `
-    <div class="mt-2">
-      <div class="muted">DXF: <b>${_escapeHtml(s.dxfFileName || "—")}</b> · inserts: <b>${inserts.length}</b></div>
-
-      <div class="grid mt-2" style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
-        <div class="card" style="padding:10px;">
-          <h4 style="margin:0;">Blocks (${filteredBlocks.length}/${blocks.length})</h4>
-          <div class="form-group mt-2">
-            <input id="diagDxfSearch" type="text" placeholder="Buscar block..." value="${_escapeHtml(s.dxfSearch || "")}" />
-          </div>
-          <div style="max-height:180px; overflow:auto; border:1px solid rgba(255,255,255,.08); border-radius:10px; padding:8px;">
-            ${
-              filteredBlocks.length
-                ? filteredBlocks
-                    .slice(0, 250)
-                    .map((b) => `<div class="muted" style="padding:2px 0;">• ${_escapeHtml(b)}</div>`)
-                    .join("")
-                : `<div class="muted">No hay blocks detectados.</div>`
-            }
-            ${filteredBlocks.length > 250 ? `<div class="muted mt-2">Mostrando 250.</div>` : ""}
-          </div>
-        </div>
-
-        <div class="card" style="padding:10px;">
-          <h4 style="margin:0;">Layers (${layers.length})</h4>
-          <div class="form-group mt-2">
-            <select id="diagDxfLayerFilter">
-              <option value="__ALL__"${s.dxfLayerFilter === "__ALL__" ? " selected" : ""}>Todas</option>
-              ${layers
-                .slice(0, 500)
-                .map(
-                  (l) =>
-                    `<option value="${_escapeHtml(l)}"${
-                      s.dxfLayerFilter === l ? " selected" : ""
-                    }>${_escapeHtml(l)}</option>`
-                )
-                .join("")}
-            </select>
-          </div>
-          <div class="muted">Filtro aplicado al preview y a inserts que se envían a la IA.</div>
-        </div>
-      </div>
-    </div>
-  `;
-
-  const inp = _el("diagDxfSearch");
-  if (inp) {
-    inp.addEventListener("input", () => {
-      appState.diagramas.dxfSearch = _strVal("diagDxfSearch", "");
-      _renderDxfInfo();
-    });
-  }
-
-  const sel = _el("diagDxfLayerFilter");
-  if (sel) {
-    sel.addEventListener("change", () => {
-      appState.diagramas.dxfLayerFilter = _strVal("diagDxfLayerFilter", "__ALL__");
-      _renderSvgPreview();
-    });
-  }
-}
-
-/* ======================================================
-   DXF Import
- ====================================================== */
-
 async function diagImportDxfFile(file) {
   if (!file) return;
 
@@ -497,8 +196,6 @@ async function diagImportDxfFile(file) {
   appState.diagramas.dxfFileName = file.name || "";
   appState.diagramas.dxfText = "";
   appState.diagramas.dxfBlocks = [];
-  appState.diagramas.dxfLayers = [];
-  appState.diagramas.dxfInserts = [];
 
   const okExt = /\.dxf$/i.test(file.name || "");
   if (!okExt) {
@@ -517,22 +214,10 @@ async function diagImportDxfFile(file) {
 
     const pairs = _dxfToPairs(text);
     const blocks = _dxfExtractBlocks(pairs);
-    const layers = _dxfExtractLayers(pairs);
-    const inserts = _dxfExtractInserts(pairs, 5000);
 
-    appState.diagramas.dxfBlocks = blocks;
-    appState.diagramas.dxfLayers = layers;
-    appState.diagramas.dxfInserts = inserts;
+    appState.diagramas.dxfBlocks = blocks.sort((a, b) => a.localeCompare(b));
 
-    if (blocks.length) {
-      appState.diagramas.catalogJsonText = _buildCatalogFromBlocks(blocks);
-      appState.diagramas.catalogFromDxf = true;
-      const ta = _el("diagCatalog");
-      if (ta) ta.value = appState.diagramas.catalogJsonText;
-    }
-
-    _renderDxfInfo();
-    _renderSvgPreview();
+    _renderDiagramasUI(); // refresca selects de iconos
     _renderResult();
   } catch (e) {
     appState.diagramas.lastError = e.message || String(e);
@@ -540,46 +225,119 @@ async function diagImportDxfFile(file) {
   }
 }
 
-function diagUseCatalogFromDxf() {
-  const blocks = Array.isArray(appState.diagramas.dxfBlocks) ? appState.diagramas.dxfBlocks : [];
-  if (!blocks.length) {
-    appState.diagramas.lastError = "No hay blocks DXF cargados para generar catálogo.";
-    _renderResult();
-    return;
+/* ======================================================
+   3) Drag & Drop (paleta -> zonas)
+ ====================================================== */
+
+let _dragRefKey = null;
+
+function _onRefDragStart(ev, ref) {
+  _dragRefKey = String(ref || "");
+  try {
+    ev.dataTransfer.setData("text/plain", _dragRefKey);
+    ev.dataTransfer.effectAllowed = "copy";
+  } catch (_) {}
+}
+
+function _onZoneDragOver(ev) {
+  ev.preventDefault();
+  try {
+    ev.dataTransfer.dropEffect = "copy";
+  } catch (_) {}
+  const zone = ev.currentTarget;
+  if (zone) zone.classList.add("is-drag-over");
+}
+
+function _onZoneDragLeave(ev) {
+  const zone = ev.currentTarget;
+  if (zone) zone.classList.remove("is-drag-over");
+}
+
+function _onZoneDrop(ev, zoneKey) {
+  ev.preventDefault();
+  const zone = ev.currentTarget;
+  if (zone) zone.classList.remove("is-drag-over");
+
+  let ref = "";
+  try {
+    ref = ev.dataTransfer.getData("text/plain") || "";
+  } catch (_) {
+    ref = _dragRefKey || "";
   }
-  appState.diagramas.catalogJsonText = _buildCatalogFromBlocks(blocks);
-  appState.diagramas.catalogFromDxf = true;
+  ref = String(ref || "").trim();
+  if (!ref) return;
 
-  const ta = _el("diagCatalog");
-  if (ta) ta.value = appState.diagramas.catalogJsonText;
+  const source = (appState.diagramas.refs || []).find((r) => r.ref === ref);
+  if (!source) return;
 
-  appState.diagramas.lastError = null;
-  _renderResult();
+  const list = (appState.diagramas.assignments[zoneKey] =
+    appState.diagramas.assignments[zoneKey] || []);
+
+  // Si ya existe en la zona, incrementa qty
+  const existing = list.find((x) => x.ref === ref);
+  if (existing) {
+    existing.qty = Number(existing.qty || 0) + 1;
+  } else {
+    list.push({
+      id: `A_${zoneKey}_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+      ref: source.ref,
+      descripcion: source.descripcion || "",
+      qty: Math.max(1, Number(source.qty || 1) || 1),
+      iconBlock: "", // se elige manual
+    });
+  }
+
+  _renderDiagramasUI();
+}
+
+function _removeAssignment(zoneKey, id) {
+  const list = appState.diagramas.assignments[zoneKey] || [];
+  const idx = list.findIndex((x) => x.id === id);
+  if (idx >= 0) list.splice(idx, 1);
+  _renderDiagramasUI();
+}
+
+function _updateAssignment(zoneKey, id, patch) {
+  const list = appState.diagramas.assignments[zoneKey] || [];
+  const it = list.find((x) => x.id === id);
+  if (!it) return;
+  Object.assign(it, patch);
 }
 
 /* ======================================================
-   Prompt builder (default + override)
+   4) Prompt + payload IA
  ====================================================== */
 
 function _defaultInstructions() {
   return `
-Eres un diseñador de redes Ethernet para videoportero/control de accesos.
+Eres un diseñador de redes Ethernet.
 
-OBJETIVO: Diseñar la red MÁS EFICIENTE usando SOLO cable UTP Cat6.
-- Minimiza longitud total de cable aproximando por distancia Euclídea con coordenadas (x,y) de spec.dxf.inserts[].
-- Topología: estrella o estrella jerárquica (dispositivos -> switches -> core -> router).
-- No inventes dispositivos finales. Trabaja con spec.dxf.inserts[] como dispositivos existentes.
-- Si falta infraestructura (router/switches), puedes crearla como VIRTUAL_* en placements.
-- Devuelve SOLO JSON VÁLIDO.
+Contexto:
+- El usuario ha asignado referencias (ref) del presupuesto a zonas del edificio: entrada_principal, portales_interiores, zonas_comunes, zonas_refugio.
+- Solo se permite cableado UTP categoría 6 (Cat6).
 
-Formato exacto:
+Objetivo:
+- Diseña la red más eficiente y mantenible.
+- Topología preferida: estrella jerárquica (dispositivos -> switches de zona/armario -> core -> router).
+- Minimiza complejidad: agrupa por zonas, usa switches PoE cuando convenga para videoporteros/control accesos.
+- No inventes dispositivos finales: SOLO usa los asignados por el usuario.
+- Sí puedes proponer infraestructura (switches/router/core) si hace falta, marcándola como VIRTUAL_*.
+
+DEVUELVE SOLO JSON válido con este formato exacto:
 {
-  "placements":[ { "id":"...", "block":"...", "device_type":"...", "meta":{ "source":"DXF"|"VIRTUAL", "x":0, "y":0 } } ],
-  "connections":[ { "from":"...", "to":"...", "type":"UTP_CAT6", "approx_len": 12.3 } ],
-  "summary": { "total_devices":0, "total_switches":0, "approx_total_cable":0 },
+  "placements":[
+    { "id":"...", "ref":"...", "zone":"...", "icon_block":"...", "qty":1, "meta":{ "source":"USER"|"VIRTUAL" } }
+  ],
+  "infra":[
+    { "id":"...", "type":"VIRTUAL_SWITCH_POE"|"VIRTUAL_SWITCH"|"VIRTUAL_CORE"|"VIRTUAL_ROUTER", "zone":"...", "meta":{...} }
+  ],
+  "connections":[
+    { "from":"...", "to":"...", "type":"UTP_CAT6", "note":"..." }
+  ],
+  "summary": { "total_refs":0, "total_devices":0, "total_switches":0 },
   "errors":[ ... ]
 }
-  `.trim();
+`.trim();
 }
 
 function _getEffectiveInstructions() {
@@ -588,106 +346,69 @@ function _getEffectiveInstructions() {
   return _defaultInstructions();
 }
 
-/* ======================================================
-   IA payload
- ====================================================== */
+function _buildAiPayload() {
+  // Refs asignadas por zona
+  const zones = appState.diagramas.zones || [];
+  const assignments = appState.diagramas.assignments || {};
 
-function _buildDiagramPromptPayload() {
-  let catalogObj = null;
-  try {
-    catalogObj = JSON.parse(appState.diagramas.catalogJsonText || "{}");
-  } catch (e) {
-    throw new Error("El JSON del catálogo no es válido.");
+  const placements = [];
+  for (const z of zones) {
+    const list = Array.isArray(assignments[z.key]) ? assignments[z.key] : [];
+    for (const it of list) {
+      placements.push({
+        id: it.id,
+        ref: it.ref,
+        descripcion: it.descripcion || "",
+        zone: z.key,
+        icon_block: it.iconBlock || "",
+        qty: Number(it.qty || 0) || 0,
+        meta: { source: "USER" },
+      });
+    }
   }
 
-  const catalogBlocks = Array.isArray(catalogObj?.catalog_blocks) ? catalogObj.catalog_blocks : [];
-  if (!catalogBlocks.length) throw new Error("El catálogo está vacío (catalog_blocks).");
+  if (!placements.length) throw new Error("No hay referencias asignadas. Arrastra refs a alguna zona.");
 
-  const skus = _parseSkus(appState.diagramas.skusText);
-  if (!skus.length) throw new Error("Añade al menos 1 SKU para la prueba.");
-
-  const layerFilter = appState.diagramas.dxfLayerFilter || "__ALL__";
-  const rawInserts = Array.isArray(appState.diagramas.dxfInserts) ? appState.diagramas.dxfInserts : [];
-  const inserts = rawInserts
-    .filter((it) => !!it && !!it.block)
-    .filter((it) => layerFilter === "__ALL__" || (it.layer || "0") === layerFilter)
-    .slice(0, 1200)
-    .map((it, idx) => ({
-      id: `I${idx + 1}`,
-      block: it.block,
-      layer: it.layer || "0",
-      x: Number.isFinite(it.x) ? it.x : null,
-      y: Number.isFinite(it.y) ? it.y : null,
-    }));
+  // Biblioteca de iconos DXF (opcional)
+  const iconLibrary = Array.isArray(appState.diagramas.dxfBlocks) ? appState.diagramas.dxfBlocks : [];
 
   const spec = {
-    project_type: appState.diagramas.projectType,
-    draw_mode: appState.diagramas.drawMode,
-    buildings: appState.diagramas.buildings,
-    per_building: {
-      placas_totales: appState.diagramas.placasPorEdificio,
-      placas_exterior: appState.diagramas.placaExteriorPorEdificio,
-      viviendas: appState.diagramas.viviendasPorEdificio,
-      monitores_por_vivienda: appState.diagramas.monitoresPorVivienda,
-    },
-    features: {
-      zonas_comunes: !!appState.diagramas.zones.comunes,
-      zonas_refugio: !!appState.diagramas.zones.refugio,
-      domotica: !!appState.diagramas.zones.domotica,
-      control_accesos: !!appState.diagramas.zones.controlAccesos,
-    },
-    skus,
-    dxf: {
-      file: appState.diagramas.dxfFileName || "",
-      layer_filter: layerFilter,
-      inserts_count: inserts.length,
-      inserts,
-      cable: { type: "UTP_CAT6", max_segment_m: 90 },
-    },
+    cable: "UTP_CAT6",
+    zones: zones.map((z) => ({ key: z.key, label: z.label })),
+    placements,
+    icon_library_blocks: iconLibrary.slice(0, 2000),
   };
 
   const network_rules = {
-    default_cable: "UTP_CAT6",
-    videoportero: { connects_to: ["switch_poe"], connection: "UTP_CAT6_PoE" },
-    access_unit: { connects_to: ["switch_poe"], connection: "UTP_CAT6_PoE" },
-    monitor: { connects_to: ["switch"], connection: "UTP_CAT6" },
-    switch_poe: { connects_to: ["switch_core", "router"], connection: "UTP_CAT6" },
-    switch: { connects_to: ["switch_core", "router"], connection: "UTP_CAT6" },
-    switch_core: { connects_to: ["router"], connection: "UTP_CAT6" },
+    cable: "UTP_CAT6",
+    topology: ["hierarchical_star", "star"],
+    hints: {
+      // heurística por texto (la IA puede usarla o ignorarla)
+      poe_keywords: ["IPSTYLE", "ACCESS", "UNIT", "CA", "READER", "IP ONE", "INTERCOM"],
+    },
   };
 
-  const instructions = _getEffectiveInstructions();
-
-  return { instructions, catalog_blocks: catalogBlocks, spec, network_rules };
+  return {
+    instructions: _getEffectiveInstructions(),
+    spec,
+    network_rules,
+  };
 }
 
-async function diagGeneratePreview() {
+async function diagGenerateDesign() {
   appState.diagramas.lastError = null;
   appState.diagramas.lastResult = null;
   _renderResult();
 
-  // sync state from UI
-  appState.diagramas.projectType = _strVal("diagProjectType", "residencial");
-  appState.diagramas.drawMode = _strVal("diagDrawMode", appState.diagramas.projectType);
-  appState.diagramas.buildings = _numVal("diagBuildings", 1);
-  appState.diagramas.placasPorEdificio = _numVal("diagPlacas", 2);
-  appState.diagramas.placaExteriorPorEdificio = _numVal("diagPlacaExt", 1);
-  appState.diagramas.viviendasPorEdificio = _numVal("diagViviendas", 15);
-  appState.diagramas.monitoresPorVivienda = _numVal("diagMonitores", 2);
-  appState.diagramas.zones.comunes = _boolVal("diagZComunes");
-  appState.diagramas.zones.refugio = _boolVal("diagZRefugio");
-  appState.diagramas.zones.domotica = _boolVal("diagZDomotica");
-  appState.diagramas.zones.controlAccesos = _boolVal("diagZCA");
-  appState.diagramas.skusText = _strVal("diagSkus", appState.diagramas.skusText);
-  appState.diagramas.catalogJsonText = _strVal("diagCatalog", appState.diagramas.catalogJsonText);
-
-  // sync prompt UI
-  appState.diagramas.useCustomPrompt = _boolVal("diagUseCustomPrompt");
-  appState.diagramas.customPromptText = _strVal("diagPromptText", appState.diagramas.customPromptText);
+  // Sync prompt UI
+  appState.diagramas.useCustomPrompt = !!(_el("diagUseCustomPrompt") && _el("diagUseCustomPrompt").checked);
+  appState.diagramas.customPromptText = _el("diagPromptText")
+    ? String(_el("diagPromptText").value || "")
+    : appState.diagramas.customPromptText;
 
   let payload;
   try {
-    payload = _buildDiagramPromptPayload();
+    payload = _buildAiPayload();
   } catch (e) {
     appState.diagramas.lastError = e.message || String(e);
     _renderResult();
@@ -705,9 +426,8 @@ async function diagGeneratePreview() {
   _setBusy(true);
   try {
     const res = await handler({
-      mode: "diagram_network_v3_preview",
+      mode: "diagram_network_v4_dragdrop",
       instructions: payload.instructions,
-      catalog_blocks: payload.catalog_blocks,
       spec: payload.spec,
       network_rules: payload.network_rules,
       user: { email: appState?.user?.email || "", role: appState?.user?.role || "" },
@@ -717,7 +437,7 @@ async function diagGeneratePreview() {
     if (typeof res === "string") {
       try {
         obj = JSON.parse(res);
-      } catch (e) {
+      } catch (_) {
         throw new Error("La IA no devolvió JSON válido.");
       }
     }
@@ -730,49 +450,269 @@ async function diagGeneratePreview() {
     appState.diagramas.lastResult = obj;
     appState.diagramas.lastError = null;
     _renderResult();
-    _renderSvgPreview();
   } catch (e) {
     console.error(e);
     appState.diagramas.lastError = e.message || String(e);
     appState.diagramas.lastResult = null;
     _renderResult();
-    _renderSvgPreview();
   } finally {
     _setBusy(false);
   }
 }
 
-function _renderResult() {
-  const out = _el("diagOutput");
-  if (!out) return;
+/* ======================================================
+   5) Render UI
+ ====================================================== */
 
-  if (appState.diagramas.lastError) {
-    out.innerHTML = `<div class="alert alert-error">${_escapeHtml(appState.diagramas.lastError)}</div>`;
-    return;
+function _renderDiagramasUI() {
+  const host = _el("diagMain");
+  if (!host) return;
+
+  const s = appState.diagramas;
+  const refs = Array.isArray(s.refs) ? s.refs : [];
+  const q = String(s.refsSearch || "").toLowerCase().trim();
+  const filtered = q
+    ? refs.filter((r) => (r.ref || "").toLowerCase().includes(q) || (r.descripcion || "").toLowerCase().includes(q))
+    : refs;
+
+  const blocks = Array.isArray(s.dxfBlocks) ? s.dxfBlocks : [];
+
+  function zoneHtml(z) {
+    const list = Array.isArray(s.assignments[z.key]) ? s.assignments[z.key] : [];
+    const items = list
+      .map((it) => {
+        const blockOptions =
+          `<option value="">(sin icono)</option>` +
+          blocks
+            .slice(0, 800)
+            .map((b) => `<option value="${_escapeHtmlAttr(b)}"${it.iconBlock === b ? " selected" : ""}>${_escapeHtml(b)}</option>`)
+            .join("");
+
+        return `
+          <div class="card" style="padding:10px; margin-top:8px;">
+            <div style="display:flex; justify-content:space-between; gap:10px; align-items:flex-start;">
+              <div style="min-width:0;">
+                <div style="font-weight:600;">${_escapeHtml(it.ref)}</div>
+                <div class="muted" style="font-size:12px;">${_escapeHtml(it.descripcion || "")}</div>
+              </div>
+              <button class="btn" data-act="remove" data-zone="${_escapeHtmlAttr(z.key)}" data-id="${_escapeHtmlAttr(it.id)}">Quitar</button>
+            </div>
+
+            <div class="grid mt-2" style="display:grid; grid-template-columns: 120px 1fr; gap:10px; align-items:center;">
+              <div class="form-group" style="margin:0;">
+                <label style="font-size:12px;">Cantidad</label>
+                <input type="number" min="1" value="${Number(it.qty || 1)}" data-act="qty" data-zone="${_escapeHtmlAttr(
+          z.key
+        )}" data-id="${_escapeHtmlAttr(it.id)}"/>
+              </div>
+              <div class="form-group" style="margin:0;">
+                <label style="font-size:12px;">Icono DXF (BLOCK)</label>
+                <select data-act="icon" data-zone="${_escapeHtmlAttr(z.key)}" data-id="${_escapeHtmlAttr(it.id)}">
+                  ${blockOptions}
+                </select>
+              </div>
+            </div>
+          </div>
+        `;
+      })
+      .join("");
+
+    return `
+      <div class="card diag-dropzone" data-zone="${_escapeHtmlAttr(z.key)}" style="padding:12px; min-height:180px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+          <div>
+            <div style="font-weight:700;">${_escapeHtml(z.label)}</div>
+            <div class="muted" style="font-size:12px;">Suelta aquí referencias del presupuesto</div>
+          </div>
+          <span class="badge">${list.length}</span>
+        </div>
+        ${items || `<div class="muted mt-2" style="font-size:12px;">(vacío)</div>`}
+      </div>
+    `;
   }
 
-  if (!appState.diagramas.lastResult) {
-    out.innerHTML = `<div class="muted">Pulsa <b>Generar preview</b> para ver el JSON.</div>`;
-    return;
-  }
+  host.innerHTML = `
+    <div class="grid" style="display:grid; grid-template-columns: 360px 1fr; gap:14px;">
+      <!-- LEFT: PALETA -->
+      <div class="card" style="padding:12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+          <h3 style="margin:0;">Referencias del proyecto</h3>
+          <button id="btnDiagReloadRefs" class="btn">Recargar</button>
+        </div>
 
-  const pretty = _escapeHtml(JSON.stringify(appState.diagramas.lastResult, null, 2));
-  out.innerHTML = `
-    <div class="mb-2"><span class="badge">Preview JSON</span></div>
-    <pre style="white-space:pre-wrap; background:#0b1020; color:#e5e7eb; padding:12px; border-radius:10px; overflow:auto;">${pretty}</pre>
+        <div class="muted mt-1" style="font-size:12px;">
+          Fuente: presupuesto (appState.presupuesto.lineas). Arrastra a zonas.
+        </div>
+
+        <div class="form-group mt-2">
+          <input id="diagRefsSearch" type="text" placeholder="Buscar ref/descripcion..." value="${_escapeHtml(s.refsSearch || "")}"/>
+        </div>
+
+        <div style="max-height:520px; overflow:auto; border:1px solid rgba(255,255,255,.08); border-radius:10px; padding:8px;">
+          ${
+            filtered.length
+              ? filtered
+                  .slice(0, 300)
+                  .map((r) => {
+                    return `
+                      <div class="card" style="padding:10px; margin-bottom:8px;"
+                           draggable="true" data-ref="${_escapeHtmlAttr(r.ref)}">
+                        <div style="display:flex; justify-content:space-between; gap:10px; align-items:center;">
+                          <div style="min-width:0;">
+                            <div style="font-weight:700;">${_escapeHtml(r.ref)}</div>
+                            <div class="muted" style="font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                              ${_escapeHtml(r.descripcion || "")}
+                            </div>
+                          </div>
+                          <span class="badge">${Number(r.qty || 0)}</span>
+                        </div>
+                      </div>
+                    `;
+                  })
+                  .join("")
+              : `<div class="muted">No hay referencias. Genera un presupuesto primero.</div>`
+          }
+          ${filtered.length > 300 ? `<div class="muted mt-2">Mostrando 300.</div>` : ""}
+        </div>
+
+        <div class="card mt-3" style="padding:12px;">
+          <h4 style="margin:0;">Biblioteca de iconos (DXF)</h4>
+          <div class="muted" style="font-size:12px; margin-top:6px;">
+            Carga tu “PLANTILLA DE ICONOS.dxf” para poder seleccionar el BLOCK en cada elemento.
+          </div>
+          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:10px;">
+            <input id="diagDxfFile" type="file" accept=".dxf"/>
+            <span class="muted" style="font-size:12px;">
+              ${s.dxfFileName ? `Cargado: <b>${_escapeHtml(s.dxfFileName)}</b> · blocks: ${blocks.length}` : "Sin DXF cargado"}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT: ZONAS -->
+      <div>
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+          <div>
+            <h3 style="margin:0;">Ubicación de dispositivos</h3>
+            <div class="muted" style="font-size:12px;">Arrastra referencias a zonas. Luego pulsa “Generar diseño”.</div>
+          </div>
+          <div style="display:flex; gap:10px; align-items:center;">
+            <button id="btnDiagTogglePrompt" class="btn">Prompt</button>
+            <button id="btnDiagGenerate" class="btn btn-primary">Generar diseño</button>
+            <span id="diagBusy" class="muted" style="display:none;">Generando…</span>
+          </div>
+        </div>
+
+        <div id="diagPromptBox" class="card mt-3" style="padding:12px; display:${s.promptUiOpen ? "" : "none"};">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+            <h4 style="margin:0;">Prompt</h4>
+            <span class="muted" style="font-size:12px;">Editable</span>
+          </div>
+          <label style="display:flex; gap:8px; align-items:center; margin-top:10px;">
+            <input id="diagUseCustomPrompt" type="checkbox"${s.useCustomPrompt ? " checked" : ""}/> Usar prompt personalizado
+          </label>
+          <div class="form-group mt-2">
+            <textarea id="diagPromptText" rows="10">${_escapeHtml(s.customPromptText || _defaultInstructions())}</textarea>
+          </div>
+        </div>
+
+        <div class="grid mt-3" style="display:grid; grid-template-columns: 1fr 1fr; gap:14px;">
+          ${s.zones.map(zoneHtml).join("")}
+        </div>
+
+        <div class="mt-3" id="diagOutput"></div>
+      </div>
+    </div>
   `;
+
+  // Bind search
+  const inp = _el("diagRefsSearch");
+  if (inp) {
+    inp.addEventListener("input", () => {
+      appState.diagramas.refsSearch = String(inp.value || "");
+      _renderDiagramasUI();
+    });
+  }
+
+  // Bind reload refs
+  const btnReload = _el("btnDiagReloadRefs");
+  if (btnReload) {
+    btnReload.addEventListener("click", () => {
+      diagLoadProjectRefs();
+      _renderDiagramasUI();
+    });
+  }
+
+  // Bind DXF import
+  const inpDxf = _el("diagDxfFile");
+  if (inpDxf) {
+    inpDxf.addEventListener("change", async () => {
+      const f = inpDxf.files && inpDxf.files[0] ? inpDxf.files[0] : null;
+      await diagImportDxfFile(f);
+    });
+  }
+
+  // Bind prompt toggle
+  const btnPrompt = _el("btnDiagTogglePrompt");
+  if (btnPrompt) {
+    btnPrompt.addEventListener("click", () => {
+      appState.diagramas.promptUiOpen = !appState.diagramas.promptUiOpen;
+      _renderDiagramasUI();
+      _renderResult();
+    });
+  }
+
+  // Bind generate
+  const btnGen = _el("btnDiagGenerate");
+  if (btnGen) btnGen.addEventListener("click", diagGenerateDesign);
+
+  // Bind draggable ref cards
+  host.querySelectorAll("[draggable='true'][data-ref]").forEach((node) => {
+    node.addEventListener("dragstart", (ev) => _onRefDragStart(ev, node.dataset.ref));
+    node.addEventListener("dragend", () => (_dragRefKey = null));
+  });
+
+  // Bind dropzones
+  host.querySelectorAll(".diag-dropzone[data-zone]").forEach((zone) => {
+    const zoneKey = zone.dataset.zone;
+    zone.addEventListener("dragover", _onZoneDragOver);
+    zone.addEventListener("dragleave", _onZoneDragLeave);
+    zone.addEventListener("drop", (ev) => _onZoneDrop(ev, zoneKey));
+  });
+
+  // Bind actions inside assignments (remove/qty/icon)
+  host.querySelectorAll("[data-act]").forEach((node) => {
+    const act = node.dataset.act;
+    const zoneKey = node.dataset.zone;
+    const id = node.dataset.id;
+
+    if (act === "remove") {
+      node.addEventListener("click", () => _removeAssignment(zoneKey, id));
+    } else if (act === "qty") {
+      node.addEventListener("change", () => {
+        const v = Number(node.value || 1);
+        _updateAssignment(zoneKey, id, { qty: Math.max(1, Number.isFinite(v) ? v : 1) });
+      });
+    } else if (act === "icon") {
+      node.addEventListener("change", () => {
+        _updateAssignment(zoneKey, id, { iconBlock: String(node.value || "") });
+      });
+    }
+  });
 }
 
 /* ======================================================
-   View
+   Public view entry
  ====================================================== */
 
 function renderDiagramasView() {
   const root = document.getElementById("appContent");
   if (!root) return;
 
+  // permisos (mantengo tu patrón)
   const caps = appState?.user?.capabilities;
   const allowed = (caps?.pages && !!caps.pages.diagramas) || (caps?.views && !!caps.views.diagramas);
+
   if (!allowed) {
     root.innerHTML = `
       <div class="card">
@@ -783,167 +723,26 @@ function renderDiagramasView() {
     return;
   }
 
-  const s = appState.diagramas;
+  // Carga refs del presupuesto
+  diagLoadProjectRefs();
 
   root.innerHTML = `
     <div class="card">
       <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
         <div>
-          <h2 style="margin-bottom:4px;">Diagrama (IA) · Preview</h2>
-          <div class="muted">DXF + red UTP Cat6. Preview visual + editor de prompt.</div>
-        </div>
-        <div style="display:flex; gap:10px; align-items:center;">
-          <button id="btnDiagTogglePrompt" class="btn">Prompt</button>
-          <button id="btnDiagGenerate" class="btn btn-primary">Generar preview</button>
-          <span id="diagBusy" class="muted" style="display:none;">Generando…</span>
+          <h2 style="margin-bottom:4px;">Diagramas · Drag & Drop</h2>
+          <div class="muted">Asignas referencias a zonas y la IA diseña la red UTP Cat6.</div>
         </div>
       </div>
-
-      <div class="card mt-3" style="padding:12px;">
-        <h3>DXF (import)</h3>
-        <div class="muted mb-2">Carga un DXF ASCII. Extraemos INSERTS (puntos) y la IA devuelve conexiones.</div>
-        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-          <input id="diagDxfFile" type="file" accept=".dxf" />
-          <button id="btnDiagUseDxfCatalog" class="btn">Usar catálogo DXF</button>
-          <span class="muted">${
-            s.dxfFileName
-              ? `Cargado: <b>${_escapeHtml(s.dxfFileName)}</b> · inserts: ${(s.dxfInserts || []).length}`
-              : "Sin DXF cargado"
-          }</span>
-        </div>
-        <div id="diagDxfInfo"></div>
-      </div>
-
-      <div id="diagPromptBox" class="card mt-3" style="padding:12px; display:${s.promptUiOpen ? "" : "none"};">
-        <h3>Prompt</h3>
-        <div class="muted mb-2">Activa “usar prompt personalizado” si quieres controlar exactamente el comportamiento.</div>
-        <label style="display:flex; gap:8px; align-items:center;">
-          <input id="diagUseCustomPrompt" type="checkbox"${s.useCustomPrompt ? " checked" : ""}/> Usar prompt personalizado
-        </label>
-        <div class="form-group mt-2">
-          <textarea id="diagPromptText" rows="10" placeholder="Pega aquí tu prompt...">${_escapeHtml(
-            s.customPromptText || _defaultInstructions()
-          )}</textarea>
-        </div>
-        <div class="muted">Si está desactivado, se usa el prompt por defecto.</div>
-      </div>
-
-      <div class="grid mt-3" style="display:grid; grid-template-columns: 1fr 1fr; gap:14px;">
-        <div class="card" style="padding:12px;">
-          <h3>Proyecto</h3>
-
-          <div class="form-group">
-            <label>Tipo de proyecto</label>
-            <select id="diagProjectType">
-              <option value="residencial"${s.projectType==="residencial"?" selected":""}>Residencial</option>
-              <option value="retail"${s.projectType==="retail"?" selected":""}>Retail</option>
-              <option value="hotel"${s.projectType==="hotel"?" selected":""}>Hotel</option>
-              <option value="villa"${s.projectType==="villa"?" selected":""}>Villa</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label>Modo de dibujo (draw_mode)</label>
-            <select id="diagDrawMode">
-              <option value="residencial"${s.drawMode==="residencial"?" selected":""}>Residencial</option>
-              <option value="retail"${s.drawMode==="retail"?" selected":""}>Retail</option>
-              <option value="hotel"${s.drawMode==="hotel"?" selected":""}>Hotel</option>
-              <option value="villa"${s.drawMode==="villa"?" selected":""}>Villa</option>
-            </select>
-          </div>
-
-          <div class="grid" style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-            <div class="form-group">
-              <label>Edificios</label>
-              <input id="diagBuildings" type="number" min="1" value="${Number(s.buildings)||1}" />
-            </div>
-            <div class="form-group">
-              <label>Placas por edificio</label>
-              <input id="diagPlacas" type="number" min="0" value="${Number(s.placasPorEdificio)||0}" />
-            </div>
-            <div class="form-group">
-              <label>Placa exterior por edificio</label>
-              <input id="diagPlacaExt" type="number" min="0" value="${Number(s.placaExteriorPorEdificio)||0}" />
-            </div>
-            <div class="form-group">
-              <label>Viviendas por edificio</label>
-              <input id="diagViviendas" type="number" min="0" value="${Number(s.viviendasPorEdificio)||0}" />
-            </div>
-            <div class="form-group">
-              <label>Monitores por vivienda</label>
-              <input id="diagMonitores" type="number" min="0" value="${Number(s.monitoresPorVivienda)||0}" />
-            </div>
-          </div>
-
-          <div class="mt-2">
-            <label style="display:flex; gap:8px; align-items:center;">
-              <input id="diagZComunes" type="checkbox"${s.zones.comunes?" checked":""}/> Zonas comunes
-            </label>
-            <label style="display:flex; gap:8px; align-items:center;">
-              <input id="diagZRefugio" type="checkbox"${s.zones.refugio?" checked":""}/> Zonas de refugio
-            </label>
-            <label style="display:flex; gap:8px; align-items:center;">
-              <input id="diagZDomotica" type="checkbox"${s.zones.domotica?" checked":""}/> Domótica
-            </label>
-            <label style="display:flex; gap:8px; align-items:center;">
-              <input id="diagZCA" type="checkbox"${s.zones.controlAccesos?" checked":""}/> Control de accesos
-            </label>
-          </div>
-
-          <div class="form-group mt-3">
-            <label>SKUs (una por línea)</label>
-            <textarea id="diagSkus" rows="6">${_escapeHtml(s.skusText)}</textarea>
-          </div>
-        </div>
-
-        <div class="card" style="padding:12px;">
-          <h3>Catálogo</h3>
-          <div class="muted mb-2">${s.catalogFromDxf ? "Generado desde DXF (editable)." : "Manual (editable)."}</div>
-          <div class="form-group">
-            <textarea id="diagCatalog" rows="18">${_escapeHtml(s.catalogJsonText)}</textarea>
-          </div>
-        </div>
-      </div>
-
-      <div class="card mt-3" style="padding:12px;">
-        <h3>Preview visual</h3>
-        <div id="diagPreview"></div>
-      </div>
-
-      <div class="mt-3" id="diagOutput"></div>
+      <div id="diagMain" class="mt-3"></div>
     </div>
   `;
 
-  // binds
-  const btn = _el("btnDiagGenerate");
-  if (btn) btn.addEventListener("click", diagGeneratePreview);
-
-  const btnToggle = _el("btnDiagTogglePrompt");
-  if (btnToggle) {
-    btnToggle.addEventListener("click", () => {
-      appState.diagramas.promptUiOpen = !appState.diagramas.promptUiOpen;
-      renderDiagramasView(); // re-render simple
-    });
-  }
-
-  const inpFile = _el("diagDxfFile");
-  if (inpFile) {
-    inpFile.addEventListener("change", async () => {
-      const f = inpFile.files && inpFile.files[0] ? inpFile.files[0] : null;
-      await diagImportDxfFile(f);
-    });
-  }
-
-  const btnUse = _el("btnDiagUseDxfCatalog");
-  if (btnUse) btnUse.addEventListener("click", diagUseCatalogFromDxf);
-
-  _renderDxfInfo();
-  _renderSvgPreview();
+  _renderDiagramasUI();
   _renderResult();
 }
 
-// export public
+// exports
 window.renderDiagramasView = renderDiagramasView;
-window.diagGeneratePreview = diagGeneratePreview;
 window.diagImportDxfFile = diagImportDxfFile;
-window.diagUseCatalogFromDxf = diagUseCatalogFromDxf;
+window.diagGenerateDesign = diagGenerateDesign;
