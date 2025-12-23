@@ -1,10 +1,12 @@
 // js/ui_diagramas.js
 // Vista: DIAGRAMAS (IA)
-// V2 (Hito 16):
+// V2.1 (Hito 16):
 // - Carga referencias del proyecto (presupuesto) -> paleta draggable
 // - Carga plantilla DXF -> biblioteca de iconos (BLOCKS)
-// - Zonas drop (entrada/portales/comunes/refugio) para asignar dispositivos
-// - IA: diseña red UTP Cat6 optimizando eficiencia (topología + switches) en base a asignaciones
+// - Zonas drop: entrada, portales, comunes, refugio + NUEVO armario/CPD
+// - Botón AUTO: sugiere iconos (BLOCK) por heurística (ref/descripcion)
+// - IA: diseña red UTP Cat6 en base a asignaciones (no inventa dispositivos finales)
+// - Exportar DXF: esquema (CIRCLE+TEXT + LINE cables) con coords artificiales por zonas
 // - Editor de prompt opcional
 
 window.appState = window.appState || {};
@@ -24,6 +26,7 @@ appState.diagramas = appState.diagramas || {
     { key: "portales_interiores", label: "Portales interiores" },
     { key: "zonas_comunes", label: "Zonas comunes" },
     { key: "zonas_refugio", label: "Zonas refugio" },
+    { key: "armario_cpd", label: "Armario / CPD" }, // <-- NUEVO
   ],
   assignments: {
     // zoneKey: [{id, ref, descripcion, qty, iconBlock}]
@@ -80,7 +83,7 @@ function _renderResult() {
   const pretty = _escapeHtml(JSON.stringify(appState.diagramas.lastResult, null, 2));
   out.innerHTML = `
     <div class="mb-2" style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
-      <span class="badge">Diseño IA (JSON)</span>
+      <span class="chip">Diseño IA (JSON)</span>
       <span class="muted">UTP Cat6 · topología eficiente</span>
     </div>
     <pre style="white-space:pre-wrap; background:#0b1020; color:#e5e7eb; padding:12px; border-radius:10px; overflow:auto;">${pretty}</pre>
@@ -115,7 +118,7 @@ function diagLoadProjectRefs() {
   const refs = Array.from(map.values()).sort((a, b) => a.ref.localeCompare(b.ref));
   appState.diagramas.refs = refs;
 
-  // Si no existe assignments, init
+  // init assignments por zonas (incluye Armario/CPD)
   appState.diagramas.assignments = appState.diagramas.assignments || {};
   for (const z of appState.diagramas.zones) {
     if (!Array.isArray(appState.diagramas.assignments[z.key])) {
@@ -273,7 +276,6 @@ function _onZoneDrop(ev, zoneKey) {
   const list = (appState.diagramas.assignments[zoneKey] =
     appState.diagramas.assignments[zoneKey] || []);
 
-  // Si ya existe en la zona, incrementa qty
   const existing = list.find((x) => x.ref === ref);
   if (existing) {
     existing.qty = Number(existing.qty || 0) + 1;
@@ -283,7 +285,7 @@ function _onZoneDrop(ev, zoneKey) {
       ref: source.ref,
       descripcion: source.descripcion || "",
       qty: Math.max(1, Number(source.qty || 1) || 1),
-      iconBlock: "", // se elige manual
+      iconBlock: "",
     });
   }
 
@@ -305,7 +307,74 @@ function _updateAssignment(zoneKey, id, patch) {
 }
 
 /* ======================================================
-   4) Prompt + payload IA
+   4) AUTO icon suggestion (por heurística)
+ ====================================================== */
+
+function _norm(s) {
+  return String(s || "").toLowerCase();
+}
+
+function _suggestIconBlockForItem(item, blocks) {
+  const text = `${item.ref || ""} ${item.descripcion || ""}`.toLowerCase();
+
+  // Mapa de patrones -> keywords esperadas en nombre de BLOCK
+  const rules = [
+    { patterns: ["ip style", "ipstyle"], blockHints: ["ip style", "ipstyle"] },
+    { patterns: ["ip one", "ipone"], blockHints: ["ip one", "ipone"] },
+    { patterns: ["indoor", "monitor", "pantalla"], blockHints: ["indoor", "monitor"] },
+    { patterns: ["access", "unit", "ble", "rfid", "lector"], blockHints: ["access", "unit"] },
+    { patterns: ["switch", "poe"], blockHints: ["switch", "poe"] },
+    { patterns: ["router", "gateway"], blockHints: ["router", "gateway"] },
+    { patterns: ["server", "nvr"], blockHints: ["server", "nvr"] },
+  ];
+
+  const bNorm = blocks.map((b) => ({ raw: b, n: _norm(b) }));
+
+  for (const r of rules) {
+    if (!r.patterns.some((p) => text.includes(p))) continue;
+
+    // 1) intenta match por hints en block
+    for (const hint of r.blockHints) {
+      const hit = bNorm.find((x) => x.n.includes(_norm(hint)));
+      if (hit) return hit.raw;
+    }
+  }
+
+  // fallback: si ref contiene algo parecido al block
+  const refNorm = _norm(item.ref);
+  if (refNorm) {
+    const hit2 = bNorm.find((x) => x.n.includes(refNorm));
+    if (hit2) return hit2.raw;
+  }
+
+  return ""; // sin sugerencia
+}
+
+function diagAutoAssignIcons() {
+  const blocks = Array.isArray(appState.diagramas.dxfBlocks) ? appState.diagramas.dxfBlocks : [];
+  if (!blocks.length) {
+    appState.diagramas.lastError = "Carga primero la plantilla DXF para poder sugerir iconos (BLOCKS).";
+    _renderResult();
+    return;
+  }
+
+  appState.diagramas.lastError = null;
+
+  for (const z of appState.diagramas.zones) {
+    const list = appState.diagramas.assignments[z.key] || [];
+    for (const it of list) {
+      if (it.iconBlock) continue; // respeta lo que ya eligió el usuario
+      const sug = _suggestIconBlockForItem(it, blocks);
+      if (sug) it.iconBlock = sug;
+    }
+  }
+
+  _renderDiagramasUI();
+  _renderResult();
+}
+
+/* ======================================================
+   5) Prompt + payload IA
  ====================================================== */
 
 function _defaultInstructions() {
@@ -313,15 +382,16 @@ function _defaultInstructions() {
 Eres un diseñador de redes Ethernet.
 
 Contexto:
-- El usuario ha asignado referencias (ref) del presupuesto a zonas del edificio: entrada_principal, portales_interiores, zonas_comunes, zonas_refugio.
+- El usuario ha asignado referencias (ref) del presupuesto a zonas del edificio:
+  entrada_principal, portales_interiores, zonas_comunes, zonas_refugio, armario_cpd.
 - Solo se permite cableado UTP categoría 6 (Cat6).
 
 Objetivo:
 - Diseña la red más eficiente y mantenible.
-- Topología preferida: estrella jerárquica (dispositivos -> switches de zona/armario -> core -> router).
-- Minimiza complejidad: agrupa por zonas, usa switches PoE cuando convenga para videoporteros/control accesos.
+- Topología preferida: estrella jerárquica (dispositivos -> switches de zona -> core -> router).
+- Agrupa por zonas; si hay Armario/CPD úsalo como ubicación de core/router.
 - No inventes dispositivos finales: SOLO usa los asignados por el usuario.
-- Sí puedes proponer infraestructura (switches/router/core) si hace falta, marcándola como VIRTUAL_*.
+- Sí puedes proponer infraestructura si hace falta (switches/core/router) en infra[] como VIRTUAL_*.
 
 DEVUELVE SOLO JSON válido con este formato exacto:
 {
@@ -347,7 +417,6 @@ function _getEffectiveInstructions() {
 }
 
 function _buildAiPayload() {
-  // Refs asignadas por zona
   const zones = appState.diagramas.zones || [];
   const assignments = appState.diagramas.assignments || {};
 
@@ -369,7 +438,6 @@ function _buildAiPayload() {
 
   if (!placements.length) throw new Error("No hay referencias asignadas. Arrastra refs a alguna zona.");
 
-  // Biblioteca de iconos DXF (opcional)
   const iconLibrary = Array.isArray(appState.diagramas.dxfBlocks) ? appState.diagramas.dxfBlocks : [];
 
   const spec = {
@@ -383,8 +451,8 @@ function _buildAiPayload() {
     cable: "UTP_CAT6",
     topology: ["hierarchical_star", "star"],
     hints: {
-      // heurística por texto (la IA puede usarla o ignorarla)
       poe_keywords: ["IPSTYLE", "ACCESS", "UNIT", "CA", "READER", "IP ONE", "INTERCOM"],
+      cpd_zone_key: "armario_cpd",
     },
   };
 
@@ -426,7 +494,7 @@ async function diagGenerateDesign() {
   _setBusy(true);
   try {
     const res = await handler({
-      mode: "diagram_network_v4_dragdrop",
+      mode: "diagram_network_v5_zones_cpd",
       instructions: payload.instructions,
       spec: payload.spec,
       network_rules: payload.network_rules,
@@ -461,7 +529,203 @@ async function diagGenerateDesign() {
 }
 
 /* ======================================================
-   5) Render UI
+   6) Export DXF (esquemático)
+   - Sin coords reales de plano: generamos layout por zonas y “nodos”
+   - Dibuja: CIRCLE nodes + TEXT label + LINE connections
+ ====================================================== */
+
+function _dxfLine(x1, y1, x2, y2, layer = "CABLE") {
+  return [
+    "0",
+    "LINE",
+    "8",
+    layer,
+    "10",
+    String(x1),
+    "20",
+    String(y1),
+    "30",
+    "0",
+    "11",
+    String(x2),
+    "21",
+    String(y2),
+    "31",
+    "0",
+  ].join("\n");
+}
+
+function _dxfCircle(x, y, r, layer = "NODES") {
+  return [
+    "0",
+    "CIRCLE",
+    "8",
+    layer,
+    "10",
+    String(x),
+    "20",
+    String(y),
+    "30",
+    "0",
+    "40",
+    String(r),
+  ].join("\n");
+}
+
+function _dxfText(x, y, h, text, layer = "LABELS") {
+  const t = String(text || "").replaceAll("\n", " ");
+  return [
+    "0",
+    "TEXT",
+    "8",
+    layer,
+    "10",
+    String(x),
+    "20",
+    String(y),
+    "30",
+    "0",
+    "40",
+    String(h),
+    "1",
+    t,
+  ].join("\n");
+}
+
+function _buildSchematicCoordsFromResult(result) {
+  const zones = appState.diagramas.zones || [];
+  const zoneIndex = new Map(zones.map((z, i) => [z.key, i]));
+
+  // Layout: columnas por zona
+  const colW = 280;
+  const rowH = 80;
+  const startX = 100;
+  const startY = 100;
+
+  // placements result + infra result
+  const placements = Array.isArray(result?.placements) ? result.placements : [];
+  const infra = Array.isArray(result?.infra) ? result.infra : [];
+
+  // contamos items por zona para distribuir
+  const perZoneCount = {};
+  for (const z of zones) perZoneCount[z.key] = 0;
+
+  function nextPos(zoneKey) {
+    const i = zoneIndex.has(zoneKey) ? zoneIndex.get(zoneKey) : 0;
+    const x = startX + i * colW;
+    const n = perZoneCount[zoneKey] || 0;
+    perZoneCount[zoneKey] = n + 1;
+    const y = startY + n * rowH;
+    return { x, y };
+  }
+
+  // id -> {x,y,label}
+  const map = new Map();
+
+  for (const p of placements) {
+    const zone = String(p.zone || "entrada_principal");
+    const pos = nextPos(zone);
+    const label = `${p.ref || p.id || ""}${p.qty ? ` x${p.qty}` : ""}`;
+    map.set(p.id, { x: pos.x, y: pos.y, label, kind: "placement", zone });
+  }
+
+  for (const n of infra) {
+    const zone = String(n.zone || "armario_cpd");
+    const pos = nextPos(zone);
+    const label = `${n.type || n.id || ""}`;
+    map.set(n.id, { x: pos.x, y: pos.y, label, kind: "infra", zone });
+  }
+
+  return map;
+}
+
+function diagExportDxf() {
+  const r = appState.diagramas.lastResult;
+  if (!r) {
+    appState.diagramas.lastError = "No hay resultado IA para exportar. Genera el diseño primero.";
+    _renderResult();
+    return;
+  }
+
+  const coords = _buildSchematicCoordsFromResult(r);
+  if (!coords.size) {
+    appState.diagramas.lastError = "No hay nodos en el resultado para exportar.";
+    _renderResult();
+    return;
+  }
+
+  const connections = Array.isArray(r.connections) ? r.connections : [];
+  const ents = [];
+
+  // Nodos
+  for (const [id, p] of coords.entries()) {
+    ents.push(_dxfCircle(p.x, p.y, 10, "NODES"));
+    ents.push(_dxfText(p.x + 16, p.y + 4, 10, p.label, "LABELS"));
+  }
+
+  // Cables
+  for (const c of connections) {
+    const a = coords.get(c.from);
+    const b = coords.get(c.to);
+    if (!a || !b) continue;
+    ents.push(_dxfLine(a.x, a.y, b.x, b.y, "CABLE"));
+  }
+
+  // Título / zonas como headers
+  const zones = appState.diagramas.zones || [];
+  const colW = 280;
+  const startX = 100;
+  const titleY = 40;
+  ents.push(_dxfText(100, 20, 14, "DIAGRAMA RED UTP CAT6 (ESQUEMA)", "LABELS"));
+  zones.forEach((z, i) => {
+    ents.push(_dxfText(startX + i * colW, titleY, 12, z.label, "LABELS"));
+  });
+
+  const dxf = [
+    "0",
+    "SECTION",
+    "2",
+    "HEADER",
+    "0",
+    "ENDSEC",
+    "0",
+    "SECTION",
+    "2",
+    "TABLES",
+    "0",
+    "ENDSEC",
+    "0",
+    "SECTION",
+    "2",
+    "ENTITIES",
+    ents.join("\n"),
+    "0",
+    "ENDSEC",
+    "0",
+    "EOF",
+  ].join("\n");
+
+  const nameBase = (appState.diagramas.dxfFileName || "diagrama").replace(/\.dxf$/i, "");
+  const fileName = `${nameBase}_red_cat6_esquema.dxf`;
+
+  try {
+    const blob = new Blob([dxf], { type: "application/dxf" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+  } catch (e) {
+    appState.diagramas.lastError = "No se pudo descargar el DXF.";
+    _renderResult();
+  }
+}
+
+/* ======================================================
+   7) Render UI
  ====================================================== */
 
 function _renderDiagramasUI() {
@@ -485,7 +749,12 @@ function _renderDiagramasUI() {
           `<option value="">(sin icono)</option>` +
           blocks
             .slice(0, 800)
-            .map((b) => `<option value="${_escapeHtmlAttr(b)}"${it.iconBlock === b ? " selected" : ""}>${_escapeHtml(b)}</option>`)
+            .map(
+              (b) =>
+                `<option value="${_escapeHtmlAttr(b)}"${
+                  it.iconBlock === b ? " selected" : ""
+                }>${_escapeHtml(b)}</option>`
+            )
             .join("");
 
         return `
@@ -495,7 +764,9 @@ function _renderDiagramasUI() {
                 <div style="font-weight:600;">${_escapeHtml(it.ref)}</div>
                 <div class="muted" style="font-size:12px;">${_escapeHtml(it.descripcion || "")}</div>
               </div>
-              <button class="btn" data-act="remove" data-zone="${_escapeHtmlAttr(z.key)}" data-id="${_escapeHtmlAttr(it.id)}">Quitar</button>
+              <button class="btn btn-sm" data-act="remove" data-zone="${_escapeHtmlAttr(z.key)}" data-id="${_escapeHtmlAttr(
+          it.id
+        )}">Quitar</button>
             </div>
 
             <div class="grid mt-2" style="display:grid; grid-template-columns: 120px 1fr; gap:10px; align-items:center;">
@@ -524,7 +795,7 @@ function _renderDiagramasUI() {
             <div style="font-weight:700;">${_escapeHtml(z.label)}</div>
             <div class="muted" style="font-size:12px;">Suelta aquí referencias del presupuesto</div>
           </div>
-          <span class="badge">${list.length}</span>
+          <span class="chip">${list.length}</span>
         </div>
         ${items || `<div class="muted mt-2" style="font-size:12px;">(vacío)</div>`}
       </div>
@@ -537,7 +808,7 @@ function _renderDiagramasUI() {
       <div class="card" style="padding:12px;">
         <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
           <h3 style="margin:0;">Referencias del proyecto</h3>
-          <button id="btnDiagReloadRefs" class="btn">Recargar</button>
+          <button id="btnDiagReloadRefs" class="btn btn-sm">Recargar</button>
         </div>
 
         <div class="muted mt-1" style="font-size:12px;">
@@ -548,14 +819,14 @@ function _renderDiagramasUI() {
           <input id="diagRefsSearch" type="text" placeholder="Buscar ref/descripcion..." value="${_escapeHtml(s.refsSearch || "")}"/>
         </div>
 
-        <div style="max-height:520px; overflow:auto; border:1px solid rgba(255,255,255,.08); border-radius:10px; padding:8px;">
+        <div style="max-height:520px; overflow:auto; border:1px solid rgba(15,23,42,.08); border-radius:10px; padding:8px;">
           ${
             filtered.length
               ? filtered
                   .slice(0, 300)
                   .map((r) => {
                     return `
-                      <div class="card" style="padding:10px; margin-bottom:8px;"
+                      <div class="card diag-draggable" style="padding:10px; margin-bottom:8px;"
                            draggable="true" data-ref="${_escapeHtmlAttr(r.ref)}">
                         <div style="display:flex; justify-content:space-between; gap:10px; align-items:center;">
                           <div style="min-width:0;">
@@ -564,7 +835,7 @@ function _renderDiagramasUI() {
                               ${_escapeHtml(r.descripcion || "")}
                             </div>
                           </div>
-                          <span class="badge">${Number(r.qty || 0)}</span>
+                          <span class="chip">${Number(r.qty || 0)}</span>
                         </div>
                       </div>
                     `;
@@ -591,14 +862,16 @@ function _renderDiagramasUI() {
 
       <!-- RIGHT: ZONAS -->
       <div>
-        <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
           <div>
             <h3 style="margin:0;">Ubicación de dispositivos</h3>
-            <div class="muted" style="font-size:12px;">Arrastra referencias a zonas. Luego pulsa “Generar diseño”.</div>
+            <div class="muted" style="font-size:12px;">Arrastra referencias a zonas. Usa AUTO para sugerir iconos. Genera diseño y exporta DXF.</div>
           </div>
-          <div style="display:flex; gap:10px; align-items:center;">
-            <button id="btnDiagTogglePrompt" class="btn">Prompt</button>
-            <button id="btnDiagGenerate" class="btn btn-primary">Generar diseño</button>
+          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <button id="btnDiagAuto" class="btn btn-secondary btn-sm">Auto</button>
+            <button id="btnDiagTogglePrompt" class="btn btn-sm">Prompt</button>
+            <button id="btnDiagGenerate" class="btn btn-primary btn-sm">Generar diseño</button>
+            <button id="btnDiagExportDxf" class="btn btn-sm">Exportar DXF</button>
             <span id="diagBusy" class="muted" style="display:none;">Generando…</span>
           </div>
         </div>
@@ -625,7 +898,7 @@ function _renderDiagramasUI() {
     </div>
   `;
 
-  // Bind search
+  // Search
   const inp = _el("diagRefsSearch");
   if (inp) {
     inp.addEventListener("input", () => {
@@ -634,7 +907,7 @@ function _renderDiagramasUI() {
     });
   }
 
-  // Bind reload refs
+  // Reload refs
   const btnReload = _el("btnDiagReloadRefs");
   if (btnReload) {
     btnReload.addEventListener("click", () => {
@@ -643,7 +916,7 @@ function _renderDiagramasUI() {
     });
   }
 
-  // Bind DXF import
+  // DXF import
   const inpDxf = _el("diagDxfFile");
   if (inpDxf) {
     inpDxf.addEventListener("change", async () => {
@@ -652,7 +925,7 @@ function _renderDiagramasUI() {
     });
   }
 
-  // Bind prompt toggle
+  // Prompt toggle
   const btnPrompt = _el("btnDiagTogglePrompt");
   if (btnPrompt) {
     btnPrompt.addEventListener("click", () => {
@@ -662,17 +935,25 @@ function _renderDiagramasUI() {
     });
   }
 
-  // Bind generate
+  // Auto
+  const btnAuto = _el("btnDiagAuto");
+  if (btnAuto) btnAuto.addEventListener("click", diagAutoAssignIcons);
+
+  // Generate
   const btnGen = _el("btnDiagGenerate");
   if (btnGen) btnGen.addEventListener("click", diagGenerateDesign);
 
-  // Bind draggable ref cards
+  // Export DXF
+  const btnExp = _el("btnDiagExportDxf");
+  if (btnExp) btnExp.addEventListener("click", diagExportDxf);
+
+  // Draggables
   host.querySelectorAll("[draggable='true'][data-ref]").forEach((node) => {
     node.addEventListener("dragstart", (ev) => _onRefDragStart(ev, node.dataset.ref));
     node.addEventListener("dragend", () => (_dragRefKey = null));
   });
 
-  // Bind dropzones
+  // Dropzones
   host.querySelectorAll(".diag-dropzone[data-zone]").forEach((zone) => {
     const zoneKey = zone.dataset.zone;
     zone.addEventListener("dragover", _onZoneDragOver);
@@ -680,7 +961,7 @@ function _renderDiagramasUI() {
     zone.addEventListener("drop", (ev) => _onZoneDrop(ev, zoneKey));
   });
 
-  // Bind actions inside assignments (remove/qty/icon)
+  // Actions inside assignments
   host.querySelectorAll("[data-act]").forEach((node) => {
     const act = node.dataset.act;
     const zoneKey = node.dataset.zone;
@@ -709,7 +990,6 @@ function renderDiagramasView() {
   const root = document.getElementById("appContent");
   if (!root) return;
 
-  // permisos (mantengo tu patrón)
   const caps = appState?.user?.capabilities;
   const allowed = (caps?.pages && !!caps.pages.diagramas) || (caps?.views && !!caps.views.diagramas);
 
@@ -723,7 +1003,6 @@ function renderDiagramasView() {
     return;
   }
 
-  // Carga refs del presupuesto
   diagLoadProjectRefs();
 
   root.innerHTML = `
@@ -731,7 +1010,7 @@ function renderDiagramasView() {
       <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
         <div>
           <h2 style="margin-bottom:4px;">Diagramas · Drag & Drop</h2>
-          <div class="muted">Asignas referencias a zonas y la IA diseña la red UTP Cat6.</div>
+          <div class="muted">Asignas referencias a zonas (incluye Armario/CPD) y la IA diseña la red UTP Cat6.</div>
         </div>
       </div>
       <div id="diagMain" class="mt-3"></div>
@@ -746,3 +1025,5 @@ function renderDiagramasView() {
 window.renderDiagramasView = renderDiagramasView;
 window.diagImportDxfFile = diagImportDxfFile;
 window.diagGenerateDesign = diagGenerateDesign;
+window.diagAutoAssignIcons = diagAutoAssignIcons;
+window.diagExportDxf = diagExportDxf;
