@@ -1107,3 +1107,25 @@ textarea {
   overflow-wrap: anywhere;
   word-break: break-word;
 }
+/* ===========================
+   DIAGRAMAS · Drag & Drop
+   =========================== */
+
+.diag-draggable {
+  cursor: grab;
+}
+
+.diag-draggable:active {
+  cursor: grabbing;
+}
+
+.diag-dropzone {
+  border: 1px dashed rgba(15, 23, 42, 0.18);
+  background: #ffffff;
+}
+
+.diag-dropzone.is-drag-over {
+  border-color: #6366f1;
+  background-color: #eef2ff;
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.2), 0 14px 30px rgba(99, 102, 241, 0.12);
+}
