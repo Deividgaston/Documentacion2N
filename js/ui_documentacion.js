@@ -2871,6 +2871,11 @@ function renderDocumentacionView() {
 
   const d = appState.documentacion;
 
+const pidNow = getCurrentProyectoIdSafe();
+if (!pidNow) {
+  console.warn("[DOC] Sin proyectoId: esperando carga de proyecto antes de renderizar media.");
+  // aquí puedes dejar el HTML normal si quieres, pero NO intentes cargar media
+}
 
 
   // 🔥 Cargar media si NO está cargada O si está vacía (evita depender de haber pasado por Gestión)
