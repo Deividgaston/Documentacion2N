@@ -2867,22 +2867,25 @@ function renderDocumentacionView() {
   if (!container) return;
 
   const d = appState.documentacion;
-  // ✅ FORZAR recarga de media al entrar (evita depender de haber pasado por Gestión)
-d.mediaLoaded = false;
-d.mediaLibrary = [];
 
 
-    // 🔥 Cargar media SOLO cuando ya existe proyectoId (evita bucle infinito)
-  if (!d.mediaLoaded) {
-    const pidNow = getCurrentProyectoIdSafe();
-    if (pidNow) {
-      ensureDocMediaLoadedOnce().then((ok) => {
-        if (ok && typeof window.renderDocumentacionView === "function") {
-          window.renderDocumentacionView();
-        }
-      });
-    }
+
+  // 🔥 Cargar media si NO está cargada O si está vacía (evita depender de haber pasado por Gestión)
+const mediaLen = Array.isArray(d.mediaLibrary) ? d.mediaLibrary.length : 0;
+if (!d.mediaLoaded || mediaLen === 0) {
+  const pidNow = getCurrentProyectoIdSafe();
+  if (pidNow) {
+    ensureDocMediaLoadedOnce().then((ok) => {
+      if (ok && typeof window.renderDocumentacionView === "function") {
+        window.renderDocumentacionView();
+      }
+    });
+  } else {
+    // sin proyectoId no podemos filtrar por proyecto -> no cargamos todavía
+    console.warn("[DOC] Sin proyectoId: no puedo cargar documentacion_media aún.");
   }
+}
+
 
 
   const idioma = d.idioma || "es";
