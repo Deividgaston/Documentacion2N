@@ -309,9 +309,22 @@ function _renderResult() {
   }
 
   if (!appState.diagramas.lastResult) {
-    out.innerHTML = `<div class="muted">Arrastra referencias a las zonas y pulsa <b>Generar diseño</b>.</div>`;
+  const previewOnly = _buildPreviewOnlyResultFromAssignments();
+  if (!previewOnly.placements.length) {
+    out.innerHTML = `<div class="muted">Arrastra referencias a las zonas.</div>`;
     return;
   }
+
+  out.innerHTML = `
+    <div class="alert alert-info mb-2">
+      Preview manual (sin IA). Puedes posicionar dispositivos.
+    </div>
+    ${_renderPreviewSvg(previewOnly)}
+  `;
+  _bindPreviewInteractions();
+  return;
+}
+
 
   const banner = appState.diagramas.usedLocalFallback
     ? `<div class="alert alert-info mb-2">Se generó el diseño en <b>modo local</b> (la IA devolvió texto, no JSON).</div>`
