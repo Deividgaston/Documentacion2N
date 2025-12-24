@@ -31,8 +31,11 @@ appState.diagramas = appState.diagramas || {
   customPromptText: "",
 
   // Preview positions
-  previewEditMode: false,            // <-- NUEVO: editar posiciones
-  manualCoords: {},                  // id -> {x,y}
+  previewEditMode: false, // editar posiciones
+  manualCoords: {},       // id -> {x,y}
+
+  // NUEVO: el “result” que está pintando el preview (puede ser previewOnly)
+  _previewResult: null,
 
   lastResult: null,
   lastError: null,
@@ -62,6 +65,12 @@ function _setBusy(b) {
   if (btn) btn.disabled = !!b;
   const sp = _el("diagBusy");
   if (sp) sp.style.display = b ? "" : "none";
+}
+
+// FIX: limpiar errores cuando el usuario cambia asignaciones / iconos, etc.
+function _clearDiagError() {
+  appState.diagramas.lastError = null;
+  appState.diagramas.lastRaw = null;
 }
 
 /* ======================================================
@@ -102,7 +111,8 @@ function _buildSchematicCoordsFromResult(result) {
 
     // coords manuales si existen, si no: auto
     const m = manual[p.id];
-    const pos = m && Number.isFinite(m.x) && Number.isFinite(m.y) ? { x: m.x, y: m.y } : nextPos(zone);
+    const pos =
+      m && Number.isFinite(m.x) && Number.isFinite(m.y) ? { x: m.x, y: m.y } : nextPos(zone);
 
     map.set(p.id, { x: pos.x, y: pos.y, label, kind: "placement", zone });
   }
@@ -112,7 +122,8 @@ function _buildSchematicCoordsFromResult(result) {
     const label = `${n.type || n.id || ""}`;
 
     const m = manual[n.id];
-    const pos = m && Number.isFinite(m.x) && Number.isFinite(m.y) ? { x: m.x, y: m.y } : nextPos(zone);
+    const pos =
+      m && Number.isFinite(m.x) && Number.isFinite(m.y) ? { x: m.x, y: m.y } : nextPos(zone);
 
     map.set(n.id, { x: pos.x, y: pos.y, label, kind: "infra", zone });
   }
@@ -148,7 +159,6 @@ function _renderPreviewSvg(result) {
     })
     .join("");
 
-  // Nodos: cada uno con handle draggable (si edit mode)
   const nodes = Array.from(coords.entries())
     .map(([id, p]) => {
       const isInfra = p.kind === "infra";
@@ -231,7 +241,7 @@ function _bindPreviewInteractions() {
   if (btnEdit) {
     btnEdit.onclick = () => {
       appState.diagramas.previewEditMode = !appState.diagramas.previewEditMode;
-      _renderResult(); // re-render preview to update cursor/buttons
+      _renderResult();
     };
   }
 
@@ -243,8 +253,10 @@ function _bindPreviewInteractions() {
     };
   }
 
-  // Si no está en modo edición, no enganchamos drag
   if (!appState.diagramas.previewEditMode) return;
+
+  // FIX: usar el result que se está mostrando (previewOnly o lastResult)
+  const baseResult = appState.diagramas._previewResult || appState.diagramas.lastResult;
 
   svg.onmousedown = (ev) => {
     const t = ev.target;
@@ -256,8 +268,7 @@ function _bindPreviewInteractions() {
 
     const p = _svgPoint(svg, ev.clientX, ev.clientY);
 
-    // posición actual del nodo
-    const coords = _buildSchematicCoordsFromResult(appState.diagramas.lastResult);
+    const coords = _buildSchematicCoordsFromResult(baseResult);
     const cur = coords.get(nodeId);
     if (!cur) return;
 
@@ -266,7 +277,9 @@ function _bindPreviewInteractions() {
     _diagDrag.offsetX = cur.x - p.x;
     _diagDrag.offsetY = cur.y - p.y;
 
-    try { ev.preventDefault(); } catch (_) {}
+    try {
+      ev.preventDefault();
+    } catch (_) {}
   };
 
   window.onmousemove = (ev) => {
@@ -278,7 +291,6 @@ function _bindPreviewInteractions() {
     appState.diagramas.manualCoords = appState.diagramas.manualCoords || {};
     appState.diagramas.manualCoords[_diagDrag.nodeId] = { x: nx, y: ny };
 
-    // render suave: solo re-render completo (simple y seguro)
     _renderResult();
   };
 
@@ -288,9 +300,41 @@ function _bindPreviewInteractions() {
   };
 }
 
+function _buildPreviewOnlyResultFromAssignments() {
+  const zones = appState.diagramas.zones || [];
+  const assignments = appState.diagramas.assignments || {};
+
+  const placements = [];
+  for (const z of zones) {
+    const list = assignments[z.key] || [];
+    for (const it of list) {
+      placements.push({
+        id: it.id,
+        ref: it.ref,
+        zone: z.key,
+        icon_block: it.iconBlock || "",
+        qty: it.qty || 1,
+        meta: { source: "USER" },
+      });
+    }
+  }
+
+  return {
+    placements,
+    infra: [],
+    connections: [],
+    summary: {},
+    errors: [],
+  };
+}
+
 function _renderResult() {
   const out = _el("diagOutput");
   if (!out) return;
+
+  // FIX: si hay error (p.ej. export blocks) pero ya hay placements, no bloquees el preview
+  const previewOnly = _buildPreviewOnlyResultFromAssignments();
+  const hasPreviewPlacements = previewOnly.placements && previewOnly.placements.length > 0;
 
   if (appState.diagramas.lastError) {
     const raw = appState.diagramas.lastRaw
@@ -304,27 +348,36 @@ function _renderResult() {
       `
       : "";
 
+    // Si el usuario ya tiene cosas asignadas, muéstrale el preview igualmente
+    if (hasPreviewPlacements) {
+      appState.diagramas._previewResult = previewOnly;
+      out.innerHTML = `
+        <div class="alert alert-error">${_escapeHtml(appState.diagramas.lastError)}</div>
+        ${_renderPreviewSvg(previewOnly)}
+        ${raw}
+      `;
+      _bindPreviewInteractions();
+      return;
+    }
+
     out.innerHTML = `<div class="alert alert-error">${_escapeHtml(appState.diagramas.lastError)}</div>${raw}`;
     return;
   }
 
   if (!appState.diagramas.lastResult) {
-  const previewOnly = _buildPreviewOnlyResultFromAssignments();
-  if (!previewOnly.placements.length) {
-    out.innerHTML = `<div class="muted">Arrastra referencias a las zonas.</div>`;
+    if (!hasPreviewPlacements) {
+      out.innerHTML = `<div class="muted">Arrastra referencias a las zonas.</div>`;
+      return;
+    }
+
+    appState.diagramas._previewResult = previewOnly;
+    out.innerHTML = `
+      <div class="alert alert-info mb-2">Preview manual (sin IA). Puedes posicionar dispositivos.</div>
+      ${_renderPreviewSvg(previewOnly)}
+    `;
+    _bindPreviewInteractions();
     return;
   }
-
-  out.innerHTML = `
-    <div class="alert alert-info mb-2">
-      Preview manual (sin IA). Puedes posicionar dispositivos.
-    </div>
-    ${_renderPreviewSvg(previewOnly)}
-  `;
-  _bindPreviewInteractions();
-  return;
-}
-
 
   const banner = appState.diagramas.usedLocalFallback
     ? `<div class="alert alert-info mb-2">Se generó el diseño en <b>modo local</b> (la IA devolvió texto, no JSON).</div>`
@@ -340,6 +393,8 @@ function _renderResult() {
       </details>
     `
     : "";
+
+  appState.diagramas._previewResult = appState.diagramas.lastResult;
 
   const preview = _renderPreviewSvg(appState.diagramas.lastResult);
   const pretty = _escapeHtml(JSON.stringify(appState.diagramas.lastResult, null, 2));
@@ -363,7 +418,6 @@ function _renderResult() {
     </div>
   `;
 
-  // Bind preview interactions AFTER HTML is in DOM
   _bindPreviewInteractions();
 }
 
@@ -544,8 +598,8 @@ function _onZoneDrop(ev, zoneKey) {
   const source = (appState.diagramas.refs || []).find((r) => r.ref === ref);
   if (!source) return;
 
-  const list = (appState.diagramas.assignments[zoneKey] =
-    appState.diagramas.assignments[zoneKey] || []);
+  const list =
+    (appState.diagramas.assignments[zoneKey] = appState.diagramas.assignments[zoneKey] || []);
 
   const existing = list.find((x) => x.ref === ref);
   if (existing) {
@@ -560,14 +614,22 @@ function _onZoneDrop(ev, zoneKey) {
     });
   }
 
+  // FIX: al cambiar asignaciones, limpiar lastError para no bloquear preview
+  _clearDiagError();
+
   _renderDiagramasUI();
+  _renderResult();
 }
 
 function _removeAssignment(zoneKey, id) {
   const list = appState.diagramas.assignments[zoneKey] || [];
   const idx = list.findIndex((x) => x.id === id);
   if (idx >= 0) list.splice(idx, 1);
+
+  _clearDiagError();
+
   _renderDiagramasUI();
+  _renderResult();
 }
 
 function _updateAssignment(zoneKey, id, patch) {
@@ -575,6 +637,8 @@ function _updateAssignment(zoneKey, id, patch) {
   const it = list.find((x) => x.id === id);
   if (!it) return;
   Object.assign(it, patch);
+
+  _clearDiagError();
 }
 
 /* ======================================================
@@ -622,8 +686,7 @@ function diagAutoAssignIcons() {
     return;
   }
 
-  appState.diagramas.lastError = null;
-  appState.diagramas.lastRaw = null;
+  _clearDiagError();
 
   for (const z of appState.diagramas.zones) {
     const list = appState.diagramas.assignments[z.key] || [];
@@ -1024,33 +1087,6 @@ function _extractDxfBlocksSection(dxfText) {
 
   return text.slice(i0, iEnd + "0\nENDSEC".length);
 }
-function _buildPreviewOnlyResultFromAssignments() {
-  const zones = appState.diagramas.zones || [];
-  const assignments = appState.diagramas.assignments || {};
-
-  const placements = [];
-  for (const z of zones) {
-    const list = assignments[z.key] || [];
-    for (const it of list) {
-      placements.push({
-        id: it.id,
-        ref: it.ref,
-        zone: z.key,
-        icon_block: it.iconBlock || "",
-        qty: it.qty || 1,
-        meta: { source: "USER" },
-      });
-    }
-  }
-
-  return {
-    placements,
-    infra: [],
-    connections: [],
-    summary: {},
-    errors: [],
-  };
-}
 
 function diagExportDxf() {
   const r = appState.diagramas.lastResult;
@@ -1071,7 +1107,7 @@ function diagExportDxf() {
     return;
   }
 
-  const coords = _buildSchematicCoordsFromResult(r); // <-- usa manualCoords si existen
+  const coords = _buildSchematicCoordsFromResult(r);
   if (!coords.size) {
     appState.diagramas.lastError = "No hay nodos en el resultado para exportar.";
     appState.diagramas.lastRaw = null;
@@ -1085,13 +1121,11 @@ function diagExportDxf() {
   const connections = Array.isArray(r.connections) ? r.connections : [];
   const ents = [];
 
-  // Headers zonas
   const zones = appState.diagramas.zones || [];
   const colW = 280, startX = 80, titleY = 40;
   ents.push(_dxfText(80, 20, 14, "DIAGRAMA RED UTP CAT6 (ESQUEMA)", "LABELS"));
   zones.forEach((z, i) => ents.push(_dxfText(startX + i * colW, titleY, 12, z.label, "LABELS")));
 
-  // Placements -> INSERT si icon_block válido
   for (const p of placements) {
     const pos = coords.get(p.id);
     if (!pos) continue;
@@ -1105,7 +1139,6 @@ function diagExportDxf() {
     ents.push(_dxfText(pos.x + 16, pos.y + 4, 10, pos.label || p.ref || p.id, "LABELS"));
   }
 
-  // Infra: círculo (luego si quieres, también INSERT)
   for (const n of infra) {
     const pos = coords.get(n.id);
     if (!pos) continue;
@@ -1113,7 +1146,6 @@ function diagExportDxf() {
     ents.push(_dxfText(pos.x + 16, pos.y + 4, 10, pos.label || n.type || n.id, "LABELS"));
   }
 
-  // Cables
   for (const c of connections) {
     const a = coords.get(c.from);
     const b = coords.get(c.to);
@@ -1188,16 +1220,16 @@ function _renderDiagramasUI() {
                 <div class="muted" style="font-size:12px;">${_escapeHtml(it.descripcion || "")}</div>
               </div>
               <button class="btn btn-sm" data-act="remove" data-zone="${_escapeHtmlAttr(z.key)}" data-id="${_escapeHtmlAttr(
-          it.id
-        )}">Quitar</button>
+                it.id
+              )}">Quitar</button>
             </div>
 
             <div class="grid mt-2" style="display:grid; grid-template-columns: 120px 1fr; gap:10px; align-items:center;">
               <div class="form-group" style="margin:0;">
                 <label style="font-size:12px;">Cantidad</label>
                 <input type="number" min="1" value="${Number(it.qty || 1)}" data-act="qty" data-zone="${_escapeHtmlAttr(
-          z.key
-        )}" data-id="${_escapeHtmlAttr(it.id)}"/>
+                  z.key
+                )}" data-id="${_escapeHtmlAttr(it.id)}"/>
               </div>
               <div class="form-group" style="margin:0;">
                 <label style="font-size:12px;">Icono DXF (BLOCK)</label>
@@ -1238,7 +1270,9 @@ function _renderDiagramasUI() {
         </div>
 
         <div class="form-group mt-2">
-          <input id="diagRefsSearch" type="text" placeholder="Buscar ref/descripcion..." value="${_escapeHtml(s.refsSearch || "")}"/>
+          <input id="diagRefsSearch" type="text" placeholder="Buscar ref/descripcion..." value="${_escapeHtml(
+            s.refsSearch || ""
+          )}"/>
         </div>
 
         <div style="max-height:520px; overflow:auto; border:1px solid rgba(15,23,42,.08); border-radius:10px; padding:8px;">
@@ -1332,6 +1366,7 @@ function _renderDiagramasUI() {
     btnReload.addEventListener("click", () => {
       diagLoadProjectRefs();
       _renderDiagramasUI();
+      _renderResult();
     });
   }
 
@@ -1384,10 +1419,12 @@ function _renderDiagramasUI() {
       node.addEventListener("change", () => {
         const v = Number(node.value || 1);
         _updateAssignment(zoneKey, id, { qty: Math.max(1, Number.isFinite(v) ? v : 1) });
+        _renderResult(); // refresca preview tras cambiar qty
       });
     } else if (act === "icon") {
       node.addEventListener("change", () => {
         _updateAssignment(zoneKey, id, { iconBlock: String(node.value || "") });
+        _renderResult(); // refresca preview tras cambiar icono
       });
     }
   });
