@@ -576,9 +576,11 @@ async function diagImportDxfFile(file) {
 
   appState.diagramas.lastError = null;
   appState.diagramas.lastRaw = null;
+
   appState.diagramas.dxfFileName = file.name || "";
   appState.diagramas.dxfText = "";
   appState.diagramas.dxfBlocks = [];
+  appState.diagramas.dxfBlocksSection = ""; // <-- NUEVO
 
   if (!/\.dxf$/i.test(file.name || "")) {
     appState.diagramas.lastError = "El archivo no parece DXF (.dxf).";
@@ -596,8 +598,15 @@ async function diagImportDxfFile(file) {
 
     const pairs = _dxfToPairs(text);
     const blocks = _dxfExtractBlocks(pairs);
-
     appState.diagramas.dxfBlocks = blocks.sort((a, b) => a.localeCompare(b));
+
+    // Guardar SECTION/BLOCKS ya extraída para export (no depender luego de dxfText)
+    const blocksSection = _extractDxfBlocksSection(text);
+    appState.diagramas.dxfBlocksSection = blocksSection || "";
+
+    if (!appState.diagramas.dxfBlocksSection) {
+      throw new Error("El DXF no contiene SECTION/BLOCKS (o no está en formato ASCII esperado).");
+    }
 
     _renderDiagramasUI();
     _renderResult();
