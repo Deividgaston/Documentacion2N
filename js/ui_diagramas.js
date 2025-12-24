@@ -1159,17 +1159,18 @@ function diagExportDxf() {
     return;
   }
 
-  const tplText = String(appState.diagramas.dxfText || "");
-  const blocksSection = _extractDxfBlocksSection(tplText);
+  // ✅ usar blocksSection guardada al importar
+  const blocksSection = String(appState.diagramas.dxfBlocksSection || "").trim();
+
   if (!blocksSection) {
     appState.diagramas.lastError =
-      "Para exportar con iconos (BLOCKS) tienes que cargar antes la plantilla DXF ASCII que contenga SECTION/BLOCKS.";
+      "Para exportar con iconos (BLOCKS) tienes que cargar antes la plantilla DXF ASCII que contenga SECTION/BLOCKS (selecciona el archivo DXF otra vez).";
     appState.diagramas.lastRaw = null;
     _renderResult();
     return;
   }
 
-  const coords = _buildSchematicCoordsFromResult(r);
+  const coords = _buildSchematicCoordsFromResult(r); // usa manualCoords si existen
   if (!coords.size) {
     appState.diagramas.lastError = "No hay nodos en el resultado para exportar.";
     appState.diagramas.lastRaw = null;
@@ -1183,11 +1184,16 @@ function diagExportDxf() {
   const connections = Array.isArray(r.connections) ? r.connections : [];
   const ents = [];
 
+  // Headers zonas
   const zones = appState.diagramas.zones || [];
-  const colW = 280, startX = 80, titleY = 40;
+  const colW = 280,
+    startX = 80,
+    titleY = 40;
+
   ents.push(_dxfText(80, 20, 14, "DIAGRAMA RED UTP CAT6 (ESQUEMA)", "LABELS"));
   zones.forEach((z, i) => ents.push(_dxfText(startX + i * colW, titleY, 12, z.label, "LABELS")));
 
+  // Placements -> INSERT si icon_block válido
   for (const p of placements) {
     const pos = coords.get(p.id);
     if (!pos) continue;
@@ -1198,16 +1204,21 @@ function diagExportDxf() {
     } else {
       ents.push(_dxfCircle(pos.x, pos.y, 10, "NODES"));
     }
-    ents.push(_dxfText(pos.x + 16, pos.y + 4, 10, pos.label || p.ref || p.id, "LABELS"));
+
+    // etiqueta
+    const lbl = String(p.ref || p.id || "");
+    ents.push(_dxfText(pos.x + 16, pos.y + 4, 10, lbl, "LABELS"));
   }
 
+  // Infra
   for (const n of infra) {
     const pos = coords.get(n.id);
     if (!pos) continue;
     ents.push(_dxfCircle(pos.x, pos.y, 12, "INFRA"));
-    ents.push(_dxfText(pos.x + 16, pos.y + 4, 10, pos.label || n.type || n.id, "LABELS"));
+    ents.push(_dxfText(pos.x + 16, pos.y + 4, 10, String(n.type || n.id), "LABELS"));
   }
 
+  // Cables
   for (const c of connections) {
     const a = coords.get(c.from);
     const b = coords.get(c.to);
@@ -1216,13 +1227,28 @@ function diagExportDxf() {
   }
 
   const dxf = [
-    "0","SECTION","2","HEADER","0","ENDSEC",
-    "0","SECTION","2","TABLES","0","ENDSEC",
+    "0",
+    "SECTION",
+    "2",
+    "HEADER",
+    "0",
+    "ENDSEC",
+    "0",
+    "SECTION",
+    "2",
+    "TABLES",
+    "0",
+    "ENDSEC",
     blocksSection,
-    "0","SECTION","2","ENTITIES",
+    "0",
+    "SECTION",
+    "2",
+    "ENTITIES",
     ents.join("\n"),
-    "0","ENDSEC",
-    "0","EOF",
+    "0",
+    "ENDSEC",
+    "0",
+    "EOF",
   ].join("\n");
 
   const nameBase = (appState.diagramas.dxfFileName || "diagrama").replace(/\.dxf$/i, "");
@@ -1243,6 +1269,7 @@ function diagExportDxf() {
     _renderResult();
   }
 }
+
 
 /* ======================================================
    7) Render UI
