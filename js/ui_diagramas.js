@@ -139,6 +139,44 @@ function _renderPreviewSvg(result) {
   const colW = 280;
   const startX = 80;
 
+  // helper: icono “lógico” para preview (NO DXF real)
+  function _iconForNode(id, p) {
+    // infra
+    if (p.kind === "infra") {
+      const r = appState.diagramas.lastResult || {};
+      const infra = Array.isArray(r.infra) ? r.infra : [];
+      const it = infra.find((x) => String(x.id) === String(id));
+      const t = String(it?.type || "").toUpperCase();
+      if (t.includes("ROUTER")) return "🌐";
+      if (t.includes("CORE")) return "🧠";
+      if (t.includes("SWITCH")) return "🔀";
+      return "⬛";
+    }
+
+    // placements
+    const r = appState.diagramas.lastResult || {};
+    const placements = Array.isArray(r.placements) ? r.placements : [];
+    const it = placements.find((x) => String(x.id) === String(id));
+    const blk = String(it?.icon_block || it?.iconBlock || "").toLowerCase();
+    const ref = String(it?.ref || "").toLowerCase();
+
+    const s = `${blk} ${ref} ${String(p.label || "").toLowerCase()}`;
+
+    if (s.includes("ip style") || s.includes("ipstyle") || s.includes("ai_ip style") || s.includes("ai_ip_style"))
+      return "📟";
+    if (s.includes("verso")) return "📞";
+    if (s.includes("ip one") || s.includes("ipone")) return "📞";
+    if (s.includes("indoor") || s.includes("monitor") || s.includes("touch") || s.includes("clip")) return "🖥️";
+    if (s.includes("access") || s.includes("unit") || s.includes("reader") || s.includes("rfid") || s.includes("ble"))
+      return "🔑";
+    if (s.includes("switch") || s.includes("poe")) return "🔀";
+    if (s.includes("router") || s.includes("gateway")) return "🌐";
+    if (s.includes("server") || s.includes("nvr")) return "🗄️";
+
+    return "●";
+  }
+
+  // Bounding box para tamaño SVG
   let maxX = 0,
     maxY = 0;
   for (const [, p] of coords.entries()) {
@@ -159,18 +197,29 @@ function _renderPreviewSvg(result) {
     })
     .join("");
 
+  // Nodos: icono + (opcional) punto + label. Draggable en edit mode
   const nodes = Array.from(coords.entries())
     .map(([id, p]) => {
       const isInfra = p.kind === "infra";
       const fill = isInfra ? "rgba(17,24,39,.95)" : "rgba(29,79,216,.95)";
       const stroke = isInfra ? "rgba(17,24,39,.25)" : "rgba(29,79,216,.25)";
       const label = _escapeHtml(p.label);
+      const icon = _escapeHtml(_iconForNode(id, p));
+
       return `
-        <g class="diag-node" data-node-id="${_escapeHtmlAttr(id)}" style="cursor:${appState.diagramas.previewEditMode ? "grab" : "default"};">
-          <circle class="diag-node-hit" cx="${p.x}" cy="${p.y}" r="16" fill="rgba(0,0,0,0)"></circle>
-          <circle cx="${p.x}" cy="${p.y}" r="12" fill="${fill}" stroke="${stroke}" stroke-width="8"></circle>
-          <circle cx="${p.x}" cy="${p.y}" r="8" fill="${fill}"></circle>
-          <text x="${p.x + 16}" y="${p.y + 5}" font-size="12" fill="rgba(17,24,39,.95)">${label}</text>
+        <g class="diag-node" data-node-id="${_escapeHtmlAttr(id)}" style="cursor:${
+        appState.diagramas.previewEditMode ? "grab" : "default"
+      };">
+          <!-- hitbox para drag -->
+          <circle class="diag-node-hit" cx="${p.x}" cy="${p.y}" r="18" fill="rgba(0,0,0,0)"></circle>
+
+          <!-- “halo” -->
+          <circle cx="${p.x}" cy="${p.y}" r="14" fill="${fill}" stroke="${stroke}" stroke-width="10"></circle>
+          <!-- icono lógico -->
+          <text x="${p.x - 8}" y="${p.y + 7}" font-size="18" fill="white">${icon}</text>
+
+          <!-- label -->
+          <text x="${p.x + 18}" y="${p.y + 5}" font-size="12" fill="rgba(17,24,39,.95)">${label}</text>
         </g>
       `;
     })
@@ -179,7 +228,9 @@ function _renderPreviewSvg(result) {
   const headers = zones
     .map((z, i) => {
       const x = startX + i * colW;
-      return `<text x="${x}" y="36" font-size="13" fill="rgba(107,114,128,.95)">${_escapeHtml(z.label)}</text>`;
+      return `<text x="${x}" y="36" font-size="13" fill="rgba(107,114,128,.95)">${_escapeHtml(
+        z.label
+      )}</text>`;
     })
     .join("");
 
@@ -189,12 +240,14 @@ function _renderPreviewSvg(result) {
         <div>
           <div style="font-weight:700;">Preview</div>
           <div class="muted" style="font-size:12px;">
-            Esquema por zonas (coords). Infra en negro.
+            Esquema por zonas (coords). Iconos = preview lógico (no DXF real).
             ${appState.diagramas.previewEditMode ? "Arrastra los nodos para fijar posición." : ""}
           </div>
         </div>
         <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-          <button id="btnDiagToggleEdit" class="btn btn-sm">${appState.diagramas.previewEditMode ? "Salir edición" : "Editar posiciones"}</button>
+          <button id="btnDiagToggleEdit" class="btn btn-sm">${
+            appState.diagramas.previewEditMode ? "Salir edición" : "Editar posiciones"
+          }</button>
           <button id="btnDiagResetLayout" class="btn btn-sm">Reset layout</button>
           <span class="chip">SVG</span>
         </div>
@@ -208,7 +261,7 @@ function _renderPreviewSvg(result) {
         </svg>
       </div>
       <div class="muted mt-2" style="font-size:12px;">
-        Tip: mueve dispositivos y luego exporta DXF para que salgan en esas posiciones.
+        Tip: mueve dispositivos y luego exporta DXF para que salgan en esas posiciones (en DXF se usarán los BLOCKS).
       </div>
     </div>
   `;
