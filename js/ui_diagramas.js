@@ -1,10 +1,12 @@
 // js/ui_diagramas.js
 // Vista: DIAGRAMAS (IA)
 // V2.6 (Hito 16):
-// - Preview SVG + JSON
+// - Preview SVG + JSON (RECUPERADO)
+// - Preview editable: arrastrar y soltar nodos para asignar posiciones
 // - Parse robusto + raw visible
 // - Fallback LOCAL: si la IA no devuelve JSON, generamos topología jerárquica (Cat6) determinista
 //   (devices -> switches por zona -> core -> router en Armario/CPD si existe)
+// - Export DXF: usa INSERT de BLOCKS (si icon_block existe), y coords manuales si el usuario las movió
 
 window.appState = window.appState || {};
 appState.diagramas = appState.diagramas || {
@@ -27,6 +29,10 @@ appState.diagramas = appState.diagramas || {
   promptUiOpen: false,
   useCustomPrompt: false,
   customPromptText: "",
+
+  // Preview positions
+  previewEditMode: false,            // <-- NUEVO: editar posiciones
+  manualCoords: {},                  // id -> {x,y}
 
   lastResult: null,
   lastError: null,
@@ -60,6 +66,7 @@ function _setBusy(b) {
 
 /* ======================================================
    Preview SVG (esquemático) basado en coords
+   - Soporta coords manuales (drag)
  ====================================================== */
 
 function _buildSchematicCoordsFromResult(result) {
@@ -87,18 +94,26 @@ function _buildSchematicCoordsFromResult(result) {
   }
 
   const map = new Map();
+  const manual = appState.diagramas.manualCoords || {};
 
   for (const p of placements) {
     const zone = String(p.zone || "entrada_principal");
-    const pos = nextPos(zone);
     const label = `${p.ref || p.id || ""}${p.qty ? ` x${p.qty}` : ""}`;
+
+    // coords manuales si existen, si no: auto
+    const m = manual[p.id];
+    const pos = m && Number.isFinite(m.x) && Number.isFinite(m.y) ? { x: m.x, y: m.y } : nextPos(zone);
+
     map.set(p.id, { x: pos.x, y: pos.y, label, kind: "placement", zone });
   }
 
   for (const n of infra) {
     const zone = String(n.zone || "armario_cpd");
-    const pos = nextPos(zone);
     const label = `${n.type || n.id || ""}`;
+
+    const m = manual[n.id];
+    const pos = m && Number.isFinite(m.x) && Number.isFinite(m.y) ? { x: m.x, y: m.y } : nextPos(zone);
+
     map.set(n.id, { x: pos.x, y: pos.y, label, kind: "infra", zone });
   }
 
@@ -120,7 +135,7 @@ function _renderPreviewSvg(result) {
     if (p.y > maxY) maxY = p.y;
   }
   const width = Math.max(900, maxX + 320);
-  const height = Math.max(420, maxY + 140);
+  const height = Math.max(420, maxY + 180);
 
   const connections = Array.isArray(result?.connections) ? result.connections : [];
 
@@ -133,6 +148,7 @@ function _renderPreviewSvg(result) {
     })
     .join("");
 
+  // Nodos: cada uno con handle draggable (si edit mode)
   const nodes = Array.from(coords.entries())
     .map(([id, p]) => {
       const isInfra = p.kind === "infra";
@@ -140,7 +156,8 @@ function _renderPreviewSvg(result) {
       const stroke = isInfra ? "rgba(17,24,39,.25)" : "rgba(29,79,216,.25)";
       const label = _escapeHtml(p.label);
       return `
-        <g>
+        <g class="diag-node" data-node-id="${_escapeHtmlAttr(id)}" style="cursor:${appState.diagramas.previewEditMode ? "grab" : "default"};">
+          <circle class="diag-node-hit" cx="${p.x}" cy="${p.y}" r="16" fill="rgba(0,0,0,0)"></circle>
           <circle cx="${p.x}" cy="${p.y}" r="12" fill="${fill}" stroke="${stroke}" stroke-width="8"></circle>
           <circle cx="${p.x}" cy="${p.y}" r="8" fill="${fill}"></circle>
           <text x="${p.x + 16}" y="${p.y + 5}" font-size="12" fill="rgba(17,24,39,.95)">${label}</text>
@@ -152,31 +169,123 @@ function _renderPreviewSvg(result) {
   const headers = zones
     .map((z, i) => {
       const x = startX + i * colW;
-      return `<text x="${x}" y="36" font-size="13" fill="rgba(107,114,128,.95)">${_escapeHtml(
-        z.label
-      )}</text>`;
+      return `<text x="${x}" y="36" font-size="13" fill="rgba(107,114,128,.95)">${_escapeHtml(z.label)}</text>`;
     })
     .join("");
 
   return `
     <div class="card" style="padding:12px; overflow:auto;">
-      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:10px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap;">
         <div>
           <div style="font-weight:700;">Preview</div>
-          <div class="muted" style="font-size:12px;">Esquema por zonas (coords artificiales). Infra en negro.</div>
+          <div class="muted" style="font-size:12px;">
+            Esquema por zonas (coords). Infra en negro.
+            ${appState.diagramas.previewEditMode ? "Arrastra los nodos para fijar posición." : ""}
+          </div>
         </div>
-        <span class="chip">SVG</span>
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          <button id="btnDiagToggleEdit" class="btn btn-sm">${appState.diagramas.previewEditMode ? "Salir edición" : "Editar posiciones"}</button>
+          <button id="btnDiagResetLayout" class="btn btn-sm">Reset layout</button>
+          <span class="chip">SVG</span>
+        </div>
       </div>
       <div style="border:1px solid rgba(15,23,42,.10); border-radius:12px; overflow:auto; background:#fff;">
-        <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+        <svg id="diagPreviewSvg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
           <rect x="0" y="0" width="${width}" height="${height}" fill="white"></rect>
           ${headers}
           ${lines}
           ${nodes}
         </svg>
       </div>
+      <div class="muted mt-2" style="font-size:12px;">
+        Tip: mueve dispositivos y luego exporta DXF para que salgan en esas posiciones.
+      </div>
     </div>
   `;
+}
+
+// Drag controller para SVG
+let _diagDrag = {
+  active: false,
+  nodeId: null,
+  offsetX: 0,
+  offsetY: 0,
+};
+
+function _svgPoint(svg, clientX, clientY) {
+  const pt = svg.createSVGPoint();
+  pt.x = clientX;
+  pt.y = clientY;
+  const ctm = svg.getScreenCTM();
+  if (!ctm) return { x: 0, y: 0 };
+  const inv = ctm.inverse();
+  const p = pt.matrixTransform(inv);
+  return { x: p.x, y: p.y };
+}
+
+function _bindPreviewInteractions() {
+  const svg = _el("diagPreviewSvg");
+  if (!svg) return;
+
+  const btnEdit = _el("btnDiagToggleEdit");
+  if (btnEdit) {
+    btnEdit.onclick = () => {
+      appState.diagramas.previewEditMode = !appState.diagramas.previewEditMode;
+      _renderResult(); // re-render preview to update cursor/buttons
+    };
+  }
+
+  const btnReset = _el("btnDiagResetLayout");
+  if (btnReset) {
+    btnReset.onclick = () => {
+      appState.diagramas.manualCoords = {};
+      _renderResult();
+    };
+  }
+
+  // Si no está en modo edición, no enganchamos drag
+  if (!appState.diagramas.previewEditMode) return;
+
+  svg.onmousedown = (ev) => {
+    const t = ev.target;
+    const g = t && t.closest ? t.closest(".diag-node") : null;
+    if (!g) return;
+
+    const nodeId = g.getAttribute("data-node-id");
+    if (!nodeId) return;
+
+    const p = _svgPoint(svg, ev.clientX, ev.clientY);
+
+    // posición actual del nodo
+    const coords = _buildSchematicCoordsFromResult(appState.diagramas.lastResult);
+    const cur = coords.get(nodeId);
+    if (!cur) return;
+
+    _diagDrag.active = true;
+    _diagDrag.nodeId = nodeId;
+    _diagDrag.offsetX = cur.x - p.x;
+    _diagDrag.offsetY = cur.y - p.y;
+
+    try { ev.preventDefault(); } catch (_) {}
+  };
+
+  window.onmousemove = (ev) => {
+    if (!_diagDrag.active || !_diagDrag.nodeId) return;
+    const p = _svgPoint(svg, ev.clientX, ev.clientY);
+    const nx = p.x + _diagDrag.offsetX;
+    const ny = p.y + _diagDrag.offsetY;
+
+    appState.diagramas.manualCoords = appState.diagramas.manualCoords || {};
+    appState.diagramas.manualCoords[_diagDrag.nodeId] = { x: nx, y: ny };
+
+    // render suave: solo re-render completo (simple y seguro)
+    _renderResult();
+  };
+
+  window.onmouseup = () => {
+    _diagDrag.active = false;
+    _diagDrag.nodeId = null;
+  };
 }
 
 function _renderResult() {
@@ -240,6 +349,9 @@ function _renderResult() {
       ${raw}
     </div>
   `;
+
+  // Bind preview interactions AFTER HTML is in DOM
+  _bindPreviewInteractions();
 }
 
 /* ======================================================
@@ -376,7 +488,7 @@ async function diagImportDxfFile(file) {
 }
 
 /* ======================================================
-   3) Drag & drop
+   3) Drag & drop (refs a zonas)
  ====================================================== */
 let _dragRefKey = null;
 
@@ -575,12 +687,10 @@ function _buildSpecFromAssignments() {
 }
 
 /* ======================================================
-   Fallback LOCAL (determinista) - aquí está el FIX real
+   Fallback LOCAL (determinista)
  ====================================================== */
-
 function _isPoeDevice(p) {
   const t = `${p.ref || ""} ${p.descripcion || ""}`.toUpperCase();
-  // Heurística simple: la mayoría de videoporteros/lectores van PoE
   const poeHints = ["IPSTYLE", "IP STYLE", "ACCESS", "UNIT", "READER", "INTERCOM", "IP ONE", "VERSO"];
   return poeHints.some((k) => t.includes(k));
 }
@@ -609,14 +719,12 @@ function _localDesignFromSpec(spec) {
   const infra = [];
   const connections = [];
 
-  // Router + Core siempre (en coreZone)
   const routerId = `V_ROUTER_${coreZone}`;
   const coreId = `V_CORE_${coreZone}`;
   infra.push({ id: routerId, type: "VIRTUAL_ROUTER", zone: coreZone, meta: { role: "EDGE" } });
   infra.push({ id: coreId, type: "VIRTUAL_CORE", zone: coreZone, meta: { role: "CORE" } });
   connections.push({ from: coreId, to: routerId, type: "UTP_CAT6", note: "Uplink core -> router" });
 
-  // Switches por zona según necesidad
   let totalSwitches = 0;
   for (const z of zones) {
     const list = byZone[z.key] || [];
@@ -629,7 +737,6 @@ function _localDesignFromSpec(spec) {
       if (_isPoeDevice(p)) needsPoe = true;
     }
 
-    // simple: 1 switch por zona (si >24, añadimos 2)
     const switchesNeeded = ports > 24 ? 2 : 1;
     for (let i = 1; i <= switchesNeeded; i++) {
       totalSwitches += 1;
@@ -641,7 +748,6 @@ function _localDesignFromSpec(spec) {
         meta: { ports_estimated: ports, index: i },
       });
 
-      // uplink switch zona -> core
       connections.push({
         from: swId,
         to: coreId,
@@ -649,7 +755,6 @@ function _localDesignFromSpec(spec) {
         note: z.key === coreZone ? "Switch local -> core" : "Uplink zona -> core",
       });
 
-      // conectar devices de zona al switch (reparto básico si hay 2 switches)
       for (const p of list) {
         connections.push({
           from: p.id,
@@ -686,7 +791,6 @@ function _localDesignFromSpec(spec) {
 /* ======================================================
    IA (opcional) + parse robusto
  ====================================================== */
-
 function _buildHandlerEnvelope(payload) {
   const sectionKey = "diagramas_network";
   const docKey = "diagramas";
@@ -818,7 +922,6 @@ async function diagGenerateDesign() {
 
   const handler = window.handleDocSectionAI || window.handleAI || window.callGemini || null;
 
-  // Si no hay handler, directamente local
   if (typeof handler !== "function") {
     appState.diagramas.lastResult = _localDesignFromSpec(spec);
     appState.diagramas.usedLocalFallback = true;
@@ -833,7 +936,6 @@ async function diagGenerateDesign() {
 
     const parsed = _parseJsonRobust(res);
     if (!parsed.ok) {
-      // FIX: no fallamos. Guardamos raw y construimos local.
       appState.diagramas.lastRaw = parsed.raw || null;
       appState.diagramas.lastResult = _localDesignFromSpec(spec);
       appState.diagramas.usedLocalFallback = true;
@@ -846,7 +948,6 @@ async function diagGenerateDesign() {
 
     if (!obj || typeof obj !== "object") throw new Error("Respuesta IA inválida.");
     if (!("placements" in obj) || !("connections" in obj) || !("errors" in obj)) {
-      // también fallback
       appState.diagramas.lastRaw = parsed.raw || null;
       appState.diagramas.lastResult = _localDesignFromSpec(spec);
       appState.diagramas.usedLocalFallback = true;
@@ -861,8 +962,6 @@ async function diagGenerateDesign() {
     _renderResult();
   } catch (e) {
     console.error(e);
-    // fallback ante error runtime del handler
-    appState.diagramas.lastRaw = appState.diagramas.lastRaw || null;
     appState.diagramas.lastResult = _localDesignFromSpec(spec);
     appState.diagramas.usedLocalFallback = true;
     appState.diagramas.lastError = null;
@@ -873,63 +972,32 @@ async function diagGenerateDesign() {
 }
 
 /* ======================================================
-   6) Export DXF (esquemático)
+   6) Export DXF (BLOCKS INSERT + coords manuales)
  ====================================================== */
 function _dxfLine(x1, y1, x2, y2, layer = "CABLE") {
   return [
-    "0",
-    "LINE",
-    "8",
-    layer,
-    "10",
-    String(x1),
-    "20",
-    String(y1),
-    "30",
-    "0",
-    "11",
-    String(x2),
-    "21",
-    String(y2),
-    "31",
-    "0",
+    "0","LINE","8",layer,
+    "10",String(x1),"20",String(y1),"30","0",
+    "11",String(x2),"21",String(y2),"31","0",
   ].join("\n");
 }
 function _dxfCircle(x, y, r, layer = "NODES") {
-  return ["0", "CIRCLE", "8", layer, "10", String(x), "20", String(y), "30", "0", "40", String(r)].join("\n");
+  return ["0","CIRCLE","8",layer,"10",String(x),"20",String(y),"30","0","40",String(r)].join("\n");
 }
 function _dxfText(x, y, h, text, layer = "LABELS") {
   const t = String(text || "").replaceAll("\n", " ");
-  return ["0", "TEXT", "8", layer, "10", String(x), "20", String(y), "30", "0", "40", String(h), "1", t].join("\n");
+  return ["0","TEXT","8",layer,"10",String(x),"20",String(y),"30","0","40",String(h),"1",t].join("\n");
 }
-
 function _dxfInsert(blockName, x, y, layer = "NODES", scale = 1, rotationDeg = 0) {
   const b = String(blockName || "").trim();
   return [
-    "0",
-    "INSERT",
-    "8",
-    layer,
-    "2",
-    b,
-    "10",
-    String(x),
-    "20",
-    String(y),
-    "30",
-    "0",
-    "41",
-    String(scale),
-    "42",
-    String(scale),
-    "43",
-    String(scale),
-    "50",
-    String(rotationDeg),
+    "0","INSERT","8",layer,
+    "2",b,
+    "10",String(x),"20",String(y),"30","0",
+    "41",String(scale),"42",String(scale),"43",String(scale),
+    "50",String(rotationDeg),
   ].join("\n");
 }
-
-// Extrae el bloque SECTION/BLOCKS...ENDSEC del DXF plantilla
 function _extractDxfBlocksSection(dxfText) {
   const text = String(dxfText || "");
   if (!text) return "";
@@ -941,10 +1009,106 @@ function _extractDxfBlocksSection(dxfText) {
   const iEnd = text.indexOf("0\nENDSEC", i0);
   if (iEnd < 0) return "";
 
-  // incluye ENDSEC
   return text.slice(i0, iEnd + "0\nENDSEC".length);
 }
 
+function diagExportDxf() {
+  const r = appState.diagramas.lastResult;
+  if (!r) {
+    appState.diagramas.lastError = "No hay resultado para exportar. Genera el diseño primero.";
+    appState.diagramas.lastRaw = null;
+    _renderResult();
+    return;
+  }
+
+  const tplText = String(appState.diagramas.dxfText || "");
+  const blocksSection = _extractDxfBlocksSection(tplText);
+  if (!blocksSection) {
+    appState.diagramas.lastError =
+      "Para exportar con iconos (BLOCKS) tienes que cargar antes la plantilla DXF ASCII que contenga SECTION/BLOCKS.";
+    appState.diagramas.lastRaw = null;
+    _renderResult();
+    return;
+  }
+
+  const coords = _buildSchematicCoordsFromResult(r); // <-- usa manualCoords si existen
+  if (!coords.size) {
+    appState.diagramas.lastError = "No hay nodos en el resultado para exportar.";
+    appState.diagramas.lastRaw = null;
+    _renderResult();
+    return;
+  }
+
+  const knownBlocks = new Set((appState.diagramas.dxfBlocks || []).map((b) => String(b)));
+  const placements = Array.isArray(r.placements) ? r.placements : [];
+  const infra = Array.isArray(r.infra) ? r.infra : [];
+  const connections = Array.isArray(r.connections) ? r.connections : [];
+  const ents = [];
+
+  // Headers zonas
+  const zones = appState.diagramas.zones || [];
+  const colW = 280, startX = 80, titleY = 40;
+  ents.push(_dxfText(80, 20, 14, "DIAGRAMA RED UTP CAT6 (ESQUEMA)", "LABELS"));
+  zones.forEach((z, i) => ents.push(_dxfText(startX + i * colW, titleY, 12, z.label, "LABELS")));
+
+  // Placements -> INSERT si icon_block válido
+  for (const p of placements) {
+    const pos = coords.get(p.id);
+    if (!pos) continue;
+
+    const block = String(p.icon_block || p.iconBlock || "").trim();
+    if (block && knownBlocks.has(block)) {
+      ents.push(_dxfInsert(block, pos.x, pos.y, "NODES", 1, 0));
+    } else {
+      ents.push(_dxfCircle(pos.x, pos.y, 10, "NODES"));
+    }
+    ents.push(_dxfText(pos.x + 16, pos.y + 4, 10, pos.label || p.ref || p.id, "LABELS"));
+  }
+
+  // Infra: círculo (luego si quieres, también INSERT)
+  for (const n of infra) {
+    const pos = coords.get(n.id);
+    if (!pos) continue;
+    ents.push(_dxfCircle(pos.x, pos.y, 12, "INFRA"));
+    ents.push(_dxfText(pos.x + 16, pos.y + 4, 10, pos.label || n.type || n.id, "LABELS"));
+  }
+
+  // Cables
+  for (const c of connections) {
+    const a = coords.get(c.from);
+    const b = coords.get(c.to);
+    if (!a || !b) continue;
+    ents.push(_dxfLine(a.x, a.y, b.x, b.y, "CABLE"));
+  }
+
+  const dxf = [
+    "0","SECTION","2","HEADER","0","ENDSEC",
+    "0","SECTION","2","TABLES","0","ENDSEC",
+    blocksSection,
+    "0","SECTION","2","ENTITIES",
+    ents.join("\n"),
+    "0","ENDSEC",
+    "0","EOF",
+  ].join("\n");
+
+  const nameBase = (appState.diagramas.dxfFileName || "diagrama").replace(/\.dxf$/i, "");
+  const fileName = `${nameBase}_red_cat6_blocks.dxf`;
+
+  try {
+    const blob = new Blob([dxf], { type: "application/dxf" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+  } catch (e) {
+    appState.diagramas.lastError = "No se pudo descargar el DXF.";
+    _renderResult();
+  }
+}
 
 /* ======================================================
    7) Render UI
@@ -972,9 +1136,7 @@ function _renderDiagramasUI() {
             .slice(0, 800)
             .map(
               (b) =>
-                `<option value="${_escapeHtmlAttr(b)}"${
-                  it.iconBlock === b ? " selected" : ""
-                }>${_escapeHtml(b)}</option>`
+                `<option value="${_escapeHtmlAttr(b)}"${it.iconBlock === b ? " selected" : ""}>${_escapeHtml(b)}</option>`
             )
             .join("");
 
@@ -1084,7 +1246,7 @@ function _renderDiagramasUI() {
         <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
           <div>
             <h3 style="margin:0;">Ubicación de dispositivos</h3>
-            <div class="muted" style="font-size:12px;">Arrastra referencias a zonas. Usa AUTO para sugerir iconos. Genera diseño y exporta DXF.</div>
+            <div class="muted" style="font-size:12px;">Arrastra referencias a zonas. Usa AUTO para sugerir iconos. Genera diseño, edita posiciones y exporta DXF.</div>
           </div>
           <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
             <button id="btnDiagAuto" class="btn btn-secondary btn-sm">Auto</button>
@@ -1217,7 +1379,7 @@ function renderDiagramasView() {
     <div class="card">
       <div>
         <h2 style="margin-bottom:4px;">Diagramas · Drag & Drop</h2>
-        <div class="muted">Asignas referencias a zonas (incluye Armario/CPD) y se diseña la red UTP Cat6.</div>
+        <div class="muted">Asignas referencias a zonas (incluye Armario/CPD), generas diseño, ajustas posiciones en Preview y exportas DXF.</div>
       </div>
       <div id="diagMain" class="mt-3"></div>
     </div>
