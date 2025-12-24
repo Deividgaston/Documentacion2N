@@ -903,88 +903,48 @@ function _dxfText(x, y, h, text, layer = "LABELS") {
   return ["0", "TEXT", "8", layer, "10", String(x), "20", String(y), "30", "0", "40", String(h), "1", t].join("\n");
 }
 
-function diagExportDxf() {
-  const r = appState.diagramas.lastResult;
-  if (!r) {
-    appState.diagramas.lastError = "No hay resultado para exportar. Genera el diseño primero.";
-    appState.diagramas.lastRaw = null;
-    _renderResult();
-    return;
-  }
-
-  const coords = _buildSchematicCoordsFromResult(r);
-  if (!coords.size) {
-    appState.diagramas.lastError = "No hay nodos en el resultado para exportar.";
-    appState.diagramas.lastRaw = null;
-    _renderResult();
-    return;
-  }
-
-  const connections = Array.isArray(r.connections) ? r.connections : [];
-  const ents = [];
-
-  for (const [, p] of coords.entries()) {
-    ents.push(_dxfCircle(p.x, p.y, 10, "NODES"));
-    ents.push(_dxfText(p.x + 16, p.y + 4, 10, p.label, "LABELS"));
-  }
-
-  for (const c of connections) {
-    const a = coords.get(c.from);
-    const b = coords.get(c.to);
-    if (!a || !b) continue;
-    ents.push(_dxfLine(a.x, a.y, b.x, b.y, "CABLE"));
-  }
-
-  const zones = appState.diagramas.zones || [];
-  const colW = 280,
-    startX = 80,
-    titleY = 40;
-  ents.push(_dxfText(80, 20, 14, "DIAGRAMA RED UTP CAT6 (ESQUEMA)", "LABELS"));
-  zones.forEach((z, i) => ents.push(_dxfText(startX + i * colW, titleY, 12, z.label, "LABELS")));
-
-  const dxf = [
+function _dxfInsert(blockName, x, y, layer = "NODES", scale = 1, rotationDeg = 0) {
+  const b = String(blockName || "").trim();
+  return [
     "0",
-    "SECTION",
+    "INSERT",
+    "8",
+    layer,
     "2",
-    "HEADER",
+    b,
+    "10",
+    String(x),
+    "20",
+    String(y),
+    "30",
     "0",
-    "ENDSEC",
-    "0",
-    "SECTION",
-    "2",
-    "TABLES",
-    "0",
-    "ENDSEC",
-    "0",
-    "SECTION",
-    "2",
-    "ENTITIES",
-    ents.join("\n"),
-    "0",
-    "ENDSEC",
-    "0",
-    "EOF",
+    "41",
+    String(scale),
+    "42",
+    String(scale),
+    "43",
+    String(scale),
+    "50",
+    String(rotationDeg),
   ].join("\n");
-
-  const nameBase = (appState.diagramas.dxfFileName || "diagrama").replace(/\.dxf$/i, "");
-  const fileName = `${nameBase}_red_cat6_esquema.dxf`;
-
-  try {
-    const blob = new Blob([dxf], { type: "application/dxf" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1500);
-  } catch (_) {
-    appState.diagramas.lastError = "No se pudo descargar el DXF.";
-    appState.diagramas.lastRaw = null;
-    _renderResult();
-  }
 }
+
+// Extrae el bloque SECTION/BLOCKS...ENDSEC del DXF plantilla
+function _extractDxfBlocksSection(dxfText) {
+  const text = String(dxfText || "");
+  if (!text) return "";
+
+  const startToken = "0\nSECTION\n2\nBLOCKS";
+  const i0 = text.indexOf(startToken);
+  if (i0 < 0) return "";
+
+  const iEnd = text.indexOf("0\nENDSEC", i0);
+  if (iEnd < 0) return "";
+
+  // incluye ENDSEC
+  return text.slice(i0, iEnd + "0\nENDSEC".length);
+}
+
 
 /* ======================================================
    7) Render UI
