@@ -1,10 +1,10 @@
 // js/ui_diagramas.js
 // Vista: DIAGRAMAS (IA)
-// V2.5 (Hito 16):
-// - Preview SVG (nodos + cables) + JSON
-// - Prompt estricto + JSON fallback
-// - sectionText limpio para handlers tipo handleDocSectionAI
+// V2.6 (Hito 16):
+// - Preview SVG + JSON
 // - Parse robusto + raw visible
+// - Fallback LOCAL: si la IA no devuelve JSON, generamos topología jerárquica (Cat6) determinista
+//   (devices -> switches por zona -> core -> router en Armario/CPD si existe)
 
 window.appState = window.appState || {};
 appState.diagramas = appState.diagramas || {
@@ -31,6 +31,7 @@ appState.diagramas = appState.diagramas || {
   lastResult: null,
   lastError: null,
   lastRaw: null,
+  usedLocalFallback: false,
   busy: false,
 };
 
@@ -65,7 +66,6 @@ function _buildSchematicCoordsFromResult(result) {
   const zones = appState.diagramas.zones || [];
   const zoneIndex = new Map(zones.map((z, i) => [z.key, i]));
 
-  // Layout: columnas por zona
   const colW = 280;
   const rowH = 90;
   const startX = 80;
@@ -113,8 +113,8 @@ function _renderPreviewSvg(result) {
   const colW = 280;
   const startX = 80;
 
-  // bounds
-  let maxX = 0, maxY = 0;
+  let maxX = 0,
+    maxY = 0;
   for (const [, p] of coords.entries()) {
     if (p.x > maxX) maxX = p.x;
     if (p.y > maxY) maxY = p.y;
@@ -152,7 +152,9 @@ function _renderPreviewSvg(result) {
   const headers = zones
     .map((z, i) => {
       const x = startX + i * colW;
-      return `<text x="${x}" y="36" font-size="13" fill="rgba(107,114,128,.95)">${_escapeHtml(z.label)}</text>`;
+      return `<text x="${x}" y="36" font-size="13" fill="rgba(107,114,128,.95)">${_escapeHtml(
+        z.label
+      )}</text>`;
     })
     .join("");
 
@@ -202,12 +204,28 @@ function _renderResult() {
     return;
   }
 
+  const banner = appState.diagramas.usedLocalFallback
+    ? `<div class="alert alert-info mb-2">Se generó el diseño en <b>modo local</b> (la IA devolvió texto, no JSON).</div>`
+    : "";
+
+  const raw = appState.diagramas.lastRaw
+    ? `
+      <details class="mt-2">
+        <summary class="muted" style="cursor:pointer;">Ver respuesta IA (raw)</summary>
+        <pre style="white-space:pre-wrap; background:#0b1020; color:#e5e7eb; padding:12px; border-radius:10px; overflow:auto; margin-top:8px;">${_escapeHtml(
+          appState.diagramas.lastRaw
+        )}</pre>
+      </details>
+    `
+    : "";
+
   const preview = _renderPreviewSvg(appState.diagramas.lastResult);
   const pretty = _escapeHtml(JSON.stringify(appState.diagramas.lastResult, null, 2));
 
   out.innerHTML = `
+    ${banner}
     <div class="mb-2" style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
-      <span class="chip">Diseño IA</span>
+      <span class="chip">Diseño</span>
       <span class="muted">UTP Cat6 · topología eficiente</span>
     </div>
 
@@ -219,6 +237,7 @@ function _renderResult() {
         <span class="muted" style="font-size:12px;">Salida completa</span>
       </div>
       <pre style="white-space:pre-wrap; background:#0b1020; color:#e5e7eb; padding:12px; border-radius:10px; overflow:auto;">${pretty}</pre>
+      ${raw}
     </div>
   `;
 }
@@ -495,47 +514,26 @@ function diagAutoAssignIcons() {
 }
 
 /* ======================================================
-   5) Prompt + payload IA (endurecido)
+   5) Payload base (para IA y para fallback local)
  ====================================================== */
+
 function _defaultInstructions() {
   return `
 RESPONDE ÚNICAMENTE CON JSON (sin markdown, sin \`\`\`, sin texto).
 Tu respuesta DEBE empezar por "{" y terminar por "}".
-Si no puedes cumplir algún requisito, devuelve igualmente JSON usando el campo "errors".
 
-Contexto:
-- Dispositivos asignados por el usuario a zonas:
-  entrada_principal, portales_interiores, zonas_comunes, zonas_refugio, armario_cpd
-- Cable único permitido: UTP_CAT6
+Objetivo: Diseñar una red eficiente UTP_CAT6 con estrella jerárquica:
+devices -> switches zona -> core -> router (en armario_cpd si existe).
+No inventes dispositivos finales: SOLO placements con source USER.
+Puedes proponer infraestructura VIRTUAL_* en infra.
 
-Reglas:
-- No inventes dispositivos finales: SOLO placements[] con meta.source="USER".
-- Sí puedes proponer infraestructura VIRTUAL_* en infra[] (switches/core/router) si hace falta.
-- Topología preferida: estrella jerárquica (devices -> switches zona -> core -> router).
-- Si existe armario_cpd úsalo para core/router.
-
-FORMATO EXACTO (obligatorio):
+Devuelve EXACTAMENTE:
 {
-  "placements":[
-    { "id":"...", "ref":"...", "zone":"...", "icon_block":"...", "qty":1, "meta":{ "source":"USER" } }
-  ],
-  "infra":[
-    { "id":"...", "type":"VIRTUAL_SWITCH_POE"|"VIRTUAL_SWITCH"|"VIRTUAL_CORE"|"VIRTUAL_ROUTER", "zone":"...", "meta":{} }
-  ],
-  "connections":[
-    { "from":"...", "to":"...", "type":"UTP_CAT6", "note":"..." }
-  ],
-  "summary": { "total_refs":0, "total_devices":0, "total_switches":0 },
+  "placements":[{"id":"...","ref":"...","zone":"...","icon_block":"...","qty":1,"meta":{"source":"USER"}}],
+  "infra":[{"id":"...","type":"VIRTUAL_SWITCH_POE"|"VIRTUAL_SWITCH"|"VIRTUAL_CORE"|"VIRTUAL_ROUTER","zone":"...","meta":{}}],
+  "connections":[{"from":"...","to":"...","type":"UTP_CAT6","note":"..."}],
+  "summary":{"total_refs":0,"total_devices":0,"total_switches":0},
   "errors":[]
-}
-
-FALLBACK SIEMPRE (si hay problemas):
-{
-  "placements":[],
-  "infra":[],
-  "connections":[],
-  "summary":{ "total_refs":0, "total_devices":0, "total_switches":0 },
-  "errors":[ "explica aquí el problema" ]
 }
 `.trim();
 }
@@ -546,7 +544,7 @@ function _getEffectiveInstructions() {
   return _defaultInstructions();
 }
 
-function _buildAiPayload() {
+function _buildSpecFromAssignments() {
   const zones = appState.diagramas.zones || [];
   const assignments = appState.diagramas.assignments || {};
 
@@ -560,7 +558,7 @@ function _buildAiPayload() {
         descripcion: it.descripcion || "",
         zone: z.key,
         icon_block: it.iconBlock || "",
-        qty: Number(it.qty || 0) || 0,
+        qty: Math.max(1, Number(it.qty || 1) || 1),
         meta: { source: "USER" },
       });
     }
@@ -568,35 +566,130 @@ function _buildAiPayload() {
 
   if (!placements.length) throw new Error("No hay referencias asignadas. Arrastra refs a alguna zona.");
 
-  const iconLibrary = Array.isArray(appState.diagramas.dxfBlocks) ? appState.diagramas.dxfBlocks : [];
-
-  const spec = {
+  return {
     cable: "UTP_CAT6",
     zones: zones.map((z) => ({ key: z.key, label: z.label })),
     placements,
-    icon_library_blocks: iconLibrary.slice(0, 2000),
+    icon_library_blocks: (appState.diagramas.dxfBlocks || []).slice(0, 2000),
   };
+}
 
-  const network_rules = {
-    cable: "UTP_CAT6",
-    topology: ["hierarchical_star", "star"],
-    hints: {
-      poe_keywords: ["IPSTYLE", "ACCESS", "UNIT", "CA", "READER", "IP ONE", "INTERCOM"],
-      cpd_zone_key: "armario_cpd",
-    },
+/* ======================================================
+   Fallback LOCAL (determinista) - aquí está el FIX real
+ ====================================================== */
+
+function _isPoeDevice(p) {
+  const t = `${p.ref || ""} ${p.descripcion || ""}`.toUpperCase();
+  // Heurística simple: la mayoría de videoporteros/lectores van PoE
+  const poeHints = ["IPSTYLE", "IP STYLE", "ACCESS", "UNIT", "READER", "INTERCOM", "IP ONE", "VERSO"];
+  return poeHints.some((k) => t.includes(k));
+}
+
+function _pickCoreZoneKey(spec) {
+  const zones = Array.isArray(spec?.zones) ? spec.zones : [];
+  const hasCpd = zones.some((z) => z.key === "armario_cpd");
+  if (hasCpd) return "armario_cpd";
+  return zones.length ? zones[0].key : "entrada_principal";
+}
+
+function _localDesignFromSpec(spec) {
+  const placements = Array.isArray(spec?.placements) ? spec.placements : [];
+  const zones = Array.isArray(spec?.zones) ? spec.zones : [];
+
+  const byZone = {};
+  for (const z of zones) byZone[z.key] = [];
+  for (const p of placements) {
+    const zk = String(p.zone || zones[0]?.key || "entrada_principal");
+    if (!byZone[zk]) byZone[zk] = [];
+    byZone[zk].push(p);
+  }
+
+  const coreZone = _pickCoreZoneKey(spec);
+
+  const infra = [];
+  const connections = [];
+
+  // Router + Core siempre (en coreZone)
+  const routerId = `V_ROUTER_${coreZone}`;
+  const coreId = `V_CORE_${coreZone}`;
+  infra.push({ id: routerId, type: "VIRTUAL_ROUTER", zone: coreZone, meta: { role: "EDGE" } });
+  infra.push({ id: coreId, type: "VIRTUAL_CORE", zone: coreZone, meta: { role: "CORE" } });
+  connections.push({ from: coreId, to: routerId, type: "UTP_CAT6", note: "Uplink core -> router" });
+
+  // Switches por zona según necesidad
+  let totalSwitches = 0;
+  for (const z of zones) {
+    const list = byZone[z.key] || [];
+    if (!list.length) continue;
+
+    let ports = 0;
+    let needsPoe = false;
+    for (const p of list) {
+      ports += Math.max(1, Number(p.qty || 1) || 1);
+      if (_isPoeDevice(p)) needsPoe = true;
+    }
+
+    // simple: 1 switch por zona (si >24, añadimos 2)
+    const switchesNeeded = ports > 24 ? 2 : 1;
+    for (let i = 1; i <= switchesNeeded; i++) {
+      totalSwitches += 1;
+      const swId = `V_SW_${z.key}_${i}`;
+      infra.push({
+        id: swId,
+        type: needsPoe ? "VIRTUAL_SWITCH_POE" : "VIRTUAL_SWITCH",
+        zone: z.key,
+        meta: { ports_estimated: ports, index: i },
+      });
+
+      // uplink switch zona -> core
+      connections.push({
+        from: swId,
+        to: coreId,
+        type: "UTP_CAT6",
+        note: z.key === coreZone ? "Switch local -> core" : "Uplink zona -> core",
+      });
+
+      // conectar devices de zona al switch (reparto básico si hay 2 switches)
+      for (const p of list) {
+        connections.push({
+          from: p.id,
+          to: swId,
+          type: "UTP_CAT6",
+          note: "Device -> switch zona",
+        });
+      }
+    }
+  }
+
+  const summary = {
+    total_refs: placements.length,
+    total_devices: placements.reduce((a, p) => a + Math.max(1, Number(p.qty || 1) || 1), 0),
+    total_switches: totalSwitches,
   };
 
   return {
-    instructions: _getEffectiveInstructions(),
-    spec,
-    network_rules,
+    placements: placements.map((p) => ({
+      id: p.id,
+      ref: p.ref,
+      zone: p.zone,
+      icon_block: p.icon_block || "",
+      qty: p.qty || 1,
+      meta: { source: "USER" },
+    })),
+    infra,
+    connections,
+    summary,
+    errors: [],
   };
 }
+
+/* ======================================================
+   IA (opcional) + parse robusto
+ ====================================================== */
 
 function _buildHandlerEnvelope(payload) {
   const sectionKey = "diagramas_network";
   const docKey = "diagramas";
-
   const sectionText = [
     payload.instructions,
     "",
@@ -630,9 +723,6 @@ function _buildHandlerEnvelope(payload) {
   };
 }
 
-/* ======================================================
-   Parse JSON robusto
- ====================================================== */
 function _coerceTextFromHandlerResponse(res) {
   if (res == null) return "";
   if (typeof res === "string") return res;
@@ -699,6 +789,7 @@ async function diagGenerateDesign() {
   appState.diagramas.lastError = null;
   appState.diagramas.lastResult = null;
   appState.diagramas.lastRaw = null;
+  appState.diagramas.usedLocalFallback = false;
   _renderResult();
 
   appState.diagramas.useCustomPrompt = !!(_el("diagUseCustomPrompt") && _el("diagUseCustomPrompt").checked);
@@ -706,18 +797,31 @@ async function diagGenerateDesign() {
     ? String(_el("diagPromptText").value || "")
     : appState.diagramas.customPromptText;
 
-  let payload;
+  let spec;
   try {
-    payload = _buildAiPayload();
+    spec = _buildSpecFromAssignments();
   } catch (e) {
     appState.diagramas.lastError = e.message || String(e);
     _renderResult();
     return;
   }
 
+  const payload = {
+    instructions: _getEffectiveInstructions(),
+    spec,
+    network_rules: {
+      cable: "UTP_CAT6",
+      topology: ["hierarchical_star", "star"],
+      hints: { cpd_zone_key: "armario_cpd" },
+    },
+  };
+
   const handler = window.handleDocSectionAI || window.handleAI || window.callGemini || null;
+
+  // Si no hay handler, directamente local
   if (typeof handler !== "function") {
-    appState.diagramas.lastError = "No encuentro el handler de IA (ej. window.handleDocSectionAI).";
+    appState.diagramas.lastResult = _localDesignFromSpec(spec);
+    appState.diagramas.usedLocalFallback = true;
     _renderResult();
     return;
   }
@@ -729,25 +833,39 @@ async function diagGenerateDesign() {
 
     const parsed = _parseJsonRobust(res);
     if (!parsed.ok) {
+      // FIX: no fallamos. Guardamos raw y construimos local.
       appState.diagramas.lastRaw = parsed.raw || null;
-      throw new Error(parsed.error || "La IA no devolvió JSON válido.");
+      appState.diagramas.lastResult = _localDesignFromSpec(spec);
+      appState.diagramas.usedLocalFallback = true;
+      appState.diagramas.lastError = null;
+      _renderResult();
+      return;
     }
 
     const obj = parsed.obj;
 
     if (!obj || typeof obj !== "object") throw new Error("Respuesta IA inválida.");
     if (!("placements" in obj) || !("connections" in obj) || !("errors" in obj)) {
+      // también fallback
       appState.diagramas.lastRaw = parsed.raw || null;
-      throw new Error("JSON sin campos requeridos (placements/connections/errors).");
+      appState.diagramas.lastResult = _localDesignFromSpec(spec);
+      appState.diagramas.usedLocalFallback = true;
+      appState.diagramas.lastError = null;
+      _renderResult();
+      return;
     }
 
     appState.diagramas.lastResult = obj;
     appState.diagramas.lastError = null;
+    appState.diagramas.usedLocalFallback = false;
     _renderResult();
   } catch (e) {
     console.error(e);
-    appState.diagramas.lastError = e.message || String(e);
-    appState.diagramas.lastResult = null;
+    // fallback ante error runtime del handler
+    appState.diagramas.lastRaw = appState.diagramas.lastRaw || null;
+    appState.diagramas.lastResult = _localDesignFromSpec(spec);
+    appState.diagramas.usedLocalFallback = true;
+    appState.diagramas.lastError = null;
     _renderResult();
   } finally {
     _setBusy(false);
@@ -759,23 +877,36 @@ async function diagGenerateDesign() {
  ====================================================== */
 function _dxfLine(x1, y1, x2, y2, layer = "CABLE") {
   return [
-    "0","LINE","8",layer,
-    "10",String(x1),"20",String(y1),"30","0",
-    "11",String(x2),"21",String(y2),"31","0",
+    "0",
+    "LINE",
+    "8",
+    layer,
+    "10",
+    String(x1),
+    "20",
+    String(y1),
+    "30",
+    "0",
+    "11",
+    String(x2),
+    "21",
+    String(y2),
+    "31",
+    "0",
   ].join("\n");
 }
 function _dxfCircle(x, y, r, layer = "NODES") {
-  return ["0","CIRCLE","8",layer,"10",String(x),"20",String(y),"30","0","40",String(r)].join("\n");
+  return ["0", "CIRCLE", "8", layer, "10", String(x), "20", String(y), "30", "0", "40", String(r)].join("\n");
 }
 function _dxfText(x, y, h, text, layer = "LABELS") {
   const t = String(text || "").replaceAll("\n", " ");
-  return ["0","TEXT","8",layer,"10",String(x),"20",String(y),"30","0","40",String(h),"1",t].join("\n");
+  return ["0", "TEXT", "8", layer, "10", String(x), "20", String(y), "30", "0", "40", String(h), "1", t].join("\n");
 }
 
 function diagExportDxf() {
   const r = appState.diagramas.lastResult;
   if (!r) {
-    appState.diagramas.lastError = "No hay resultado IA para exportar. Genera el diseño primero.";
+    appState.diagramas.lastError = "No hay resultado para exportar. Genera el diseño primero.";
     appState.diagramas.lastRaw = null;
     _renderResult();
     return;
@@ -805,16 +936,34 @@ function diagExportDxf() {
   }
 
   const zones = appState.diagramas.zones || [];
-  const colW = 280, startX = 80, titleY = 40;
+  const colW = 280,
+    startX = 80,
+    titleY = 40;
   ents.push(_dxfText(80, 20, 14, "DIAGRAMA RED UTP CAT6 (ESQUEMA)", "LABELS"));
   zones.forEach((z, i) => ents.push(_dxfText(startX + i * colW, titleY, 12, z.label, "LABELS")));
 
   const dxf = [
-    "0","SECTION","2","HEADER","0","ENDSEC",
-    "0","SECTION","2","TABLES","0","ENDSEC",
-    "0","SECTION","2","ENTITIES",
+    "0",
+    "SECTION",
+    "2",
+    "HEADER",
+    "0",
+    "ENDSEC",
+    "0",
+    "SECTION",
+    "2",
+    "TABLES",
+    "0",
+    "ENDSEC",
+    "0",
+    "SECTION",
+    "2",
+    "ENTITIES",
     ents.join("\n"),
-    "0","ENDSEC","0","EOF",
+    "0",
+    "ENDSEC",
+    "0",
+    "EOF",
   ].join("\n");
 
   const nameBase = (appState.diagramas.dxfFileName || "diagrama").replace(/\.dxf$/i, "");
@@ -1108,7 +1257,7 @@ function renderDiagramasView() {
     <div class="card">
       <div>
         <h2 style="margin-bottom:4px;">Diagramas · Drag & Drop</h2>
-        <div class="muted">Asignas referencias a zonas (incluye Armario/CPD) y la IA diseña la red UTP Cat6.</div>
+        <div class="muted">Asignas referencias a zonas (incluye Armario/CPD) y se diseña la red UTP Cat6.</div>
       </div>
       <div id="diagMain" class="mt-3"></div>
     </div>
