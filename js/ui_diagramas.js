@@ -1,9 +1,10 @@
 // js/ui_diagramas.js
 // Vista: DIAGRAMAS (IA)
-// V2.4 (Hito 16):
-// - FIX: prompt MUY estricto + JSON fallback
-// - FIX: sectionText limpio (solo instrucciones + JSON spec) para handlers tipo handleDocSectionAI
-// - FIX: parse robusto + raw visible
+// V2.5 (Hito 16):
+// - Preview SVG (nodos + cables) + JSON
+// - Prompt estricto + JSON fallback
+// - sectionText limpio para handlers tipo handleDocSectionAI
+// - Parse robusto + raw visible
 
 window.appState = window.appState || {};
 appState.diagramas = appState.diagramas || {
@@ -56,6 +57,126 @@ function _setBusy(b) {
   if (sp) sp.style.display = b ? "" : "none";
 }
 
+/* ======================================================
+   Preview SVG (esquemático) basado en coords
+ ====================================================== */
+
+function _buildSchematicCoordsFromResult(result) {
+  const zones = appState.diagramas.zones || [];
+  const zoneIndex = new Map(zones.map((z, i) => [z.key, i]));
+
+  // Layout: columnas por zona
+  const colW = 280;
+  const rowH = 90;
+  const startX = 80;
+  const startY = 90;
+
+  const placements = Array.isArray(result?.placements) ? result.placements : [];
+  const infra = Array.isArray(result?.infra) ? result.infra : [];
+
+  const perZoneCount = {};
+  for (const z of zones) perZoneCount[z.key] = 0;
+
+  function nextPos(zoneKey) {
+    const i = zoneIndex.has(zoneKey) ? zoneIndex.get(zoneKey) : 0;
+    const x = startX + i * colW;
+    const n = perZoneCount[zoneKey] || 0;
+    perZoneCount[zoneKey] = n + 1;
+    const y = startY + n * rowH;
+    return { x, y };
+  }
+
+  const map = new Map();
+
+  for (const p of placements) {
+    const zone = String(p.zone || "entrada_principal");
+    const pos = nextPos(zone);
+    const label = `${p.ref || p.id || ""}${p.qty ? ` x${p.qty}` : ""}`;
+    map.set(p.id, { x: pos.x, y: pos.y, label, kind: "placement", zone });
+  }
+
+  for (const n of infra) {
+    const zone = String(n.zone || "armario_cpd");
+    const pos = nextPos(zone);
+    const label = `${n.type || n.id || ""}`;
+    map.set(n.id, { x: pos.x, y: pos.y, label, kind: "infra", zone });
+  }
+
+  return map;
+}
+
+function _renderPreviewSvg(result) {
+  const coords = _buildSchematicCoordsFromResult(result);
+  if (!coords.size) return `<div class="muted">Sin nodos para preview.</div>`;
+
+  const zones = appState.diagramas.zones || [];
+  const colW = 280;
+  const startX = 80;
+
+  // bounds
+  let maxX = 0, maxY = 0;
+  for (const [, p] of coords.entries()) {
+    if (p.x > maxX) maxX = p.x;
+    if (p.y > maxY) maxY = p.y;
+  }
+  const width = Math.max(900, maxX + 320);
+  const height = Math.max(420, maxY + 140);
+
+  const connections = Array.isArray(result?.connections) ? result.connections : [];
+
+  const lines = connections
+    .map((c) => {
+      const a = coords.get(c.from);
+      const b = coords.get(c.to);
+      if (!a || !b) return "";
+      return `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="rgba(29,79,216,.55)" stroke-width="2"/>`;
+    })
+    .join("");
+
+  const nodes = Array.from(coords.entries())
+    .map(([id, p]) => {
+      const isInfra = p.kind === "infra";
+      const fill = isInfra ? "rgba(17,24,39,.95)" : "rgba(29,79,216,.95)";
+      const stroke = isInfra ? "rgba(17,24,39,.25)" : "rgba(29,79,216,.25)";
+      const label = _escapeHtml(p.label);
+      return `
+        <g>
+          <circle cx="${p.x}" cy="${p.y}" r="12" fill="${fill}" stroke="${stroke}" stroke-width="8"></circle>
+          <circle cx="${p.x}" cy="${p.y}" r="8" fill="${fill}"></circle>
+          <text x="${p.x + 16}" y="${p.y + 5}" font-size="12" fill="rgba(17,24,39,.95)">${label}</text>
+        </g>
+      `;
+    })
+    .join("");
+
+  const headers = zones
+    .map((z, i) => {
+      const x = startX + i * colW;
+      return `<text x="${x}" y="36" font-size="13" fill="rgba(107,114,128,.95)">${_escapeHtml(z.label)}</text>`;
+    })
+    .join("");
+
+  return `
+    <div class="card" style="padding:12px; overflow:auto;">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:10px;">
+        <div>
+          <div style="font-weight:700;">Preview</div>
+          <div class="muted" style="font-size:12px;">Esquema por zonas (coords artificiales). Infra en negro.</div>
+        </div>
+        <span class="chip">SVG</span>
+      </div>
+      <div style="border:1px solid rgba(15,23,42,.10); border-radius:12px; overflow:auto; background:#fff;">
+        <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+          <rect x="0" y="0" width="${width}" height="${height}" fill="white"></rect>
+          ${headers}
+          ${lines}
+          ${nodes}
+        </svg>
+      </div>
+    </div>
+  `;
+}
+
 function _renderResult() {
   const out = _el("diagOutput");
   if (!out) return;
@@ -81,13 +202,24 @@ function _renderResult() {
     return;
   }
 
+  const preview = _renderPreviewSvg(appState.diagramas.lastResult);
   const pretty = _escapeHtml(JSON.stringify(appState.diagramas.lastResult, null, 2));
+
   out.innerHTML = `
     <div class="mb-2" style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
-      <span class="chip">Diseño IA (JSON)</span>
+      <span class="chip">Diseño IA</span>
       <span class="muted">UTP Cat6 · topología eficiente</span>
     </div>
-    <pre style="white-space:pre-wrap; background:#0b1020; color:#e5e7eb; padding:12px; border-radius:10px; overflow:auto;">${pretty}</pre>
+
+    ${preview}
+
+    <div class="card mt-3" style="padding:12px;">
+      <div class="mb-2" style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+        <span class="chip">JSON</span>
+        <span class="muted" style="font-size:12px;">Salida completa</span>
+      </div>
+      <pre style="white-space:pre-wrap; background:#0b1020; color:#e5e7eb; padding:12px; border-radius:10px; overflow:auto;">${pretty}</pre>
+    </div>
   `;
 }
 
@@ -363,10 +495,9 @@ function diagAutoAssignIcons() {
 }
 
 /* ======================================================
-   5) Prompt + payload IA (ENDURECIDO)
+   5) Prompt + payload IA (endurecido)
  ====================================================== */
 function _defaultInstructions() {
-  // IMPORTANTE: incluye fallback JSON SIEMPRE
   return `
 RESPONDE ÚNICAMENTE CON JSON (sin markdown, sin \`\`\`, sin texto).
 Tu respuesta DEBE empezar por "{" y terminar por "}".
@@ -378,7 +509,7 @@ Contexto:
 - Cable único permitido: UTP_CAT6
 
 Reglas:
-- No inventes dispositivos finales: SOLO placements[] de source USER.
+- No inventes dispositivos finales: SOLO placements[] con meta.source="USER".
 - Sí puedes proponer infraestructura VIRTUAL_* en infra[] (switches/core/router) si hace falta.
 - Topología preferida: estrella jerárquica (devices -> switches zona -> core -> router).
 - Si existe armario_cpd úsalo para core/router.
@@ -462,7 +593,6 @@ function _buildAiPayload() {
   };
 }
 
-// sectionText LIMPIO: solo instrucciones + JSON spec
 function _buildHandlerEnvelope(payload) {
   const sectionKey = "diagramas_network";
   const docKey = "diagramas";
@@ -495,28 +625,19 @@ function _buildHandlerEnvelope(payload) {
     network_rules: payload.network_rules,
     user: { email: appState?.user?.email || "", role: appState?.user?.role || "" },
 
-    // flags (si tu handler los soporta, mejor)
     jsonOnly: true,
     response_format: "json",
   };
 }
 
 /* ======================================================
-   5.5) JSON parse robusto
+   Parse JSON robusto
  ====================================================== */
 function _coerceTextFromHandlerResponse(res) {
   if (res == null) return "";
   if (typeof res === "string") return res;
 
-  const candidates = [
-    res.text,
-    res.output_text,
-    res.outputText,
-    res.content,
-    res.result,
-    res.data,
-    res.response,
-  ];
+  const candidates = [res.text, res.output_text, res.outputText, res.content, res.result, res.data, res.response];
   for (const c of candidates) {
     if (typeof c === "string" && c.trim()) return c;
   }
@@ -546,7 +667,7 @@ function _parseJsonRobust(res) {
   if (res == null) return { ok: false, error: "Respuesta vacía", raw: "" };
 
   if (typeof res === "object" && res) {
-    if (("placements" in res) && ("connections" in res) && ("errors" in res)) {
+    if ("placements" in res && "connections" in res && "errors" in res) {
       return { ok: true, obj: res, raw: "" };
     }
   }
@@ -651,42 +772,6 @@ function _dxfText(x, y, h, text, layer = "LABELS") {
   return ["0","TEXT","8",layer,"10",String(x),"20",String(y),"30","0","40",String(h),"1",t].join("\n");
 }
 
-function _buildSchematicCoordsFromResult(result) {
-  const zones = appState.diagramas.zones || [];
-  const zoneIndex = new Map(zones.map((z, i) => [z.key, i]));
-  const colW = 280, rowH = 80, startX = 100, startY = 100;
-
-  const placements = Array.isArray(result?.placements) ? result.placements : [];
-  const infra = Array.isArray(result?.infra) ? result.infra : [];
-
-  const perZoneCount = {};
-  for (const z of zones) perZoneCount[z.key] = 0;
-
-  function nextPos(zoneKey) {
-    const i = zoneIndex.has(zoneKey) ? zoneIndex.get(zoneKey) : 0;
-    const x = startX + i * colW;
-    const n = perZoneCount[zoneKey] || 0;
-    perZoneCount[zoneKey] = n + 1;
-    const y = startY + n * rowH;
-    return { x, y };
-  }
-
-  const map = new Map();
-  for (const p of placements) {
-    const zone = String(p.zone || "entrada_principal");
-    const pos = nextPos(zone);
-    const label = `${p.ref || p.id || ""}${p.qty ? ` x${p.qty}` : ""}`;
-    map.set(p.id, { x: pos.x, y: pos.y, label });
-  }
-  for (const n of infra) {
-    const zone = String(n.zone || "armario_cpd");
-    const pos = nextPos(zone);
-    const label = `${n.type || n.id || ""}`;
-    map.set(n.id, { x: pos.x, y: pos.y, label });
-  }
-  return map;
-}
-
 function diagExportDxf() {
   const r = appState.diagramas.lastResult;
   if (!r) {
@@ -720,8 +805,8 @@ function diagExportDxf() {
   }
 
   const zones = appState.diagramas.zones || [];
-  const colW = 280, startX = 100, titleY = 40;
-  ents.push(_dxfText(100, 20, 14, "DIAGRAMA RED UTP CAT6 (ESQUEMA)", "LABELS"));
+  const colW = 280, startX = 80, titleY = 40;
+  ents.push(_dxfText(80, 20, 14, "DIAGRAMA RED UTP CAT6 (ESQUEMA)", "LABELS"));
   zones.forEach((z, i) => ents.push(_dxfText(startX + i * colW, titleY, 12, z.label, "LABELS")));
 
   const dxf = [
