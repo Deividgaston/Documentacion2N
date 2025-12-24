@@ -1011,6 +1011,33 @@ function _extractDxfBlocksSection(dxfText) {
 
   return text.slice(i0, iEnd + "0\nENDSEC".length);
 }
+function _buildPreviewOnlyResultFromAssignments() {
+  const zones = appState.diagramas.zones || [];
+  const assignments = appState.diagramas.assignments || {};
+
+  const placements = [];
+  for (const z of zones) {
+    const list = assignments[z.key] || [];
+    for (const it of list) {
+      placements.push({
+        id: it.id,
+        ref: it.ref,
+        zone: z.key,
+        icon_block: it.iconBlock || "",
+        qty: it.qty || 1,
+        meta: { source: "USER" },
+      });
+    }
+  }
+
+  return {
+    placements,
+    infra: [],
+    connections: [],
+    summary: {},
+    errors: [],
+  };
+}
 
 function diagExportDxf() {
   const r = appState.diagramas.lastResult;
