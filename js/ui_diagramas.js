@@ -1136,18 +1136,30 @@ function _dxfInsert(blockName, x, y, layer = "NODES", scale = 1, rotationDeg = 0
     "50",String(rotationDeg),
   ].join("\n");
 }
+// Extrae el bloque SECTION/BLOCKS...ENDSEC del DXF plantilla (robusto: \r\n, espacios)
 function _extractDxfBlocksSection(dxfText) {
-  const text = String(dxfText || "");
+  let text = String(dxfText || "");
   if (!text) return "";
 
-  const startToken = "0\nSECTION\n2\nBLOCKS";
-  const i0 = text.indexOf(startToken);
-  if (i0 < 0) return "";
+  // Normaliza saltos de línea para que el slice sea consistente
+  text = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 
-  const iEnd = text.indexOf("0\nENDSEC", i0);
-  if (iEnd < 0) return "";
+  // Busca inicio de SECTION/BLOCKS tolerando espacios
+  const reStart = /0\s*\nSECTION\s*\n\s*2\s*\nBLOCKS\b/i;
+  const m0 = reStart.exec(text);
+  if (!m0) return "";
 
-  return text.slice(i0, iEnd + "0\nENDSEC".length);
+  const startIdx = m0.index;
+
+  // Busca ENDSEC a partir del inicio (tolerando espacios)
+  const reEnd = /0\s*\nENDSEC\b/i;
+  reEnd.lastIndex = startIdx;
+  const m1 = reEnd.exec(text);
+  if (!m1) return "";
+
+  const endIdx = m1.index + m1[0].length; // incluye ENDSEC completo
+
+  return text.slice(startIdx, endIdx);
 }
 
 function diagExportDxf() {
