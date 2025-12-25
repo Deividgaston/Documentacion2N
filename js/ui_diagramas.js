@@ -13,6 +13,7 @@ appState.diagramas = appState.diagramas || {
   dxfFileName: "",
   dxfText: "",
   dxfBlocks: [],
+  dxfBlocksSection: "", // <-- AÑADE ESTA LÍNEA
 
   refs: [],
   refsSearch: "",
