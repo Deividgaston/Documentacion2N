@@ -13,7 +13,7 @@ appState.diagramas = appState.diagramas || {
   dxfFileName: "",
   dxfText: "",
   dxfBlocks: [],
-  dxfBlocksSection: "", // <-- AÑADE ESTA LÍNEA
+  dxfBlocksSection: "",
 
   refs: [],
   refsSearch: "",
@@ -32,10 +32,10 @@ appState.diagramas = appState.diagramas || {
   customPromptText: "",
 
   // Preview positions
-  previewEditMode: false, // editar posiciones
-  manualCoords: {},       // id -> {x,y}
+  previewEditMode: false,
+  manualCoords: {},
 
-  // NUEVO: el “result” que está pintando el preview (puede ser previewOnly)
+  // el “result” que está pintando el preview (puede ser previewOnly)
   _previewResult: null,
 
   lastResult: null,
@@ -110,7 +110,6 @@ function _buildSchematicCoordsFromResult(result) {
     const zone = String(p.zone || "entrada_principal");
     const label = `${p.ref || p.id || ""}${p.qty ? ` x${p.qty}` : ""}`;
 
-    // coords manuales si existen, si no: auto
     const m = manual[p.id];
     const pos =
       m && Number.isFinite(m.x) && Number.isFinite(m.y) ? { x: m.x, y: m.y } : nextPos(zone);
@@ -140,9 +139,7 @@ function _renderPreviewSvg(result) {
   const colW = 280;
   const startX = 80;
 
-  // helper: icono “lógico” para preview (NO DXF real)
   function _iconForNode(id, p) {
-    // infra
     if (p.kind === "infra") {
       const r = appState.diagramas.lastResult || {};
       const infra = Array.isArray(r.infra) ? r.infra : [];
@@ -154,7 +151,6 @@ function _renderPreviewSvg(result) {
       return "⬛";
     }
 
-    // placements
     const r = appState.diagramas.lastResult || {};
     const placements = Array.isArray(r.placements) ? r.placements : [];
     const it = placements.find((x) => String(x.id) === String(id));
@@ -177,7 +173,6 @@ function _renderPreviewSvg(result) {
     return "●";
   }
 
-  // Bounding box para tamaño SVG
   let maxX = 0,
     maxY = 0;
   for (const [, p] of coords.entries()) {
@@ -198,7 +193,6 @@ function _renderPreviewSvg(result) {
     })
     .join("");
 
-  // Nodos: icono + (opcional) punto + label. Draggable en edit mode
   const nodes = Array.from(coords.entries())
     .map(([id, p]) => {
       const isInfra = p.kind === "infra";
@@ -211,15 +205,9 @@ function _renderPreviewSvg(result) {
         <g class="diag-node" data-node-id="${_escapeHtmlAttr(id)}" style="cursor:${
         appState.diagramas.previewEditMode ? "grab" : "default"
       };">
-          <!-- hitbox para drag -->
           <circle class="diag-node-hit" cx="${p.x}" cy="${p.y}" r="18" fill="rgba(0,0,0,0)"></circle>
-
-          <!-- “halo” -->
           <circle cx="${p.x}" cy="${p.y}" r="14" fill="${fill}" stroke="${stroke}" stroke-width="10"></circle>
-          <!-- icono lógico -->
           <text x="${p.x - 8}" y="${p.y + 7}" font-size="18" fill="white">${icon}</text>
-
-          <!-- label -->
           <text x="${p.x + 18}" y="${p.y + 5}" font-size="12" fill="rgba(17,24,39,.95)">${label}</text>
         </g>
       `;
@@ -235,10 +223,13 @@ function _renderPreviewSvg(result) {
     })
     .join("");
 
+  // ✅ FIX layout: evitar que el SVG “ensanche” toda la página (grid min-content)
+  // - el contenedor NO puede empujar el grid: min-width:0 + overflow hidden
+  // - el scroll horizontal queda dentro del cuadro de preview
   return `
-    <div class="card" style="padding:12px; overflow:auto;">
+    <div class="card" style="padding:12px; overflow:hidden; min-width:0; max-width:100%;">
       <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap;">
-        <div>
+        <div style="min-width:0;">
           <div style="font-weight:700;">Preview</div>
           <div class="muted" style="font-size:12px;">
             Esquema por zonas (coords). Iconos = preview lógico (no DXF real).
@@ -253,14 +244,20 @@ function _renderPreviewSvg(result) {
           <span class="chip">SVG</span>
         </div>
       </div>
-      <div style="border:1px solid rgba(15,23,42,.10); border-radius:12px; overflow:auto; background:#fff;">
-        <svg id="diagPreviewSvg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+
+      <div style="border:1px solid rgba(15,23,42,.10); border-radius:12px; overflow:auto; background:#fff; max-width:100%;">
+        <svg id="diagPreviewSvg"
+          width="${width}"
+          height="${height}"
+          viewBox="0 0 ${width} ${height}"
+          style="display:block;">
           <rect x="0" y="0" width="${width}" height="${height}" fill="white"></rect>
           ${headers}
           ${lines}
           ${nodes}
         </svg>
       </div>
+
       <div class="muted mt-2" style="font-size:12px;">
         Tip: mueve dispositivos y luego exporta DXF para que salgan en esas posiciones (en DXF se usarán los BLOCKS).
       </div>
@@ -309,7 +306,6 @@ function _bindPreviewInteractions() {
 
   if (!appState.diagramas.previewEditMode) return;
 
-  // FIX: usar el result que se está mostrando (previewOnly o lastResult)
   const baseResult = appState.diagramas._previewResult || appState.diagramas.lastResult;
 
   svg.onmousedown = (ev) => {
@@ -386,7 +382,6 @@ function _renderResult() {
   const out = _el("diagOutput");
   if (!out) return;
 
-  // FIX: si hay error (p.ej. export blocks) pero ya hay placements, no bloquees el preview
   const previewOnly = _buildPreviewOnlyResultFromAssignments();
   const hasPreviewPlacements = previewOnly.placements && previewOnly.placements.length > 0;
 
@@ -402,7 +397,6 @@ function _renderResult() {
       `
       : "";
 
-    // Si el usuario ya tiene cosas asignadas, muéstrale el preview igualmente
     if (hasPreviewPlacements) {
       appState.diagramas._previewResult = previewOnly;
       out.innerHTML = `
@@ -462,7 +456,7 @@ function _renderResult() {
 
     ${preview}
 
-    <div class="card mt-3" style="padding:12px;">
+    <div class="card mt-3" style="padding:12px; min-width:0; overflow:auto;">
       <div class="mb-2" style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
         <span class="chip">JSON</span>
         <span class="muted" style="font-size:12px;">Salida completa</span>
@@ -581,9 +575,7 @@ async function diagImportDxfFile(file) {
   appState.diagramas.dxfFileName = file.name || "";
   appState.diagramas.dxfText = "";
   appState.diagramas.dxfBlocks = [];
-  appState.diagramas.dxfBlocksSection = ""; // <-- NUEVO
- 
-
+  appState.diagramas.dxfBlocksSection = "";
 
   if (!/\.dxf$/i.test(file.name || "")) {
     appState.diagramas.lastError = "El archivo no parece DXF (.dxf).";
@@ -603,14 +595,14 @@ async function diagImportDxfFile(file) {
     const blocks = _dxfExtractBlocks(pairs);
     appState.diagramas.dxfBlocks = blocks.sort((a, b) => a.localeCompare(b));
 
-    // Guardar SECTION/BLOCKS ya extraída para export (no depender luego de dxfText)
     const blocksSection = _extractDxfBlocksSection(text);
     appState.diagramas.dxfBlocksSection = blocksSection || "";
 
     if (!appState.diagramas.dxfBlocksSection) {
       throw new Error("El DXF no contiene SECTION/BLOCKS (o no está en formato ASCII esperado).");
     }
-      // ✅ Persistencia SOLO cuando ya está cargado bien
+
+    // Persistencia SOLO si está OK
     try {
       localStorage.setItem("diag_dxf_fileName", appState.diagramas.dxfFileName || "");
       localStorage.setItem("diag_dxf_blocksSection", appState.diagramas.dxfBlocksSection || "");
@@ -685,7 +677,6 @@ function _onZoneDrop(ev, zoneKey) {
     });
   }
 
-  // FIX: al cambiar asignaciones, limpiar lastError para no bloquear preview
   _clearDiagError();
 
   _renderDiagramasUI();
@@ -775,7 +766,6 @@ function diagAutoAssignIcons() {
 /* ======================================================
    5) Payload base (para IA y para fallback local)
  ====================================================== */
-
 function _defaultInstructions() {
   return `
 RESPONDE ÚNICAMENTE CON JSON (sin markdown, sin \`\`\`, sin texto).
@@ -1145,29 +1135,26 @@ function _dxfInsert(blockName, x, y, layer = "NODES", scale = 1, rotationDeg = 0
     "50",String(rotationDeg),
   ].join("\n");
 }
+
 // Extrae el bloque SECTION/BLOCKS...ENDSEC del DXF plantilla (robusto: \r\n, espacios)
 function _extractDxfBlocksSection(dxfText) {
   let text = String(dxfText || "");
   if (!text) return "";
 
-  // Normaliza saltos
   text = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 
-  // ✅ Acepta espacios antes de los códigos (DXF típico: "  0", "  2")
-  // Busca: 0 SECTION 2 BLOCKS
   const reStart = /(?:^|\n)\s*0\s*\n\s*SECTION\s*\n\s*2\s*\n\s*BLOCKS\b/i;
   const m0 = reStart.exec(text);
   if (!m0) return "";
 
   const startIdx = m0.index;
 
-  // Busca ENDSEC desde ahí, tolerando espacios
   const reEnd = /(?:^|\n)\s*0\s*\n\s*ENDSEC\b/i;
   reEnd.lastIndex = startIdx;
   const m1 = reEnd.exec(text);
   if (!m1) return "";
 
-  const endIdx = m1.index + m1[0].length; // incluye ENDSEC
+  const endIdx = m1.index + m1[0].length;
   return text.slice(startIdx, endIdx);
 }
 
@@ -1180,7 +1167,6 @@ function diagExportDxf() {
     return;
   }
 
-  // ✅ usar blocksSection guardada al importar
   const blocksSection = String(appState.diagramas.dxfBlocksSection || "").trim();
 
   if (!blocksSection) {
@@ -1191,7 +1177,7 @@ function diagExportDxf() {
     return;
   }
 
-  const coords = _buildSchematicCoordsFromResult(r); // usa manualCoords si existen
+  const coords = _buildSchematicCoordsFromResult(r);
   if (!coords.size) {
     appState.diagramas.lastError = "No hay nodos en el resultado para exportar.";
     appState.diagramas.lastRaw = null;
@@ -1205,7 +1191,6 @@ function diagExportDxf() {
   const connections = Array.isArray(r.connections) ? r.connections : [];
   const ents = [];
 
-  // Headers zonas
   const zones = appState.diagramas.zones || [];
   const colW = 280,
     startX = 80,
@@ -1214,7 +1199,6 @@ function diagExportDxf() {
   ents.push(_dxfText(80, 20, 14, "DIAGRAMA RED UTP CAT6 (ESQUEMA)", "LABELS"));
   zones.forEach((z, i) => ents.push(_dxfText(startX + i * colW, titleY, 12, z.label, "LABELS")));
 
-  // Placements -> INSERT si icon_block válido
   for (const p of placements) {
     const pos = coords.get(p.id);
     if (!pos) continue;
@@ -1226,12 +1210,10 @@ function diagExportDxf() {
       ents.push(_dxfCircle(pos.x, pos.y, 10, "NODES"));
     }
 
-    // etiqueta
     const lbl = String(p.ref || p.id || "");
     ents.push(_dxfText(pos.x + 16, pos.y + 4, 10, lbl, "LABELS"));
   }
 
-  // Infra
   for (const n of infra) {
     const pos = coords.get(n.id);
     if (!pos) continue;
@@ -1239,7 +1221,6 @@ function diagExportDxf() {
     ents.push(_dxfText(pos.x + 16, pos.y + 4, 10, String(n.type || n.id), "LABELS"));
   }
 
-  // Cables
   for (const c of connections) {
     const a = coords.get(c.from);
     const b = coords.get(c.to);
@@ -1248,34 +1229,19 @@ function diagExportDxf() {
   }
 
   const dxf = [
-    "0",
-    "SECTION",
-    "2",
-    "HEADER",
-    "0",
-    "ENDSEC",
-    "0",
-    "SECTION",
-    "2",
-    "TABLES",
-    "0",
-    "ENDSEC",
+    "0","SECTION","2","HEADER","0","ENDSEC",
+    "0","SECTION","2","TABLES","0","ENDSEC",
     blocksSection,
-    "0",
-    "SECTION",
-    "2",
-    "ENTITIES",
+    "0","SECTION","2","ENTITIES",
     ents.join("\n"),
-    "0",
-    "ENDSEC",
-    "0",
-    "EOF",
+    "0","ENDSEC",
+    "0","EOF",
   ].join("\n");
 
   const nameBase = (appState.diagramas.dxfFileName || "diagrama").replace(/\.dxf$/i, "");
   const fileName = `${nameBase}_red_cat6_blocks.dxf`;
 
-    try {
+  try {
     const blob = new Blob([dxf], { type: "application/dxf" });
     const url = URL.createObjectURL(blob);
 
@@ -1287,7 +1253,6 @@ function diagExportDxf() {
 
     document.body.appendChild(a);
 
-    // Importante: forzar “user gesture” + dar tiempo al DOM
     requestAnimationFrame(() => {
       a.click();
       setTimeout(() => {
@@ -1301,9 +1266,7 @@ function diagExportDxf() {
     appState.diagramas.lastError = "No se pudo descargar el DXF (bloqueado por el navegador).";
     _renderResult();
   }
-
 }
-
 
 /* ======================================================
    7) Render UI
@@ -1380,8 +1343,9 @@ function _renderDiagramasUI() {
     `;
   }
 
+  // ✅ FIX layout: minmax(0,1fr) + min-width:0 en la columna derecha
   host.innerHTML = `
-    <div class="grid" style="display:grid; grid-template-columns: 360px 1fr; gap:14px;">
+    <div class="grid" style="display:grid; grid-template-columns: 360px minmax(0, 1fr); gap:14px; align-items:start;">
       <div class="card" style="padding:12px;">
         <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
           <h3 style="margin:0;">Referencias del proyecto</h3>
@@ -1439,9 +1403,9 @@ function _renderDiagramasUI() {
         </div>
       </div>
 
-      <div>
+      <div style="min-width:0;">
         <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
-          <div>
+          <div style="min-width:0;">
             <h3 style="margin:0;">Ubicación de dispositivos</h3>
             <div class="muted" style="font-size:12px;">Arrastra referencias a zonas. Usa AUTO para sugerir iconos. Genera diseño, edita posiciones y exporta DXF.</div>
           </div>
@@ -1467,11 +1431,11 @@ function _renderDiagramasUI() {
           </div>
         </div>
 
-        <div class="grid mt-3" style="display:grid; grid-template-columns: 1fr 1fr; gap:14px;">
+        <div class="grid mt-3" style="display:grid; grid-template-columns: 1fr 1fr; gap:14px; min-width:0;">
           ${s.zones.map(zoneHtml).join("")}
         </div>
 
-        <div class="mt-3" id="diagOutput"></div>
+        <div class="mt-3" id="diagOutput" style="min-width:0;"></div>
       </div>
     </div>
   `;
@@ -1542,12 +1506,12 @@ function _renderDiagramasUI() {
       node.addEventListener("change", () => {
         const v = Number(node.value || 1);
         _updateAssignment(zoneKey, id, { qty: Math.max(1, Number.isFinite(v) ? v : 1) });
-        _renderResult(); // refresca preview tras cambiar qty
+        _renderResult();
       });
     } else if (act === "icon") {
       node.addEventListener("change", () => {
         _updateAssignment(zoneKey, id, { iconBlock: String(node.value || "") });
-        _renderResult(); // refresca preview tras cambiar icono
+        _renderResult();
       });
     }
   });
@@ -1572,15 +1536,17 @@ function renderDiagramasView() {
     `;
     return;
   }
-// Restore DXF cache (evita volver a seleccionar el archivo)
-try {
-  if (!appState.diagramas.dxfBlocksSection) {
-    appState.diagramas.dxfFileName = localStorage.getItem("diag_dxf_fileName") || "";
-    appState.diagramas.dxfBlocksSection = localStorage.getItem("diag_dxf_blocksSection") || "";
+
+  // ✅ Restore DXF cache SOLO si es válido (evita quedarte con blocks=0)
+  try {
+    const sec = localStorage.getItem("diag_dxf_blocksSection") || "";
     const b = localStorage.getItem("diag_dxf_blocks");
-    if (b) appState.diagramas.dxfBlocks = JSON.parse(b) || [];
-  }
-} catch (_) {}
+    if (!appState.diagramas.dxfBlocksSection && sec && b) {
+      appState.diagramas.dxfFileName = localStorage.getItem("diag_dxf_fileName") || "";
+      appState.diagramas.dxfBlocksSection = sec;
+      appState.diagramas.dxfBlocks = JSON.parse(b) || [];
+    }
+  } catch (_) {}
 
   diagLoadProjectRefs();
 
