@@ -1275,20 +1275,33 @@ function diagExportDxf() {
   const nameBase = (appState.diagramas.dxfFileName || "diagrama").replace(/\.dxf$/i, "");
   const fileName = `${nameBase}_red_cat6_blocks.dxf`;
 
-  try {
+    try {
     const blob = new Blob([dxf], { type: "application/dxf" });
     const url = URL.createObjectURL(blob);
+
     const a = document.createElement("a");
     a.href = url;
     a.download = fileName;
+    a.style.display = "none";
+    a.rel = "noopener";
+
     document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1500);
+
+    // Importante: forzar “user gesture” + dar tiempo al DOM
+    requestAnimationFrame(() => {
+      a.click();
+      setTimeout(() => {
+        try { a.remove(); } catch (_) {}
+        try { URL.revokeObjectURL(url); } catch (_) {}
+      }, 2000);
+    });
+
   } catch (e) {
-    appState.diagramas.lastError = "No se pudo descargar el DXF.";
+    console.error(e);
+    appState.diagramas.lastError = "No se pudo descargar el DXF (bloqueado por el navegador).";
     _renderResult();
   }
+
 }
 
 
