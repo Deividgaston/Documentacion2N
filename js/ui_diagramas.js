@@ -1149,24 +1149,24 @@ function _extractDxfBlocksSection(dxfText) {
   let text = String(dxfText || "");
   if (!text) return "";
 
-  // Normaliza saltos de línea para que el slice sea consistente
+  // Normaliza saltos
   text = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 
-  // Busca inicio de SECTION/BLOCKS tolerando espacios
-  const reStart = /0\s*\nSECTION\s*\n\s*2\s*\nBLOCKS\b/i;
+  // ✅ Acepta espacios antes de los códigos (DXF típico: "  0", "  2")
+  // Busca: 0 SECTION 2 BLOCKS
+  const reStart = /(?:^|\n)\s*0\s*\n\s*SECTION\s*\n\s*2\s*\n\s*BLOCKS\b/i;
   const m0 = reStart.exec(text);
   if (!m0) return "";
 
   const startIdx = m0.index;
 
-  // Busca ENDSEC a partir del inicio (tolerando espacios)
-  const reEnd = /0\s*\nENDSEC\b/i;
+  // Busca ENDSEC desde ahí, tolerando espacios
+  const reEnd = /(?:^|\n)\s*0\s*\n\s*ENDSEC\b/i;
   reEnd.lastIndex = startIdx;
   const m1 = reEnd.exec(text);
   if (!m1) return "";
 
-  const endIdx = m1.index + m1[0].length; // incluye ENDSEC completo
-
+  const endIdx = m1.index + m1[0].length; // incluye ENDSEC
   return text.slice(startIdx, endIdx);
 }
 
