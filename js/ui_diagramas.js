@@ -582,6 +582,13 @@ async function diagImportDxfFile(file) {
   appState.diagramas.dxfText = "";
   appState.diagramas.dxfBlocks = [];
   appState.diagramas.dxfBlocksSection = ""; // <-- NUEVO
+  // Persistencia (para no tener que re-seleccionar el DXF)
+  try {
+    localStorage.setItem("diag_dxf_fileName", appState.diagramas.dxfFileName || "");
+    localStorage.setItem("diag_dxf_blocksSection", appState.diagramas.dxfBlocksSection || "");
+    localStorage.setItem("diag_dxf_blocks", JSON.stringify(appState.diagramas.dxfBlocks || []));
+  } catch (_) {}
+
 
   if (!/\.dxf$/i.test(file.name || "")) {
     appState.diagramas.lastError = "El archivo no parece DXF (.dxf).";
