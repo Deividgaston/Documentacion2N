@@ -1558,6 +1558,15 @@ function renderDiagramasView() {
     `;
     return;
   }
+// Restore DXF cache (evita volver a seleccionar el archivo)
+try {
+  if (!appState.diagramas.dxfBlocksSection) {
+    appState.diagramas.dxfFileName = localStorage.getItem("diag_dxf_fileName") || "";
+    appState.diagramas.dxfBlocksSection = localStorage.getItem("diag_dxf_blocksSection") || "";
+    const b = localStorage.getItem("diag_dxf_blocks");
+    if (b) appState.diagramas.dxfBlocks = JSON.parse(b) || [];
+  }
+} catch (_) {}
 
   diagLoadProjectRefs();
 
