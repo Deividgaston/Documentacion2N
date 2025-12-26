@@ -1253,13 +1253,25 @@ function diagExportDxf() {
   }
 
   // Si faltan HEADER/TABLES, metemos mínimos (pero lo ideal es siempre reutilizar plantilla)
-  const safeHeader = headerSection || [
-    "0","SECTION","2","HEADER",
-    "9","$ACADVER","1","AC1009",
-    "0","ENDSEC"
-  ].join("\n");
+ const safeHeader = headerSection || [
+  "0","SECTION","2","HEADER",
+  "9","$ACADVER","1","AC1027", // ⬅️ MUY IMPORTANTE
+  "0","ENDSEC"
+].join("\n");
 
-  const safeClasses = classesSection || ""; // opcional
+
+  const safeClasses = classesSection || [
+  "0","SECTION","2","CLASSES",
+  "0","CLASS",
+  "1","AcDbEntity",
+  "2","AcDbEntity",
+  "3","ObjectDBX Classes",
+  "90","0",
+  "280","0",
+  "281","0",
+  "0","ENDSEC"
+].join("\n");
+
 
   const safeTables = tablesSection || [
     "0","SECTION","2","TABLES",
@@ -1268,20 +1280,25 @@ function diagExportDxf() {
 
   const safeObjects = objectsSection || ""; // opcional
 
-  // ✅ Orden DXF recomendado: HEADER, CLASSES, TABLES, BLOCKS, ENTITIES, OBJECTS, EOF
-  const dxf = [
-    safeHeader,
-    safeClasses,
-    safeTables,
-    blocksSection,
-    "0","SECTION","2","ENTITIES",
-    ents.join("\n"),
-    "0","ENDSEC",
-    safeObjects,
-    "0","EOF",
-  ]
-    .filter((s) => String(s || "").trim() !== "")
-    .join("\n") + "\n";
+// HEADER / CLASSES / TABLES ya los tienes
+
+const safeObjects = objectsSection || [
+  "0","SECTION","2","OBJECTS",
+  "0","ENDSEC"
+].join("\n");
+
+const parts = [
+  safeHeader,
+  safeClasses,
+  safeTables,
+  blocksSection,
+  ["0","SECTION","2","ENTITIES", ents.join("\n"), "0","ENDSEC"].join("\n"),
+  safeObjects,
+  "0\nEOF"
+];
+
+const dxf = parts.join("\n") + "\n";
+
 
   const nameBase = (appState.diagramas.dxfFileName || "diagrama").replace(/\.dxf$/i, "");
   const fileName = `${nameBase}_red_cat6_blocks.dxf`;
