@@ -552,7 +552,7 @@ function _dxfExtractBlocks(pairs) {
   return blocks;
 }
 
-// Extrae el bloque SECTION/<NAME>...ENDSEC del DXF (robusto: \r\n, espacios)
+// Extrae el bloque SECTION/<NAME>...ENDSEC del DXF (robusto)
 function _extractDxfSection(dxfText, sectionName) {
   let text = String(dxfText || "");
   if (!text) return "";
@@ -562,20 +562,27 @@ function _extractDxfSection(dxfText, sectionName) {
   const name = String(sectionName || "").trim().toUpperCase();
   if (!name) return "";
 
-  const reStart = new RegExp(String.raw`(?:^|\n)\s*0\s*\n\s*SECTION\s*\n\s*2\s*\n\s*${name}\b`, "i");
+  // Encuentra el inicio de SECTION + nombre
+  const reStart = new RegExp(
+    String.raw`(?:^|\n)\s*0\s*\n\s*SECTION\s*\n\s*2\s*\n\s*${name}\b`,
+    "i"
+  );
   const m0 = reStart.exec(text);
   if (!m0) return "";
 
   const startIdx = m0.index;
 
-  const reEnd = /(?:^|\n)\s*0\s*\n\s*ENDSEC\b/i;
+  // MUY IMPORTANTE: usar /g/ para que lastIndex funcione
+  const reEnd = /(?:^|\n)\s*0\s*\n\s*ENDSEC\b/ig;
   reEnd.lastIndex = startIdx;
+
   const m1 = reEnd.exec(text);
   if (!m1) return "";
 
   const endIdx = m1.index + m1[0].length;
   return text.slice(startIdx, endIdx);
 }
+
 
 async function diagImportDxfFile(file) {
   if (!file) return;
