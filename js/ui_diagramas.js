@@ -12,6 +12,10 @@
 // - Guardar HEADER/TABLES/BLOCKS desde la plantilla DXF y reutilizarlos al exportar (evita errores APPID/330/210/PAPER_SPACE)
 // - Import DXF: detectar binario por null-bytes, no por "nonPrintable"
 // - Preview: evitar que el grid expanda el ancho (min-width:0) + SVG width=100%
+//
+// FIX adicional (DXF válido en AutoCAD):
+// - Reutilizar también CLASSES y OBJECTS si existen en la plantilla (AutoCAD a veces los exige)
+// - Eliminar BOM (\uFEFF) al leer DXF para que el extractor de secciones no falle
 
 window.appState = window.appState || {};
 appState.diagramas = appState.diagramas || {
@@ -21,8 +25,10 @@ appState.diagramas = appState.diagramas || {
 
   // Secciones DXF plantilla cacheadas para export "válido"
   dxfHeaderSection: "",
+  dxfClassesSection: "",   // ✅ NUEVO
   dxfTablesSection: "",
   dxfBlocksSection: "",
+  dxfObjectsSection: "",   // ✅ NUEVO
 
   refs: [],
   refsSearch: "",
@@ -491,8 +497,14 @@ function diagLoadProjectRefs() {
 /* ======================================================
    2) DXF blocks
  ====================================================== */
+
+// ✅ strip BOM si viene en el texto del DXF
+function _stripBom(s) {
+  return String(s || "").replace(/^\uFEFF/, "");
+}
+
 function _dxfToPairs(dxfText) {
-  const lines = String(dxfText || "")
+  const lines = _stripBom(String(dxfText || ""))
     .replace(/\r\n/g, "\n")
     .replace(/\r/g, "\n")
     .split("\n");
@@ -554,7 +566,7 @@ function _dxfExtractBlocks(pairs) {
 
 // Extrae el bloque SECTION/<NAME>...ENDSEC del DXF (robusto)
 function _extractDxfSection(dxfText, sectionName) {
-  let text = String(dxfText || "");
+  let text = _stripBom(String(dxfText || ""));
   if (!text) return "";
 
   text = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
@@ -590,8 +602,10 @@ async function diagImportDxfFile(file) {
   appState.diagramas.dxfText = "";
   appState.diagramas.dxfBlocks = [];
   appState.diagramas.dxfHeaderSection = "";
+  appState.diagramas.dxfClassesSection = "";
   appState.diagramas.dxfTablesSection = "";
   appState.diagramas.dxfBlocksSection = "";
+  appState.diagramas.dxfObjectsSection = "";
 
   if (!/\.dxf$/i.test(file.name || "")) {
     appState.diagramas.lastError = "El archivo no parece DXF (.dxf).";
@@ -600,11 +614,12 @@ async function diagImportDxfFile(file) {
   }
 
   try {
-    const text = await file.text();
+    const text0 = await file.text();
 
     // ✅ Mejor detector binario: null-bytes (evita falsos positivos por UTF8/BOM)
-    if (/\x00/.test(text)) throw new Error("DXF parece binario. Exporta como DXF ASCII.");
+    if (/\x00/.test(text0)) throw new Error("DXF parece binario. Exporta como DXF ASCII.");
 
+    const text = _stripBom(text0);
     appState.diagramas.dxfText = text;
 
     const pairs = _dxfToPairs(text);
@@ -613,8 +628,10 @@ async function diagImportDxfFile(file) {
 
     // Guardar secciones completas de la plantilla (clave para export válido)
     appState.diagramas.dxfHeaderSection = _extractDxfSection(text, "HEADER") || "";
+    appState.diagramas.dxfClassesSection = _extractDxfSection(text, "CLASSES") || ""; // ✅ NUEVO
     appState.diagramas.dxfTablesSection = _extractDxfSection(text, "TABLES") || "";
     appState.diagramas.dxfBlocksSection = _extractDxfSection(text, "BLOCKS") || "";
+    appState.diagramas.dxfObjectsSection = _extractDxfSection(text, "OBJECTS") || ""; // ✅ NUEVO
 
     if (!appState.diagramas.dxfBlocksSection) {
       throw new Error("El DXF no contiene SECTION/BLOCKS (o no está en formato ASCII esperado).");
@@ -628,8 +645,10 @@ async function diagImportDxfFile(file) {
       localStorage.setItem("diag_dxf_fileName", appState.diagramas.dxfFileName || "");
       localStorage.setItem("diag_dxf_blocks", JSON.stringify(appState.diagramas.dxfBlocks || []));
       localStorage.setItem("diag_dxf_headerSection", appState.diagramas.dxfHeaderSection || "");
+      localStorage.setItem("diag_dxf_classesSection", appState.diagramas.dxfClassesSection || "");
       localStorage.setItem("diag_dxf_tablesSection", appState.diagramas.dxfTablesSection || "");
       localStorage.setItem("diag_dxf_blocksSection", appState.diagramas.dxfBlocksSection || "");
+      localStorage.setItem("diag_dxf_objectsSection", appState.diagramas.dxfObjectsSection || "");
     } catch (_) {}
 
     _renderDiagramasUI();
@@ -1118,7 +1137,7 @@ async function diagGenerateDesign() {
 }
 
 /* ======================================================
-   6) Export DXF (usar plantilla HEADER+TABLES+BLOCKS + ENTITIES generado)
+   6) Export DXF (usar plantilla HEADER+CLASSES+TABLES+BLOCKS + ENTITIES + OBJECTS)
  ====================================================== */
 function _dxfLine(x1, y1, x2, y2, layer = "CABLE") {
   return [
@@ -1156,8 +1175,10 @@ function diagExportDxf() {
 
   // ✅ REUTILIZAR secciones de la plantilla (clave para que el CAD reconozca BLOCKS correctamente)
   const headerSection = String(appState.diagramas.dxfHeaderSection || "").trim();
+  const classesSection = String(appState.diagramas.dxfClassesSection || "").trim();
   const tablesSection = String(appState.diagramas.dxfTablesSection || "").trim();
   const blocksSection = String(appState.diagramas.dxfBlocksSection || "").trim();
+  const objectsSection = String(appState.diagramas.dxfObjectsSection || "").trim();
 
   if (!blocksSection) {
     appState.diagramas.lastError =
@@ -1238,20 +1259,29 @@ function diagExportDxf() {
     "0","ENDSEC"
   ].join("\n");
 
+  const safeClasses = classesSection || ""; // opcional
+
   const safeTables = tablesSection || [
     "0","SECTION","2","TABLES",
     "0","ENDSEC"
   ].join("\n");
 
+  const safeObjects = objectsSection || ""; // opcional
+
+  // ✅ Orden DXF recomendado: HEADER, CLASSES, TABLES, BLOCKS, ENTITIES, OBJECTS, EOF
   const dxf = [
     safeHeader,
+    safeClasses,
     safeTables,
     blocksSection,
     "0","SECTION","2","ENTITIES",
     ents.join("\n"),
     "0","ENDSEC",
+    safeObjects,
     "0","EOF",
-  ].join("\n");
+  ]
+    .filter((s) => String(s || "").trim() !== "")
+    .join("\n") + "\n";
 
   const nameBase = (appState.diagramas.dxfFileName || "diagrama").replace(/\.dxf$/i, "");
   const fileName = `${nameBase}_red_cat6_blocks.dxf`;
@@ -1545,8 +1575,10 @@ function renderDiagramasView() {
       if (b) appState.diagramas.dxfBlocks = JSON.parse(b) || [];
 
       appState.diagramas.dxfHeaderSection = localStorage.getItem("diag_dxf_headerSection") || "";
+      appState.diagramas.dxfClassesSection = localStorage.getItem("diag_dxf_classesSection") || "";
       appState.diagramas.dxfTablesSection = localStorage.getItem("diag_dxf_tablesSection") || "";
       appState.diagramas.dxfBlocksSection = localStorage.getItem("diag_dxf_blocksSection") || "";
+      appState.diagramas.dxfObjectsSection = localStorage.getItem("diag_dxf_objectsSection") || "";
     }
   } catch (_) {}
 
