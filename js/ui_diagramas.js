@@ -1110,6 +1110,7 @@ async function diagGenerateDesign() {
    6) ✅ Export SCR (Opción A): SIN CAPAS
    - Multi-idioma (no depende de -LAYER/-CAPA ni subopciones "M/S")
    - Evita bloqueos por atributos: ATTDIA/ATTREQ
+   - ✅ Rellena AI_KEY (atributo) en la inserción
  ====================================================== */
 function diagExportScr() {
   const r = appState.diagramas.lastResult;
@@ -1160,8 +1161,13 @@ function diagExportScr() {
   scr.push("0");
   scr.push("._ATTDIA");
   scr.push("0");
+
+  // IMPORTANTE:
+  // - Para poder inyectar valores de atributos en -INSERT, el comando debe pedirlos.
+  //   Eso ocurre con ATTREQ=1.
+  // - Si lo pones a 0, NO pedirá atributos y no podremos rellenar AI_KEY.
   scr.push("._ATTREQ");
-  scr.push("0");
+  scr.push("1");
 
   // Helpers
   function scrText(x, y, h, rotDeg, text) {
@@ -1186,16 +1192,48 @@ function diagExportScr() {
     scr.push(String(Number(r0).toFixed(3)));
   }
 
- function scrInsert(blockName, x, y, scale, rotDeg) {
-  const bn = String(blockName || "").replaceAll('"', ''); // evita comillas dobles raras
-  scr.push("._-INSERT");
-  scr.push(`"${bn}"`); // ✅ clave: comillas para nombres con espacios
-  scr.push(`${Number(x).toFixed(3)},${Number(y).toFixed(3)}`);
-  scr.push(String(Number(scale || 1).toFixed(3)));
-  scr.push(String(Number(scale || 1).toFixed(3)));
-  scr.push(String(Number(rotDeg || 0).toFixed(3)));
-}
+  // ✅ Construcción del valor AI_KEY (simple y estable)
+  function _buildAiKeyForPlacement(p) {
+    // Si ya viene algo desde IA, lo respetamos
+    const aiKey = p?.meta?.AI_KEY || p?.meta?.ai_key || p?.ai_key || p?.AI_KEY;
+    if (String(aiKey || "").trim()) return String(aiKey).trim();
 
+    // Default: TYPE por heurística + SKU = ref
+    const ref = String(p?.ref || "").trim();
+    const desc = String(p?.descripcion || p?.description || "").toUpperCase();
+    const blk = String(p?.icon_block || p?.iconBlock || "").toUpperCase();
+    const s = `${ref} ${desc} ${blk}`;
+
+    let type = "DISPOSITIVO";
+    if (s.includes("INDOOR") || s.includes("MONITOR") || s.includes("TOUCH") || s.includes("CLIP")) type = "MONITOR";
+    if (s.includes("ACCESS") || s.includes("UNIT") || s.includes("READER") || s.includes("RFID") || s.includes("BLE")) type = "CONTROL_ACCESO";
+    if (s.includes("SWITCH")) type = "SWITCH";
+    if (s.includes("ROUTER") || s.includes("GATEWAY")) type = "ROUTER";
+    if (s.includes("IP STYLE") || s.includes("IPSTYLE") || s.includes("VERSO") || s.includes("IP ONE") || s.includes("IPONE")) type = "VIDEOPORTERO";
+
+    return `TYPE=${type};SKU=${ref}`;
+  }
+
+  // ✅ INSERT que inyecta 1 atributo (AI_KEY) y cierra con ENTER
+  // Nota: AutoCAD pide valores de atributos en el orden de definición del bloque.
+  // En tu caso, has indicado que todos los bloques tienen el atributo AI_KEY -> OK.
+  function scrInsertWithAiKey(blockName, x, y, scale, rotDeg, aiKeyValue) {
+    const bn = String(blockName || "").replaceAll('"', "").trim(); // evita comillas dobles raras
+    const v = String(aiKeyValue || "").replaceAll("\n", " ").replaceAll("\r", " ");
+
+    scr.push("._-INSERT");
+    scr.push(`"${bn}"`); // ✅ clave: comillas para nombres con espacios
+    scr.push(`${Number(x).toFixed(3)},${Number(y).toFixed(3)}`);
+    scr.push(String(Number(scale || 1).toFixed(3)));
+    scr.push(String(Number(scale || 1).toFixed(3)));
+    scr.push(String(Number(rotDeg || 0).toFixed(3)));
+
+    // ✅ Valor para AI_KEY (atributo 1)
+    scr.push(v);
+
+    // ✅ Cerrar entrada de atributos / finalizar inserción
+    scr.push("");
+  }
 
   // Título + zonas (sin capas)
   const zones = appState.diagramas.zones || [];
@@ -1220,13 +1258,17 @@ function diagExportScr() {
     const wanted = String(p.icon_block || p.iconBlock || "").trim();
     const resolved = wanted ? (blockMap.get(_normBlockName(wanted)) || "") : "";
 
-    if (resolved) scrInsert(resolved, pos.x, pos.y, 1, 0);
-    else scrCircle(pos.x, pos.y, 10);
+    if (resolved) {
+      const aiKey = _buildAiKeyForPlacement(p);
+      scrInsertWithAiKey(resolved, pos.x, pos.y, 1, 0, aiKey);
+    } else {
+      scrCircle(pos.x, pos.y, 10);
+    }
 
     scrText(pos.x + 16, pos.y + 4, 10, 0, String(p.ref || p.id || ""));
   }
 
-  // Infra
+  // Infra (sin insert de blocks)
   for (const n of infra) {
     const pos = coords.get(n.id);
     if (!pos) continue;
