@@ -1186,15 +1186,16 @@ function diagExportScr() {
     scr.push(String(Number(r0).toFixed(3)));
   }
 
-  function scrInsert(blockName, x, y, scale, rotDeg) {
-    // -INSERT block point xscale yscale rotation
-    scr.push("._-INSERT");
-    scr.push(String(blockName));
-    scr.push(`${Number(x).toFixed(3)},${Number(y).toFixed(3)}`);
-    scr.push(String(Number(scale || 1).toFixed(3)));
-    scr.push(String(Number(scale || 1).toFixed(3)));
-    scr.push(String(Number(rotDeg || 0).toFixed(3)));
-  }
+ function scrInsert(blockName, x, y, scale, rotDeg) {
+  const bn = String(blockName || "").replaceAll('"', ''); // evita comillas dobles raras
+  scr.push("._-INSERT");
+  scr.push(`"${bn}"`); // ✅ clave: comillas para nombres con espacios
+  scr.push(`${Number(x).toFixed(3)},${Number(y).toFixed(3)}`);
+  scr.push(String(Number(scale || 1).toFixed(3)));
+  scr.push(String(Number(scale || 1).toFixed(3)));
+  scr.push(String(Number(rotDeg || 0).toFixed(3)));
+}
+
 
   // Título + zonas (sin capas)
   const zones = appState.diagramas.zones || [];
