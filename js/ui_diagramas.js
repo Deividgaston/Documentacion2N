@@ -1128,6 +1128,7 @@ function _dxfText(x, y, h, text, layer = "LABELS") {
     .replace(/\r?\n/g, " ")
     .replace(/\t/g, " ");
 
+  // TEXT "simple" (sin alineaciones 72/73 ni punto 11/21/31)
   return [
     "0","TEXT",
     "100","AcDbEntity",
@@ -1138,13 +1139,10 @@ function _dxfText(x, y, h, text, layer = "LABELS") {
     "1",t,
     "50","0",
     "7","STANDARD",
-    "72","0",
-    "73","0",
-    // alignment point (muchos DXF lo esperan aunque sea igual que 10/20)
-    "11",String(x),"21",String(y),"31","0",
     "100","AcDbText"
   ].join("\n");
 }
+
 
 function _dxfInsert(blockName, x, y, layer = "NODES", scale = 1, rotationDeg = 0) {
   const b = String(blockName || "").trim();
