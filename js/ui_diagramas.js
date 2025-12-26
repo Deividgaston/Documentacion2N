@@ -1136,9 +1136,15 @@ function _dxfText(x, y, h, text, layer = "LABELS") {
     "100","AcDbText",
     "10",String(x),"20",String(y),"30","0",
     "40",String(h),
-    "1",t
+    "1",t,
+    "7","STANDARD",   // style
+    "50","0",          // rotation
+    "41","1",          // x-scale
+    "72","0",          // h-align (left)
+    "73","0"           // v-align (baseline)
   ].join("\n");
 }
+
 function _dxfInsert(blockName, x, y, layer = "NODES", scale = 1, rotationDeg = 0) {
   const b = String(blockName || "").trim();
   return [
