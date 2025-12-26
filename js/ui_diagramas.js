@@ -4,6 +4,7 @@
 // - Mantiene todo lo actual
 // - ✅ NUEVO (opción más simple/robusta): Export SCR (AutoCAD SCRIPT) -> inserta BLOCKS + cables + textos SOBRE tu plantilla
 // - ✅ FIX: evitar "Identifier safeObjects already declared" (solo 1 declaración)
+// - ✅ FIX DXF REAL: añadir HANDLE (grupo 5) a entidades (algunos lectores lo exigen) + TEXT ultra-simple
 
 window.appState = window.appState || {};
 appState.diagramas = appState.diagramas || {
@@ -1107,47 +1108,64 @@ async function diagGenerateDesign() {
 /* ======================================================
    6) Export DXF (se mantiene) + ✅ NUEVO Export SCR (recomendado)
  ====================================================== */
+
+// ======================================================
+// ✅ NUEVO: DXF HANDLEs (algunos lectores lo exigen)
+// ======================================================
+let _dxfHandleSeq = 0x100;
+function _dxfNextHandle() {
+  _dxfHandleSeq += 1;
+  return _dxfHandleSeq.toString(16).toUpperCase();
+}
+
 function _dxfLine(x1, y1, x2, y2, layer = "CABLE") {
+  const h = _dxfNextHandle();
   return [
-    "0","LINE","8",layer,
+    "0","LINE",
+    "5",h,
+    "8",layer,
     "10",String(x1),"20",String(y1),"30","0",
     "11",String(x2),"21",String(y2),"31","0",
   ].join("\n");
 }
+
 function _dxfCircle(x, y, r, layer = "NODES") {
-  return ["0","CIRCLE","8",layer,"10",String(x),"20",String(y),"30","0","40",String(r)].join("\n");
+  const h = _dxfNextHandle();
+  return [
+    "0","CIRCLE",
+    "5",h,
+    "8",layer,
+    "10",String(x),"20",String(y),"30","0",
+    "40",String(r)
+  ].join("\n");
 }
 
-/**
- * ✅ FIX REAL (máxima compatibilidad):
- * - NO usar subclass markers (100/AcDbEntity/AcDbText)
- * - Generar TEXT "clásico" para que AutoCAD no rechace el DXF.
- */
-function _dxfText(x, y, h, text, layer = "LABELS") {
+// ✅ TEXT ultra-simple + HANDLE (sin 100/AcDb* para máxima compatibilidad)
+function _dxfText(x, y, hgt, text, layer = "LABELS") {
+  const h = _dxfNextHandle();
   const t = String(text || "")
     .replace(/\r?\n/g, " ")
     .replace(/\t/g, " ");
 
-  // TEXT "simple" (sin alineaciones 72/73 ni punto 11/21/31)
   return [
     "0","TEXT",
-    "100","AcDbEntity",
+    "5",h,
     "8",layer,
-    "100","AcDbText",
     "10",String(x),"20",String(y),"30","0",
-    "40",String(h),
+    "40",String(hgt),
     "1",t,
     "50","0",
-    "7","STANDARD",
-    "100","AcDbText"
+    "7","STANDARD"
   ].join("\n");
 }
 
-
 function _dxfInsert(blockName, x, y, layer = "NODES", scale = 1, rotationDeg = 0) {
+  const h = _dxfNextHandle();
   const b = String(blockName || "").trim();
   return [
-    "0","INSERT","8",layer,
+    "0","INSERT",
+    "5",h,
+    "8",layer,
     "2",b,
     "10",String(x),"20",String(y),"30","0",
     "41",String(scale),"42",String(scale),"43",String(scale),
@@ -1163,6 +1181,9 @@ function diagExportDxf() {
     _renderResult();
     return;
   }
+
+  // ✅ reset handles por export (consistente)
+  _dxfHandleSeq = 0x100;
 
   const headerSection  = String(appState.diagramas.dxfHeaderSection  || "").trim();
   const classesSection = String(appState.diagramas.dxfClassesSection || "").trim();
