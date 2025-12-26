@@ -1,21 +1,9 @@
 // js/ui_diagramas.js
 // Vista: DIAGRAMAS (IA)
-// V2.6 (Hito 16):
-// - Preview SVG + JSON (RECUPERADO)
-// - Preview editable: arrastrar y soltar nodos para asignar posiciones
-// - Parse robusto + raw visible
-// - Fallback LOCAL: si la IA no devuelve JSON, generamos topología jerárquica (Cat6) determinista
-//   (devices -> switches por zona -> core -> router en Armario/CPD si existe)
-// - Export DXF: usa INSERT de BLOCKS (si icon_block existe), y coords manuales si el usuario las movió
-//
-// FIX (DXF export/import + layout):
-// - Guardar HEADER/TABLES/BLOCKS desde la plantilla DXF y reutilizarlos al exportar (evita errores APPID/330/210/PAPER_SPACE)
-// - Import DXF: detectar binario por null-bytes, no por "nonPrintable"
-// - Preview: evitar que el grid expanda el ancho (min-width:0) + SVG width=100%
-//
-// FIX adicional (DXF válido en AutoCAD):
-// - Reutilizar también CLASSES y OBJECTS si existen en la plantilla (AutoCAD a veces los exige)
-// - Eliminar BOM (\uFEFF) al leer DXF para que el extractor de secciones no falle
+// V2.7 (Hito 16+):
+// - Mantiene todo lo actual
+// - ✅ NUEVO (opción más simple/robusta): Export SCR (AutoCAD SCRIPT) -> inserta BLOCKS + cables + textos SOBRE tu plantilla
+// - ✅ FIX: evitar "Identifier safeObjects already declared" (solo 1 declaración)
 
 window.appState = window.appState || {};
 appState.diagramas = appState.diagramas || {
@@ -25,10 +13,10 @@ appState.diagramas = appState.diagramas || {
 
   // Secciones DXF plantilla cacheadas para export "válido"
   dxfHeaderSection: "",
-  dxfClassesSection: "",   // ✅ NUEVO
+  dxfClassesSection: "",
   dxfTablesSection: "",
   dxfBlocksSection: "",
-  dxfObjectsSection: "",   // ✅ NUEVO
+  dxfObjectsSection: "",
 
   refs: [],
   refsSearch: "",
@@ -47,10 +35,9 @@ appState.diagramas = appState.diagramas || {
   customPromptText: "",
 
   // Preview positions
-  previewEditMode: false, // editar posiciones
-  manualCoords: {},       // id -> {x,y}
+  previewEditMode: false,
+  manualCoords: {},
 
-  // NUEVO: el “result” que está pintando el preview (puede ser previewOnly)
   _previewResult: null,
 
   lastResult: null,
@@ -83,7 +70,6 @@ function _setBusy(b) {
   if (sp) sp.style.display = b ? "" : "none";
 }
 
-// FIX: limpiar errores cuando el usuario cambia asignaciones / iconos, etc.
 function _clearDiagError() {
   appState.diagramas.lastError = null;
   appState.diagramas.lastRaw = null;
@@ -91,7 +77,6 @@ function _clearDiagError() {
 
 /* ======================================================
    Preview SVG (esquemático) basado en coords
-   - Soporta coords manuales (drag)
  ====================================================== */
 
 function _buildSchematicCoordsFromResult(result) {
@@ -125,9 +110,11 @@ function _buildSchematicCoordsFromResult(result) {
     const zone = String(p.zone || "entrada_principal");
     const label = `${p.ref || p.id || ""}${p.qty ? ` x${p.qty}` : ""}`;
 
-    // coords manuales si existen, si no: auto
     const m = manual[p.id];
-    const pos = m && Number.isFinite(m.x) && Number.isFinite(m.y) ? { x: m.x, y: m.y } : nextPos(zone);
+    const pos =
+      m && Number.isFinite(m.x) && Number.isFinite(m.y)
+        ? { x: m.x, y: m.y }
+        : nextPos(zone);
 
     map.set(p.id, { x: pos.x, y: pos.y, label, kind: "placement", zone });
   }
@@ -137,7 +124,10 @@ function _buildSchematicCoordsFromResult(result) {
     const label = `${n.type || n.id || ""}`;
 
     const m = manual[n.id];
-    const pos = m && Number.isFinite(m.x) && Number.isFinite(m.y) ? { x: m.x, y: m.y } : nextPos(zone);
+    const pos =
+      m && Number.isFinite(m.x) && Number.isFinite(m.y)
+        ? { x: m.x, y: m.y }
+        : nextPos(zone);
 
     map.set(n.id, { x: pos.x, y: pos.y, label, kind: "infra", zone });
   }
@@ -153,9 +143,7 @@ function _renderPreviewSvg(result) {
   const colW = 280;
   const startX = 80;
 
-  // helper: icono “lógico” para preview (NO DXF real)
   function _iconForNode(id, p) {
-    // infra
     if (p.kind === "infra") {
       const r = appState.diagramas.lastResult || {};
       const infra = Array.isArray(r.infra) ? r.infra : [];
@@ -167,7 +155,6 @@ function _renderPreviewSvg(result) {
       return "⬛";
     }
 
-    // placements
     const r = appState.diagramas.lastResult || {};
     const placements = Array.isArray(r.placements) ? r.placements : [];
     const it = placements.find((x) => String(x.id) === String(id));
@@ -188,14 +175,12 @@ function _renderPreviewSvg(result) {
     return "●";
   }
 
-  // Bounding box para tamaño SVG
   let maxX = 0, maxY = 0;
   for (const [, p] of coords.entries()) {
     if (p.x > maxX) maxX = p.x;
     if (p.y > maxY) maxY = p.y;
   }
 
-  // OJO: width "lógico" para viewBox, NO debe forzar el ancho real de la página
   const vbW = Math.max(900, maxX + 320);
   const vbH = Math.max(420, maxY + 180);
 
@@ -210,7 +195,6 @@ function _renderPreviewSvg(result) {
     })
     .join("");
 
-  // Nodos: icono + label. Draggable en edit mode
   const nodes = Array.from(coords.entries())
     .map(([id, p]) => {
       const isInfra = p.kind === "infra";
@@ -268,7 +252,7 @@ function _renderPreviewSvg(result) {
       </div>
 
       <div class="muted mt-2" style="font-size:12px;">
-        Tip: mueve dispositivos y luego exporta DXF para que salgan en esas posiciones (en DXF se usarán los BLOCKS).
+        Tip: mueve dispositivos y luego exporta. Recomendado: <b>SCR</b> (SCRIPT) sobre la plantilla.
       </div>
     </div>
   `;
@@ -497,8 +481,6 @@ function diagLoadProjectRefs() {
 /* ======================================================
    2) DXF blocks
  ====================================================== */
-
-// ✅ strip BOM si viene en el texto del DXF
 function _stripBom(s) {
   return String(s || "").replace(/^\uFEFF/, "");
 }
@@ -564,7 +546,6 @@ function _dxfExtractBlocks(pairs) {
   return blocks;
 }
 
-// Extrae el bloque SECTION/<NAME>...ENDSEC del DXF (robusto)
 function _extractDxfSection(dxfText, sectionName) {
   let text = _stripBom(String(dxfText || ""));
   if (!text) return "";
@@ -615,8 +596,6 @@ async function diagImportDxfFile(file) {
 
   try {
     const text0 = await file.text();
-
-    // ✅ Mejor detector binario: null-bytes (evita falsos positivos por UTF8/BOM)
     if (/\x00/.test(text0)) throw new Error("DXF parece binario. Exporta como DXF ASCII.");
 
     const text = _stripBom(text0);
@@ -626,7 +605,6 @@ async function diagImportDxfFile(file) {
     const blocks = _dxfExtractBlocks(pairs);
     appState.diagramas.dxfBlocks = blocks.sort((a, b) => a.localeCompare(b));
 
-    // Guardar secciones completas de la plantilla (clave para export válido)
     appState.diagramas.dxfHeaderSection = _extractDxfSection(text, "HEADER") || "";
     appState.diagramas.dxfClassesSection = _extractDxfSection(text, "CLASSES") || "";
     appState.diagramas.dxfTablesSection = _extractDxfSection(text, "TABLES") || "";
@@ -636,11 +614,7 @@ async function diagImportDxfFile(file) {
     if (!appState.diagramas.dxfBlocksSection) {
       throw new Error("El DXF no contiene SECTION/BLOCKS (o no está en formato ASCII esperado).");
     }
-    if (!appState.diagramas.dxfHeaderSection || !appState.diagramas.dxfTablesSection) {
-      console.warn("DXF plantilla sin HEADER/TABLES completos; el export puede fallar en algunos CAD.");
-    }
 
-    // ✅ Persistencia SOLO cuando ya está cargado bien
     try {
       localStorage.setItem("diag_dxf_fileName", appState.diagramas.dxfFileName || "");
       localStorage.setItem("diag_dxf_blocks", JSON.stringify(appState.diagramas.dxfBlocks || []));
@@ -674,9 +648,7 @@ function _onRefDragStart(ev, ref) {
 
 function _onZoneDragOver(ev) {
   ev.preventDefault();
-  try {
-    ev.dataTransfer.dropEffect = "copy";
-  } catch (_) {}
+  try { ev.dataTransfer.dropEffect = "copy"; } catch (_) {}
   const zone = ev.currentTarget;
   if (zone) zone.classList.add("is-drag-over");
 }
@@ -692,11 +664,9 @@ function _onZoneDrop(ev, zoneKey) {
   if (zone) zone.classList.remove("is-drag-over");
 
   let ref = "";
-  try {
-    ref = ev.dataTransfer.getData("text/plain") || "";
-  } catch (_) {
-    ref = _dragRefKey || "";
-  }
+  try { ref = ev.dataTransfer.getData("text/plain") || ""; }
+  catch (_) { ref = _dragRefKey || ""; }
+
   ref = String(ref || "").trim();
   if (!ref) return;
 
@@ -704,8 +674,8 @@ function _onZoneDrop(ev, zoneKey) {
   if (!source) return;
 
   const list = (appState.diagramas.assignments[zoneKey] = appState.diagramas.assignments[zoneKey] || []);
-
   const existing = list.find((x) => x.ref === ref);
+
   if (existing) {
     existing.qty = Number(existing.qty || 0) + 1;
   } else {
@@ -738,7 +708,6 @@ function _updateAssignment(zoneKey, id, patch) {
   const it = list.find((x) => x.id === id);
   if (!it) return;
   Object.assign(it, patch);
-
   _clearDiagError();
 }
 
@@ -805,7 +774,6 @@ function diagAutoAssignIcons() {
 /* ======================================================
    5) Payload base (para IA y para fallback local)
  ====================================================== */
-
 function _defaultInstructions() {
   return `
 RESPONDE ÚNICAMENTE CON JSON (sin markdown, sin \`\`\`, sin texto).
@@ -1137,7 +1105,7 @@ async function diagGenerateDesign() {
 }
 
 /* ======================================================
-   6) Export DXF (usar plantilla HEADER+CLASSES+TABLES+BLOCKS + ENTITIES + OBJECTS)
+   6) Export DXF (se mantiene) + ✅ NUEVO Export SCR (recomendado)
  ====================================================== */
 function _dxfLine(x1, y1, x2, y2, layer = "CABLE") {
   return [
@@ -1173,7 +1141,6 @@ function diagExportDxf() {
     return;
   }
 
-  // ✅ REUTILIZAR secciones de la plantilla
   const headerSection  = String(appState.diagramas.dxfHeaderSection  || "").trim();
   const classesSection = String(appState.diagramas.dxfClassesSection || "").trim();
   const tablesSection  = String(appState.diagramas.dxfTablesSection  || "").trim();
@@ -1182,7 +1149,7 @@ function diagExportDxf() {
 
   if (!blocksSection) {
     appState.diagramas.lastError =
-      "Para exportar con iconos (BLOCKS) tienes que cargar antes la plantilla DXF ASCII que contenga SECTION/BLOCKS (selecciona el archivo DXF otra vez).";
+      "Para exportar DXF con iconos (BLOCKS) tienes que cargar antes la plantilla DXF ASCII (selecciona el archivo DXF).";
     appState.diagramas.lastRaw = null;
     _renderResult();
     return;
@@ -1196,7 +1163,6 @@ function diagExportDxf() {
     return;
   }
 
-  // ✅ Match de blocks robusto (case-insensitive + trim)
   function _normBlockName(s) {
     return String(s || "").trim().toLowerCase();
   }
@@ -1217,7 +1183,6 @@ function diagExportDxf() {
   ents.push(_dxfText(80, 20, 14, "DIAGRAMA RED UTP CAT6 (ESQUEMA)", "LABELS"));
   zones.forEach((z, i) => ents.push(_dxfText(startX + i * colW, titleY, 12, z.label, "LABELS")));
 
-  // Placements -> INSERT si icon_block existe en plantilla
   for (const p of placements) {
     const pos = coords.get(p.id);
     if (!pos) continue;
@@ -1225,17 +1190,13 @@ function diagExportDxf() {
     const wanted = String(p.icon_block || p.iconBlock || "").trim();
     const resolved = wanted ? (blockMap.get(_normBlockName(wanted)) || "") : "";
 
-    if (resolved) {
-      ents.push(_dxfInsert(resolved, pos.x, pos.y, "NODES", 1, 0));
-    } else {
-      ents.push(_dxfCircle(pos.x, pos.y, 10, "NODES"));
-    }
+    if (resolved) ents.push(_dxfInsert(resolved, pos.x, pos.y, "NODES", 1, 0));
+    else ents.push(_dxfCircle(pos.x, pos.y, 10, "NODES"));
 
     const lbl = String(p.ref || p.id || "");
     ents.push(_dxfText(pos.x + 16, pos.y + 4, 10, lbl, "LABELS"));
   }
 
-  // Infra
   for (const n of infra) {
     const pos = coords.get(n.id);
     if (!pos) continue;
@@ -1243,7 +1204,6 @@ function diagExportDxf() {
     ents.push(_dxfText(pos.x + 16, pos.y + 4, 10, String(n.type || n.id), "LABELS"));
   }
 
-  // Cables
   for (const c of connections) {
     const a = coords.get(c.from);
     const b = coords.get(c.to);
@@ -1251,14 +1211,12 @@ function diagExportDxf() {
     ents.push(_dxfLine(a.x, a.y, b.x, b.y, "CABLE"));
   }
 
-  // ✅ Fallbacks seguros
   const safeHeader = headerSection || [
     "0","SECTION","2","HEADER",
     "9","$ACADVER","1","AC1027",
     "0","ENDSEC"
   ].join("\n");
 
-  // ✅ CLASSES: si no viene de plantilla, lo más seguro es vacío
   const safeClasses = classesSection || [
     "0","SECTION","2","CLASSES",
     "0","ENDSEC"
@@ -1269,7 +1227,7 @@ function diagExportDxf() {
     "0","ENDSEC"
   ].join("\n");
 
-  // ✅ OBJECTS siempre como sección completa (mínimo seguro)
+  // ✅ FIX: SOLO una declaración (evita error "already been declared")
   const safeObjects = objectsSection || [
     "0","SECTION","2","OBJECTS",
     "0","ENDSEC"
@@ -1313,6 +1271,227 @@ function diagExportDxf() {
   } catch (e) {
     console.error(e);
     appState.diagramas.lastError = "No se pudo descargar el DXF (bloqueado por el navegador).";
+    _renderResult();
+  }
+}
+
+/* ======================================================
+   ✅ NUEVO: Export SCR (AutoCAD SCRIPT) - la forma más cómoda/estable
+   Uso en ingeniería:
+   1) Abrir PLANTILLA_DE_ICONOS.dxf
+   2) Comando: SCRIPT  -> seleccionar .scr generado
+ ====================================================== */
+function diagExportScr() {
+  const r = appState.diagramas.lastResult;
+  if (!r) {
+    appState.diagramas.lastError = "No hay resultado para exportar. Genera el diseño primero.";
+    appState.diagramas.lastRaw = null;
+    _renderResult();
+    return;
+  }
+
+  // Para SCR, lo único imprescindible es que la ingeniería tenga la plantilla con esos BLOCKS
+  const blocks = Array.isArray(appState.diagramas.dxfBlocks) ? appState.diagramas.dxfBlocks : [];
+  if (!blocks.length) {
+    appState.diagramas.lastError = "Para exportar SCR, carga primero la plantilla DXF (para validar nombres de BLOCK).";
+    appState.diagramas.lastRaw = null;
+    _renderResult();
+    return;
+  }
+
+  const coords = _buildSchematicCoordsFromResult(r);
+  if (!coords.size) {
+    appState.diagramas.lastError = "No hay nodos en el resultado para exportar.";
+    appState.diagramas.lastRaw = null;
+    _renderResult();
+    return;
+  }
+
+  function _normBlockName(s) {
+    return String(s || "").trim().toLowerCase();
+  }
+  const blockMap = new Map();
+  blocks.forEach((b) => {
+    const nb = _normBlockName(b);
+    if (nb && !blockMap.has(nb)) blockMap.set(nb, String(b));
+  });
+
+  const placements   = Array.isArray(r.placements) ? r.placements : [];
+  const infra        = Array.isArray(r.infra) ? r.infra : [];
+  const connections  = Array.isArray(r.connections) ? r.connections : [];
+
+  // Helpers SCR (usar comandos "con guion" para evitar diálogos)
+  const scr = [];
+
+  // Encabezado / limpieza mínima
+  scr.push("._UNDO");
+  scr.push("_BE");
+  scr.push("._OSMODE");
+  scr.push("0");
+  scr.push("._CMDECHO");
+  scr.push("0");
+
+  // Capas (mínimo)
+  // -LAYER M <name> (make) luego vacío para salir
+  scr.push("._-LAYER");
+  scr.push("M");
+  scr.push("NODES");
+  scr.push("M");
+  scr.push("CABLE");
+  scr.push("M");
+  scr.push("LABELS");
+  scr.push("M");
+  scr.push("INFRA");
+  scr.push("");
+
+  // Título + nombres de zonas (solo texto, no afecta si falta style)
+  const zones = appState.diagramas.zones || [];
+  const colW = 280, startX = 80, titleY = 40;
+
+  function scrText(x, y, h, rotDeg, text) {
+    const t = String(text || "").replaceAll("\n", " ");
+    scr.push("._-TEXT");
+    scr.push(`${Number(x).toFixed(3)},${Number(y).toFixed(3)}`);
+    scr.push(String(Number(h).toFixed(3)));
+    scr.push(String(Number(rotDeg || 0).toFixed(3)));
+    scr.push(t);
+  }
+
+  function scrLine(x1, y1, x2, y2) {
+    scr.push("._LINE");
+    scr.push(`${Number(x1).toFixed(3)},${Number(y1).toFixed(3)}`);
+    scr.push(`${Number(x2).toFixed(3)},${Number(y2).toFixed(3)}`);
+    scr.push("");
+  }
+
+  function scrCircle(x, y, r) {
+    scr.push("._CIRCLE");
+    scr.push(`${Number(x).toFixed(3)},${Number(y).toFixed(3)}`);
+    scr.push(String(Number(r).toFixed(3)));
+  }
+
+  function scrInsert(blockName, x, y, scale, rotDeg) {
+    // -INSERT block point xscale yscale rotation
+    scr.push("._-INSERT");
+    scr.push(String(blockName));
+    scr.push(`${Number(x).toFixed(3)},${Number(y).toFixed(3)}`);
+    scr.push(String(Number(scale || 1).toFixed(3)));
+    scr.push(String(Number(scale || 1).toFixed(3)));
+    scr.push(String(Number(rotDeg || 0).toFixed(3)));
+  }
+
+  // Capa LABELS
+  scr.push("._-LAYER");
+  scr.push("S");
+  scr.push("LABELS");
+  scr.push("");
+
+  scrText(80, 20, 14, 0, "DIAGRAMA RED UTP CAT6 (ESQUEMA)");
+  zones.forEach((z, i) => scrText(startX + i * colW, titleY, 12, 0, z.label));
+
+  // Cables
+  scr.push("._-LAYER");
+  scr.push("S");
+  scr.push("CABLE");
+  scr.push("");
+
+  for (const c of connections) {
+    const a = coords.get(c.from);
+    const b = coords.get(c.to);
+    if (!a || !b) continue;
+    scrLine(a.x, a.y, b.x, b.y);
+  }
+
+  // Nodos placements
+  scr.push("._-LAYER");
+  scr.push("S");
+  scr.push("NODES");
+  scr.push("");
+
+  for (const p of placements) {
+    const pos = coords.get(p.id);
+    if (!pos) continue;
+
+    const wanted = String(p.icon_block || p.iconBlock || "").trim();
+    const resolved = wanted ? (blockMap.get(_normBlockName(wanted)) || "") : "";
+
+    if (resolved) {
+      scrInsert(resolved, pos.x, pos.y, 1, 0);
+    } else {
+      scrCircle(pos.x, pos.y, 10);
+    }
+
+    // Label
+    scr.push("._-LAYER");
+    scr.push("S");
+    scr.push("LABELS");
+    scr.push("");
+    scrText(pos.x + 16, pos.y + 4, 10, 0, String(p.ref || p.id || ""));
+    scr.push("._-LAYER");
+    scr.push("S");
+    scr.push("NODES");
+    scr.push("");
+  }
+
+  // Infra
+  scr.push("._-LAYER");
+  scr.push("S");
+  scr.push("INFRA");
+  scr.push("");
+
+  for (const n of infra) {
+    const pos = coords.get(n.id);
+    if (!pos) continue;
+    scrCircle(pos.x, pos.y, 12);
+
+    scr.push("._-LAYER");
+    scr.push("S");
+    scr.push("LABELS");
+    scr.push("");
+    scrText(pos.x + 16, pos.y + 4, 10, 0, String(n.type || n.id));
+    scr.push("._-LAYER");
+    scr.push("S");
+    scr.push("INFRA");
+    scr.push("");
+  }
+
+  // Zoom extents (opcional, útil)
+  scr.push("._ZOOM");
+  scr.push("_E");
+
+  // Restaurar algo
+  scr.push("._CMDECHO");
+  scr.push("1");
+  scr.push("._UNDO");
+  scr.push("_E");
+
+  const scriptText = scr.join("\n") + "\n";
+
+  const nameBase = (appState.diagramas.dxfFileName || "diagrama").replace(/\.dxf$/i, "");
+  const fileName = `${nameBase}_red_cat6.scr`;
+
+  try {
+    const blob = new Blob([scriptText], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    a.style.display = "none";
+    a.rel = "noopener";
+
+    document.body.appendChild(a);
+
+    requestAnimationFrame(() => {
+      a.click();
+      setTimeout(() => {
+        try { a.remove(); } catch (_) {}
+        try { URL.revokeObjectURL(url); } catch (_) {}
+      }, 2000);
+    });
+  } catch (e) {
+    console.error(e);
+    appState.diagramas.lastError = "No se pudo descargar el SCR (bloqueado por el navegador).";
     _renderResult();
   }
 }
@@ -1426,7 +1605,7 @@ function _renderDiagramasUI() {
         <div class="card mt-3" style="padding:12px;">
           <h4 style="margin:0;">Biblioteca de iconos (DXF)</h4>
           <div class="muted" style="font-size:12px; margin-top:6px;">
-            Carga tu “PLANTILLA DE ICONOS.dxf” para poder seleccionar el BLOCK en cada elemento.
+            Carga tu “PLANTILLA DE ICONOS.dxf” para poder seleccionar el BLOCK en cada elemento (y exportar DXF/SCR).
           </div>
           <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:10px;">
             <input id="diagDxfFile" type="file" accept=".dxf"/>
@@ -1441,12 +1620,16 @@ function _renderDiagramasUI() {
         <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
           <div style="min-width:0;">
             <h3 style="margin:0;">Ubicación de dispositivos</h3>
-            <div class="muted" style="font-size:12px;">Arrastra referencias a zonas. Usa AUTO para sugerir iconos. Genera diseño, edita posiciones y exporta DXF.</div>
+            <div class="muted" style="font-size:12px;">
+              Arrastra refs a zonas. AUTO sugiere iconos. Genera diseño, ajusta posiciones y exporta.
+              <b>Recomendado</b>: Exportar <b>SCR</b> (ingeniería abre plantilla y ejecuta SCRIPT).
+            </div>
           </div>
           <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
             <button id="btnDiagAuto" class="btn btn-secondary btn-sm">Auto</button>
             <button id="btnDiagTogglePrompt" class="btn btn-sm">Prompt</button>
             <button id="btnDiagGenerate" class="btn btn-primary btn-sm">Generar diseño</button>
+            <button id="btnDiagExportScr" class="btn btn-sm">Exportar SCR</button>
             <button id="btnDiagExportDxf" class="btn btn-sm">Exportar DXF</button>
             <span id="diagBusy" class="muted" style="display:none;">Generando…</span>
           </div>
@@ -1514,6 +1697,10 @@ function _renderDiagramasUI() {
   const btnGen = _el("btnDiagGenerate");
   if (btnGen) btnGen.addEventListener("click", diagGenerateDesign);
 
+  // ✅ NUEVO
+  const btnScr = _el("btnDiagExportScr");
+  if (btnScr) btnScr.addEventListener("click", diagExportScr);
+
   const btnExp = _el("btnDiagExportDxf");
   if (btnExp) btnExp.addEventListener("click", diagExportDxf);
 
@@ -1571,7 +1758,6 @@ function renderDiagramasView() {
     return;
   }
 
-  // Restore DXF cache (evita volver a seleccionar el archivo)
   try {
     if (!appState.diagramas.dxfBlocksSection) {
       appState.diagramas.dxfFileName = localStorage.getItem("diag_dxf_fileName") || "";
@@ -1592,7 +1778,10 @@ function renderDiagramasView() {
     <div class="card">
       <div>
         <h2 style="margin-bottom:4px;">Diagramas · Drag & Drop</h2>
-        <div class="muted">Asignas referencias a zonas (incluye Armario/CPD), generas diseño, ajustas posiciones en Preview y exportas DXF.</div>
+        <div class="muted">
+          Para ingeniería: exporta <b>SCR</b> y manda también tu <b>PLANTILLA_DE_ICONOS.dxf</b>.
+          Ellos abren la plantilla y ejecutan <b>SCRIPT</b> con el .scr.
+        </div>
       </div>
       <div id="diagMain" class="mt-3"></div>
     </div>
@@ -1608,3 +1797,4 @@ window.diagImportDxfFile = diagImportDxfFile;
 window.diagGenerateDesign = diagGenerateDesign;
 window.diagAutoAssignIcons = diagAutoAssignIcons;
 window.diagExportDxf = diagExportDxf;
+window.diagExportScr = diagExportScr;
