@@ -1,16 +1,16 @@
 // js/ui_diagramas.js
 // Vista: DIAGRAMAS (IA)
-// V2.8 (Hito 16+):
-// - Mantiene todo lo actual
-// - ✅ Export SCR (AutoCAD SCRIPT) ROBUSTO multi-idioma (Opción A): NO usa capas (evita prompts de -CAPA/-LAYER)
-// - ✅ Elimina export DXF (abandono DXF)
-// - Import DXF se mantiene SOLO para leer BLOCKS (biblioteca de iconos)
+// V2.8.1 (Hito 16+):
+// - ✅ Export SCR robusto multi-idioma (sin capas)
+// - ✅ DXF solo se usa para leer BLOCKS + contar atributos (para no romper -INSERT)
+// - ✅ Si un bloque NO tiene atributos, no se inyecta AI_KEY (evita que el script se desplace / falle)
 
 window.appState = window.appState || {};
 appState.diagramas = appState.diagramas || {
   dxfFileName: "",
   dxfText: "",
   dxfBlocks: [],
+  dxfBlockAttrs: {}, // blockName -> { count:number, tags:[string] }
 
   // (se mantienen por compatibilidad / caché, aunque ya no exportamos DXF)
   dxfHeaderSection: "",
@@ -502,10 +502,16 @@ function _dxfToPairs(dxfText) {
   return pairs;
 }
 
+// ✅ Extrae NOMBRES de bloques + nº de atributos (ATTDEF) por bloque
 function _dxfExtractBlocks(pairs) {
   const blocks = [];
+  const attrsByBlock = {}; // name -> { count, tags[] }
+
   let inBlocksSection = false;
   let inBlockEntity = false;
+
+  let curName = null;
+  let curTags = [];
 
   for (let i = 0; i < pairs.length; i++) {
     const [c, v] = pairs[i];
@@ -513,8 +519,10 @@ function _dxfExtractBlocks(pairs) {
     if (c === "0" && v === "SECTION") {
       const next = pairs[i + 1];
       if (next && next[0] === "2") {
-        inBlocksSection = next[1] === "BLOCKS";
+        inBlocksSection = String(next[1] || "").toUpperCase() === "BLOCKS";
         inBlockEntity = false;
+        curName = null;
+        curTags = [];
       }
       continue;
     }
@@ -524,27 +532,53 @@ function _dxfExtractBlocks(pairs) {
     if (c === "0" && v === "ENDSEC") {
       inBlocksSection = false;
       inBlockEntity = false;
+      curName = null;
+      curTags = [];
       continue;
     }
 
     if (c === "0" && v === "BLOCK") {
       inBlockEntity = true;
+      curName = null;
+      curTags = [];
       continue;
     }
 
     if (c === "0" && v === "ENDBLK") {
+      if (curName) {
+        if (!blocks.includes(curName)) blocks.push(curName);
+        attrsByBlock[curName] = { count: curTags.length, tags: curTags.slice() };
+      }
       inBlockEntity = false;
+      curName = null;
+      curTags = [];
       continue;
     }
 
-    if (inBlockEntity && c === "2") {
-      const name = String(v || "").trim();
-      if (name && !blocks.includes(name)) blocks.push(name);
-      inBlockEntity = false;
+    if (!inBlockEntity) continue;
+
+    // Nombre de bloque (primer code 2 tras BLOCK)
+    if (!curName && c === "2") {
+      curName = String(v || "").trim();
+      continue;
+    }
+
+    // Captura ATTDEF TAGs (code 2 dentro de ATTDEF)
+    if (c === "0" && v === "ATTDEF") {
+      let tag = "";
+      for (let j = i + 1; j < pairs.length; j++) {
+        const [c2, v2] = pairs[j];
+        if (c2 === "0") break;
+        if (c2 === "2") {
+          tag = String(v2 || "").trim();
+          break;
+        }
+      }
+      if (tag) curTags.push(tag);
     }
   }
 
-  return blocks;
+  return { blocks, attrsByBlock };
 }
 
 function _extractDxfSection(dxfText, sectionName) {
@@ -583,6 +617,7 @@ async function diagImportDxfFile(file) {
   appState.diagramas.dxfFileName = file.name || "";
   appState.diagramas.dxfText = "";
   appState.diagramas.dxfBlocks = [];
+  appState.diagramas.dxfBlockAttrs = {};
   appState.diagramas.dxfHeaderSection = "";
   appState.diagramas.dxfClassesSection = "";
   appState.diagramas.dxfTablesSection = "";
@@ -603,8 +638,9 @@ async function diagImportDxfFile(file) {
     appState.diagramas.dxfText = text;
 
     const pairs = _dxfToPairs(text);
-    const blocks = _dxfExtractBlocks(pairs);
-    appState.diagramas.dxfBlocks = blocks.sort((a, b) => a.localeCompare(b));
+    const ex = _dxfExtractBlocks(pairs);
+    appState.diagramas.dxfBlocks = (ex.blocks || []).sort((a, b) => a.localeCompare(b));
+    appState.diagramas.dxfBlockAttrs = ex.attrsByBlock || {};
 
     // cache (aunque no exportemos DXF, dejamos por si luego lo reutilizas)
     appState.diagramas.dxfHeaderSection = _extractDxfSection(text, "HEADER") || "";
@@ -620,6 +656,7 @@ async function diagImportDxfFile(file) {
     try {
       localStorage.setItem("diag_dxf_fileName", appState.diagramas.dxfFileName || "");
       localStorage.setItem("diag_dxf_blocks", JSON.stringify(appState.diagramas.dxfBlocks || []));
+      localStorage.setItem("diag_dxf_blockAttrs", JSON.stringify(appState.diagramas.dxfBlockAttrs || {}));
       localStorage.setItem("diag_dxf_headerSection", appState.diagramas.dxfHeaderSection || "");
       localStorage.setItem("diag_dxf_classesSection", appState.diagramas.dxfClassesSection || "");
       localStorage.setItem("diag_dxf_tablesSection", appState.diagramas.dxfTablesSection || "");
@@ -1107,10 +1144,7 @@ async function diagGenerateDesign() {
 }
 
 /* ======================================================
-   6) ✅ Export SCR (Opción A): SIN CAPAS
-   - Multi-idioma (no depende de -LAYER/-CAPA ni subopciones "M/S")
-   - Evita bloqueos por atributos: ATTDIA/ATTREQ
-   - ✅ Rellena AI_KEY (atributo) en la inserción
+   6) ✅ Export SCR (SIN CAPAS) + robusto con atributos
  ====================================================== */
 function diagExportScr() {
   const r = appState.diagramas.lastResult;
@@ -1140,10 +1174,21 @@ function diagExportScr() {
   function _normBlockName(s) {
     return String(s || "").trim().toLowerCase();
   }
+
   const blockMap = new Map();
   blocks.forEach((b) => {
     const nb = _normBlockName(b);
     if (nb && !blockMap.has(nb)) blockMap.set(nb, String(b));
+  });
+
+  // attrs: blockName -> count
+  const blockAttrs = appState.diagramas.dxfBlockAttrs || {};
+  const attrCountByNorm = new Map();
+  Object.keys(blockAttrs).forEach((bn) => {
+    const nb = _normBlockName(bn);
+    if (!nb) return;
+    const cnt = Number(blockAttrs[bn]?.count || 0) || 0;
+    attrCountByNorm.set(nb, cnt);
   });
 
   const placements = Array.isArray(r.placements) ? r.placements : [];
@@ -1162,14 +1207,10 @@ function diagExportScr() {
   scr.push("._ATTDIA");
   scr.push("0");
 
-  // IMPORTANTE:
-  // - Para poder inyectar valores de atributos en -INSERT, el comando debe pedirlos.
-  //   Eso ocurre con ATTREQ=1.
-  // - Si lo pones a 0, NO pedirá atributos y no podremos rellenar AI_KEY.
+  // Necesario para que -INSERT pida atributos cuando existan
   scr.push("._ATTREQ");
   scr.push("1");
 
-  // Helpers
   function scrText(x, y, h, rotDeg, text) {
     const t = String(text || "").replaceAll("\n", " ").replaceAll("\r", " ");
     scr.push("._-TEXT");
@@ -1192,13 +1233,10 @@ function diagExportScr() {
     scr.push(String(Number(r0).toFixed(3)));
   }
 
-  // ✅ Construcción del valor AI_KEY (simple y estable)
   function _buildAiKeyForPlacement(p) {
-    // Si ya viene algo desde IA, lo respetamos
     const aiKey = p?.meta?.AI_KEY || p?.meta?.ai_key || p?.ai_key || p?.AI_KEY;
     if (String(aiKey || "").trim()) return String(aiKey).trim();
 
-    // Default: TYPE por heurística + SKU = ref
     const ref = String(p?.ref || "").trim();
     const desc = String(p?.descripcion || p?.description || "").toUpperCase();
     const blk = String(p?.icon_block || p?.iconBlock || "").toUpperCase();
@@ -1214,24 +1252,26 @@ function diagExportScr() {
     return `TYPE=${type};SKU=${ref}`;
   }
 
-  // ✅ INSERT que inyecta 1 atributo (AI_KEY) y cierra con ENTER
-  // Nota: AutoCAD pide valores de atributos en el orden de definición del bloque.
-  // En tu caso, has indicado que todos los bloques tienen el atributo AI_KEY -> OK.
-  function scrInsertWithAiKey(blockName, x, y, scale, rotDeg, aiKeyValue) {
-    const bn = String(blockName || "").replaceAll('"', "").trim(); // evita comillas dobles raras
-    const v = String(aiKeyValue || "").replaceAll("\n", " ").replaceAll("\r", " ");
+  // ✅ Insert robusto:
+  // - Si el bloque NO tiene atributos: no inyecta nada
+  // - Si tiene N atributos: rellena el 1º con AI_KEY y el resto con ENTER
+  function scrInsertSmart(blockName, x, y, scale, rotDeg, aiKeyValue) {
+    const bn = String(blockName || "").replaceAll('"', "").trim();
+    const nb = _normBlockName(bn);
+    const attrCount = Number(attrCountByNorm.get(nb) || 0) || 0;
 
     scr.push("._-INSERT");
-    scr.push(`"${bn}"`); // ✅ clave: comillas para nombres con espacios
+    scr.push(`"${bn}"`);
     scr.push(`${Number(x).toFixed(3)},${Number(y).toFixed(3)}`);
     scr.push(String(Number(scale || 1).toFixed(3)));
     scr.push(String(Number(scale || 1).toFixed(3)));
     scr.push(String(Number(rotDeg || 0).toFixed(3)));
 
-    // ✅ Valor para AI_KEY (atributo 1)
-    scr.push(v);
+    if (attrCount <= 0) return;
 
-    // ✅ Cerrar entrada de atributos / finalizar inserción
+    const v = String(aiKeyValue || "").replaceAll("\n", " ").replaceAll("\r", " ");
+    scr.push(v);
+    for (let k = 1; k < attrCount; k++) scr.push("");
     scr.push("");
   }
 
@@ -1260,7 +1300,7 @@ function diagExportScr() {
 
     if (resolved) {
       const aiKey = _buildAiKeyForPlacement(p);
-      scrInsertWithAiKey(resolved, pos.x, pos.y, 1, 0, aiKey);
+      scrInsertSmart(resolved, pos.x, pos.y, 1, 0, aiKey);
     } else {
       scrCircle(pos.x, pos.y, 10);
     }
@@ -1281,7 +1321,7 @@ function diagExportScr() {
   scr.push("._ZOOM");
   scr.push("_E");
 
-  // Restaurar algo
+  // Restaurar
   scr.push("._CMDECHO");
   scr.push("1");
 
@@ -1578,6 +1618,9 @@ function renderDiagramasView() {
       appState.diagramas.dxfFileName = localStorage.getItem("diag_dxf_fileName") || "";
       const b = localStorage.getItem("diag_dxf_blocks");
       if (b) appState.diagramas.dxfBlocks = JSON.parse(b) || [];
+
+      const ba = localStorage.getItem("diag_dxf_blockAttrs");
+      if (ba) appState.diagramas.dxfBlockAttrs = JSON.parse(ba) || {};
 
       appState.diagramas.dxfHeaderSection  = localStorage.getItem("diag_dxf_headerSection")  || "";
       appState.diagramas.dxfClassesSection = localStorage.getItem("diag_dxf_classesSection") || "";
