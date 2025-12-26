@@ -1125,21 +1125,24 @@ function _dxfCircle(x, y, r, layer = "NODES") {
  */
 function _dxfText(x, y, h, text, layer = "LABELS") {
   const t = String(text || "")
-    .replaceAll("\n", " ")
-    .replace(/\r/g, " ")
+    .replace(/\r?\n/g, " ")
     .replace(/\t/g, " ");
 
   return [
     "0","TEXT",
+    "100","AcDbEntity",
     "8",layer,
+    "100","AcDbText",
     "10",String(x),"20",String(y),"30","0",
     "40",String(h),
     "1",t,
-    "50","0",          // rotation
-    "41","1",          // x-scale
-    "7","STANDARD",    // style
-    "72","0",          // h-align (left)
-    "73","0"           // v-align (baseline)
+    "50","0",
+    "7","STANDARD",
+    "72","0",
+    "73","0",
+    // alignment point (muchos DXF lo esperan aunque sea igual que 10/20)
+    "11",String(x),"21",String(y),"31","0",
+    "100","AcDbText"
   ].join("\n");
 }
 
