@@ -4,6 +4,7 @@
 // - Mantiene todo lo actual
 // - ✅ NUEVO (opción más simple/robusta): Export SCR (AutoCAD SCRIPT) -> inserta BLOCKS + cables + textos SOBRE tu plantilla
 // - ✅ FIX: evitar "Identifier safeObjects already declared" (solo 1 declaración)
+// - ✅ FIX DXF: export DXF "mínimo y válido" (NO reutiliza CLASSES/OBJECTS de la plantilla; evita error AcDbEntity/TEXT)
 
 window.appState = window.appState || {};
 appState.diagramas = appState.diagramas || {
@@ -1107,24 +1108,43 @@ async function diagGenerateDesign() {
 /* ======================================================
    6) Export DXF (se mantiene) + ✅ NUEVO Export SCR (recomendado)
  ====================================================== */
+
+// ✅ DXF entities con subclass markers (evita error "AcDbEntity esperada")
 function _dxfLine(x1, y1, x2, y2, layer = "CABLE") {
   return [
-    "0","LINE","8",layer,
+    "0","LINE",
+    "100","AcDbEntity","8",layer,
+    "100","AcDbLine",
     "10",String(x1),"20",String(y1),"30","0",
     "11",String(x2),"21",String(y2),"31","0",
   ].join("\n");
 }
 function _dxfCircle(x, y, r, layer = "NODES") {
-  return ["0","CIRCLE","8",layer,"10",String(x),"20",String(y),"30","0","40",String(r)].join("\n");
+  return [
+    "0","CIRCLE",
+    "100","AcDbEntity","8",layer,
+    "100","AcDbCircle",
+    "10",String(x),"20",String(y),"30","0",
+    "40",String(r)
+  ].join("\n");
 }
 function _dxfText(x, y, h, text, layer = "LABELS") {
   const t = String(text || "").replaceAll("\n", " ");
-  return ["0","TEXT","8",layer,"10",String(x),"20",String(y),"30","0","40",String(h),"1",t].join("\n");
+  return [
+    "0","TEXT",
+    "100","AcDbEntity","8",layer,
+    "100","AcDbText",
+    "10",String(x),"20",String(y),"30","0",
+    "40",String(h),
+    "1",t
+  ].join("\n");
 }
 function _dxfInsert(blockName, x, y, layer = "NODES", scale = 1, rotationDeg = 0) {
   const b = String(blockName || "").trim();
   return [
-    "0","INSERT","8",layer,
+    "0","INSERT",
+    "100","AcDbEntity","8",layer,
+    "100","AcDbBlockReference",
     "2",b,
     "10",String(x),"20",String(y),"30","0",
     "41",String(scale),"42",String(scale),"43",String(scale),
@@ -1142,10 +1162,8 @@ function diagExportDxf() {
   }
 
   const headerSection  = String(appState.diagramas.dxfHeaderSection  || "").trim();
-  const classesSection = String(appState.diagramas.dxfClassesSection || "").trim();
   const tablesSection  = String(appState.diagramas.dxfTablesSection  || "").trim();
   const blocksSection  = String(appState.diagramas.dxfBlocksSection  || "").trim();
-  const objectsSection = String(appState.diagramas.dxfObjectsSection || "").trim();
 
   if (!blocksSection) {
     appState.diagramas.lastError =
@@ -1211,14 +1229,10 @@ function diagExportDxf() {
     ents.push(_dxfLine(a.x, a.y, b.x, b.y, "CABLE"));
   }
 
+  // ✅ Export DXF "mínimo": NO mezclamos CLASSES/OBJECTS de plantilla (causa errores AcDbEntity/TEXT)
   const safeHeader = headerSection || [
     "0","SECTION","2","HEADER",
     "9","$ACADVER","1","AC1027",
-    "0","ENDSEC"
-  ].join("\n");
-
-  const safeClasses = classesSection || [
-    "0","SECTION","2","CLASSES",
     "0","ENDSEC"
   ].join("\n");
 
@@ -1227,19 +1241,11 @@ function diagExportDxf() {
     "0","ENDSEC"
   ].join("\n");
 
-  // ✅ FIX: SOLO una declaración (evita error "already been declared")
-  const safeObjects = objectsSection || [
-    "0","SECTION","2","OBJECTS",
-    "0","ENDSEC"
-  ].join("\n");
-
   const parts = [
     safeHeader,
-    safeClasses,
     safeTables,
     blocksSection,
     ["0","SECTION","2","ENTITIES", ents.join("\n"), "0","ENDSEC"].join("\n"),
-    safeObjects,
     "0\nEOF"
   ];
 
