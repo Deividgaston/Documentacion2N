@@ -1158,12 +1158,20 @@ function diagExportDxf() {
     _renderResult();
     return;
   }
+  const safeHeader = [
+  "0","SECTION",
+  "2","HEADER",
+  "9","$ACADVER",
+  "1","AC1009",
+  "0","ENDSEC"
+].join("\n");
+const safeTables = [
+  "0","SECTION",
+  "2","TABLES",
+  "0","ENDSEC"
+].join("\n");
 
-  // ✅ usar HEADER/TABLES/BLOCKS de la plantilla (clave para evitar errores en LibreCAD)
-  const headerSection = String(appState.diagramas.dxfHeaderSection || "").trim();
-  const tablesSection = String(appState.diagramas.dxfTablesSection || "").trim();
-  const blocksSection = String(appState.diagramas.dxfBlocksSection || "").trim();
-
+  
   if (!blocksSection) {
     appState.diagramas.lastError =
       "Para exportar con iconos (BLOCKS) tienes que cargar antes la plantilla DXF ASCII que contenga SECTION/BLOCKS (selecciona el archivo DXF otra vez).";
