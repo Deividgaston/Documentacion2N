@@ -1,9 +1,12 @@
 // js/ui_diagramas.js
 // Vista: DIAGRAMAS (IA)
-// V2.7 (Hito 16 fix):
-// - FIX export DXF: incluir $ACADVER del DXF plantilla para evitar errores de códigos (330/70) al abrir
-// - FIX layout: evitar que el Preview “rompa” el ancho (CSS minmax(0,1fr) + min-width:0 + wrappers con max-width)
-// - Persistencia DXF: guarda también acadver y solo persiste si import OK
+// V2.6 (Hito 16):
+// - Preview SVG + JSON (RECUPERADO)
+// - Preview editable: arrastrar y soltar nodos para asignar posiciones
+// - Parse robusto + raw visible
+// - Fallback LOCAL: si la IA no devuelve JSON, generamos topología jerárquica (Cat6) determinista
+//   (devices -> switches por zona -> core -> router en Armario/CPD si existe)
+// - Export DXF: usa INSERT de BLOCKS (si icon_block existe), y coords manuales si el usuario las movió
 
 window.appState = window.appState || {};
 appState.diagramas = appState.diagramas || {
@@ -11,7 +14,6 @@ appState.diagramas = appState.diagramas || {
   dxfText: "",
   dxfBlocks: [],
   dxfBlocksSection: "",
-  dxfAcadVer: "", // <-- NUEVO (para export compatible con plantilla)
 
   refs: [],
   refsSearch: "",
@@ -65,13 +67,15 @@ function _setBusy(b) {
   if (sp) sp.style.display = b ? "" : "none";
 }
 
+// FIX: limpiar errores cuando el usuario cambia asignaciones / iconos, etc.
 function _clearDiagError() {
   appState.diagramas.lastError = null;
   appState.diagramas.lastRaw = null;
 }
 
 /* ======================================================
-   Preview SVG
+   Preview SVG (esquemático) basado en coords
+   - Soporta coords manuales (drag)
  ====================================================== */
 
 function _buildSchematicCoordsFromResult(result) {
@@ -106,8 +110,7 @@ function _buildSchematicCoordsFromResult(result) {
     const label = `${p.ref || p.id || ""}${p.qty ? ` x${p.qty}` : ""}`;
 
     const m = manual[p.id];
-    const pos =
-      m && Number.isFinite(m.x) && Number.isFinite(m.y) ? { x: m.x, y: m.y } : nextPos(zone);
+    const pos = m && Number.isFinite(m.x) && Number.isFinite(m.y) ? { x: m.x, y: m.y } : nextPos(zone);
 
     map.set(p.id, { x: pos.x, y: pos.y, label, kind: "placement", zone });
   }
@@ -117,8 +120,7 @@ function _buildSchematicCoordsFromResult(result) {
     const label = `${n.type || n.id || ""}`;
 
     const m = manual[n.id];
-    const pos =
-      m && Number.isFinite(m.x) && Number.isFinite(m.y) ? { x: m.x, y: m.y } : nextPos(zone);
+    const pos = m && Number.isFinite(m.x) && Number.isFinite(m.y) ? { x: m.x, y: m.y } : nextPos(zone);
 
     map.set(n.id, { x: pos.x, y: pos.y, label, kind: "infra", zone });
   }
@@ -151,25 +153,20 @@ function _renderPreviewSvg(result) {
     const it = placements.find((x) => String(x.id) === String(id));
     const blk = String(it?.icon_block || it?.iconBlock || "").toLowerCase();
     const ref = String(it?.ref || "").toLowerCase();
-
     const s = `${blk} ${ref} ${String(p.label || "").toLowerCase()}`;
 
-    if (s.includes("ip style") || s.includes("ipstyle") || s.includes("ai_ip style") || s.includes("ai_ip_style"))
-      return "📟";
+    if (s.includes("ip style") || s.includes("ipstyle") || s.includes("ai_ip style") || s.includes("ai_ip_style")) return "📟";
     if (s.includes("verso")) return "📞";
     if (s.includes("ip one") || s.includes("ipone")) return "📞";
     if (s.includes("indoor") || s.includes("monitor") || s.includes("touch") || s.includes("clip")) return "🖥️";
-    if (s.includes("access") || s.includes("unit") || s.includes("reader") || s.includes("rfid") || s.includes("ble"))
-      return "🔑";
+    if (s.includes("access") || s.includes("unit") || s.includes("reader") || s.includes("rfid") || s.includes("ble")) return "🔑";
     if (s.includes("switch") || s.includes("poe")) return "🔀";
     if (s.includes("router") || s.includes("gateway")) return "🌐";
     if (s.includes("server") || s.includes("nvr")) return "🗄️";
-
     return "●";
   }
 
-  let maxX = 0,
-    maxY = 0;
+  let maxX = 0, maxY = 0;
   for (const [, p] of coords.entries()) {
     if (p.x > maxX) maxX = p.x;
     if (p.y > maxY) maxY = p.y;
@@ -178,47 +175,38 @@ function _renderPreviewSvg(result) {
   const height = Math.max(420, maxY + 180);
 
   const connections = Array.isArray(result?.connections) ? result.connections : [];
+  const lines = connections.map((c) => {
+    const a = coords.get(c.from);
+    const b = coords.get(c.to);
+    if (!a || !b) return "";
+    return `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="rgba(29,79,216,.55)" stroke-width="2"/>`;
+  }).join("");
 
-  const lines = connections
-    .map((c) => {
-      const a = coords.get(c.from);
-      const b = coords.get(c.to);
-      if (!a || !b) return "";
-      return `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="rgba(29,79,216,.55)" stroke-width="2"/>`;
-    })
-    .join("");
+  const nodes = Array.from(coords.entries()).map(([id, p]) => {
+    const isInfra = p.kind === "infra";
+    const fill = isInfra ? "rgba(17,24,39,.95)" : "rgba(29,79,216,.95)";
+    const stroke = isInfra ? "rgba(17,24,39,.25)" : "rgba(29,79,216,.25)";
+    const label = _escapeHtml(p.label);
+    const icon = _escapeHtml(_iconForNode(id, p));
 
-  const nodes = Array.from(coords.entries())
-    .map(([id, p]) => {
-      const isInfra = p.kind === "infra";
-      const fill = isInfra ? "rgba(17,24,39,.95)" : "rgba(29,79,216,.95)";
-      const stroke = isInfra ? "rgba(17,24,39,.25)" : "rgba(29,79,216,.25)";
-      const label = _escapeHtml(p.label);
-      const icon = _escapeHtml(_iconForNode(id, p));
+    return `
+      <g class="diag-node" data-node-id="${_escapeHtmlAttr(id)}" style="cursor:${appState.diagramas.previewEditMode ? "grab" : "default"};">
+        <circle class="diag-node-hit" cx="${p.x}" cy="${p.y}" r="18" fill="rgba(0,0,0,0)"></circle>
+        <circle cx="${p.x}" cy="${p.y}" r="14" fill="${fill}" stroke="${stroke}" stroke-width="10"></circle>
+        <text x="${p.x - 8}" y="${p.y + 7}" font-size="18" fill="white">${icon}</text>
+        <text x="${p.x + 18}" y="${p.y + 5}" font-size="12" fill="rgba(17,24,39,.95)">${label}</text>
+      </g>
+    `;
+  }).join("");
 
-      return `
-        <g class="diag-node" data-node-id="${_escapeHtmlAttr(id)}" style="cursor:${
-        appState.diagramas.previewEditMode ? "grab" : "default"
-      };">
-          <circle class="diag-node-hit" cx="${p.x}" cy="${p.y}" r="18" fill="rgba(0,0,0,0)"></circle>
-          <circle cx="${p.x}" cy="${p.y}" r="14" fill="${fill}" stroke="${stroke}" stroke-width="10"></circle>
-          <text x="${p.x - 8}" y="${p.y + 7}" font-size="18" fill="white">${icon}</text>
-          <text x="${p.x + 18}" y="${p.y + 5}" font-size="12" fill="rgba(17,24,39,.95)">${label}</text>
-        </g>
-      `;
-    })
-    .join("");
+  const headers = zones.map((z, i) => {
+    const x = startX + i * colW;
+    return `<text x="${x}" y="36" font-size="13" fill="rgba(107,114,128,.95)">${_escapeHtml(z.label)}</text>`;
+  }).join("");
 
-  const headers = zones
-    .map((z, i) => {
-      const x = startX + i * colW;
-      return `<text x="${x}" y="36" font-size="13" fill="rgba(107,114,128,.95)">${_escapeHtml(z.label)}</text>`;
-    })
-    .join("");
-
-  // FIX layout: max-width + min-width:0 wrappers para no “ensanchar” la página
+  // ✅ FIX layout: el contenedor no expande la página; el scroll es interno
   return `
-    <div class="card" style="padding:12px; max-width:100%; overflow:hidden;">
+    <div class="card" style="padding:12px; overflow:hidden; max-width:100%;">
       <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap;">
         <div style="min-width:0;">
           <div style="font-weight:700;">Preview</div>
@@ -228,16 +216,18 @@ function _renderPreviewSvg(result) {
           </div>
         </div>
         <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-          <button id="btnDiagToggleEdit" class="btn btn-sm">${
-            appState.diagramas.previewEditMode ? "Salir edición" : "Editar posiciones"
-          }</button>
+          <button id="btnDiagToggleEdit" class="btn btn-sm">${appState.diagramas.previewEditMode ? "Salir edición" : "Editar posiciones"}</button>
           <button id="btnDiagResetLayout" class="btn btn-sm">Reset layout</button>
           <span class="chip">SVG</span>
         </div>
       </div>
 
-      <div style="border:1px solid rgba(15,23,42,.10); border-radius:12px; overflow:auto; background:#fff; max-width:100%;">
-        <svg id="diagPreviewSvg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" style="display:block;">
+      <div style="border:1px solid rgba(15,23,42,.10); border-radius:12px; overflow:auto; max-width:100%; background:#fff;">
+        <svg id="diagPreviewSvg"
+             width="${width}" height="${height}"
+             viewBox="0 0 ${width} ${height}"
+             preserveAspectRatio="xMinYMin meet"
+             style="display:block;">
           <rect x="0" y="0" width="${width}" height="${height}" fill="white"></rect>
           ${headers}
           ${lines}
@@ -253,12 +243,7 @@ function _renderPreviewSvg(result) {
 }
 
 // Drag controller para SVG
-let _diagDrag = {
-  active: false,
-  nodeId: null,
-  offsetX: 0,
-  offsetY: 0,
-};
+let _diagDrag = { active: false, nodeId: null, offsetX: 0, offsetY: 0 };
 
 function _svgPoint(svg, clientX, clientY) {
   const pt = svg.createSVGPoint();
@@ -314,9 +299,7 @@ function _bindPreviewInteractions() {
     _diagDrag.offsetX = cur.x - p.x;
     _diagDrag.offsetY = cur.y - p.y;
 
-    try {
-      ev.preventDefault();
-    } catch (_) {}
+    try { ev.preventDefault(); } catch (_) {}
   };
 
   window.onmousemove = (ev) => {
@@ -356,13 +339,7 @@ function _buildPreviewOnlyResultFromAssignments() {
     }
   }
 
-  return {
-    placements,
-    infra: [],
-    connections: [],
-    summary: {},
-    errors: [],
-  };
+  return { placements, infra: [], connections: [], summary: {}, errors: [] };
 }
 
 function _renderResult() {
@@ -377,9 +354,7 @@ function _renderResult() {
       ? `
         <details class="mt-2">
           <summary class="muted" style="cursor:pointer;">Ver respuesta IA (raw)</summary>
-          <pre style="white-space:pre-wrap; background:#0b1020; color:#e5e7eb; padding:12px; border-radius:10px; overflow:auto; margin-top:8px;">${_escapeHtml(
-            appState.diagramas.lastRaw
-          )}</pre>
+          <pre style="white-space:pre-wrap; background:#0b1020; color:#e5e7eb; padding:12px; border-radius:10px; overflow:auto; margin-top:8px;">${_escapeHtml(appState.diagramas.lastRaw)}</pre>
         </details>
       `
       : "";
@@ -422,9 +397,7 @@ function _renderResult() {
     ? `
       <details class="mt-2">
         <summary class="muted" style="cursor:pointer;">Ver respuesta IA (raw)</summary>
-        <pre style="white-space:pre-wrap; background:#0b1020; color:#e5e7eb; padding:12px; border-radius:10px; overflow:auto; margin-top:8px;">${_escapeHtml(
-          appState.diagramas.lastRaw
-        )}</pre>
+        <pre style="white-space:pre-wrap; background:#0b1020; color:#e5e7eb; padding:12px; border-radius:10px; overflow:auto; margin-top:8px;">${_escapeHtml(appState.diagramas.lastRaw)}</pre>
       </details>
     `
     : "";
@@ -436,19 +409,17 @@ function _renderResult() {
 
   out.innerHTML = `
     ${banner}
-    <div class="mb-2" style="display:flex; justify-content:space-between; align-items:center; gap:10px; min-width:0;">
+    <div class="mb-2" style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
       <span class="chip">Diseño</span>
       <span class="muted">UTP Cat6 · topología eficiente</span>
     </div>
-
     ${preview}
-
-    <div class="card mt-3" style="padding:12px; max-width:100%; overflow:hidden;">
+    <div class="card mt-3" style="padding:12px; overflow:hidden;">
       <div class="mb-2" style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
         <span class="chip">JSON</span>
         <span class="muted" style="font-size:12px;">Salida completa</span>
       </div>
-      <pre style="white-space:pre-wrap; background:#0b1020; color:#e5e7eb; padding:12px; border-radius:10px; overflow:auto; max-width:100%;">${pretty}</pre>
+      <pre style="white-space:pre-wrap; background:#0b1020; color:#e5e7eb; padding:12px; border-radius:10px; overflow:auto;">${pretty}</pre>
       ${raw}
     </div>
   `;
@@ -493,10 +464,7 @@ function diagLoadProjectRefs() {
    2) DXF blocks
  ====================================================== */
 function _dxfToPairs(dxfText) {
-  const lines = String(dxfText || "")
-    .replace(/\r\n/g, "\n")
-    .replace(/\r/g, "\n")
-    .split("\n");
+  const lines = String(dxfText || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
 
   const pairs = [];
   for (let i = 0; i < lines.length - 1; i += 2) {
@@ -553,39 +521,6 @@ function _dxfExtractBlocks(pairs) {
   return blocks;
 }
 
-// Extrae ACADVER (para export)
-function _extractDxfAcadVer(dxfText) {
-  let text = String(dxfText || "");
-  if (!text) return "";
-  text = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-  // tolera espacios: 9 $ACADVER \n 1 AC1027
-  const m = /(?:^|\n)\s*9\s*\n\s*\$ACADVER\s*\n\s*1\s*\n\s*([A-Z0-9_]+)\b/i.exec(text);
-  if (!m) return "";
-  return String(m[1] || "").trim().toUpperCase();
-}
-
-// Extrae SECTION/BLOCKS...ENDSEC del DXF plantilla (robusto)
-function _extractDxfBlocksSection(dxfText) {
-  let text = String(dxfText || "");
-  if (!text) return "";
-
-  text = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-
-  const reStart = /(?:^|\n)\s*0\s*\n\s*SECTION\s*\n\s*2\s*\n\s*BLOCKS\b/i;
-  const m0 = reStart.exec(text);
-  if (!m0) return "";
-
-  const startIdx = m0.index;
-
-  const reEnd = /(?:^|\n)\s*0\s*\n\s*ENDSEC\b/i;
-  reEnd.lastIndex = startIdx;
-  const m1 = reEnd.exec(text);
-  if (!m1) return "";
-
-  const endIdx = m1.index + m1[0].length;
-  return text.slice(startIdx, endIdx);
-}
-
 async function diagImportDxfFile(file) {
   if (!file) return;
 
@@ -596,7 +531,6 @@ async function diagImportDxfFile(file) {
   appState.diagramas.dxfText = "";
   appState.diagramas.dxfBlocks = [];
   appState.diagramas.dxfBlocksSection = "";
-  appState.diagramas.dxfAcadVer = "";
 
   if (!/\.dxf$/i.test(file.name || "")) {
     appState.diagramas.lastError = "El archivo no parece DXF (.dxf).";
@@ -619,18 +553,14 @@ async function diagImportDxfFile(file) {
     const blocksSection = _extractDxfBlocksSection(text);
     appState.diagramas.dxfBlocksSection = blocksSection || "";
 
-    const acadver = _extractDxfAcadVer(text);
-    appState.diagramas.dxfAcadVer = acadver || "";
-
     if (!appState.diagramas.dxfBlocksSection) {
       throw new Error("El DXF no contiene SECTION/BLOCKS (o no está en formato ASCII esperado).");
     }
 
-    // ✅ Persistencia SOLO cuando import OK
+    // ✅ Persistencia SOLO si import OK
     try {
       localStorage.setItem("diag_dxf_fileName", appState.diagramas.dxfFileName || "");
       localStorage.setItem("diag_dxf_blocksSection", appState.diagramas.dxfBlocksSection || "");
-      localStorage.setItem("diag_dxf_acadver", appState.diagramas.dxfAcadVer || "");
       localStorage.setItem("diag_dxf_blocks", JSON.stringify(appState.diagramas.dxfBlocks || []));
     } catch (_) {}
 
@@ -643,7 +573,7 @@ async function diagImportDxfFile(file) {
 }
 
 /* ======================================================
-   3) Drag & drop
+   3) Drag & drop (refs a zonas)
  ====================================================== */
 let _dragRefKey = null;
 
@@ -702,7 +632,6 @@ function _onZoneDrop(ev, zoneKey) {
   }
 
   _clearDiagError();
-
   _renderDiagramasUI();
   _renderResult();
 }
@@ -713,7 +642,6 @@ function _removeAssignment(zoneKey, id) {
   if (idx >= 0) list.splice(idx, 1);
 
   _clearDiagError();
-
   _renderDiagramasUI();
   _renderResult();
 }
@@ -723,16 +651,13 @@ function _updateAssignment(zoneKey, id, patch) {
   const it = list.find((x) => x.id === id);
   if (!it) return;
   Object.assign(it, patch);
-
   _clearDiagError();
 }
 
 /* ======================================================
    4) AUTO icon suggestion
  ====================================================== */
-function _norm(s) {
-  return String(s || "").toLowerCase();
-}
+function _norm(s) { return String(s || "").toLowerCase(); }
 
 function _suggestIconBlockForItem(item, blocks) {
   const text = `${item.ref || ""} ${item.descripcion || ""}`.toLowerCase();
@@ -788,9 +713,8 @@ function diagAutoAssignIcons() {
 }
 
 /* ======================================================
-   5) Payload base / fallback local / IA
+   5) Payload base (para IA y para fallback local)
  ====================================================== */
-
 function _defaultInstructions() {
   return `
 RESPONDE ÚNICAMENTE CON JSON (sin markdown, sin \`\`\`, sin texto).
@@ -848,6 +772,9 @@ function _buildSpecFromAssignments() {
   };
 }
 
+/* ======================================================
+   Fallback LOCAL (determinista)
+ ====================================================== */
 function _isPoeDevice(p) {
   const t = `${p.ref || ""} ${p.descripcion || ""}`.toUpperCase();
   const poeHints = ["IPSTYLE", "IP STYLE", "ACCESS", "UNIT", "READER", "INTERCOM", "IP ONE", "VERSO"];
@@ -915,12 +842,7 @@ function _localDesignFromSpec(spec) {
       });
 
       for (const p of list) {
-        connections.push({
-          from: p.id,
-          to: swId,
-          type: "UTP_CAT6",
-          note: "Device -> switch zona",
-        });
+        connections.push({ from: p.id, to: swId, type: "UTP_CAT6", note: "Device -> switch zona" });
       }
     }
   }
@@ -947,6 +869,9 @@ function _localDesignFromSpec(spec) {
   };
 }
 
+/* ======================================================
+   IA (opcional) + parse robusto
+ ====================================================== */
 function _buildHandlerEnvelope(payload) {
   const sectionKey = "diagramas_network";
   const docKey = "diagramas";
@@ -958,26 +883,14 @@ function _buildHandlerEnvelope(payload) {
   ].join("\n");
 
   return {
-    docKey,
-    doc_key: docKey,
-    documentKey: docKey,
-
-    sectionKey,
-    section_key: sectionKey,
-    sectionId: sectionKey,
-    section_id: sectionKey,
-
-    sectionText,
-    section_text: sectionText,
-    content: sectionText,
-    text: sectionText,
-
+    docKey, doc_key: docKey, documentKey: docKey,
+    sectionKey, section_key: sectionKey, sectionId: sectionKey, section_id: sectionKey,
+    sectionText, section_text: sectionText, content: sectionText, text: sectionText,
     mode: "diagram_network_v5_zones_cpd",
     instructions: payload.instructions,
     spec: payload.spec,
     network_rules: payload.network_rules,
     user: { email: appState?.user?.email || "", role: appState?.user?.role || "" },
-
     jsonOnly: true,
     response_format: "json",
   };
@@ -992,11 +905,7 @@ function _coerceTextFromHandlerResponse(res) {
     if (typeof c === "string" && c.trim()) return c;
   }
 
-  try {
-    return JSON.stringify(res);
-  } catch (_) {
-    return String(res);
-  }
+  try { return JSON.stringify(res); } catch (_) { return String(res); }
 }
 
 function _extractJsonString(s) {
@@ -1026,22 +935,14 @@ function _parseJsonRobust(res) {
   const jsonText = _extractJsonString(rawText);
 
   if (!jsonText) {
-    return {
-      ok: false,
-      error: 'La IA devolvió texto sin JSON reconocible (no encuentro "{ ... }").',
-      raw: rawText,
-    };
+    return { ok: false, error: 'La IA devolvió texto sin JSON reconocible (no encuentro "{ ... }").', raw: rawText };
   }
 
   try {
     const obj = JSON.parse(jsonText);
     return { ok: true, obj, raw: rawText };
   } catch (_) {
-    return {
-      ok: false,
-      error: "El JSON extraído no se puede parsear (JSON.parse falla).",
-      raw: rawText,
-    };
+    return { ok: false, error: "El JSON extraído no se puede parsear (JSON.parse falla).", raw: rawText };
   }
 }
 
@@ -1069,11 +970,7 @@ async function diagGenerateDesign() {
   const payload = {
     instructions: _getEffectiveInstructions(),
     spec,
-    network_rules: {
-      cable: "UTP_CAT6",
-      topology: ["hierarchical_star", "star"],
-      hints: { cpd_zone_key: "armario_cpd" },
-    },
+    network_rules: { cable: "UTP_CAT6", topology: ["hierarchical_star", "star"], hints: { cpd_zone_key: "armario_cpd" } },
   };
 
   const handler = window.handleDocSectionAI || window.handleAI || window.callGemini || null;
@@ -1101,7 +998,6 @@ async function diagGenerateDesign() {
     }
 
     const obj = parsed.obj;
-
     if (!obj || typeof obj !== "object") throw new Error("Respuesta IA inválida.");
     if (!("placements" in obj) || !("connections" in obj) || !("errors" in obj)) {
       appState.diagramas.lastRaw = parsed.raw || null;
@@ -1128,15 +1024,11 @@ async function diagGenerateDesign() {
 }
 
 /* ======================================================
-   6) Export DXF
-   FIX: incluir $ACADVER del DXF plantilla para que los códigos (330/70/100...) sean válidos
+   6) Export DXF (R12 válido + BLOCKS INSERT + coords manuales)
+   FIX CRÍTICO: TABLES NO puede ir vacío -> crea APPID/LTYPE/LAYER/STYLE mínimos
  ====================================================== */
 function _dxfLine(x1, y1, x2, y2, layer = "CABLE") {
-  return [
-    "0","LINE","8",layer,
-    "10",String(x1),"20",String(y1),"30","0",
-    "11",String(x2),"21",String(y2),"31","0",
-  ].join("\n");
+  return ["0","LINE","8",layer,"10",String(x1),"20",String(y1),"30","0","11",String(x2),"21",String(y2),"31","0"].join("\n");
 }
 function _dxfCircle(x, y, r, layer = "NODES") {
   return ["0","CIRCLE","8",layer,"10",String(x),"20",String(y),"30","0","40",String(r)].join("\n");
@@ -1147,12 +1039,68 @@ function _dxfText(x, y, h, text, layer = "LABELS") {
 }
 function _dxfInsert(blockName, x, y, layer = "NODES", scale = 1, rotationDeg = 0) {
   const b = String(blockName || "").trim();
+  return ["0","INSERT","8",layer,"2",b,"10",String(x),"20",String(y),"30","0","41",String(scale),"42",String(scale),"43",String(scale),"50",String(rotationDeg)].join("\n");
+}
+
+// Extrae el bloque SECTION/BLOCKS...ENDSEC del DXF plantilla
+function _extractDxfBlocksSection(dxfText) {
+  let text = String(dxfText || "");
+  if (!text) return "";
+  text = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+
+  const reStart = /(?:^|\n)\s*0\s*\n\s*SECTION\s*\n\s*2\s*\n\s*BLOCKS\b/i;
+  const m0 = reStart.exec(text);
+  if (!m0) return "";
+  const startIdx = m0.index;
+
+  const reEnd = /(?:^|\n)\s*0\s*\n\s*ENDSEC\b/i;
+  reEnd.lastIndex = startIdx;
+  const m1 = reEnd.exec(text);
+  if (!m1) return "";
+
+  const endIdx = m1.index + m1[0].length;
+  return text.slice(startIdx, endIdx);
+}
+
+// ✅ NUEVO: TABLES mínimas R12 válidas (APPID, LTYPE, LAYER, STYLE)
+function _dxfTablesR12(layers) {
+  const layerList = Array.isArray(layers) && layers.length ? layers : ["0","NODES","INFRA","CABLE","LABELS"];
+  const unique = Array.from(new Set(layerList.map((x) => String(x || "").trim()).filter(Boolean)));
+  if (!unique.includes("0")) unique.unshift("0");
+
+  const layerEntries = unique.map((name) => [
+    "0","LAYER",
+    "2",name,
+    "70","0",
+    "62","7",
+    "6","CONTINUOUS"
+  ].join("\n")).join("\n");
+
   return [
-    "0","INSERT","8",layer,
-    "2",b,
-    "10",String(x),"20",String(y),"30","0",
-    "41",String(scale),"42",String(scale),"43",String(scale),
-    "50",String(rotationDeg),
+    "0","SECTION",
+    "2","TABLES",
+
+    // LTYPE
+    "0","TABLE","2","LTYPE","70","1",
+    "0","LTYPE","2","CONTINUOUS","70","0","3","Solid line","72","65","73","0","40","0.0",
+    "0","ENDTAB",
+
+    // LAYER
+    "0","TABLE","2","LAYER","70",String(unique.length),
+    layerEntries,
+    "0","ENDTAB",
+
+    // STYLE
+    "0","TABLE","2","STYLE","70","1",
+    "0","STYLE","2","STANDARD","70","0","40","0.0","41","1.0","50","0.0","71","0","42","2.5","3","txt","4","",
+    "0","ENDTAB",
+
+    // APPID (CRÍTICO para que no falle “tabla APPID”)
+    "0","TABLE","2","APPID","70","1",
+    "0","APPID","2","ACAD","70","0",
+    "0","ENDTAB",
+
+    "0","ENDSEC",
   ].join("\n");
 }
 
@@ -1188,6 +1136,7 @@ function diagExportDxf() {
   const connections = Array.isArray(r.connections) ? r.connections : [];
   const ents = [];
 
+  // Headers zonas
   const zones = appState.diagramas.zones || [];
   const colW = 280, startX = 80, titleY = 40;
 
@@ -1223,45 +1172,27 @@ function diagExportDxf() {
     ents.push(_dxfLine(a.x, a.y, b.x, b.y, "CABLE"));
   }
 
-  // ✅ ACADVER: si la plantilla trae AC1027/AC1015/etc, úsalo.
-  // Si no hay, usa AC1027 (AutoCAD 2013) como “moderno” (evita que el lector asuma R12).
-  const acadver = String(appState.diagramas.dxfAcadVer || "").trim() || "AC1027";
-
+  // ✅ HEADER R12 + TABLES válidas
   const header = [
-    "0",
-    "SECTION",
-    "2",
-    "HEADER",
-    "9",
-    "$ACADVER",
-    "1",
-    acadver,
-    "0",
-    "ENDSEC",
+    "0","SECTION","2","HEADER",
+    "9","$ACADVER","1","AC1009",
+    "0","ENDSEC",
   ].join("\n");
+
+  const tables = _dxfTablesR12(["0","NODES","INFRA","CABLE","LABELS"]);
 
   const dxf = [
     header,
-    "0",
-    "SECTION",
-    "2",
-    "TABLES",
-    "0",
-    "ENDSEC",
+    tables,
     blocksSection,
-    "0",
-    "SECTION",
-    "2",
-    "ENTITIES",
+    "0","SECTION","2","ENTITIES",
     ents.join("\n"),
-    "0",
-    "ENDSEC",
-    "0",
-    "EOF",
+    "0","ENDSEC",
+    "0","EOF",
   ].join("\n");
 
   const nameBase = (appState.diagramas.dxfFileName || "diagrama").replace(/\.dxf$/i, "");
-  const fileName = `${nameBase}_red_cat6_blocks.dxf`;
+  const fileName = `${nameBase}_red_cat6_R12_blocks.dxf`;
 
   try {
     const blob = new Blob([dxf], { type: "application/dxf" });
@@ -1272,8 +1203,8 @@ function diagExportDxf() {
     a.download = fileName;
     a.style.display = "none";
     a.rel = "noopener";
-
     document.body.appendChild(a);
+
     requestAnimationFrame(() => {
       a.click();
       setTimeout(() => {
@@ -1290,7 +1221,6 @@ function diagExportDxf() {
 
 /* ======================================================
    7) Render UI
-   FIX layout: grid minmax(0,1fr) + min-width:0
  ====================================================== */
 function _renderDiagramasUI() {
   const host = _el("diagMain");
@@ -1307,48 +1237,38 @@ function _renderDiagramasUI() {
 
   function zoneHtml(z) {
     const list = Array.isArray(s.assignments[z.key]) ? s.assignments[z.key] : [];
-    const items = list
-      .map((it) => {
-        const blockOptions =
-          `<option value="">(sin icono)</option>` +
-          blocks
-            .slice(0, 800)
-            .map(
-              (b) =>
-                `<option value="${_escapeHtmlAttr(b)}"${it.iconBlock === b ? " selected" : ""}>${_escapeHtml(b)}</option>`
-            )
-            .join("");
+    const items = list.map((it) => {
+      const blockOptions =
+        `<option value="">(sin icono)</option>` +
+        blocks.slice(0, 800).map((b) =>
+          `<option value="${_escapeHtmlAttr(b)}"${it.iconBlock === b ? " selected" : ""}>${_escapeHtml(b)}</option>`
+        ).join("");
 
-        return `
-          <div class="card" style="padding:10px; margin-top:8px;">
-            <div style="display:flex; justify-content:space-between; gap:10px; align-items:flex-start;">
-              <div style="min-width:0;">
-                <div style="font-weight:600;">${_escapeHtml(it.ref)}</div>
-                <div class="muted" style="font-size:12px;">${_escapeHtml(it.descripcion || "")}</div>
-              </div>
-              <button class="btn btn-sm" data-act="remove" data-zone="${_escapeHtmlAttr(z.key)}" data-id="${_escapeHtmlAttr(
-                it.id
-              )}">Quitar</button>
+      return `
+        <div class="card" style="padding:10px; margin-top:8px;">
+          <div style="display:flex; justify-content:space-between; gap:10px; align-items:flex-start;">
+            <div style="min-width:0;">
+              <div style="font-weight:600;">${_escapeHtml(it.ref)}</div>
+              <div class="muted" style="font-size:12px;">${_escapeHtml(it.descripcion || "")}</div>
             </div>
+            <button class="btn btn-sm" data-act="remove" data-zone="${_escapeHtmlAttr(z.key)}" data-id="${_escapeHtmlAttr(it.id)}">Quitar</button>
+          </div>
 
-            <div class="grid mt-2" style="display:grid; grid-template-columns: 120px minmax(0,1fr); gap:10px; align-items:center;">
-              <div class="form-group" style="margin:0;">
-                <label style="font-size:12px;">Cantidad</label>
-                <input type="number" min="1" value="${Number(it.qty || 1)}" data-act="qty" data-zone="${_escapeHtmlAttr(
-                  z.key
-                )}" data-id="${_escapeHtmlAttr(it.id)}"/>
-              </div>
-              <div class="form-group" style="margin:0; min-width:0;">
-                <label style="font-size:12px;">Icono DXF (BLOCK)</label>
-                <select data-act="icon" data-zone="${_escapeHtmlAttr(z.key)}" data-id="${_escapeHtmlAttr(it.id)}" style="max-width:100%;">
-                  ${blockOptions}
-                </select>
-              </div>
+          <div class="grid mt-2" style="display:grid; grid-template-columns: 120px 1fr; gap:10px; align-items:center; min-width:0;">
+            <div class="form-group" style="margin:0;">
+              <label style="font-size:12px;">Cantidad</label>
+              <input type="number" min="1" value="${Number(it.qty || 1)}" data-act="qty" data-zone="${_escapeHtmlAttr(z.key)}" data-id="${_escapeHtmlAttr(it.id)}"/>
+            </div>
+            <div class="form-group" style="margin:0; min-width:0;">
+              <label style="font-size:12px;">Icono DXF (BLOCK)</label>
+              <select data-act="icon" data-zone="${_escapeHtmlAttr(z.key)}" data-id="${_escapeHtmlAttr(it.id)}" style="max-width:100%;">
+                ${blockOptions}
+              </select>
             </div>
           </div>
-        `;
-      })
-      .join("");
+        </div>
+      `;
+    }).join("");
 
     return `
       <div class="card diag-dropzone" data-zone="${_escapeHtmlAttr(z.key)}" style="padding:12px; min-height:180px; min-width:0;">
@@ -1364,8 +1284,9 @@ function _renderDiagramasUI() {
     `;
   }
 
+  // ✅ FIX layout principal: min-width:0 en la columna derecha para que no se expanda por el SVG
   host.innerHTML = `
-    <div class="grid" style="display:grid; grid-template-columns: 360px minmax(0,1fr); gap:14px; max-width:100%;">
+    <div class="grid" style="display:grid; grid-template-columns: 360px minmax(0,1fr); gap:14px; align-items:start;">
       <div class="card" style="padding:12px; min-width:0;">
         <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
           <h3 style="margin:0;">Referencias del proyecto</h3>
@@ -1377,33 +1298,26 @@ function _renderDiagramasUI() {
         </div>
 
         <div class="form-group mt-2">
-          <input id="diagRefsSearch" type="text" placeholder="Buscar ref/descripcion..." value="${_escapeHtml(
-            s.refsSearch || ""
-          )}"/>
+          <input id="diagRefsSearch" type="text" placeholder="Buscar ref/descripcion..." value="${_escapeHtml(s.refsSearch || "")}"/>
         </div>
 
         <div style="max-height:520px; overflow:auto; border:1px solid rgba(15,23,42,.08); border-radius:10px; padding:8px;">
           ${
             filtered.length
-              ? filtered
-                  .slice(0, 300)
-                  .map((r) => {
-                    return `
-                      <div class="card diag-draggable" style="padding:10px; margin-bottom:8px;"
-                           draggable="true" data-ref="${_escapeHtmlAttr(r.ref)}">
-                        <div style="display:flex; justify-content:space-between; gap:10px; align-items:center;">
-                          <div style="min-width:0;">
-                            <div style="font-weight:700;">${_escapeHtml(r.ref)}</div>
-                            <div class="muted" style="font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-                              ${_escapeHtml(r.descripcion || "")}
-                            </div>
-                          </div>
-                          <span class="chip">${Number(r.qty || 0)}</span>
+              ? filtered.slice(0, 300).map((r) => `
+                  <div class="card diag-draggable" style="padding:10px; margin-bottom:8px;"
+                       draggable="true" data-ref="${_escapeHtmlAttr(r.ref)}">
+                    <div style="display:flex; justify-content:space-between; gap:10px; align-items:center;">
+                      <div style="min-width:0;">
+                        <div style="font-weight:700;">${_escapeHtml(r.ref)}</div>
+                        <div class="muted" style="font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                          ${_escapeHtml(r.descripcion || "")}
                         </div>
                       </div>
-                    `;
-                  })
-                  .join("")
+                      <span class="chip">${Number(r.qty || 0)}</span>
+                    </div>
+                  </div>
+                `).join("")
               : `<div class="muted">No hay referencias. Genera un presupuesto primero.</div>`
           }
           ${filtered.length > 300 ? `<div class="muted mt-2">Mostrando 300.</div>` : ""}
@@ -1417,17 +1331,13 @@ function _renderDiagramasUI() {
           <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:10px;">
             <input id="diagDxfFile" type="file" accept=".dxf"/>
             <span class="muted" style="font-size:12px;">
-              ${
-                s.dxfFileName
-                  ? `Cargado: <b>${_escapeHtml(s.dxfFileName)}</b> · blocks: ${blocks.length}${s.dxfAcadVer ? ` · ${_escapeHtml(s.dxfAcadVer)}` : ""}`
-                  : "Sin DXF cargado"
-              }
+              ${s.dxfFileName ? `Cargado: <b>${_escapeHtml(s.dxfFileName)}</b> · blocks: ${blocks.length}` : "Sin DXF cargado"}
             </span>
           </div>
         </div>
       </div>
 
-      <div style="min-width:0; max-width:100%;">
+      <div style="min-width:0;">
         <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; min-width:0;">
           <div style="min-width:0;">
             <h3 style="margin:0;">Ubicación de dispositivos</h3>
@@ -1442,7 +1352,7 @@ function _renderDiagramasUI() {
           </div>
         </div>
 
-        <div id="diagPromptBox" class="card mt-3" style="padding:12px; display:${s.promptUiOpen ? "" : "none"}; max-width:100%; overflow:hidden;">
+        <div id="diagPromptBox" class="card mt-3" style="padding:12px; display:${s.promptUiOpen ? "" : "none"};">
           <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
             <h4 style="margin:0;">Prompt</h4>
             <span class="muted" style="font-size:12px;">Editable</span>
@@ -1455,11 +1365,11 @@ function _renderDiagramasUI() {
           </div>
         </div>
 
-        <div class="grid mt-3" style="display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap:14px; max-width:100%;">
+        <div class="grid mt-3" style="display:grid; grid-template-columns: 1fr 1fr; gap:14px; min-width:0;">
           ${s.zones.map(zoneHtml).join("")}
         </div>
 
-        <div class="mt-3" id="diagOutput" style="max-width:100%; min-width:0;"></div>
+        <div class="mt-3" id="diagOutput" style="min-width:0;"></div>
       </div>
     </div>
   `;
@@ -1566,7 +1476,6 @@ function renderDiagramasView() {
     if (!appState.diagramas.dxfBlocksSection) {
       appState.diagramas.dxfFileName = localStorage.getItem("diag_dxf_fileName") || "";
       appState.diagramas.dxfBlocksSection = localStorage.getItem("diag_dxf_blocksSection") || "";
-      appState.diagramas.dxfAcadVer = localStorage.getItem("diag_dxf_acadver") || "";
       const b = localStorage.getItem("diag_dxf_blocks");
       if (b) appState.diagramas.dxfBlocks = JSON.parse(b) || [];
     }
