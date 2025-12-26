@@ -1224,9 +1224,16 @@ function diagExportDxf() {
     ents.push(_dxfLine(a.x, a.y, b.x, b.y, "CABLE"));
   }
 
-  // Si faltan HEADER/TABLES, metemos mínimos (pero lo ideal es siempre reutilizar plantilla)
-  const safeHeader = headerSection || ["0","SECTION","2","HEADER","0","ENDSEC"].join("\n");
-  const safeTables = tablesSection || ["0","SECTION","2","TABLES","0","ENDSEC"].join("\n");
+ const safeHeader = [
+  "0","SECTION","2","HEADER",
+  "9","$ACADVER","1","AC1009",
+  "0","ENDSEC"
+].join("\n");
+
+const safeTables = [
+  "0","SECTION","2","TABLES",
+  "0","ENDSEC"
+].join("\n");
 
   const dxf = [
     safeHeader,
