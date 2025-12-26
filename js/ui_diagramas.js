@@ -5,8 +5,11 @@
 // - Preview editable: arrastrar y soltar nodos para asignar posiciones
 // - Parse robusto + raw visible
 // - Fallback LOCAL: si la IA no devuelve JSON, generamos topología jerárquica (Cat6) determinista
-//   (devices -> switches por zona -> core -> router en Armario/CPD si existe)
-// - Export DXF: usa INSERT de BLOCKS (si icon_block existe), y coords manuales si el usuario las movió
+// - Export DXF: INSERT de BLOCKS (si icon_block existe), coords manuales si el usuario las movió
+//
+// FIX EXTRA (DXF):
+// - Export R12-friendly para LibreCAD/QCAD: elimina códigos no soportados (330/100/360/...) de BLOCKS
+// - HEADER fuerza $ACADVER = AC1009 (R12)
 
 window.appState = window.appState || {};
 appState.diagramas = appState.diagramas || {
@@ -14,6 +17,7 @@ appState.diagramas = appState.diagramas || {
   dxfText: "",
   dxfBlocks: [],
   dxfBlocksSection: "",
+  dxfBlocksSectionR12: "", // ✅ NUEVO: BLOCKS compatible con R12 (sin 330/100/360...)
 
   refs: [],
   refsSearch: "",
@@ -31,11 +35,8 @@ appState.diagramas = appState.diagramas || {
   useCustomPrompt: false,
   customPromptText: "",
 
-  // Preview positions
   previewEditMode: false,
   manualCoords: {},
-
-  // el “result” que está pintando el preview (puede ser previewOnly)
   _previewResult: null,
 
   lastResult: null,
@@ -68,15 +69,13 @@ function _setBusy(b) {
   if (sp) sp.style.display = b ? "" : "none";
 }
 
-// limpiar errores cuando el usuario cambia asignaciones / iconos, etc.
 function _clearDiagError() {
   appState.diagramas.lastError = null;
   appState.diagramas.lastRaw = null;
 }
 
 /* ======================================================
-   Preview SVG (esquemático) basado en coords
-   - Soporta coords manuales (drag)
+   Preview SVG
  ====================================================== */
 
 function _buildSchematicCoordsFromResult(result) {
@@ -173,7 +172,6 @@ function _renderPreviewSvg(result) {
     return "●";
   }
 
-  // Bounding box
   let maxX = 0,
     maxY = 0;
   for (const [, p] of coords.entries()) {
@@ -222,7 +220,6 @@ function _renderPreviewSvg(result) {
     })
     .join("");
 
-  // ✅ FIX: no “romper” el ancho del layout: el contenedor tiene max-width y el svg no fuerza el grid
   return `
     <div class="card" style="padding:12px; max-width:100%; overflow:hidden;">
       <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap;">
@@ -254,13 +251,12 @@ function _renderPreviewSvg(result) {
       </div>
 
       <div class="muted mt-2" style="font-size:12px;">
-        Tip: mueve dispositivos y luego exporta DXF para que salgan en esas posiciones (en DXF se usarán los BLOCKS si están cargados).
+        Tip: mueve dispositivos y luego exporta DXF para que salgan en esas posiciones.
       </div>
     </div>
   `;
 }
 
-// Drag controller para SVG
 let _diagDrag = {
   active: false,
   nodeId: null,
@@ -364,13 +360,7 @@ function _buildPreviewOnlyResultFromAssignments() {
     }
   }
 
-  return {
-    placements,
-    infra: [],
-    connections: [],
-    summary: {},
-    errors: [],
-  };
+  return { placements, infra: [], connections: [], summary: {}, errors: [] };
 }
 
 function _renderResult() {
@@ -554,7 +544,6 @@ function _dxfExtractBlocks(pairs) {
     if (inBlockEntity && c === "2") {
       const name = String(v || "").trim();
       if (name && !blocks.includes(name)) blocks.push(name);
-      // ojo: no cerramos el bloque; solo evitamos duplicar el nombre
       continue;
     }
   }
@@ -562,11 +551,10 @@ function _dxfExtractBlocks(pairs) {
   return blocks;
 }
 
-// Extrae SECTION/BLOCKS...ENDSEC del DXF plantilla (robusto)
+// Extrae SECTION/BLOCKS...ENDSEC (regex)
 function _extractDxfBlocksSection(dxfText) {
   let text = String(dxfText || "");
   if (!text) return "";
-
   text = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 
   const reStart = /(?:^|\n)\s*0\s*\n\s*SECTION\s*\n\s*2\s*\n\s*BLOCKS\b/i;
@@ -584,7 +572,7 @@ function _extractDxfBlocksSection(dxfText) {
   return text.slice(startIdx, endIdx);
 }
 
-// ✅ Fallback: extraer SECTION/BLOCKS desde pares si la regex falla (por rarezas de formato)
+// Fallback: extraer SECTION/BLOCKS desde pares
 function _extractDxfBlocksSectionFromPairs(pairs) {
   if (!Array.isArray(pairs) || !pairs.length) return "";
 
@@ -620,6 +608,52 @@ function _extractDxfBlocksSectionFromPairs(pairs) {
   return out.join("\n");
 }
 
+// ✅ NUEVO: filtra una SECTION (p.ej. BLOCKS) para hacerla R12-friendly (LibreCAD)
+// R12 NO soporta 330/100/360/... ni subclass markers modernos. Conservamos solo group codes <= 99,
+// y dejamos 999 comments por si acaso.
+function _dxfSectionToR12(sectionText) {
+  const pairs = _dxfToPairs(sectionText);
+  const out = [];
+
+  for (const [cRaw, vRaw] of pairs) {
+    const c = String(cRaw || "").trim();
+    const codeNum = Number(c);
+
+    // conservar siempre "0" y "2" (estructura) aunque parezcan strings
+    if (c === "0" || c === "2") {
+      out.push(c, String(vRaw ?? ""));
+      continue;
+    }
+
+    // comentarios
+    if (c === "999") {
+      out.push(c, String(vRaw ?? ""));
+      continue;
+    }
+
+    // si no es número válido, descarta
+    if (!Number.isFinite(codeNum)) continue;
+
+    // R12: en general, nos quedamos con 1..99
+    if (codeNum >= 1 && codeNum <= 99) {
+      out.push(c, String(vRaw ?? ""));
+      continue;
+    }
+
+    // si es 100/330/360/etc => descarta
+  }
+
+  // asegurar que termina bien: si por filtrado se pierde ENDSEC, lo reponemos
+  const txt = out.join("\n");
+  const hasEndsec = /(?:^|\n)\s*0\s*\n\s*ENDSEC\b/i.test(txt);
+  if (hasEndsec) return txt;
+
+  // intenta rehacer: agrega ENDSEC si la sección parece ser una SECTION
+  const hasSection = /(?:^|\n)\s*0\s*\n\s*SECTION\b/i.test(txt);
+  if (hasSection) return `${txt}\n0\nENDSEC`;
+  return txt;
+}
+
 async function diagImportDxfFile(file) {
   if (!file) return;
 
@@ -630,8 +664,8 @@ async function diagImportDxfFile(file) {
   appState.diagramas.dxfText = "";
   appState.diagramas.dxfBlocks = [];
   appState.diagramas.dxfBlocksSection = "";
+  appState.diagramas.dxfBlocksSectionR12 = "";
 
-  // refresca UI ya (aunque falle luego), para que no “parezca” que no ha importado
   _renderDiagramasUI();
   _renderResult();
 
@@ -655,21 +689,23 @@ async function diagImportDxfFile(file) {
     const blocks = _dxfExtractBlocks(pairs);
     appState.diagramas.dxfBlocks = blocks.sort((a, b) => a.localeCompare(b));
 
-    // extraer BLOCKS section (regex) + fallback (pairs)
     let blocksSection = _extractDxfBlocksSection(text);
     if (!blocksSection) blocksSection = _extractDxfBlocksSectionFromPairs(pairs);
-    appState.diagramas.dxfBlocksSection = blocksSection || "";
 
+    appState.diagramas.dxfBlocksSection = blocksSection || "";
     if (!appState.diagramas.dxfBlocksSection) {
       throw new Error("El DXF no contiene SECTION/BLOCKS (o no está en formato ASCII esperado).");
     }
 
-    // ✅ Persistencia SOLO si cabe (si falla por tamaño, seguimos sin romper import)
+    // ✅ Generar versión R12-friendly (para LibreCAD/QCAD)
+    appState.diagramas.dxfBlocksSectionR12 = _dxfSectionToR12(appState.diagramas.dxfBlocksSection);
+
+    // Persistencia (si cabe)
     try {
       localStorage.setItem("diag_dxf_fileName", appState.diagramas.dxfFileName || "");
       localStorage.setItem("diag_dxf_blocks", JSON.stringify(appState.diagramas.dxfBlocks || []));
-      // ⚠️ blocksSection puede ser grande. Intentamos, pero si no cabe, no pasa nada.
       localStorage.setItem("diag_dxf_blocksSection", appState.diagramas.dxfBlocksSection || "");
+      localStorage.setItem("diag_dxf_blocksSectionR12", appState.diagramas.dxfBlocksSectionR12 || "");
     } catch (_) {}
 
     _renderDiagramasUI();
@@ -682,7 +718,7 @@ async function diagImportDxfFile(file) {
 }
 
 /* ======================================================
-   3) Drag & drop (refs a zonas)
+   3) Drag & drop
  ====================================================== */
 let _dragRefKey = null;
 
@@ -828,7 +864,7 @@ function diagAutoAssignIcons() {
 }
 
 /* ======================================================
-   5) Payload base (para IA y para fallback local)
+   5) Payload base
  ====================================================== */
 
 function _defaultInstructions() {
@@ -889,7 +925,7 @@ function _buildSpecFromAssignments() {
 }
 
 /* ======================================================
-   Fallback LOCAL (determinista)
+   Fallback LOCAL
  ====================================================== */
 function _isPoeDevice(p) {
   const t = `${p.ref || ""} ${p.descripcion || ""}`.toUpperCase();
@@ -991,7 +1027,7 @@ function _localDesignFromSpec(spec) {
 }
 
 /* ======================================================
-   IA (opcional) + parse robusto
+   IA (opcional) + parse
  ====================================================== */
 function _buildHandlerEnvelope(payload) {
   const sectionKey = "diagramas_network";
@@ -1174,8 +1210,7 @@ async function diagGenerateDesign() {
 }
 
 /* ======================================================
-   6) Export DXF
-   - ✅ Si NO hay BLOCKS section: exporta “sin iconos” (círculos) en vez de bloquear
+   6) Export DXF (R12)
  ====================================================== */
 function _dxfLine(x1, y1, x2, y2, layer = "CABLE") {
   return [
@@ -1202,6 +1237,58 @@ function _dxfInsert(blockName, x, y, layer = "NODES", scale = 1, rotationDeg = 0
   ].join("\n");
 }
 
+// ✅ Header R12 (AC1009)
+function _dxfHeaderR12() {
+  return [
+    "0","SECTION",
+    "2","HEADER",
+    "9","$ACADVER",
+    "1","AC1009",
+    "0","ENDSEC",
+  ].join("\n");
+}
+
+// ✅ Tables R12 mínimas + capas
+function _dxfTablesR12(layers) {
+  const uniq = Array.from(new Set((layers || []).map((x) => String(x || "").trim()).filter(Boolean)));
+  const layerRecs = uniq.map((name) => {
+    return [
+      "0","LAYER",
+      "2",name,
+      "70","0",
+      "62","7",
+      "6","CONTINUOUS",
+    ].join("\n");
+  }).join("\n");
+
+  return [
+    "0","SECTION",
+    "2","TABLES",
+
+    "0","TABLE",
+    "2","LTYPE",
+    "70","1",
+    "0","LTYPE",
+    "2","CONTINUOUS",
+    "70","0",
+    "3","Solid line",
+    "72","65",
+    "73","0",
+    "40","0.0",
+    "0","ENDTAB",
+
+    "0","TABLE",
+    "2","LAYER",
+    "70",String(Math.max(1, uniq.length)),
+    layerRecs || [
+      "0","LAYER","2","0","70","0","62","7","6","CONTINUOUS"
+    ].join("\n"),
+    "0","ENDTAB",
+
+    "0","ENDSEC",
+  ].join("\n");
+}
+
 function diagExportDxf() {
   const r = appState.diagramas.lastResult;
   if (!r) {
@@ -1219,9 +1306,9 @@ function diagExportDxf() {
     return;
   }
 
-  // usamos blocksSection si existe; si no, exportamos sin iconos
-  const blocksSection = String(appState.diagramas.dxfBlocksSection || "").trim();
-  const canUseBlocks = !!blocksSection;
+  // ✅ usar R12 blocks section (para LibreCAD)
+  const blocksSectionR12 = String(appState.diagramas.dxfBlocksSectionR12 || "").trim();
+  const canUseBlocks = !!blocksSectionR12;
 
   const knownBlocks = new Set((appState.diagramas.dxfBlocks || []).map((b) => String(b)));
   const placements = Array.isArray(r.placements) ? r.placements : [];
@@ -1242,8 +1329,6 @@ function diagExportDxf() {
     if (!pos) continue;
 
     const block = String(p.icon_block || p.iconBlock || "").trim();
-
-    // ✅ Solo insert si tenemos BLOCKS section (si no, el DXF no “verá” los bloques)
     if (canUseBlocks && block && knownBlocks.has(block)) {
       ents.push(_dxfInsert(block, pos.x, pos.y, "NODES", 1, 0));
     } else {
@@ -1268,37 +1353,38 @@ function diagExportDxf() {
     ents.push(_dxfLine(a.x, a.y, b.x, b.y, "CABLE"));
   }
 
-  // ✅ Si no hay BLOCKS section, construimos DXF “simple” (sin SECTION/BLOCKS)
-  const dxfParts = [
-    "0","SECTION","2","HEADER","0","ENDSEC",
-    "0","SECTION","2","TABLES","0","ENDSEC",
-  ];
+  const header = _dxfHeaderR12();
+  const tables = _dxfTablesR12(["0", "LABELS", "NODES", "INFRA", "CABLE"]);
 
-  if (canUseBlocks) dxfParts.push(blocksSection);
+  const dxfParts = [header, tables];
+
+  if (canUseBlocks) {
+    dxfParts.push(blocksSectionR12);
+    appState.diagramas.lastError = null;
+  } else {
+    appState.diagramas.lastError =
+      "Aviso: exportado SIN iconos (no hay SECTION/BLOCKS R12 cargada). Recarga la plantilla DXF para iconos.";
+  }
 
   dxfParts.push(
-    "0","SECTION","2","ENTITIES",
-    ents.join("\n"),
-    "0","ENDSEC",
-    "0","EOF"
+    [
+      "0","SECTION",
+      "2","ENTITIES",
+      ents.join("\n"),
+      "0","ENDSEC",
+      "0","EOF",
+    ].join("\n")
   );
+
+  appState.diagramas.lastRaw = null;
+  _renderResult();
 
   const dxf = dxfParts.join("\n");
 
   const nameBase = (appState.diagramas.dxfFileName || "diagrama").replace(/\.dxf$/i, "");
   const fileName = canUseBlocks
-    ? `${nameBase}_red_cat6_blocks.dxf`
-    : `${nameBase}_red_cat6_simple.dxf`;
-
-  // aviso suave si exporta sin blocks
-  if (!canUseBlocks) {
-    appState.diagramas.lastError =
-      "Aviso: exportado SIN iconos (no hay SECTION/BLOCKS cargada). Si quieres iconos, vuelve a cargar la plantilla DXF ASCII.";
-  } else {
-    appState.diagramas.lastError = null;
-  }
-  appState.diagramas.lastRaw = null;
-  _renderResult();
+    ? `${nameBase}_red_cat6_R12_blocks.dxf`
+    : `${nameBase}_red_cat6_R12_simple.dxf`;
 
   try {
     const blob = new Blob([dxf], { type: "application/dxf" });
@@ -1400,7 +1486,6 @@ function _renderDiagramasUI() {
     `;
   }
 
-  // ✅ FIX: min-width:0 en la columna derecha para que el SVG no ensanche TODO el layout
   host.innerHTML = `
     <div class="grid" style="display:grid; grid-template-columns: 360px 1fr; gap:14px; align-items:start;">
       <div class="card" style="padding:12px; min-width:0;">
@@ -1449,8 +1534,8 @@ function _renderDiagramasUI() {
         <div class="card mt-3" style="padding:12px;">
           <h4 style="margin:0;">Biblioteca de iconos (DXF)</h4>
           <div class="muted" style="font-size:12px; margin-top:6px;">
-            Carga tu “PLANTILLA DE ICONOS.dxf” (DXF ASCII) para exportar con INSERT/BLOCKS.
-            ${!s.dxfBlocksSection && s.dxfBlocks.length ? `<br/><span class="muted">Nota: tienes BLOCKS (caché) pero falta SECTION/BLOCKS; para export con iconos, recarga el DXF.</span>` : ""}
+            Carga tu “PLANTILLA DE ICONOS.dxf” (DXF ASCII).
+            <br/>Para LibreCAD/QCAD exportamos en R12 (AC1009) sin códigos modernos.
           </div>
           <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:10px;">
             <input id="diagDxfFile" type="file" accept=".dxf"/>
@@ -1595,13 +1680,14 @@ function renderDiagramasView() {
     return;
   }
 
-  // Restore DXF cache (evita volver a seleccionar el archivo)
+  // Restore DXF cache
   try {
-    if (!appState.diagramas.dxfBlocksSection) {
+    if (!appState.diagramas.dxfBlocksSectionR12) {
       appState.diagramas.dxfFileName = localStorage.getItem("diag_dxf_fileName") || "";
-      appState.diagramas.dxfBlocksSection = localStorage.getItem("diag_dxf_blocksSection") || "";
       const b = localStorage.getItem("diag_dxf_blocks");
       if (b) appState.diagramas.dxfBlocks = JSON.parse(b) || [];
+      appState.diagramas.dxfBlocksSection = localStorage.getItem("diag_dxf_blocksSection") || "";
+      appState.diagramas.dxfBlocksSectionR12 = localStorage.getItem("diag_dxf_blocksSectionR12") || "";
     }
   } catch (_) {}
 
