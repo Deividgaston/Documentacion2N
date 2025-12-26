@@ -628,10 +628,10 @@ async function diagImportDxfFile(file) {
 
     // Guardar secciones completas de la plantilla (clave para export válido)
     appState.diagramas.dxfHeaderSection = _extractDxfSection(text, "HEADER") || "";
-    appState.diagramas.dxfClassesSection = _extractDxfSection(text, "CLASSES") || ""; // ✅ NUEVO
+    appState.diagramas.dxfClassesSection = _extractDxfSection(text, "CLASSES") || "";
     appState.diagramas.dxfTablesSection = _extractDxfSection(text, "TABLES") || "";
     appState.diagramas.dxfBlocksSection = _extractDxfSection(text, "BLOCKS") || "";
-    appState.diagramas.dxfObjectsSection = _extractDxfSection(text, "OBJECTS") || ""; // ✅ NUEVO
+    appState.diagramas.dxfObjectsSection = _extractDxfSection(text, "OBJECTS") || "";
 
     if (!appState.diagramas.dxfBlocksSection) {
       throw new Error("El DXF no contiene SECTION/BLOCKS (o no está en formato ASCII esperado).");
@@ -1173,11 +1173,11 @@ function diagExportDxf() {
     return;
   }
 
-  // ✅ REUTILIZAR secciones de la plantilla (clave para que el CAD reconozca BLOCKS correctamente)
-  const headerSection = String(appState.diagramas.dxfHeaderSection || "").trim();
+  // ✅ REUTILIZAR secciones de la plantilla
+  const headerSection  = String(appState.diagramas.dxfHeaderSection  || "").trim();
   const classesSection = String(appState.diagramas.dxfClassesSection || "").trim();
-  const tablesSection = String(appState.diagramas.dxfTablesSection || "").trim();
-  const blocksSection = String(appState.diagramas.dxfBlocksSection || "").trim();
+  const tablesSection  = String(appState.diagramas.dxfTablesSection  || "").trim();
+  const blocksSection  = String(appState.diagramas.dxfBlocksSection  || "").trim();
   const objectsSection = String(appState.diagramas.dxfObjectsSection || "").trim();
 
   if (!blocksSection) {
@@ -1206,9 +1206,9 @@ function diagExportDxf() {
     if (nb && !blockMap.has(nb)) blockMap.set(nb, String(b));
   });
 
-  const placements = Array.isArray(r.placements) ? r.placements : [];
-  const infra = Array.isArray(r.infra) ? r.infra : [];
-  const connections = Array.isArray(r.connections) ? r.connections : [];
+  const placements   = Array.isArray(r.placements) ? r.placements : [];
+  const infra        = Array.isArray(r.infra) ? r.infra : [];
+  const connections  = Array.isArray(r.connections) ? r.connections : [];
   const ents = [];
 
   const zones = appState.diagramas.zones || [];
@@ -1228,7 +1228,6 @@ function diagExportDxf() {
     if (resolved) {
       ents.push(_dxfInsert(resolved, pos.x, pos.y, "NODES", 1, 0));
     } else {
-      // fallback si el bloque no existe
       ents.push(_dxfCircle(pos.x, pos.y, 10, "NODES"));
     }
 
@@ -1252,53 +1251,41 @@ function diagExportDxf() {
     ents.push(_dxfLine(a.x, a.y, b.x, b.y, "CABLE"));
   }
 
-  // Si faltan HEADER/TABLES, metemos mínimos (pero lo ideal es siempre reutilizar plantilla)
- const safeHeader = headerSection || [
-  "0","SECTION","2","HEADER",
-  "9","$ACADVER","1","AC1027", // ⬅️ MUY IMPORTANTE
-  "0","ENDSEC"
-].join("\n");
+  // ✅ Fallbacks seguros
+  const safeHeader = headerSection || [
+    "0","SECTION","2","HEADER",
+    "9","$ACADVER","1","AC1027",
+    "0","ENDSEC"
+  ].join("\n");
 
-
+  // ✅ CLASSES: si no viene de plantilla, lo más seguro es vacío
   const safeClasses = classesSection || [
-  "0","SECTION","2","CLASSES",
-  "0","CLASS",
-  "1","AcDbEntity",
-  "2","AcDbEntity",
-  "3","ObjectDBX Classes",
-  "90","0",
-  "280","0",
-  "281","0",
-  "0","ENDSEC"
-].join("\n");
-
+    "0","SECTION","2","CLASSES",
+    "0","ENDSEC"
+  ].join("\n");
 
   const safeTables = tablesSection || [
     "0","SECTION","2","TABLES",
     "0","ENDSEC"
   ].join("\n");
 
-  const safeObjects = objectsSection || ""; // opcional
+  // ✅ OBJECTS siempre como sección completa (mínimo seguro)
+  const safeObjects = objectsSection || [
+    "0","SECTION","2","OBJECTS",
+    "0","ENDSEC"
+  ].join("\n");
 
-// HEADER / CLASSES / TABLES ya los tienes
+  const parts = [
+    safeHeader,
+    safeClasses,
+    safeTables,
+    blocksSection,
+    ["0","SECTION","2","ENTITIES", ents.join("\n"), "0","ENDSEC"].join("\n"),
+    safeObjects,
+    "0\nEOF"
+  ];
 
-const safeObjects = objectsSection || [
-  "0","SECTION","2","OBJECTS",
-  "0","ENDSEC"
-].join("\n");
-
-const parts = [
-  safeHeader,
-  safeClasses,
-  safeTables,
-  blocksSection,
-  ["0","SECTION","2","ENTITIES", ents.join("\n"), "0","ENDSEC"].join("\n"),
-  safeObjects,
-  "0\nEOF"
-];
-
-const dxf = parts.join("\n") + "\n";
-
+  const dxf = parts.join("\n") + "\n";
 
   const nameBase = (appState.diagramas.dxfFileName || "diagrama").replace(/\.dxf$/i, "");
   const fileName = `${nameBase}_red_cat6_blocks.dxf`;
@@ -1591,10 +1578,10 @@ function renderDiagramasView() {
       const b = localStorage.getItem("diag_dxf_blocks");
       if (b) appState.diagramas.dxfBlocks = JSON.parse(b) || [];
 
-      appState.diagramas.dxfHeaderSection = localStorage.getItem("diag_dxf_headerSection") || "";
+      appState.diagramas.dxfHeaderSection  = localStorage.getItem("diag_dxf_headerSection")  || "";
       appState.diagramas.dxfClassesSection = localStorage.getItem("diag_dxf_classesSection") || "";
-      appState.diagramas.dxfTablesSection = localStorage.getItem("diag_dxf_tablesSection") || "";
-      appState.diagramas.dxfBlocksSection = localStorage.getItem("diag_dxf_blocksSection") || "";
+      appState.diagramas.dxfTablesSection  = localStorage.getItem("diag_dxf_tablesSection")  || "";
+      appState.diagramas.dxfBlocksSection  = localStorage.getItem("diag_dxf_blocksSection")  || "";
       appState.diagramas.dxfObjectsSection = localStorage.getItem("diag_dxf_objectsSection") || "";
     }
   } catch (_) {}
