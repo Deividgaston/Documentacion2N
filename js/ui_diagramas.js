@@ -1,26 +1,23 @@
 // js/ui_diagramas.js
 // Vista: DIAGRAMAS (IA)
-// V2.8.2 (Hito 16+):
-// - ✅ Export SCR robusto multi-idioma (sin capas)
-// - ✅ DXF solo se usa para leer BLOCKS + contar atributos (para no romper -INSERT)
-// - ✅ Si un bloque NO tiene atributos, no se inyecta AI_KEY (evita que el script se desplace / falle)
-//
-// FIX NUEVO (SCR en AutoCAD ES):
-// - ✅ Coordenadas/valores SIN decimales para evitar "Comando '000,94.000' desconocido" por separadores ES
-//   (AutoCAD ES interpreta '.' como miles; toFixed() rompe el SCRIPT).
-//
-// FIXES (estabilidad):
-// - ✅ Eliminado duplicado accidental del archivo (causaba "Identifier ... already been declared").
-// - ✅ Preview drag: no pisa window.onmousemove/onmouseup (usa add/removeEventListener y evita leaks/duplicados).
+// V2.9 (Hito 16+):
+// - ✅ Export DXF (ASCII) SIN atributos (INSERT simple) reutilizando HEADER/TABLES/BLOCKS de la plantilla
+// - ✅ Eliminado SCR (botón + función + textos)
+// - ✅ FIX buscador refs: ahora puedes escribir normal (sin re-render en cada tecla)
+// - ✅ Preview drag estable (mantiene add/removeEventListener)
+
+// ======================================================
+// ESTADO GLOBAL
+// ======================================================
 
 window.appState = window.appState || {};
 appState.diagramas = appState.diagramas || {
   dxfFileName: "",
   dxfText: "",
   dxfBlocks: [],
-  dxfBlockAttrs: {}, // blockName -> { count:number, tags:[string] }
+  dxfBlockAttrs: {}, // se mantiene por compatibilidad (ya no se usa para export)
 
-  // (se mantienen por compatibilidad / caché, aunque ya no exportamos DXF)
+  // cache secciones DXF plantilla
   dxfHeaderSection: "",
   dxfClassesSection: "",
   dxfTablesSection: "",
@@ -266,7 +263,7 @@ function _renderPreviewSvg(result) {
       </div>
 
       <div class="muted mt-2" style="font-size:12px;">
-        Tip: mueve dispositivos y luego exporta <b>SCR</b> (SCRIPT) sobre la plantilla.
+        Tip: mueve dispositivos y exporta <b>DXF</b> (sin atributos).
       </div>
     </div>
   `;
@@ -299,10 +296,9 @@ function _unbindPreviewWindowListeners() {
   s._previewListenersBound = false;
 }
 
-function _bindPreviewWindowListeners(svg, baseResult) {
+function _bindPreviewWindowListeners(svg) {
   const s = appState.diagramas;
 
-  // limpiar anteriores para evitar duplicados/leaks
   _unbindPreviewWindowListeners();
 
   s._previewMouseMoveHandler = (ev) => {
@@ -358,8 +354,7 @@ function _bindPreviewInteractions() {
 
   const baseResult = appState.diagramas._previewResult || appState.diagramas.lastResult;
 
-  // bind window listeners (no pisa otros módulos)
-  _bindPreviewWindowListeners(svg, baseResult);
+  _bindPreviewWindowListeners(svg);
 
   svg.onmousedown = (ev) => {
     const t = ev.target;
@@ -551,7 +546,7 @@ function _dxfToPairs(dxfText) {
   return pairs;
 }
 
-// ✅ Extrae NOMBRES de bloques + nº de atributos (ATTDEF) por bloque
+// Extrae NOMBRES de bloques + nº de atributos (ATTDEF) por bloque (compat)
 function _dxfExtractBlocks(pairs) {
   const blocks = [];
   const attrsByBlock = {}; // name -> { count, tags[] }
@@ -606,13 +601,11 @@ function _dxfExtractBlocks(pairs) {
 
     if (!inBlockEntity) continue;
 
-    // Nombre de bloque (primer code 2 tras BLOCK)
     if (!curName && c === "2") {
       curName = String(v || "").trim();
       continue;
     }
 
-    // Captura ATTDEF TAGs (code 2 dentro de ATTDEF)
     if (c === "0" && v === "ATTDEF") {
       let tag = "";
       for (let j = i + 1; j < pairs.length; j++) {
@@ -691,7 +684,6 @@ async function diagImportDxfFile(file) {
     appState.diagramas.dxfBlocks = (ex.blocks || []).sort((a, b) => a.localeCompare(b));
     appState.diagramas.dxfBlockAttrs = ex.attrsByBlock || {};
 
-    // cache (aunque no exportemos DXF, dejamos por si luego lo reutilizas)
     appState.diagramas.dxfHeaderSection = _extractDxfSection(text, "HEADER") || "";
     appState.diagramas.dxfClassesSection = _extractDxfSection(text, "CLASSES") || "";
     appState.diagramas.dxfTablesSection = _extractDxfSection(text, "TABLES") || "";
@@ -1193,10 +1185,11 @@ async function diagGenerateDesign() {
 }
 
 /* ======================================================
-   6) ✅ Export SCR (SIN CAPAS) + robusto con atributos
-   FIX: sin decimales (AutoCAD ES)
+   6) ✅ Export DXF (SIN atributos)
+   - Reutiliza HEADER/CLASSES/TABLES/BLOCKS/OBJECTS de la plantilla
+   - Crea ENTITIES con LINE + INSERT + TEXT (+ CIRCLE fallback)
  ====================================================== */
-function diagExportScr() {
+function diagExportDxf() {
   const r = appState.diagramas.lastResult;
   if (!r) {
     appState.diagramas.lastError = "No hay resultado para exportar. Genera el diseño primero.";
@@ -1205,9 +1198,16 @@ function diagExportScr() {
     return;
   }
 
+  if (!appState.diagramas.dxfBlocksSection) {
+    appState.diagramas.lastError = "Para exportar DXF, carga primero la plantilla DXF (para reutilizar BLOCKS).";
+    appState.diagramas.lastRaw = null;
+    _renderResult();
+    return;
+  }
+
   const blocks = Array.isArray(appState.diagramas.dxfBlocks) ? appState.diagramas.dxfBlocks : [];
   if (!blocks.length) {
-    appState.diagramas.lastError = "Para exportar SCR, carga primero la plantilla DXF (para validar nombres de BLOCK).";
+    appState.diagramas.lastError = "La plantilla DXF no tiene bloques detectados (BLOCKS).";
     appState.diagramas.lastRaw = null;
     _renderResult();
     return;
@@ -1224,136 +1224,79 @@ function diagExportScr() {
   function _normBlockName(s) {
     return String(s || "").trim().toLowerCase();
   }
-
   const blockMap = new Map();
   blocks.forEach((b) => {
     const nb = _normBlockName(b);
     if (nb && !blockMap.has(nb)) blockMap.set(nb, String(b));
   });
 
-  // attrs: blockName -> count
-  const blockAttrs = appState.diagramas.dxfBlockAttrs || {};
-  const attrCountByNorm = new Map();
-  Object.keys(blockAttrs).forEach((bn) => {
-    const nb = _normBlockName(bn);
-    if (!nb) return;
-    const cnt = Number(blockAttrs[bn]?.count || 0) || 0;
-    attrCountByNorm.set(nb, cnt);
-  });
-
   const placements = Array.isArray(r.placements) ? r.placements : [];
   const infra = Array.isArray(r.infra) ? r.infra : [];
   const connections = Array.isArray(r.connections) ? r.connections : [];
 
-  const scr = [];
-
-  // Evitar diálogos / prompts raros (multi-idioma)
-  scr.push("._CMDECHO");
-  scr.push("0");
-  scr.push("._OSMODE");
-  scr.push("0");
-  scr.push("._CMDDIA");
-  scr.push("0");
-  scr.push("._ATTDIA");
-  scr.push("0");
-
-  // Necesario para que -INSERT pida atributos cuando existan
-  scr.push("._ATTREQ");
-  scr.push("1");
-
-  // -----------------------------
-  // FIX: formato numérico robusto (sin decimales)
-  // -----------------------------
-  function _fmtN(n) {
+  const _fmt = (n) => {
     const v = Number(n);
     if (!Number.isFinite(v)) return "0";
-    return String(Math.round(v));
-  }
-  function _fmtXY(x, y) {
-    // En AutoCAD ES, el separador entre X e Y debe ser "," o espacio.
-    // Usamos "," y números enteros para evitar el bug de separadores.
-    return `${_fmtN(x)},${_fmtN(y)}`;
-  }
+    return v.toFixed(3);
+  };
 
-  function scrText(x, y, h, rotDeg, text) {
-    const t = String(text || "").replaceAll("\n", " ").replaceAll("\r", " ");
-    scr.push("._-TEXT");
-    scr.push(_fmtXY(x, y));
-    scr.push(String(Math.max(1, Math.round(Number(h) || 10))));
-    scr.push(String(Math.round(Number(rotDeg || 0))));
-    scr.push(t);
+  const ent = [];
+
+  function dxfLine(x1, y1, x2, y2) {
+    ent.push(
+      "0","LINE",
+      "8","0",
+      "10",_fmt(x1),"20",_fmt(y1),"30","0",
+      "11",_fmt(x2),"21",_fmt(y2),"31","0"
+    );
   }
 
-  function scrLine(x1, y1, x2, y2) {
-    scr.push("._LINE");
-    scr.push(_fmtXY(x1, y1));
-    scr.push(_fmtXY(x2, y2));
-    scr.push("");
+  function dxfCircle(x, y, rad) {
+    ent.push(
+      "0","CIRCLE",
+      "8","0",
+      "10",_fmt(x),"20",_fmt(y),"30","0",
+      "40",_fmt(rad)
+    );
   }
 
-  function scrCircle(x, y, r0) {
-    scr.push("._CIRCLE");
-    scr.push(_fmtXY(x, y));
-    scr.push(String(Math.max(1, Math.round(Number(r0) || 10))));
+  function dxfText(x, y, h, text) {
+    const t = String(text || "").replace(/\r?\n/g, " ");
+    ent.push(
+      "0","TEXT",
+      "8","0",
+      "10",_fmt(x),"20",_fmt(y),"30","0",
+      "40",_fmt(h),
+      "1",t,
+      "50","0"
+    );
   }
 
-  function _buildAiKeyForPlacement(p) {
-    const aiKey = p?.meta?.AI_KEY || p?.meta?.ai_key || p?.ai_key || p?.AI_KEY;
-    if (String(aiKey || "").trim()) return String(aiKey).trim();
-
-    const ref = String(p?.ref || "").trim();
-    const desc = String(p?.descripcion || p?.description || "").toUpperCase();
-    const blk = String(p?.icon_block || p?.iconBlock || "").toUpperCase();
-    const s = `${ref} ${desc} ${blk}`;
-
-    let type = "DISPOSITIVO";
-    if (s.includes("INDOOR") || s.includes("MONITOR") || s.includes("TOUCH") || s.includes("CLIP")) type = "MONITOR";
-    if (s.includes("ACCESS") || s.includes("UNIT") || s.includes("READER") || s.includes("RFID") || s.includes("BLE")) type = "CONTROL_ACCESO";
-    if (s.includes("SWITCH")) type = "SWITCH";
-    if (s.includes("ROUTER") || s.includes("GATEWAY")) type = "ROUTER";
-    if (s.includes("IP STYLE") || s.includes("IPSTYLE") || s.includes("VERSO") || s.includes("IP ONE") || s.includes("IPONE")) type = "VIDEOPORTERO";
-
-    return `TYPE=${type};SKU=${ref}`;
-  }
-
-  // ✅ Insert robusto:
-  // - Si el bloque NO tiene atributos: no inyecta nada
-  // - Si tiene N atributos: rellena el 1º con AI_KEY y el resto con ENTER
-  // FIX: sin decimales (escala/rot)
-  function scrInsertSmart(blockName, x, y, scale, rotDeg, aiKeyValue) {
+  function dxfInsert(blockName, x, y, sx, sy, rotDeg) {
     const bn = String(blockName || "").replaceAll('"', "").trim();
-    const nb = _normBlockName(bn);
-    const attrCount = Number(attrCountByNorm.get(nb) || 0) || 0;
-
-    scr.push("._-INSERT");
-    scr.push(`"${bn}"`);
-    scr.push(_fmtXY(x, y));
-    // escala X, escala Y, rotación (enteros)
-    scr.push(String(Math.max(1, Math.round(Number(scale || 1)))));
-    scr.push(String(Math.max(1, Math.round(Number(scale || 1)))));
-    scr.push(String(Math.round(Number(rotDeg || 0))));
-
-    if (attrCount <= 0) return;
-
-    const v = String(aiKeyValue || "").replaceAll("\n", " ").replaceAll("\r", " ");
-    scr.push(v);
-    for (let k = 1; k < attrCount; k++) scr.push("");
-    scr.push("");
+    ent.push(
+      "0","INSERT",
+      "8","0",
+      "2",bn,
+      "10",_fmt(x),"20",_fmt(y),"30","0",
+      "41",_fmt(sx),"42",_fmt(sy),"43",_fmt(1),
+      "50",_fmt(rotDeg || 0)
+    );
+    // SIN ATTRIB / SEQEND: sin atributos
   }
 
-  // Título + zonas (sin capas)
+  // Título y cabeceras de zona
   const zones = appState.diagramas.zones || [];
   const colW = 280, startX = 80, titleY = 40;
-
-  scrText(80, 20, 14, 0, "DIAGRAMA RED UTP CAT6 (ESQUEMA)");
-  zones.forEach((z, i) => scrText(startX + i * colW, titleY, 12, 0, z.label));
+  dxfText(80, 20, 14, "DIAGRAMA RED UTP CAT6 (ESQUEMA)");
+  zones.forEach((z, i) => dxfText(startX + i * colW, titleY, 12, z.label));
 
   // Cables
   for (const c of connections) {
     const a = coords.get(c.from);
     const b = coords.get(c.to);
     if (!a || !b) continue;
-    scrLine(a.x, a.y, b.x, b.y);
+    dxfLine(a.x, a.y, b.x, b.y);
   }
 
   // Placements
@@ -1365,39 +1308,52 @@ function diagExportScr() {
     const resolved = wanted ? (blockMap.get(_normBlockName(wanted)) || "") : "";
 
     if (resolved) {
-      const aiKey = _buildAiKeyForPlacement(p);
-      scrInsertSmart(resolved, pos.x, pos.y, 1, 0, aiKey);
+      dxfInsert(resolved, pos.x, pos.y, 1, 1, 0);
     } else {
-      scrCircle(pos.x, pos.y, 10);
+      dxfCircle(pos.x, pos.y, 10);
     }
 
-    scrText(pos.x + 16, pos.y + 4, 10, 0, String(p.ref || p.id || ""));
+    dxfText(pos.x + 16, pos.y + 4, 10, String(p.ref || p.id || ""));
   }
 
-  // Infra (sin insert de blocks)
+  // Infra (sin bloques, simple círculo + texto)
   for (const n of infra) {
     const pos = coords.get(n.id);
     if (!pos) continue;
-
-    scrCircle(pos.x, pos.y, 12);
-    scrText(pos.x + 16, pos.y + 4, 10, 0, String(n.type || n.id));
+    dxfCircle(pos.x, pos.y, 12);
+    dxfText(pos.x + 16, pos.y + 4, 10, String(n.type || n.id));
   }
 
-  // Zoom extents
-  scr.push("._ZOOM");
-  scr.push("_E");
+  // Entidades -> sección ENTITIES
+  const entitiesSection = [
+    "0","SECTION",
+    "2","ENTITIES",
+    ...ent,
+    "0","ENDSEC",
+  ].join("\n");
 
-  // Restaurar
-  scr.push("._CMDECHO");
-  scr.push("1");
+  // Ensamblado final reutilizando plantilla (mínimos cambios)
+  const header = appState.diagramas.dxfHeaderSection || ["0","SECTION","2","HEADER","0","ENDSEC"].join("\n");
+  const classes = appState.diagramas.dxfClassesSection || ""; // opcional
+  const tables = appState.diagramas.dxfTablesSection || ["0","SECTION","2","TABLES","0","ENDSEC"].join("\n");
+  const blocksSection = appState.diagramas.dxfBlocksSection; // requerido
+  const objects = appState.diagramas.dxfObjectsSection || ""; // opcional
 
-  const scriptText = scr.join("\n") + "\n";
+  const out = [
+    _stripBom(header),
+    classes ? _stripBom(classes) : "",
+    _stripBom(tables),
+    _stripBom(blocksSection),
+    entitiesSection,
+    objects ? _stripBom(objects) : "",
+    "0\nEOF\n",
+  ].filter(Boolean).join("\n");
 
-  const nameBase = (appState.diagramas.dxfFileName || "diagrama").replace(/\.dxf$/i, "");
-  const fileName = `${nameBase}_red_cat6.scr`;
+  const nameBase = (appState.diagramas.dxfFileName || "plantilla").replace(/\.dxf$/i, "");
+  const fileName = `${nameBase}_red_cat6_sin_atributos.dxf`;
 
   try {
-    const blob = new Blob([scriptText], { type: "text/plain" });
+    const blob = new Blob([out], { type: "application/dxf" });
     const url = URL.createObjectURL(blob);
 
     const a = document.createElement("a");
@@ -1407,7 +1363,6 @@ function diagExportScr() {
     a.rel = "noopener";
 
     document.body.appendChild(a);
-
     requestAnimationFrame(() => {
       a.click();
       setTimeout(() => {
@@ -1417,16 +1372,18 @@ function diagExportScr() {
     });
   } catch (e) {
     console.error(e);
-    appState.diagramas.lastError = "No se pudo descargar el SCR (bloqueado por el navegador).";
+    appState.diagramas.lastError = "No se pudo descargar el DXF (bloqueado por el navegador).";
     _renderResult();
   }
 }
 
 /* ======================================================
-   7) Render UI
+   7) Render UI + FIX buscador
+   FIX: no re-render completo en cada tecla (solo lista refs)
  ====================================================== */
-function _renderDiagramasUI() {
-  const host = _el("diagMain");
+
+function _renderRefsList() {
+  const host = _el("diagRefsList");
   if (!host) return;
 
   const s = appState.diagramas;
@@ -1436,6 +1393,40 @@ function _renderDiagramasUI() {
     ? refs.filter((r) => (r.ref || "").toLowerCase().includes(q) || (r.descripcion || "").toLowerCase().includes(q))
     : refs;
 
+  host.innerHTML = `
+    ${
+      filtered.length
+        ? filtered.slice(0, 300).map((r) => `
+            <div class="card diag-draggable" style="padding:10px; margin-bottom:8px;"
+                 draggable="true" data-ref="${_escapeHtmlAttr(r.ref)}">
+              <div style="display:flex; justify-content:space-between; gap:10px; align-items:center;">
+                <div style="min-width:0;">
+                  <div style="font-weight:700;">${_escapeHtml(r.ref)}</div>
+                  <div class="muted" style="font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                    ${_escapeHtml(r.descripcion || "")}
+                  </div>
+                </div>
+                <span class="chip">${Number(r.qty || 0)}</span>
+              </div>
+            </div>
+          `).join("")
+        : `<div class="muted">No hay referencias. Genera un presupuesto primero.</div>`
+    }
+    ${filtered.length > 300 ? `<div class="muted mt-2">Mostrando 300.</div>` : ""}
+  `;
+
+  // re-bind drag refs (solo dentro del listado)
+  host.querySelectorAll("[draggable='true'][data-ref]").forEach((node) => {
+    node.addEventListener("dragstart", (ev) => _onRefDragStart(ev, node.dataset.ref));
+    node.addEventListener("dragend", () => (_dragRefKey = null));
+  });
+}
+
+function _renderDiagramasUI() {
+  const host = _el("diagMain");
+  if (!host) return;
+
+  const s = appState.diagramas;
   const blocks = Array.isArray(s.dxfBlocks) ? s.dxfBlocks : [];
 
   function zoneHtml(z) {
@@ -1506,32 +1497,12 @@ function _renderDiagramasUI() {
           <input id="diagRefsSearch" type="text" placeholder="Buscar ref/descripcion..." value="${_escapeHtml(s.refsSearch || "")}"/>
         </div>
 
-        <div style="max-height:520px; overflow:auto; border:1px solid rgba(15,23,42,.08); border-radius:10px; padding:8px;">
-          ${
-            filtered.length
-              ? filtered.slice(0, 300).map((r) => `
-                      <div class="card diag-draggable" style="padding:10px; margin-bottom:8px;"
-                           draggable="true" data-ref="${_escapeHtmlAttr(r.ref)}">
-                        <div style="display:flex; justify-content:space-between; gap:10px; align-items:center;">
-                          <div style="min-width:0;">
-                            <div style="font-weight:700;">${_escapeHtml(r.ref)}</div>
-                            <div class="muted" style="font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-                              ${_escapeHtml(r.descripcion || "")}
-                            </div>
-                          </div>
-                          <span class="chip">${Number(r.qty || 0)}</span>
-                        </div>
-                      </div>
-                    `).join("")
-              : `<div class="muted">No hay referencias. Genera un presupuesto primero.</div>`
-          }
-          ${filtered.length > 300 ? `<div class="muted mt-2">Mostrando 300.</div>` : ""}
-        </div>
+        <div id="diagRefsList" style="max-height:520px; overflow:auto; border:1px solid rgba(15,23,42,.08); border-radius:10px; padding:8px;"></div>
 
         <div class="card mt-3" style="padding:12px;">
           <h4 style="margin:0;">Biblioteca de iconos (DXF)</h4>
           <div class="muted" style="font-size:12px; margin-top:6px;">
-            Carga tu “PLANTILLA DE ICONOS.dxf” para poder seleccionar el BLOCK y exportar <b>SCR</b>.
+            Carga tu “PLANTILLA DE ICONOS.dxf” para poder seleccionar el BLOCK y exportar <b>DXF</b>.
           </div>
           <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:10px;">
             <input id="diagDxfFile" type="file" accept=".dxf"/>
@@ -1548,14 +1519,14 @@ function _renderDiagramasUI() {
             <h3 style="margin:0;">Ubicación de dispositivos</h3>
             <div class="muted" style="font-size:12px;">
               Arrastra refs a zonas. AUTO sugiere iconos. Genera diseño, ajusta posiciones y exporta.
-              <b>Recomendado</b>: Exportar <b>SCR</b> (ingeniería abre plantilla y ejecuta SCRIPT).
+              <b>Recomendado</b>: Exportar <b>DXF</b> (sin atributos).
             </div>
           </div>
           <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
             <button id="btnDiagAuto" class="btn btn-secondary btn-sm">Auto</button>
             <button id="btnDiagTogglePrompt" class="btn btn-sm">Prompt</button>
             <button id="btnDiagGenerate" class="btn btn-primary btn-sm">Generar diseño</button>
-            <button id="btnDiagExportScr" class="btn btn-sm">Exportar SCR</button>
+            <button id="btnDiagExportDxf" class="btn btn-sm">Exportar DXF</button>
             <span id="diagBusy" class="muted" style="display:none;">Generando…</span>
           </div>
         </div>
@@ -1582,11 +1553,14 @@ function _renderDiagramasUI() {
     </div>
   `;
 
+  // Render inicial de lista refs (y bind drag)
+  _renderRefsList();
+
   const inp = _el("diagRefsSearch");
   if (inp) {
     inp.addEventListener("input", () => {
       appState.diagramas.refsSearch = String(inp.value || "");
-      _renderDiagramasUI();
+      _renderRefsList(); // FIX: solo lista, no re-render total
     });
   }
 
@@ -1594,7 +1568,8 @@ function _renderDiagramasUI() {
   if (btnReload) {
     btnReload.addEventListener("click", () => {
       diagLoadProjectRefs();
-      _renderDiagramasUI();
+      _renderRefsList();
+      _renderDiagramasUI(); // refresca todo (incluye selects)
       _renderResult();
     });
   }
@@ -1622,13 +1597,8 @@ function _renderDiagramasUI() {
   const btnGen = _el("btnDiagGenerate");
   if (btnGen) btnGen.addEventListener("click", diagGenerateDesign);
 
-  const btnScr = _el("btnDiagExportScr");
-  if (btnScr) btnScr.addEventListener("click", diagExportScr);
-
-  host.querySelectorAll("[draggable='true'][data-ref]").forEach((node) => {
-    node.addEventListener("dragstart", (ev) => _onRefDragStart(ev, node.dataset.ref));
-    node.addEventListener("dragend", () => (_dragRefKey = null));
-  });
+  const btnDxf = _el("btnDiagExportDxf");
+  if (btnDxf) btnDxf.addEventListener("click", diagExportDxf);
 
   host.querySelectorAll(".diag-dropzone[data-zone]").forEach((zone) => {
     const zoneKey = zone.dataset.zone;
@@ -1703,8 +1673,7 @@ function renderDiagramasView() {
       <div>
         <h2 style="margin-bottom:4px;">Diagramas · Drag & Drop</h2>
         <div class="muted">
-          Para ingeniería: exporta <b>SCR</b> y manda también tu <b>PLANTILLA_DE_ICONOS.dxf</b>.
-          Ellos abren la plantilla y ejecutan <b>_.SCRIPT</b> con el .scr.
+          Exporta <b>DXF</b> (sin atributos) reutilizando los <b>BLOCKS</b> de tu plantilla.
         </div>
       </div>
       <div id="diagMain" class="mt-3"></div>
@@ -1720,4 +1689,4 @@ window.renderDiagramasView = renderDiagramasView;
 window.diagImportDxfFile = diagImportDxfFile;
 window.diagGenerateDesign = diagGenerateDesign;
 window.diagAutoAssignIcons = diagAutoAssignIcons;
-window.diagExportScr = diagExportScr;
+window.diagExportDxf = diagExportDxf;
