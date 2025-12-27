@@ -531,17 +531,23 @@ function _stripBom(s) {
   return String(s || "").replace(/^\uFEFF/, "");
 }
 
-// ✅ NUEVO (mínimo): normaliza sección a líneas DXF “seguras” (sin vacíos)
+// ✅ FIX: NO eliminar líneas vacías (son valores válidos en DXF)
+// y asegurar pares code/value (número par de líneas)
 function _dxfSectionToLines(sectionText) {
   const t = _stripBom(String(sectionText || ""));
   if (!t.trim()) return [];
-  return t
+
+  const lines = t
     .replace(/\r\n/g, "\n")
     .replace(/\r/g, "\n")
-    .split("\n")
-    // AutoCAD es MUY sensible: una línea vacía puede romper pares code/value
-    .filter((ln) => ln !== "");
+    .split("\n"); // <-- mantiene "" cuando hay valor vacío
+
+  // Asegura pares code/value (AutoCAD revienta si queda impar)
+  if (lines.length % 2 === 1) lines.push("");
+
+  return lines;
 }
+
 
 function _dxfToPairs(dxfText) {
   const lines = _stripBom(String(dxfText || ""))
