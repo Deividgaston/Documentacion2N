@@ -642,21 +642,7 @@ function _buildMinimalTablesSection() {
     "0",
     "ENDTAB",
 
-    // APPID (solo ACAD)
-    "0",
-    "TABLE",
-    "2",
-    "APPID",
-    "70",
-    "1",
-    "0",
-    "APPID",
-    "2",
-    "ACAD",
-    "70",
-    "0",
-    "0",
-    "ENDTAB",
+   
 
     "0",
     "ENDSEC",
