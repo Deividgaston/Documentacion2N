@@ -1590,7 +1590,7 @@ function diagExportDxf() {
   const objects = ""; // ✅ FIX: no incluir OBJECTS (evita diccionarios/APPID/handles conflictivos)
 
   outLines.push(..._dxfSectionToLines(header));
-  if (classes) outLines.push(..._dxfSectionToLines(classes));
+ 
   outLines.push(..._dxfSectionToLines(tables));
   outLines.push(..._dxfSectionToLines(blocksSection));
 
