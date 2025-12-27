@@ -175,11 +175,13 @@ function _renderPreviewSvg(result) {
 
     const s = `${blk} ${ref} ${String(p.label || "").toLowerCase()}`;
 
-    if (s.includes("ip style") || s.includes("ipstyle") || s.includes("ai_ip style") || s.includes("ai_ip_style")) return "📟";
+    if (s.includes("ip style") || s.includes("ipstyle") || s.includes("ai_ip style") || s.includes("ai_ip_style"))
+      return "📟";
     if (s.includes("verso")) return "📞";
     if (s.includes("ip one") || s.includes("ipone")) return "📞";
     if (s.includes("indoor") || s.includes("monitor") || s.includes("touch") || s.includes("clip")) return "🖥️";
-    if (s.includes("access") || s.includes("unit") || s.includes("reader") || s.includes("rfid") || s.includes("ble")) return "🔑";
+    if (s.includes("access") || s.includes("unit") || s.includes("reader") || s.includes("rfid") || s.includes("ble"))
+      return "🔑";
     if (s.includes("switch") || s.includes("poe")) return "🔀";
     if (s.includes("router") || s.includes("gateway")) return "🌐";
     if (s.includes("server") || s.includes("nvr")) return "🗄️";
@@ -187,7 +189,8 @@ function _renderPreviewSvg(result) {
     return "●";
   }
 
-  let maxX = 0, maxY = 0;
+  let maxX = 0,
+    maxY = 0;
   for (const [, p] of coords.entries()) {
     if (p.x > maxX) maxX = p.x;
     if (p.y > maxY) maxY = p.y;
@@ -216,7 +219,9 @@ function _renderPreviewSvg(result) {
       const icon = _escapeHtml(_iconForNode(id, p));
 
       return `
-        <g class="diag-node" data-node-id="${_escapeHtmlAttr(id)}" style="cursor:${appState.diagramas.previewEditMode ? "grab" : "default"};">
+        <g class="diag-node" data-node-id="${_escapeHtmlAttr(id)}" style="cursor:${
+        appState.diagramas.previewEditMode ? "grab" : "default"
+      };">
           <circle class="diag-node-hit" cx="${p.x}" cy="${p.y}" r="18" fill="rgba(0,0,0,0)"></circle>
           <circle cx="${p.x}" cy="${p.y}" r="14" fill="${fill}" stroke="${stroke}" stroke-width="10"></circle>
           <text x="${p.x - 8}" y="${p.y + 7}" font-size="18" fill="white">${icon}</text>
@@ -244,7 +249,9 @@ function _renderPreviewSvg(result) {
           </div>
         </div>
         <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-          <button id="btnDiagToggleEdit" class="btn btn-sm">${appState.diagramas.previewEditMode ? "Salir edición" : "Editar posiciones"}</button>
+          <button id="btnDiagToggleEdit" class="btn btn-sm">${
+            appState.diagramas.previewEditMode ? "Salir edición" : "Editar posiciones"
+          }</button>
           <button id="btnDiagResetLayout" class="btn btn-sm">Reset layout</button>
           <span class="chip">SVG</span>
         </div>
@@ -376,7 +383,9 @@ function _bindPreviewInteractions() {
     _diagDrag.offsetX = cur.x - p.x;
     _diagDrag.offsetY = cur.y - p.y;
 
-    try { ev.preventDefault(); } catch (_) {}
+    try {
+      ev.preventDefault();
+    } catch (_) {}
   };
 }
 
@@ -414,7 +423,9 @@ function _renderResult() {
       ? `
         <details class="mt-2">
           <summary class="muted" style="cursor:pointer;">Ver respuesta IA (raw)</summary>
-          <pre style="white-space:pre-wrap; background:#0b1020; color:#e5e7eb; padding:12px; border-radius:10px; overflow:auto; margin-top:8px;">${_escapeHtml(appState.diagramas.lastRaw)}</pre>
+          <pre style="white-space:pre-wrap; background:#0b1020; color:#e5e7eb; padding:12px; border-radius:10px; overflow:auto; margin-top:8px;">${_escapeHtml(
+            appState.diagramas.lastRaw
+          )}</pre>
         </details>
       `
       : "";
@@ -459,7 +470,9 @@ function _renderResult() {
     ? `
       <details class="mt-2">
         <summary class="muted" style="cursor:pointer;">Ver respuesta IA (raw)</summary>
-        <pre style="white-space:pre-wrap; background:#0b1020; color:#e5e7eb; padding:12px; border-radius:10px; overflow:auto; margin-top:8px;">${_escapeHtml(appState.diagramas.lastRaw)}</pre>
+        <pre style="white-space:pre-wrap; background:#0b1020; color:#e5e7eb; padding:12px; border-radius:10px; overflow:auto; margin-top:8px;">${_escapeHtml(
+          appState.diagramas.lastRaw
+        )}</pre>
       </details>
     `
     : "";
@@ -531,16 +544,12 @@ function _stripBom(s) {
   return String(s || "").replace(/^\uFEFF/, "");
 }
 
-// ✅ FIX: NO eliminar líneas vacías (son valores válidos en DXF)
-// y asegurar pares code/value (número par de líneas)
+// ✅ FIX: mantener vacíos como valores, pero nunca como "código"
 function _dxfSectionToLines(sectionText) {
   const t = _stripBom(String(sectionText || ""));
   if (!t.trim()) return [];
 
-  let lines = t
-    .replace(/\r\n/g, "\n")
-    .replace(/\r/g, "\n")
-    .split("\n");
+  let lines = t.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
 
   // Quita líneas vacías en posición de "código" (0,2,4...) => inválidas en DXF
   lines = lines.filter((ln, idx) => !(idx % 2 === 0 && ln === ""));
@@ -551,7 +560,108 @@ function _dxfSectionToLines(sectionText) {
   return lines;
 }
 
+// ✅ NUEVO (mínimo): TABLES mínimo (evita APPID/handles conflictivos de la plantilla)
+function _buildMinimalTablesSection() {
+  return [
+    "0",
+    "SECTION",
+    "2",
+    "TABLES",
 
+    // LTYPE
+    "0",
+    "TABLE",
+    "2",
+    "LTYPE",
+    "70",
+    "1",
+    "0",
+    "LTYPE",
+    "2",
+    "CONTINUOUS",
+    "70",
+    "0",
+    "3",
+    "Solid line",
+    "72",
+    "65",
+    "73",
+    "0",
+    "40",
+    "0.0",
+    "0",
+    "ENDTAB",
+
+    // LAYER
+    "0",
+    "TABLE",
+    "2",
+    "LAYER",
+    "70",
+    "1",
+    "0",
+    "LAYER",
+    "2",
+    "0",
+    "70",
+    "0",
+    "62",
+    "7",
+    "6",
+    "CONTINUOUS",
+    "0",
+    "ENDTAB",
+
+    // STYLE
+    "0",
+    "TABLE",
+    "2",
+    "STYLE",
+    "70",
+    "1",
+    "0",
+    "STYLE",
+    "2",
+    "STANDARD",
+    "70",
+    "0",
+    "40",
+    "0",
+    "41",
+    "1",
+    "50",
+    "0",
+    "71",
+    "0",
+    "42",
+    "2.5",
+    "3",
+    "txt",
+    "4",
+    "",
+    "0",
+    "ENDTAB",
+
+    // APPID (solo ACAD)
+    "0",
+    "TABLE",
+    "2",
+    "APPID",
+    "70",
+    "1",
+    "0",
+    "APPID",
+    "2",
+    "ACAD",
+    "70",
+    "0",
+    "0",
+    "ENDTAB",
+
+    "0",
+    "ENDSEC",
+  ].join("\n");
+}
 
 function _dxfToPairs(dxfText) {
   const lines = _stripBom(String(dxfText || ""))
@@ -655,16 +765,13 @@ function _extractDxfSection(dxfText, sectionName) {
   const name = String(sectionName || "").trim().toUpperCase();
   if (!name) return "";
 
-  const reStart = new RegExp(
-    String.raw`(?:^|\n)\s*0\s*\n\s*SECTION\s*\n\s*2\s*\n\s*${name}\b`,
-    "i"
-  );
+  const reStart = new RegExp(String.raw`(?:^|\n)\s*0\s*\n\s*SECTION\s*\n\s*2\s*\n\s*${name}\b`, "i");
   const m0 = reStart.exec(text);
   if (!m0) return "";
 
   const startIdx = m0.index;
 
-  const reEnd = /(?:^|\n)\s*0\s*\n\s*ENDSEC\b/ig;
+  const reEnd = /(?:^|\n)\s*0\s*\n\s*ENDSEC\b/gi;
   reEnd.lastIndex = startIdx;
   const m1 = reEnd.exec(text);
   if (!m1) return "";
@@ -751,7 +858,9 @@ function _onRefDragStart(ev, ref) {
 
 function _onZoneDragOver(ev) {
   ev.preventDefault();
-  try { ev.dataTransfer.dropEffect = "copy"; } catch (_) {}
+  try {
+    ev.dataTransfer.dropEffect = "copy";
+  } catch (_) {}
   const zone = ev.currentTarget;
   if (zone) zone.classList.add("is-drag-over");
 }
@@ -767,8 +876,11 @@ function _onZoneDrop(ev, zoneKey) {
   if (zone) zone.classList.remove("is-drag-over");
 
   let ref = "";
-  try { ref = ev.dataTransfer.getData("text/plain") || ""; }
-  catch (_) { ref = _dragRefKey || ""; }
+  try {
+    ref = ev.dataTransfer.getData("text/plain") || "";
+  } catch (_) {
+    ref = _dragRefKey || "";
+  }
 
   ref = String(ref || "").trim();
   if (!ref) return;
@@ -1042,12 +1154,9 @@ function _localDesignFromSpec(spec) {
 function _buildHandlerEnvelope(payload) {
   const sectionKey = "diagramas_network";
   const docKey = "diagramas";
-  const sectionText = [
-    payload.instructions,
-    "",
-    "INPUT_JSON:",
-    JSON.stringify({ spec: payload.spec, network_rules: payload.network_rules }),
-  ].join("\n");
+  const sectionText = [payload.instructions, "", "INPUT_JSON:", JSON.stringify({ spec: payload.spec, network_rules: payload.network_rules })].join(
+    "\n"
+  );
 
   return {
     docKey,
@@ -1084,7 +1193,11 @@ function _coerceTextFromHandlerResponse(res) {
     if (typeof c === "string" && c.trim()) return c;
   }
 
-  try { return JSON.stringify(res); } catch (_) { return String(res); }
+  try {
+    return JSON.stringify(res);
+  } catch (_) {
+    return String(res);
+  }
 }
 
 function _extractJsonString(s) {
@@ -1209,8 +1322,6 @@ async function diagGenerateDesign() {
 
 /* ======================================================
    6A) ✅ Export SVG (MAESTRO)
-   - Basado en coords del preview (líneas + nodos + textos)
-   - Sin depender de DXF ni AutoCAD
  ====================================================== */
 function diagExportSvg() {
   const r = appState.diagramas.lastResult || appState.diagramas._previewResult;
@@ -1229,7 +1340,8 @@ function diagExportSvg() {
     return;
   }
 
-  let maxX = 0, maxY = 0;
+  let maxX = 0,
+    maxY = 0;
   for (const [, p] of coords.entries()) {
     if (p.x > maxX) maxX = p.x;
     if (p.y > maxY) maxY = p.y;
@@ -1245,41 +1357,49 @@ function diagExportSvg() {
   const placements = Array.isArray(r?.placements) ? r.placements : [];
   const infra = Array.isArray(r?.infra) ? r.infra : [];
 
-  const headers = zones.map((z, i) => {
-    const x = startX + i * colW;
-    return `<text x="${x}" y="36" font-size="13" fill="#6b7280" font-family="Arial, sans-serif">${_escapeHtml(z.label)}</text>`;
-  }).join("");
+  const headers = zones
+    .map((z, i) => {
+      const x = startX + i * colW;
+      return `<text x="${x}" y="36" font-size="13" fill="#6b7280" font-family="Arial, sans-serif">${_escapeHtml(z.label)}</text>`;
+    })
+    .join("");
 
-  const lines = connections.map((c) => {
-    const a = coords.get(c.from);
-    const b = coords.get(c.to);
-    if (!a || !b) return "";
-    return `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#1d4fd8" stroke-opacity="0.55" stroke-width="2"/>`;
-  }).join("");
+  const lines = connections
+    .map((c) => {
+      const a = coords.get(c.from);
+      const b = coords.get(c.to);
+      if (!a || !b) return "";
+      return `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#1d4fd8" stroke-opacity="0.55" stroke-width="2"/>`;
+    })
+    .join("");
 
-  const placementNodes = placements.map((p) => {
-    const pos = coords.get(p.id);
-    if (!pos) return "";
-    const label = _escapeHtml(String(p.ref || p.id || ""));
-    return `
+  const placementNodes = placements
+    .map((p) => {
+      const pos = coords.get(p.id);
+      if (!pos) return "";
+      const label = _escapeHtml(String(p.ref || p.id || ""));
+      return `
       <g>
         <circle cx="${pos.x}" cy="${pos.y}" r="14" fill="#1d4fd8" opacity="0.95"></circle>
         <text x="${pos.x + 18}" y="${pos.y + 5}" font-size="12" fill="#111827" font-family="Arial, sans-serif">${label}</text>
       </g>
     `;
-  }).join("");
+    })
+    .join("");
 
-  const infraNodes = infra.map((n) => {
-    const pos = coords.get(n.id);
-    if (!pos) return "";
-    const label = _escapeHtml(String(n.type || n.id || ""));
-    return `
+  const infraNodes = infra
+    .map((n) => {
+      const pos = coords.get(n.id);
+      if (!pos) return "";
+      const label = _escapeHtml(String(n.type || n.id || ""));
+      return `
       <g>
         <circle cx="${pos.x}" cy="${pos.y}" r="14" fill="#111827" opacity="0.95"></circle>
         <text x="${pos.x + 18}" y="${pos.y + 5}" font-size="12" fill="#111827" font-family="Arial, sans-serif">${label}</text>
       </g>
     `;
-  }).join("");
+    })
+    .join("");
 
   const title = `<text x="80" y="20" font-size="14" fill="#111827" font-family="Arial, sans-serif" font-weight="700">DIAGRAMA RED UTP CAT6 (ESQUEMA)</text>`;
 
@@ -1307,8 +1427,12 @@ function diagExportSvg() {
     requestAnimationFrame(() => {
       a.click();
       setTimeout(() => {
-        try { a.remove(); } catch (_) {}
-        try { URL.revokeObjectURL(url); } catch (_) {}
+        try {
+          a.remove();
+        } catch (_) {}
+        try {
+          URL.revokeObjectURL(url);
+        } catch (_) {}
       }, 2000);
     });
   } catch (e) {
@@ -1320,8 +1444,7 @@ function diagExportSvg() {
 
 /* ======================================================
    6B) ✅ Export DXF (ASCII) SIN atributos
-   - Reutiliza HEADER/CLASSES/TABLES/BLOCKS/OBJECTS de la plantilla
-   - Escribe DXF como líneas (sin vacíos) => evita “entrada incompleta”
+   FIX: TABLES mínimo + NO OBJECTS (evita error APPID)
  ====================================================== */
 function diagExportDxf() {
   const r = appState.diagramas.lastResult;
@@ -1377,51 +1500,50 @@ function diagExportDxf() {
   const ent = [];
 
   function dxfLine(x1, y1, x2, y2) {
-    ent.push(
-      "0","LINE",
-      "8","0",
-      "10",_fmt(x1),"20",_fmt(y1),"30","0",
-      "11",_fmt(x2),"21",_fmt(y2),"31","0"
-    );
+    ent.push("0", "LINE", "8", "0", "10", _fmt(x1), "20", _fmt(y1), "30", "0", "11", _fmt(x2), "21", _fmt(y2), "31", "0");
   }
 
   function dxfCircle(x, y, rad) {
-    ent.push(
-      "0","CIRCLE",
-      "8","0",
-      "10",_fmt(x),"20",_fmt(y),"30","0",
-      "40",_fmt(rad)
-    );
+    ent.push("0", "CIRCLE", "8", "0", "10", _fmt(x), "20", _fmt(y), "30", "0", "40", _fmt(rad));
   }
 
   function dxfText(x, y, h, text) {
     const t = String(text || "").replace(/\r?\n/g, " ");
-    ent.push(
-      "0","TEXT",
-      "8","0",
-      "10",_fmt(x),"20",_fmt(y),"30","0",
-      "40",_fmt(h),
-      "1",t,
-      "50","0"
-    );
+    ent.push("0", "TEXT", "8", "0", "10", _fmt(x), "20", _fmt(y), "30", "0", "40", _fmt(h), "1", t, "50", "0");
   }
 
   function dxfInsert(blockName, x, y, sx, sy, rotDeg) {
     const bn = String(blockName || "").replaceAll('"', "").trim();
     ent.push(
-      "0","INSERT",
-      "8","0",
-      "2",bn,
-      "10",_fmt(x),"20",_fmt(y),"30","0",
-      "41",_fmt(sx),"42",_fmt(sy),"43",_fmt(1),
-      "50",_fmt(rotDeg || 0)
+      "0",
+      "INSERT",
+      "8",
+      "0",
+      "2",
+      bn,
+      "10",
+      _fmt(x),
+      "20",
+      _fmt(y),
+      "30",
+      "0",
+      "41",
+      _fmt(sx),
+      "42",
+      _fmt(sy),
+      "43",
+      _fmt(1),
+      "50",
+      _fmt(rotDeg || 0)
     );
     // SIN ATTRIB / SEQEND (sin atributos)
   }
 
   // Título y cabeceras de zona
   const zones = appState.diagramas.zones || [];
-  const colW = 280, startX = 80, titleY = 40;
+  const colW = 280,
+    startX = 80,
+    titleY = 40;
   dxfText(80, 20, 14, "DIAGRAMA RED UTP CAT6 (ESQUEMA)");
   zones.forEach((z, i) => dxfText(startX + i * colW, titleY, 12, z.label));
 
@@ -1439,7 +1561,7 @@ function diagExportDxf() {
     if (!pos) continue;
 
     const wanted = String(p.icon_block || p.iconBlock || "").trim();
-    const resolved = wanted ? (blockMap.get(_normBlockName(wanted)) || "") : "";
+    const resolved = wanted ? blockMap.get(_normBlockName(wanted)) || "" : "";
 
     if (resolved) {
       dxfInsert(resolved, pos.x, pos.y, 1, 1, 0);
@@ -1458,14 +1580,14 @@ function diagExportDxf() {
     dxfText(pos.x + 16, pos.y + 4, 10, String(n.type || n.id));
   }
 
-  // ✅ Construcción robusta “por líneas” (evita DXF incompleto)
+  // ✅ Construcción robusta “por líneas”
   const outLines = [];
 
-  const header = appState.diagramas.dxfHeaderSection || ["0","SECTION","2","HEADER","0","ENDSEC"].join("\n");
+  const header = appState.diagramas.dxfHeaderSection || ["0", "SECTION", "2", "HEADER", "0", "ENDSEC"].join("\n");
   const classes = appState.diagramas.dxfClassesSection || ""; // opcional
-  const tables = appState.diagramas.dxfTablesSection || ["0","SECTION","2","TABLES","0","ENDSEC"].join("\n");
+  const tables = _buildMinimalTablesSection(); // ✅ FIX: no reutilizar TABLES de plantilla
   const blocksSection = appState.diagramas.dxfBlocksSection; // requerido
-  const objects = appState.diagramas.dxfObjectsSection || ""; // opcional pero recomendable si la plantilla lo trae
+  const objects = ""; // ✅ FIX: no incluir OBJECTS (evita diccionarios/APPID/handles conflictivos)
 
   outLines.push(..._dxfSectionToLines(header));
   if (classes) outLines.push(..._dxfSectionToLines(classes));
@@ -1473,13 +1595,11 @@ function diagExportDxf() {
   outLines.push(..._dxfSectionToLines(blocksSection));
 
   // ENTITIES
-  outLines.push("0","SECTION","2","ENTITIES");
+  outLines.push("0", "SECTION", "2", "ENTITIES");
   outLines.push(...ent);
-  outLines.push("0","ENDSEC");
+  outLines.push("0", "ENDSEC");
 
-  if (objects) outLines.push(..._dxfSectionToLines(objects));
-
-  outLines.push("0","EOF");
+  outLines.push("0", "EOF");
 
   const out = outLines.join("\n") + "\n";
 
@@ -1500,8 +1620,12 @@ function diagExportDxf() {
     requestAnimationFrame(() => {
       a.click();
       setTimeout(() => {
-        try { a.remove(); } catch (_) {}
-        try { URL.revokeObjectURL(url); } catch (_) {}
+        try {
+          a.remove();
+        } catch (_) {}
+        try {
+          URL.revokeObjectURL(url);
+        } catch (_) {}
       }, 2000);
     });
   } catch (e) {
@@ -1513,7 +1637,6 @@ function diagExportDxf() {
 
 /* ======================================================
    7) Render UI + FIX buscador
-   FIX: no re-render completo en cada tecla (solo lista refs)
  ====================================================== */
 
 function _renderRefsList() {
@@ -1530,7 +1653,10 @@ function _renderRefsList() {
   host.innerHTML = `
     ${
       filtered.length
-        ? filtered.slice(0, 300).map((r) => `
+        ? filtered
+            .slice(0, 300)
+            .map(
+              (r) => `
             <div class="card diag-draggable" style="padding:10px; margin-bottom:8px;"
                  draggable="true" data-ref="${_escapeHtmlAttr(r.ref)}">
               <div style="display:flex; justify-content:space-between; gap:10px; align-items:center;">
@@ -1543,7 +1669,9 @@ function _renderRefsList() {
                 <span class="chip">${Number(r.qty || 0)}</span>
               </div>
             </div>
-          `).join("")
+          `
+            )
+            .join("")
         : `<div class="muted">No hay referencias. Genera un presupuesto primero.</div>`
     }
     ${filtered.length > 300 ? `<div class="muted mt-2">Mostrando 300.</div>` : ""}
@@ -1586,11 +1714,15 @@ function _renderDiagramasUI() {
             <div class="grid mt-2" style="display:grid; grid-template-columns: 120px 1fr; gap:10px; align-items:center; min-width:0;">
               <div class="form-group" style="margin:0;">
                 <label style="font-size:12px;">Cantidad</label>
-                <input type="number" min="1" value="${Number(it.qty || 1)}" data-act="qty" data-zone="${_escapeHtmlAttr(z.key)}" data-id="${_escapeHtmlAttr(it.id)}"/>
+                <input type="number" min="1" value="${Number(it.qty || 1)}" data-act="qty" data-zone="${_escapeHtmlAttr(
+          z.key
+        )}" data-id="${_escapeHtmlAttr(it.id)}"/>
               </div>
               <div class="form-group" style="margin:0; min-width:0;">
                 <label style="font-size:12px;">Icono (BLOCK)</label>
-                <select style="max-width:100%;" data-act="icon" data-zone="${_escapeHtmlAttr(z.key)}" data-id="${_escapeHtmlAttr(it.id)}">
+                <select style="max-width:100%;" data-act="icon" data-zone="${_escapeHtmlAttr(z.key)}" data-id="${_escapeHtmlAttr(
+          it.id
+        )}">
                   ${blockOptions}
                 </select>
               </div>
@@ -1640,7 +1772,9 @@ function _renderDiagramasUI() {
           <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:10px;">
             <input id="diagDxfFile" type="file" accept=".dxf"/>
             <span class="muted" style="font-size:12px;">
-              ${s.dxfFileName ? `Cargado: <b>${_escapeHtml(s.dxfFileName)}</b> · blocks: ${blocks.length}` : "Sin DXF cargado"}
+              ${
+                s.dxfFileName ? `Cargado: <b>${_escapeHtml(s.dxfFileName)}</b> · blocks: ${blocks.length}` : "Sin DXF cargado"
+              }
             </span>
           </div>
         </div>
@@ -1794,10 +1928,10 @@ function renderDiagramasView() {
       const ba = localStorage.getItem("diag_dxf_blockAttrs");
       if (ba) appState.diagramas.dxfBlockAttrs = JSON.parse(ba) || {};
 
-      appState.diagramas.dxfHeaderSection  = localStorage.getItem("diag_dxf_headerSection")  || "";
+      appState.diagramas.dxfHeaderSection = localStorage.getItem("diag_dxf_headerSection") || "";
       appState.diagramas.dxfClassesSection = localStorage.getItem("diag_dxf_classesSection") || "";
-      appState.diagramas.dxfTablesSection  = localStorage.getItem("diag_dxf_tablesSection")  || "";
-      appState.diagramas.dxfBlocksSection  = localStorage.getItem("diag_dxf_blocksSection")  || "";
+      appState.diagramas.dxfTablesSection = localStorage.getItem("diag_dxf_tablesSection") || "";
+      appState.diagramas.dxfBlocksSection = localStorage.getItem("diag_dxf_blocksSection") || "";
       appState.diagramas.dxfObjectsSection = localStorage.getItem("diag_dxf_objectsSection") || "";
     }
   } catch (_) {}
