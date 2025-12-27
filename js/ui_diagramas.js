@@ -537,16 +537,20 @@ function _dxfSectionToLines(sectionText) {
   const t = _stripBom(String(sectionText || ""));
   if (!t.trim()) return [];
 
-  const lines = t
+  let lines = t
     .replace(/\r\n/g, "\n")
     .replace(/\r/g, "\n")
-    .split("\n"); // <-- mantiene "" cuando hay valor vacío
+    .split("\n");
 
-  // Asegura pares code/value (AutoCAD revienta si queda impar)
+  // Quita líneas vacías en posición de "código" (0,2,4...) => inválidas en DXF
+  lines = lines.filter((ln, idx) => !(idx % 2 === 0 && ln === ""));
+
+  // Asegura pares code/value
   if (lines.length % 2 === 1) lines.push("");
 
   return lines;
 }
+
 
 
 function _dxfToPairs(dxfText) {
