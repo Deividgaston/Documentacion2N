@@ -1,9 +1,13 @@
 // js/ui_diagramas.js
 // Vista: DIAGRAMAS (IA)
-// V2.8.1 (Hito 16+):
+// V2.8.2 (Hito 16+):
 // - ✅ Export SCR robusto multi-idioma (sin capas)
 // - ✅ DXF solo se usa para leer BLOCKS + contar atributos (para no romper -INSERT)
 // - ✅ Si un bloque NO tiene atributos, no se inyecta AI_KEY (evita que el script se desplace / falle)
+//
+// FIX NUEVO (SCR en AutoCAD ES):
+// - ✅ Coordenadas/valores SIN decimales para evitar "Comando '000,94.000' desconocido" por separadores ES
+//   (AutoCAD ES interpreta '.' como miles; toFixed() rompe el SCRIPT).
 //
 // FIXES (estabilidad):
 // - ✅ Eliminado duplicado accidental del archivo (causaba "Identifier ... already been declared").
@@ -1190,6 +1194,7 @@ async function diagGenerateDesign() {
 
 /* ======================================================
    6) ✅ Export SCR (SIN CAPAS) + robusto con atributos
+   FIX: sin decimales (AutoCAD ES)
  ====================================================== */
 function diagExportScr() {
   const r = appState.diagramas.lastResult;
@@ -1256,26 +1261,40 @@ function diagExportScr() {
   scr.push("._ATTREQ");
   scr.push("1");
 
+  // -----------------------------
+  // FIX: formato numérico robusto (sin decimales)
+  // -----------------------------
+  function _fmtN(n) {
+    const v = Number(n);
+    if (!Number.isFinite(v)) return "0";
+    return String(Math.round(v));
+  }
+  function _fmtXY(x, y) {
+    // En AutoCAD ES, el separador entre X e Y debe ser "," o espacio.
+    // Usamos "," y números enteros para evitar el bug de separadores.
+    return `${_fmtN(x)},${_fmtN(y)}`;
+  }
+
   function scrText(x, y, h, rotDeg, text) {
     const t = String(text || "").replaceAll("\n", " ").replaceAll("\r", " ");
     scr.push("._-TEXT");
-    scr.push(`${Number(x).toFixed(3)},${Number(y).toFixed(3)}`);
-    scr.push(String(Number(h).toFixed(3)));
-    scr.push(String(Number(rotDeg || 0).toFixed(3)));
+    scr.push(_fmtXY(x, y));
+    scr.push(String(Math.max(1, Math.round(Number(h) || 10))));
+    scr.push(String(Math.round(Number(rotDeg || 0))));
     scr.push(t);
   }
 
   function scrLine(x1, y1, x2, y2) {
     scr.push("._LINE");
-    scr.push(`${Number(x1).toFixed(3)},${Number(y1).toFixed(3)}`);
-    scr.push(`${Number(x2).toFixed(3)},${Number(y2).toFixed(3)}`);
+    scr.push(_fmtXY(x1, y1));
+    scr.push(_fmtXY(x2, y2));
     scr.push("");
   }
 
   function scrCircle(x, y, r0) {
     scr.push("._CIRCLE");
-    scr.push(`${Number(x).toFixed(3)},${Number(y).toFixed(3)}`);
-    scr.push(String(Number(r0).toFixed(3)));
+    scr.push(_fmtXY(x, y));
+    scr.push(String(Math.max(1, Math.round(Number(r0) || 10))));
   }
 
   function _buildAiKeyForPlacement(p) {
@@ -1300,6 +1319,7 @@ function diagExportScr() {
   // ✅ Insert robusto:
   // - Si el bloque NO tiene atributos: no inyecta nada
   // - Si tiene N atributos: rellena el 1º con AI_KEY y el resto con ENTER
+  // FIX: sin decimales (escala/rot)
   function scrInsertSmart(blockName, x, y, scale, rotDeg, aiKeyValue) {
     const bn = String(blockName || "").replaceAll('"', "").trim();
     const nb = _normBlockName(bn);
@@ -1307,10 +1327,11 @@ function diagExportScr() {
 
     scr.push("._-INSERT");
     scr.push(`"${bn}"`);
-    scr.push(`${Number(x).toFixed(3)},${Number(y).toFixed(3)}`);
-    scr.push(String(Number(scale || 1).toFixed(3)));
-    scr.push(String(Number(scale || 1).toFixed(3)));
-    scr.push(String(Number(rotDeg || 0).toFixed(3)));
+    scr.push(_fmtXY(x, y));
+    // escala X, escala Y, rotación (enteros)
+    scr.push(String(Math.max(1, Math.round(Number(scale || 1)))));
+    scr.push(String(Math.max(1, Math.round(Number(scale || 1)))));
+    scr.push(String(Math.round(Number(rotDeg || 0))));
 
     if (attrCount <= 0) return;
 
