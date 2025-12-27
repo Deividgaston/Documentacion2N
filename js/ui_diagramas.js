@@ -1303,8 +1303,8 @@ function diagExportSvg() {
 
 /* ======================================================
    6B) ✅ Export DXF (SIN atributos)
-   - Reutiliza HEADER/CLASSES/TABLES/BLOCKS/OBJECTS de la plantilla
-   - Crea ENTITIES con LINE + INSERT + TEXT (+ CIRCLE fallback)
+   - Reutiliza HEADER/TABLES/BLOCKS de la plantilla
+   - (NO incluye CLASSES/OBJECTS para evitar DXF inválido en AutoCAD)
  ====================================================== */
 function diagExportDxf() {
   const r = appState.diagramas.lastResult;
@@ -1399,7 +1399,6 @@ function diagExportDxf() {
       "41",_fmt(sx),"42",_fmt(sy),"43",_fmt(1),
       "50",_fmt(rotDeg || 0)
     );
-    // SIN ATTRIB / SEQEND: sin atributos
   }
 
   // Título y cabeceras de zona
@@ -1449,22 +1448,18 @@ function diagExportDxf() {
     "0","ENDSEC",
   ].join("\n");
 
-  // Ensamblado final reutilizando plantilla (mínimos cambios)
+  // Ensamblado final: SOLO HEADER + TABLES + BLOCKS + ENTITIES (más robusto)
   const header = appState.diagramas.dxfHeaderSection || ["0","SECTION","2","HEADER","0","ENDSEC"].join("\n");
-  const classes = appState.diagramas.dxfClassesSection || ""; // opcional
   const tables = appState.diagramas.dxfTablesSection || ["0","SECTION","2","TABLES","0","ENDSEC"].join("\n");
   const blocksSection = appState.diagramas.dxfBlocksSection; // requerido
-  const objects = appState.diagramas.dxfObjectsSection || ""; // opcional
 
   const out = [
     _stripBom(header),
-    classes ? _stripBom(classes) : "",
     _stripBom(tables),
     _stripBom(blocksSection),
     entitiesSection,
-    objects ? _stripBom(objects) : "",
     "0\nEOF\n",
-  ].filter(Boolean).join("\n");
+  ].join("\n");
 
   const nameBase = (appState.diagramas.dxfFileName || "plantilla").replace(/\.dxf$/i, "");
   const fileName = `${nameBase}_red_cat6_sin_atributos.dxf`;
@@ -1532,7 +1527,6 @@ function _renderRefsList() {
     ${filtered.length > 300 ? `<div class="muted mt-2">Mostrando 300.</div>` : ""}
   `;
 
-  // re-bind drag refs (solo dentro del listado)
   host.querySelectorAll("[draggable='true'][data-ref]").forEach((node) => {
     node.addEventListener("dragstart", (ev) => _onRefDragStart(ev, node.dataset.ref));
     node.addEventListener("dragend", () => (_dragRefKey = null));
@@ -1671,14 +1665,13 @@ function _renderDiagramasUI() {
     </div>
   `;
 
-  // Render inicial de lista refs (y bind drag)
   _renderRefsList();
 
   const inp = _el("diagRefsSearch");
   if (inp) {
     inp.addEventListener("input", () => {
       appState.diagramas.refsSearch = String(inp.value || "");
-      _renderRefsList(); // FIX: solo lista, no re-render total
+      _renderRefsList();
     });
   }
 
@@ -1687,7 +1680,7 @@ function _renderDiagramasUI() {
     btnReload.addEventListener("click", () => {
       diagLoadProjectRefs();
       _renderRefsList();
-      _renderDiagramasUI(); // refresca todo (incluye selects)
+      _renderDiagramasUI();
       _renderResult();
     });
   }
