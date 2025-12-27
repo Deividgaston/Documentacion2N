@@ -1,8 +1,9 @@
 // js/ui_diagramas.js
 // Vista: DIAGRAMAS (IA)
-// V2.9 (Hito 16+):
-// - ✅ Export DXF (ASCII) SIN atributos (INSERT simple) reutilizando HEADER/TABLES/BLOCKS de la plantilla
-// - ✅ Eliminado SCR (botón + función + textos)
+// V2.10 (Hito 16+):
+// - ✅ Export SVG (MAESTRO) estable (líneas + nodos + textos) basado en coords del preview
+// - ✅ Mantiene Export DXF (ASCII) SIN atributos (opcional) reutilizando secciones de plantilla
+// - ✅ Eliminado SCR (botón + función + textos) (ya estaba)
 // - ✅ FIX buscador refs: ahora puedes escribir normal (sin re-render en cada tecla)
 // - ✅ Preview drag estable (mantiene add/removeEventListener)
 
@@ -263,7 +264,7 @@ function _renderPreviewSvg(result) {
       </div>
 
       <div class="muted mt-2" style="font-size:12px;">
-        Tip: mueve dispositivos y exporta <b>DXF</b> (sin atributos).
+        Tip: mueve dispositivos y exporta <b>SVG</b> (formato maestro).
       </div>
     </div>
   `;
@@ -1185,7 +1186,123 @@ async function diagGenerateDesign() {
 }
 
 /* ======================================================
-   6) ✅ Export DXF (SIN atributos)
+   6A) ✅ Export SVG (MAESTRO)
+   - Basado en coords del preview (líneas + nodos + textos)
+   - Sin depender de DXF ni AutoCAD
+ ====================================================== */
+function diagExportSvg() {
+  const r = appState.diagramas.lastResult || appState.diagramas._previewResult;
+  if (!r) {
+    appState.diagramas.lastError = "No hay resultado para exportar. Genera el diseño o crea un preview manual.";
+    appState.diagramas.lastRaw = null;
+    _renderResult();
+    return;
+  }
+
+  const coords = _buildSchematicCoordsFromResult(r);
+  if (!coords.size) {
+    appState.diagramas.lastError = "No hay nodos para exportar.";
+    appState.diagramas.lastRaw = null;
+    _renderResult();
+    return;
+  }
+
+  // calcular canvas (similar al preview)
+  let maxX = 0, maxY = 0;
+  for (const [, p] of coords.entries()) {
+    if (p.x > maxX) maxX = p.x;
+    if (p.y > maxY) maxY = p.y;
+  }
+  const vbW = Math.max(900, maxX + 320);
+  const vbH = Math.max(420, maxY + 180);
+
+  const zones = appState.diagramas.zones || [];
+  const colW = 280;
+  const startX = 80;
+
+  const connections = Array.isArray(r?.connections) ? r.connections : [];
+  const placements = Array.isArray(r?.placements) ? r.placements : [];
+  const infra = Array.isArray(r?.infra) ? r.infra : [];
+
+  // cabeceras
+  const headers = zones.map((z, i) => {
+    const x = startX + i * colW;
+    return `<text x="${x}" y="36" font-size="13" fill="#6b7280" font-family="Arial, sans-serif">${_escapeHtml(z.label)}</text>`;
+  }).join("");
+
+  // líneas
+  const lines = connections.map((c) => {
+    const a = coords.get(c.from);
+    const b = coords.get(c.to);
+    if (!a || !b) return "";
+    return `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#1d4fd8" stroke-opacity="0.55" stroke-width="2"/>`;
+  }).join("");
+
+  // nodos placements: círculo + texto
+  const placementNodes = placements.map((p) => {
+    const pos = coords.get(p.id);
+    if (!pos) return "";
+    const label = _escapeHtml(String(p.ref || p.id || ""));
+    return `
+      <g>
+        <circle cx="${pos.x}" cy="${pos.y}" r="14" fill="#1d4fd8" opacity="0.95"></circle>
+        <text x="${pos.x + 18}" y="${pos.y + 5}" font-size="12" fill="#111827" font-family="Arial, sans-serif">${label}</text>
+      </g>
+    `;
+  }).join("");
+
+  // nodos infra: círculo oscuro + texto
+  const infraNodes = infra.map((n) => {
+    const pos = coords.get(n.id);
+    if (!pos) return "";
+    const label = _escapeHtml(String(n.type || n.id || ""));
+    return `
+      <g>
+        <circle cx="${pos.x}" cy="${pos.y}" r="14" fill="#111827" opacity="0.95"></circle>
+        <text x="${pos.x + 18}" y="${pos.y + 5}" font-size="12" fill="#111827" font-family="Arial, sans-serif">${label}</text>
+      </g>
+    `;
+  }).join("");
+
+  const title = `<text x="80" y="20" font-size="14" fill="#111827" font-family="Arial, sans-serif" font-weight="700">DIAGRAMA RED UTP CAT6 (ESQUEMA)</text>`;
+
+  const svgText =
+    `<?xml version="1.0" encoding="UTF-8"?>\n` +
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${vbW}" height="${vbH}" viewBox="0 0 ${vbW} ${vbH}">\n` +
+    `<rect x="0" y="0" width="${vbW}" height="${vbH}" fill="#ffffff"/>\n` +
+    `${title}\n${headers}\n${lines}\n${placementNodes}\n${infraNodes}\n` +
+    `</svg>\n`;
+
+  const nameBase = (appState.diagramas.dxfFileName || "diagrama").replace(/\.dxf$/i, "");
+  const fileName = `${nameBase}_red_cat6.svg`;
+
+  try {
+    const blob = new Blob([svgText], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    a.style.display = "none";
+    a.rel = "noopener";
+
+    document.body.appendChild(a);
+    requestAnimationFrame(() => {
+      a.click();
+      setTimeout(() => {
+        try { a.remove(); } catch (_) {}
+        try { URL.revokeObjectURL(url); } catch (_) {}
+      }, 2000);
+    });
+  } catch (e) {
+    console.error(e);
+    appState.diagramas.lastError = "No se pudo descargar el SVG (bloqueado por el navegador).";
+    _renderResult();
+  }
+}
+
+/* ======================================================
+   6B) ✅ Export DXF (SIN atributos)
    - Reutiliza HEADER/CLASSES/TABLES/BLOCKS/OBJECTS de la plantilla
    - Crea ENTITIES con LINE + INSERT + TEXT (+ CIRCLE fallback)
  ====================================================== */
@@ -1502,7 +1619,7 @@ function _renderDiagramasUI() {
         <div class="card mt-3" style="padding:12px;">
           <h4 style="margin:0;">Biblioteca de iconos (DXF)</h4>
           <div class="muted" style="font-size:12px; margin-top:6px;">
-            Carga tu “PLANTILLA DE ICONOS.dxf” para poder seleccionar el BLOCK y exportar <b>DXF</b>.
+            (Opcional) Carga tu “PLANTILLA DE ICONOS.dxf” para sugerir BLOCKs o exportar <b>DXF</b>.
           </div>
           <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:10px;">
             <input id="diagDxfFile" type="file" accept=".dxf"/>
@@ -1519,13 +1636,14 @@ function _renderDiagramasUI() {
             <h3 style="margin:0;">Ubicación de dispositivos</h3>
             <div class="muted" style="font-size:12px;">
               Arrastra refs a zonas. AUTO sugiere iconos. Genera diseño, ajusta posiciones y exporta.
-              <b>Recomendado</b>: Exportar <b>DXF</b> (sin atributos).
+              <b>Recomendado</b>: Exportar <b>SVG</b> (formato maestro).
             </div>
           </div>
           <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
             <button id="btnDiagAuto" class="btn btn-secondary btn-sm">Auto</button>
             <button id="btnDiagTogglePrompt" class="btn btn-sm">Prompt</button>
             <button id="btnDiagGenerate" class="btn btn-primary btn-sm">Generar diseño</button>
+            <button id="btnDiagExportSvg" class="btn btn-sm">Exportar SVG</button>
             <button id="btnDiagExportDxf" class="btn btn-sm">Exportar DXF</button>
             <span id="diagBusy" class="muted" style="display:none;">Generando…</span>
           </div>
@@ -1596,6 +1714,9 @@ function _renderDiagramasUI() {
 
   const btnGen = _el("btnDiagGenerate");
   if (btnGen) btnGen.addEventListener("click", diagGenerateDesign);
+
+  const btnSvg = _el("btnDiagExportSvg");
+  if (btnSvg) btnSvg.addEventListener("click", diagExportSvg);
 
   const btnDxf = _el("btnDiagExportDxf");
   if (btnDxf) btnDxf.addEventListener("click", diagExportDxf);
@@ -1673,7 +1794,7 @@ function renderDiagramasView() {
       <div>
         <h2 style="margin-bottom:4px;">Diagramas · Drag & Drop</h2>
         <div class="muted">
-          Exporta <b>DXF</b> (sin atributos) reutilizando los <b>BLOCKS</b> de tu plantilla.
+          Exporta <b>SVG</b> (maestro). Si alguien necesita CAD, convierte SVG→DXF con Inkscape/Illustrator/Visio.
         </div>
       </div>
       <div id="diagMain" class="mt-3"></div>
@@ -1689,4 +1810,5 @@ window.renderDiagramasView = renderDiagramasView;
 window.diagImportDxfFile = diagImportDxfFile;
 window.diagGenerateDesign = diagGenerateDesign;
 window.diagAutoAssignIcons = diagAutoAssignIcons;
+window.diagExportSvg = diagExportSvg;
 window.diagExportDxf = diagExportDxf;
