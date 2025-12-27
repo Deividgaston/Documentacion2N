@@ -531,6 +531,18 @@ function _stripBom(s) {
   return String(s || "").replace(/^\uFEFF/, "");
 }
 
+// ✅ NUEVO (mínimo): normaliza sección a líneas DXF “seguras” (sin vacíos)
+function _dxfSectionToLines(sectionText) {
+  const t = _stripBom(String(sectionText || ""));
+  if (!t.trim()) return [];
+  return t
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .split("\n")
+    // AutoCAD es MUY sensible: una línea vacía puede romper pares code/value
+    .filter((ln) => ln !== "");
+}
+
 function _dxfToPairs(dxfText) {
   const lines = _stripBom(String(dxfText || ""))
     .replace(/\r\n/g, "\n")
@@ -1207,7 +1219,6 @@ function diagExportSvg() {
     return;
   }
 
-  // calcular canvas (similar al preview)
   let maxX = 0, maxY = 0;
   for (const [, p] of coords.entries()) {
     if (p.x > maxX) maxX = p.x;
@@ -1224,13 +1235,11 @@ function diagExportSvg() {
   const placements = Array.isArray(r?.placements) ? r.placements : [];
   const infra = Array.isArray(r?.infra) ? r.infra : [];
 
-  // cabeceras
   const headers = zones.map((z, i) => {
     const x = startX + i * colW;
     return `<text x="${x}" y="36" font-size="13" fill="#6b7280" font-family="Arial, sans-serif">${_escapeHtml(z.label)}</text>`;
   }).join("");
 
-  // líneas
   const lines = connections.map((c) => {
     const a = coords.get(c.from);
     const b = coords.get(c.to);
@@ -1238,7 +1247,6 @@ function diagExportSvg() {
     return `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#1d4fd8" stroke-opacity="0.55" stroke-width="2"/>`;
   }).join("");
 
-  // nodos placements: círculo + texto
   const placementNodes = placements.map((p) => {
     const pos = coords.get(p.id);
     if (!pos) return "";
@@ -1251,7 +1259,6 @@ function diagExportSvg() {
     `;
   }).join("");
 
-  // nodos infra: círculo oscuro + texto
   const infraNodes = infra.map((n) => {
     const pos = coords.get(n.id);
     if (!pos) return "";
@@ -1302,9 +1309,9 @@ function diagExportSvg() {
 }
 
 /* ======================================================
-   6B) ✅ Export DXF (SIN atributos)
-   - Reutiliza HEADER/TABLES/BLOCKS de la plantilla
-   - (NO incluye CLASSES/OBJECTS para evitar DXF inválido en AutoCAD)
+   6B) ✅ Export DXF (ASCII) SIN atributos
+   - Reutiliza HEADER/CLASSES/TABLES/BLOCKS/OBJECTS de la plantilla
+   - Escribe DXF como líneas (sin vacíos) => evita “entrada incompleta”
  ====================================================== */
 function diagExportDxf() {
   const r = appState.diagramas.lastResult;
@@ -1399,6 +1406,7 @@ function diagExportDxf() {
       "41",_fmt(sx),"42",_fmt(sy),"43",_fmt(1),
       "50",_fmt(rotDeg || 0)
     );
+    // SIN ATTRIB / SEQEND (sin atributos)
   }
 
   // Título y cabeceras de zona
@@ -1415,7 +1423,7 @@ function diagExportDxf() {
     dxfLine(a.x, a.y, b.x, b.y);
   }
 
-  // Placements
+  // Placements (usa bloque seleccionado; si no, círculo)
   for (const p of placements) {
     const pos = coords.get(p.id);
     if (!pos) continue;
@@ -1432,7 +1440,7 @@ function diagExportDxf() {
     dxfText(pos.x + 16, pos.y + 4, 10, String(p.ref || p.id || ""));
   }
 
-  // Infra (sin bloques, simple círculo + texto)
+  // Infra (simple círculo + texto)
   for (const n of infra) {
     const pos = coords.get(n.id);
     if (!pos) continue;
@@ -1440,26 +1448,30 @@ function diagExportDxf() {
     dxfText(pos.x + 16, pos.y + 4, 10, String(n.type || n.id));
   }
 
-  // Entidades -> sección ENTITIES
-  const entitiesSection = [
-    "0","SECTION",
-    "2","ENTITIES",
-    ...ent,
-    "0","ENDSEC",
-  ].join("\n");
+  // ✅ Construcción robusta “por líneas” (evita DXF incompleto)
+  const outLines = [];
 
-  // Ensamblado final: SOLO HEADER + TABLES + BLOCKS + ENTITIES (más robusto)
   const header = appState.diagramas.dxfHeaderSection || ["0","SECTION","2","HEADER","0","ENDSEC"].join("\n");
+  const classes = appState.diagramas.dxfClassesSection || ""; // opcional
   const tables = appState.diagramas.dxfTablesSection || ["0","SECTION","2","TABLES","0","ENDSEC"].join("\n");
   const blocksSection = appState.diagramas.dxfBlocksSection; // requerido
+  const objects = appState.diagramas.dxfObjectsSection || ""; // opcional pero recomendable si la plantilla lo trae
 
-  const out = [
-    _stripBom(header),
-    _stripBom(tables),
-    _stripBom(blocksSection),
-    entitiesSection,
-    "0\nEOF\n",
-  ].join("\n");
+  outLines.push(..._dxfSectionToLines(header));
+  if (classes) outLines.push(..._dxfSectionToLines(classes));
+  outLines.push(..._dxfSectionToLines(tables));
+  outLines.push(..._dxfSectionToLines(blocksSection));
+
+  // ENTITIES
+  outLines.push("0","SECTION","2","ENTITIES");
+  outLines.push(...ent);
+  outLines.push("0","ENDSEC");
+
+  if (objects) outLines.push(..._dxfSectionToLines(objects));
+
+  outLines.push("0","EOF");
+
+  const out = outLines.join("\n") + "\n";
 
   const nameBase = (appState.diagramas.dxfFileName || "plantilla").replace(/\.dxf$/i, "");
   const fileName = `${nameBase}_red_cat6_sin_atributos.dxf`;
