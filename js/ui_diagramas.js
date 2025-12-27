@@ -1509,7 +1509,7 @@ function diagExportDxf() {
 
   outLines.push(..._dxfSectionToLines(header));
   outLines.push(..._dxfSectionToLines(tables));
-  outLines.push(..._dxfSectionToLines(blocksSection));
+ // outLines.push(..._dxfSectionToLines(blocksSection));
 
   // ENTITIES
   outLines.push("0","SECTION","2","ENTITIES");
