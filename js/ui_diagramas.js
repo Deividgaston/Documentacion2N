@@ -560,38 +560,157 @@ function _dxfSectionToLines(sectionText) {
   return lines;
 }
 
-// ✅ TABLES mínimo (evita APPID/handles conflictivos de la plantilla)
+// ✅ NUEVO (mínimo): TABLES mínimo (evita APPID/handles conflictivos de la plantilla)
 function _buildMinimalTablesSection() {
   return [
-    "0","SECTION","2","TABLES",
+    "0",
+    "SECTION",
+    "2",
+    "TABLES",
 
     // LTYPE
-    "0","TABLE","2","LTYPE","70","1",
-    "0","LTYPE","2","CONTINUOUS","70","0","3","Solid line","72","65","73","0","40","0.0",
-    "0","ENDTAB",
+    "0",
+    "TABLE",
+    "2",
+    "LTYPE",
+    "70",
+    "1",
+    "0",
+    "LTYPE",
+    "2",
+    "CONTINUOUS",
+    "70",
+    "0",
+    "3",
+    "Solid line",
+    "72",
+    "65",
+    "73",
+    "0",
+    "40",
+    "0.0",
+    "0",
+    "ENDTAB",
 
     // LAYER
-    "0","TABLE","2","LAYER","70","1",
-    "0","LAYER","2","0","70","0","62","7","6","CONTINUOUS",
-    "0","ENDTAB",
+    "0",
+    "TABLE",
+    "2",
+    "LAYER",
+    "70",
+    "1",
+    "0",
+    "LAYER",
+    "2",
+    "0",
+    "70",
+    "0",
+    "62",
+    "7",
+    "6",
+    "CONTINUOUS",
+    "0",
+    "ENDTAB",
 
     // STYLE
-    "0","TABLE","2","STYLE","70","1",
-    "0","STYLE","2","STANDARD","70","0","40","0","41","1","50","0","71","0","42","2.5","3","txt","4","",
-    "0","ENDTAB",
+    "0",
+    "TABLE",
+    "2",
+    "STYLE",
+    "70",
+    "1",
+    "0",
+    "STYLE",
+    "2",
+    "STANDARD",
+    "70",
+    "0",
+    "40",
+    "0",
+    "41",
+    "1",
+    "50",
+    "0",
+    "71",
+    "0",
+    "42",
+    "2.5",
+    "3",
+    "txt",
+    "4",
+    "",
+    "0",
+    "ENDTAB",
 
-    "0","ENDSEC",
+    "0",
+    "ENDSEC",
   ].join("\n");
 }
 
-// ✅ NUEVO: HEADER mínimo y estable (no usar el de la plantilla)
-function _buildMinimalHeaderSection() {
+/* ======================================================
+   ✅ NUEVO: BLOCKS “limpios” generados por nosotros
+   - SIN APPID/XDATA
+   - 2 bloques:
+     * AI_NODE_DEV   (círculo + cruz)
+     * AI_NODE_INFRA (rectángulo)
+ ====================================================== */
+function _buildCleanBlocksSection() {
+  // Bloque DEV: círculo radio 10 + cruz
+  const dev = [
+    "0","BLOCK",
+    "8","0",
+    "2","AI_NODE_DEV",
+    "70","0",
+    "10","0","20","0","30","0",
+    "3","AI_NODE_DEV",
+    "1","",
+
+    // circle
+    "0","CIRCLE",
+    "8","0",
+    "10","0","20","0","30","0",
+    "40","10",
+
+    // cross line 1
+    "0","LINE",
+    "8","0",
+    "10","-7","20","0","30","0",
+    "11","7","21","0","31","0",
+
+    // cross line 2
+    "0","LINE",
+    "8","0",
+    "10","0","20","-7","30","0",
+    "11","0","21","7","31","0",
+
+    "0","ENDBLK"
+  ];
+
+  // Bloque INFRA: rectángulo 24x16 centrado en 0,0
+  const infra = [
+    "0","BLOCK",
+    "8","0",
+    "2","AI_NODE_INFRA",
+    "70","0",
+    "10","0","20","0","30","0",
+    "3","AI_NODE_INFRA",
+    "1","",
+
+    // rectangle (4 lines)
+    "0","LINE","8","0","10","-12","20","-8","30","0","11","12","21","-8","31","0",
+    "0","LINE","8","0","10","12","20","-8","30","0","11","12","21","8","31","0",
+    "0","LINE","8","0","10","12","20","8","30","0","11","-12","21","8","31","0",
+    "0","LINE","8","0","10","-12","20","8","30","0","11","-12","21","-8","31","0",
+
+    "0","ENDBLK"
+  ];
+
   return [
-    "0","SECTION","2","HEADER",
-    "9","$ACADVER","1","AC1027",
-    "9","$INSUNITS","70","6",
-    "9","$HANDSEED","5","FFFF",
-    "0","ENDSEC",
+    "0","SECTION",
+    "2","BLOCKS",
+    ...dev,
+    ...infra,
+    "0","ENDSEC"
   ].join("\n");
 }
 
@@ -1376,27 +1495,12 @@ function diagExportSvg() {
 
 /* ======================================================
    6B) ✅ Export DXF (ASCII) SIN atributos
-   FIX: HEADER mínimo + TABLES mínimo + NO OBJECTS (evita APPID)
+   ✅ FIX DEFINITIVO: BLOCKS “limpios” generados por nosotros
  ====================================================== */
 function diagExportDxf() {
-  const r = appState.diagramas.lastResult; // (se mantiene igual para cambios mínimos)
+  const r = appState.diagramas.lastResult;
   if (!r) {
     appState.diagramas.lastError = "No hay resultado para exportar. Genera el diseño primero.";
-    appState.diagramas.lastRaw = null;
-    _renderResult();
-    return;
-  }
-
-  if (!appState.diagramas.dxfBlocksSection) {
-    appState.diagramas.lastError = "Para exportar DXF, carga primero la plantilla DXF (para reutilizar BLOCKS).";
-    appState.diagramas.lastRaw = null;
-    _renderResult();
-    return;
-  }
-
-  const blocks = Array.isArray(appState.diagramas.dxfBlocks) ? appState.diagramas.dxfBlocks : [];
-  if (!blocks.length) {
-    appState.diagramas.lastError = "La plantilla DXF no tiene bloques detectados (BLOCKS).";
     appState.diagramas.lastRaw = null;
     _renderResult();
     return;
@@ -1409,15 +1513,6 @@ function diagExportDxf() {
     _renderResult();
     return;
   }
-
-  function _normBlockName(s) {
-    return String(s || "").trim().toLowerCase();
-  }
-  const blockMap = new Map();
-  blocks.forEach((b) => {
-    const nb = _normBlockName(b);
-    if (nb && !blockMap.has(nb)) blockMap.set(nb, String(b));
-  });
 
   const placements = Array.isArray(r.placements) ? r.placements : [];
   const infra = Array.isArray(r.infra) ? r.infra : [];
@@ -1432,37 +1527,45 @@ function diagExportDxf() {
   const ent = [];
 
   function dxfLine(x1, y1, x2, y2) {
-    ent.push(
-      "0","LINE","8","0",
-      "10",_fmt(x1),"20",_fmt(y1),"30","0",
-      "11",_fmt(x2),"21",_fmt(y2),"31","0"
-    );
-  }
-
-  function dxfCircle(x, y, rad) {
-    ent.push("0","CIRCLE","8","0","10",_fmt(x),"20",_fmt(y),"30","0","40",_fmt(rad));
+    ent.push("0", "LINE", "8", "0", "10", _fmt(x1), "20", _fmt(y1), "30", "0", "11", _fmt(x2), "21", _fmt(y2), "31", "0");
   }
 
   function dxfText(x, y, h, text) {
     const t = String(text || "").replace(/\r?\n/g, " ");
-    ent.push("0","TEXT","8","0","10",_fmt(x),"20",_fmt(y),"30","0","40",_fmt(h),"1",t,"50","0");
+    ent.push("0", "TEXT", "8", "0", "10", _fmt(x), "20", _fmt(y), "30", "0", "40", _fmt(h), "1", t, "50", "0");
   }
 
   function dxfInsert(blockName, x, y, sx, sy, rotDeg) {
     const bn = String(blockName || "").replaceAll('"', "").trim();
-    if (!bn) return;
     ent.push(
-      "0","INSERT","8","0","2",bn,
-      "10",_fmt(x),"20",_fmt(y),"30","0",
-      "41",_fmt(sx),"42",_fmt(sy),"43",_fmt(1),
-      "50",_fmt(rotDeg || 0)
+      "0",
+      "INSERT",
+      "8",
+      "0",
+      "2",
+      bn,
+      "10",
+      _fmt(x),
+      "20",
+      _fmt(y),
+      "30",
+      "0",
+      "41",
+      _fmt(sx),
+      "42",
+      _fmt(sy),
+      "43",
+      _fmt(1),
+      "50",
+      _fmt(rotDeg || 0)
     );
-    // SIN ATTRIB / SEQEND (sin atributos)
   }
 
   // Título y cabeceras de zona
   const zones = appState.diagramas.zones || [];
-  const colW = 280, startX = 80, titleY = 40;
+  const colW = 280,
+    startX = 80,
+    titleY = 40;
   dxfText(80, 20, 14, "DIAGRAMA RED UTP CAT6 (ESQUEMA)");
   zones.forEach((z, i) => dxfText(startX + i * colW, titleY, 12, z.label));
 
@@ -1474,53 +1577,54 @@ function diagExportDxf() {
     dxfLine(a.x, a.y, b.x, b.y);
   }
 
-  // Placements (usa bloque seleccionado; si no, círculo)
+  // ✅ Placements: bloque limpio DEV
   for (const p of placements) {
     const pos = coords.get(p.id);
     if (!pos) continue;
-
-    const wanted = String(p.icon_block || p.iconBlock || "").trim();
-    const resolved = wanted ? blockMap.get(_normBlockName(wanted)) || "" : "";
-
-    if (resolved) dxfInsert(resolved, pos.x, pos.y, 1, 1, 0);
-    else dxfCircle(pos.x, pos.y, 10);
-
+    dxfInsert("AI_NODE_DEV", pos.x, pos.y, 1, 1, 0);
     dxfText(pos.x + 16, pos.y + 4, 10, String(p.ref || p.id || ""));
   }
 
-  // Infra (simple círculo + texto)
+  // ✅ Infra: bloque limpio INFRA
   for (const n of infra) {
     const pos = coords.get(n.id);
     if (!pos) continue;
-    dxfCircle(pos.x, pos.y, 12);
+    dxfInsert("AI_NODE_INFRA", pos.x, pos.y, 1, 1, 0);
     dxfText(pos.x + 16, pos.y + 4, 10, String(n.type || n.id));
   }
 
-  // ✅ Construcción robusta “por líneas”:
-  // - NO reutilizar HEADER de plantilla (APPID/handles)
-  // - TABLES mínimo propio
-  // - SOLO reutilizar BLOCKS (iconos)
-  // - NO OBJECTS
+  // ✅ Construcción robusta “por líneas”
   const outLines = [];
 
-  const header = _buildMinimalHeaderSection();
+  // Header mínimo (si no hay plantilla cargada, usamos este)
+  const header =
+    appState.diagramas.dxfHeaderSection ||
+    [
+      "0","SECTION",
+      "2","HEADER",
+      "9","$ACADVER",
+      "1","AC1009", // R12 ASCII (muy compatible)
+      "0","ENDSEC"
+    ].join("\n");
+
   const tables = _buildMinimalTablesSection();
-  const blocksSection = appState.diagramas.dxfBlocksSection;
+  const cleanBlocks = _buildCleanBlocksSection();
 
   outLines.push(..._dxfSectionToLines(header));
   outLines.push(..._dxfSectionToLines(tables));
- // outLines.push(..._dxfSectionToLines(blocksSection));
+  outLines.push(..._dxfSectionToLines(cleanBlocks));
 
   // ENTITIES
-  outLines.push("0","SECTION","2","ENTITIES");
+  outLines.push("0", "SECTION", "2", "ENTITIES");
   outLines.push(...ent);
-  outLines.push("0","ENDSEC");
-  outLines.push("0","EOF");
+  outLines.push("0", "ENDSEC");
+
+  outLines.push("0", "EOF");
 
   const out = outLines.join("\n") + "\n";
 
-  const nameBase = (appState.diagramas.dxfFileName || "plantilla").replace(/\.dxf$/i, "");
-  const fileName = `${nameBase}_red_cat6_sin_atributos.dxf`;
+  const nameBase = (appState.diagramas.dxfFileName || "diagrama").replace(/\.dxf$/i, "");
+  const fileName = `${nameBase}_red_cat6_clean_blocks.dxf`;
 
   try {
     const blob = new Blob([out], { type: "application/dxf" });
