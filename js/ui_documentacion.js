@@ -957,6 +957,44 @@ function attachDocMediaGridHandlers(root) {
   });
 }
 
+function attachDocFichasHandlers(root) {
+  const container = root || getDocAppContent();
+  if (!container) return;
+
+  // checkbox selección
+  container.querySelectorAll("[data-doc-ficha-media-id]").forEach((chk) => {
+    if (chk.__docBound) return;
+    chk.__docBound = true;
+
+    chk.addEventListener("change", () => {
+      const id = chk.getAttribute("data-doc-ficha-media-id");
+      if (!id) return;
+
+      const set = new Set(appState.documentacion.selectedFichasMediaIds || []);
+      if (chk.checked) set.add(id);
+      else set.delete(id);
+
+      appState.documentacion.selectedFichasMediaIds = Array.from(set);
+      saveDocStateToLocalStorage();
+    });
+  });
+
+  // botón descargar
+  container.querySelectorAll("[data-doc-ficha-download-id]").forEach((btn) => {
+    if (btn.__docBound) return;
+    btn.__docBound = true;
+
+    btn.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+
+      const id = btn.getAttribute("data-doc-ficha-download-id");
+      if (!id) return;
+      startSingleFichaDownloadById(id);
+    });
+  });
+}
+
 // ======================================================
 // AÑADIR / QUITAR MEDIA A SECCIÓN
 // ======================================================
