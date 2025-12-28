@@ -278,7 +278,7 @@ function _renderPreviewSvg(result) {
 }
 
 // Drag controller para SVG
-window.window._diagDrag = window.window._diagDrag || { active: false, nodeId: null, offsetX: 0, offsetY: 0 };
+let _diagDrag = { active: false, nodeId: null, offsetX: 0, offsetY: 0 };
 
 function _svgPoint(svg, clientX, clientY) {
   const pt = svg.createSVGPoint();
@@ -310,20 +310,20 @@ function _bindPreviewWindowListeners(svg) {
   _unbindPreviewWindowListeners();
 
   s._previewMouseMoveHandler = (ev) => {
-    if (!window._diagDrag.active || !window._diagDrag.nodeId) return;
+    if (!_diagDrag.active || !_diagDrag.nodeId) return;
     const p = _svgPoint(svg, ev.clientX, ev.clientY);
-    const nx = p.x + window._diagDrag.offsetX;
-    const ny = p.y + window._diagDrag.offsetY;
+    const nx = p.x + _diagDrag.offsetX;
+    const ny = p.y + _diagDrag.offsetY;
 
     s.manualCoords = s.manualCoords || {};
-    s.manualCoords[window._diagDrag.nodeId] = { x: nx, y: ny };
+    s.manualCoords[_diagDrag.nodeId] = { x: nx, y: ny };
 
     _renderResult();
   };
 
   s._previewMouseUpHandler = () => {
-    window._diagDrag.active = false;
-    window._diagDrag.nodeId = null;
+    _diagDrag.active = false;
+    _diagDrag.nodeId = null;
   };
 
   window.addEventListener("mousemove", s._previewMouseMoveHandler, true);
@@ -378,10 +378,10 @@ function _bindPreviewInteractions() {
     const cur = coords.get(nodeId);
     if (!cur) return;
 
-    window._diagDrag.active = true;
-    window._diagDrag.nodeId = nodeId;
-    window._diagDrag.offsetX = cur.x - p.x;
-    window._diagDrag.offsetY = cur.y - p.y;
+    _diagDrag.active = true;
+    _diagDrag.nodeId = nodeId;
+    _diagDrag.offsetX = cur.x - p.x;
+    _diagDrag.offsetY = cur.y - p.y;
 
     try {
       ev.preventDefault();
@@ -563,130 +563,180 @@ function _dxfSectionToLines(sectionText) {
 // ✅ TABLES mínimo CON handles (5) + owner (330)
 // (AutoCAD LT 2026 suele petar si APPID/LAYER/LTYPE/STYLE no llevan handle)
 function _buildMinimalTablesSection() {
-  // R12 TABLES mínimos (sin handles) para máxima compatibilidad en AutoCAD LT 2026
-  const out = ["0", "SECTION", "2", "TABLES"];
+  let h = 0x100; // handles > 0
+  const nextH = () => (h++).toString(16).toUpperCase();
+
+  const TABLES_OWNER = nextH(); // handle ficticio "owner" de las tablas
 
   function tableStart(name, count) {
-    out.push("0", "TABLE", "2", name, "70", String(count));
-  }
-  function endTab() {
-    out.push("0", "ENDTAB");
+    const th = nextH(); // table handle
+    return {
+      th,
+      lines: [
+        "0",
+        "TABLE",
+        "2",
+        name,
+        "5",
+        th,
+        "330",
+        TABLES_OWNER,
+        "100",
+        "AcDbSymbolTable",
+        "70",
+        String(count),
+      ],
+    };
   }
 
-  // VPORT (required in R12)
-  tableStart("VPORT", 1);
-  out.push(
-    "0","VPORT",
-    "2","*ACTIVE",
-    "70","0",
-    "10","0.0","20","0.0",
-    "11","1.0","21","1.0",
-    "12","286.5","22","286.5",
-    "13","0.0","23","0.0",
-    "14","10.0","24","10.0",
-    "15","10.0","25","10.0",
-    "16","0.0","26","0.0",
-    "36","1.0",
-    "17","0.0","27","0.0",
-    "37","0.0",
-    "40","335.0",
-    "41","1.0",
-    "42","50.0",
-    "43","0.0",
-    "44","0.0",
-    "50","0.0",
-    "51","0.0",
-    "71","0",
-    "72","1000",
-    "73","1",
-    "74","3",
-    "75","0",
-    "76","0",
-    "77","0",
-    "78","0"
-  );
-  endTab();
+  function endTab() {
+    return ["0", "ENDTAB"];
+  }
+
+  function appidRecord(tableHandle, appName) {
+    const rh = nextH();
+    return [
+      "0",
+      "APPID",
+      "5",
+      rh,
+      "330",
+      tableHandle,
+      "100",
+      "AcDbSymbolTableRecord",
+      "100",
+      "AcDbRegAppTableRecord",
+      "2",
+      appName,
+      "70",
+      "0",
+    ];
+  }
+
+  function ltypeContinuous(tableHandle) {
+    const rh = nextH();
+    return [
+      "0",
+      "LTYPE",
+      "5",
+      rh,
+      "330",
+      tableHandle,
+      "100",
+      "AcDbSymbolTableRecord",
+      "100",
+      "AcDbLinetypeTableRecord",
+      "2",
+      "CONTINUOUS",
+      "70",
+      "0",
+      "3",
+      "Solid line",
+      "72",
+      "65",
+      "73",
+      "0",
+      "40",
+      "0.0",
+    ];
+  }
+
+  function layer0(tableHandle) {
+  const rh = nextH();
+  return [
+    "0",
+    "LAYER",
+    "5",
+    rh,
+    "330",
+    tableHandle,
+    "100",
+    "AcDbSymbolTableRecord",
+    "100",
+    "AcDbLayerTableRecord",
+    "2",
+    "0",
+    "70",
+    "0",
+    "62",
+    "7",
+    "6",
+    "CONTINUOUS",
+
+    // ✅ FIX AutoCAD LT 2026: PlotStyleName requerido
+    "370",
+    "0",   // lineweight (default)
+    "390",
+    "0",   // PlotStyleName (default / bylayer)
+  ];
+}
+
+
+  function styleStandard(tableHandle) {
+    const rh = nextH();
+    return [
+      "0",
+      "STYLE",
+      "5",
+      rh,
+      "330",
+      tableHandle,
+      "100",
+      "AcDbSymbolTableRecord",
+      "100",
+      "AcDbTextStyleTableRecord",
+      "2",
+      "STANDARD",
+      "70",
+      "0",
+      "40",
+      "0",
+      "41",
+      "1",
+      "50",
+      "0",
+      "71",
+      "0",
+      "42",
+      "2.5",
+      "3",
+      "txt",
+      "4",
+      "",
+    ];
+  }
+
+  const out = ["0", "SECTION", "2", "TABLES"];
+
+  // APPID (ACAD)
+  const appid = tableStart("APPID", 1);
+  out.push(...appid.lines);
+  out.push(...appidRecord(appid.th, "ACAD"));
+  out.push(...endTab());
 
   // LTYPE
-  tableStart("LTYPE", 1);
-  out.push(
-    "0","LTYPE",
-    "2","CONTINUOUS",
-    "70","0",
-    "3","Solid line",
-    "72","65",
-    "73","0",
-    "40","0.0"
-  );
-  endTab();
+  const ltype = tableStart("LTYPE", 1);
+  out.push(...ltype.lines);
+  out.push(...ltypeContinuous(ltype.th));
+  out.push(...endTab());
 
   // LAYER
-  tableStart("LAYER", 1);
-  out.push(
-    "0","LAYER",
-    "2","0",
-    "70","0",
-    "62","7",
-    "6","CONTINUOUS"
-  );
-  endTab();
+  const layer = tableStart("LAYER", 1);
+  out.push(...layer.lines);
+  out.push(...layer0(layer.th));
+  out.push(...endTab());
 
   // STYLE
-  tableStart("STYLE", 1);
-  out.push(
-    "0","STYLE",
-    "2","STANDARD",
-    "70","0",
-    "40","0.0",
-    "41","1.0",
-    "50","0.0",
-    "71","0",
-    "42","2.5",
-    "3","txt",
-    "4",""
-  );
-  endTab();
-
-  // VIEW (required table; can be empty)
-  tableStart("VIEW", 0);
-  endTab();
-
-  // UCS (required table; can be empty)
-  tableStart("UCS", 0);
-  endTab();
-
-  // APPID
-  tableStart("APPID", 1);
-  out.push(
-    "0","APPID",
-    "2","ACAD",
-    "70","0"
-  );
-  endTab();
-
-  // DIMSTYLE
-  tableStart("DIMSTYLE", 1);
-  out.push(
-    "0","DIMSTYLE",
-    "2","STANDARD",
-    "70","0"
-  );
-  endTab();
-
-  // BLOCK_RECORD (model + paper space)
-  tableStart("BLOCK_RECORD", 2);
-  out.push("0","BLOCK_RECORD","2","*MODEL_SPACE","70","0");
-  out.push("0","BLOCK_RECORD","2","*PAPER_SPACE","70","0");
-  endTab();
+  const style = tableStart("STYLE", 1);
+  out.push(...style.lines);
+  out.push(...styleStandard(style.th));
+  out.push(...endTab());
 
   out.push("0", "ENDSEC");
-  return out.join("
-");
+  return out.join("\n");
 }
 // ✅ HEADER mínimo (añade HANDSEED)
- (añade HANDSEED)
 function _buildMinimalHeaderSection() {
-  // R12 (AC1009) abre en AutoCAD LT 2026 sin requerir handles / plotstyles en TABLES
   return [
     "0",
     "SECTION",
@@ -695,12 +745,21 @@ function _buildMinimalHeaderSection() {
     "9",
     "$ACADVER",
     "1",
-    "AC1009",
+    "AC1027",
+    "9",
+    "$INSUNITS",
+    "70",
+    "4", // 4=mm
+    "9",
+    "$HANDSEED",
+    "5",
+    "FFFF", // semilla alta para que AutoCAD no choque
     "0",
     "ENDSEC",
-  ].join("
-");
+  ].join("\n");
 }
+
+
 // ✅ NUEVO: quita XDATA (1001 + 1000..1071) para no requerir APPID
 function _stripDxfXDataFromLines(lines) {
   const out = [];
@@ -915,12 +974,12 @@ async function diagImportDxfFile(file) {
 /* ======================================================
    3) Drag & drop (refs a zonas)
  ====================================================== */
-window.window._dragRefKey = window.window._dragRefKey ?? null;
+let _dragRefKey = null;
 
 function _onRefDragStart(ev, ref) {
-  window._dragRefKey = String(ref || "");
+  _dragRefKey = String(ref || "");
   try {
-    ev.dataTransfer.setData("text/plain", window._dragRefKey);
+    ev.dataTransfer.setData("text/plain", _dragRefKey);
     ev.dataTransfer.effectAllowed = "copy";
   } catch (_) {}
 }
@@ -948,7 +1007,7 @@ function _onZoneDrop(ev, zoneKey) {
   try {
     ref = ev.dataTransfer.getData("text/plain") || "";
   } catch (_) {
-    ref = window._dragRefKey || "";
+    ref = _dragRefKey || "";
   }
 
   ref = String(ref || "").trim();
@@ -1648,20 +1707,17 @@ function diagExportDxf() {
     dxfText(pos.x + 16, pos.y + 4, 10, String(n.type || n.id));
   }
 
-  // ✅ Construcción robusta “por líneas” (R12: sin handles / sin OBJECTS) 
+  // ✅ Construcción robusta “por líneas”
   const outLines = [];
 
-  // Forzamos DXF R12 para que AutoCAD LT 2026 no exija handles/plotstyles en TABLES
-  const header = _buildMinimalHeaderSection();
-  const tables = _buildMinimalTablesSection();
+  const header = _buildMinimalHeaderSection(); // ✅ propio
+  const tables = _buildMinimalTablesSection(); // ✅ ahora incluye APPID ACAD
 
   const blocksSectionRaw = appState.diagramas.dxfBlocksSection; // requerido
   const blocksLines = _dxfSectionToLines(blocksSectionRaw);
-  const blocksCleanLines = _stripDxfXDataFromLines(blocksLines); // ✅ quita XDATA (evita APPID extra)
-
+  const blocksCleanLines = _stripDxfXDataFromLines(blocksLines); // ✅ quita XDATA
 
   outLines.push(..._dxfSectionToLines(header));
-  if (classesText) outLines.push(..._dxfSectionToLines(classesText));
   outLines.push(..._dxfSectionToLines(tables));
   outLines.push(...blocksCleanLines);
 
@@ -1750,7 +1806,7 @@ function _renderRefsList() {
 
   host.querySelectorAll("[draggable='true'][data-ref]").forEach((node) => {
     node.addEventListener("dragstart", (ev) => _onRefDragStart(ev, node.dataset.ref));
-    node.addEventListener("dragend", () => (window._dragRefKey = null));
+    node.addEventListener("dragend", () => (_dragRefKey = null));
   });
 }
 
