@@ -1411,3 +1411,40 @@ textarea {
     white-space: nowrap;
   }
 }
+/* =========================================================
+   DOCUMENTACIÓN · FICHAS TÉCNICAS (fila + botón Descargar)
+   ========================================================= */
+
+.doc-ficha-item-row{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.2rem 0.1rem;
+}
+
+.doc-ficha-item-row .doc-ficha-item{
+  flex: 1 1 auto;
+  min-width: 0; /* clave: permite truncar texto en flex */
+}
+
+/* Texto de ficha: que no “empuje” al botón */
+.doc-ficha-item-row .doc-ficha-main{
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;      /* 2 líneas */
+  -webkit-box-orient: vertical;
+}
+
+/* Botón Descargar compacto y consistente con tu sistema */
+.doc-ficha-item-row [data-doc-ficha-download-id]{
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+/* Opcional: que el checkbox no se descuadre en 2 líneas */
+.doc-ficha-item-row .doc-ficha-item input[type="checkbox"]{
+  margin-top: 0.2rem;
+}
