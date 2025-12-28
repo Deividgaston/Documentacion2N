@@ -560,181 +560,70 @@ function _dxfSectionToLines(sectionText) {
   return lines;
 }
 
-// ✅ TABLES mínimo CON handles (5) + owner (330)
-// (AutoCAD LT 2026 suele petar si APPID/LAYER/LTYPE/STYLE no llevan handle)
+/**
+ * ✅ FIX AutoCAD LT 2026:
+ * Evitamos tablas "modernas" con handles/owners (5/330/100) porque es muy fácil romperlas.
+ * Generamos un TABLES mínimo estilo R12, y además incluimos VIEW para evitar "Falta SymbolTable:VIEW".
+ * Como además strippeamos XDATA (1001..1071), NO necesitamos APPID.
+ */
 function _buildMinimalTablesSection() {
-  let h = 0x100; // handles > 0
-  const nextH = () => (h++).toString(16).toUpperCase();
-
-  const TABLES_OWNER = nextH(); // handle ficticio "owner" de las tablas
-
-  function tableStart(name, count) {
-    const th = nextH(); // table handle
-    return {
-      th,
-      lines: [
-        "0",
-        "TABLE",
-        "2",
-        name,
-        "5",
-        th,
-        "330",
-        TABLES_OWNER,
-        "100",
-        "AcDbSymbolTable",
-        "70",
-        String(count),
-      ],
-    };
-  }
-
-  function endTab() {
-    return ["0", "ENDTAB"];
-  }
-
-  function appidRecord(tableHandle, appName) {
-    const rh = nextH();
-    return [
-      "0",
-      "APPID",
-      "5",
-      rh,
-      "330",
-      tableHandle,
-      "100",
-      "AcDbSymbolTableRecord",
-      "100",
-      "AcDbRegAppTableRecord",
-      "2",
-      appName,
-      "70",
-      "0",
-    ];
-  }
-
-  function ltypeContinuous(tableHandle) {
-    const rh = nextH();
-    return [
-      "0",
-      "LTYPE",
-      "5",
-      rh,
-      "330",
-      tableHandle,
-      "100",
-      "AcDbSymbolTableRecord",
-      "100",
-      "AcDbLinetypeTableRecord",
-      "2",
-      "CONTINUOUS",
-      "70",
-      "0",
-      "3",
-      "Solid line",
-      "72",
-      "65",
-      "73",
-      "0",
-      "40",
-      "0.0",
-    ];
-  }
-
-  function layer0(tableHandle) {
-  const rh = nextH();
   return [
-    "0",
-    "LAYER",
-    "5",
-    rh,
-    "330",
-    tableHandle,
-    "100",
-    "AcDbSymbolTableRecord",
-    "100",
-    "AcDbLayerTableRecord",
-    "2",
-    "0",
-    "70",
-    "0",
-    "62",
-    "7",
-    "6",
-    "CONTINUOUS",
+    "0","SECTION",
+    "2","TABLES",
 
-    // ✅ FIX AutoCAD LT 2026: PlotStyleName requerido
-    "370",
-    "0",   // lineweight (default)
-    "390",
-    "0",   // PlotStyleName (default / bylayer)
-  ];
+    // ---------- LTYPE ----------
+    "0","TABLE",
+    "2","LTYPE",
+    "70","1",
+    "0","LTYPE",
+    "2","CONTINUOUS",
+    "70","0",
+    "3","Solid line",
+    "72","65",
+    "73","0",
+    "40","0.0",
+    "0","ENDTAB",
+
+    // ---------- LAYER ----------
+    "0","TABLE",
+    "2","LAYER",
+    "70","1",
+    "0","LAYER",
+    "2","0",
+    "70","0",
+    "62","7",
+    "6","CONTINUOUS",
+    // ✅ PlotStyleName/lineweight para LT 2026
+    "370","0",
+    "390","0",
+    "0","ENDTAB",
+
+    // ---------- STYLE ----------
+    "0","TABLE",
+    "2","STYLE",
+    "70","1",
+    "0","STYLE",
+    "2","STANDARD",
+    "70","0",
+    "40","0",
+    "41","1",
+    "50","0",
+    "71","0",
+    "42","2.5",
+    "3","txt",
+    "4","",
+    "0","ENDTAB",
+
+    // ---------- VIEW (vacía pero obligatoria en algunos LT) ----------
+    "0","TABLE",
+    "2","VIEW",
+    "70","0",
+    "0","ENDTAB",
+
+    "0","ENDSEC",
+  ].join("\n");
 }
 
-
-  function styleStandard(tableHandle) {
-    const rh = nextH();
-    return [
-      "0",
-      "STYLE",
-      "5",
-      rh,
-      "330",
-      tableHandle,
-      "100",
-      "AcDbSymbolTableRecord",
-      "100",
-      "AcDbTextStyleTableRecord",
-      "2",
-      "STANDARD",
-      "70",
-      "0",
-      "40",
-      "0",
-      "41",
-      "1",
-      "50",
-      "0",
-      "71",
-      "0",
-      "42",
-      "2.5",
-      "3",
-      "txt",
-      "4",
-      "",
-    ];
-  }
-
-  const out = ["0", "SECTION", "2", "TABLES"];
-
-  // APPID (ACAD)
-  const appid = tableStart("APPID", 1);
-  out.push(...appid.lines);
-  out.push(...appidRecord(appid.th, "ACAD"));
-  out.push(...endTab());
-
-  // LTYPE
-  const ltype = tableStart("LTYPE", 1);
-  out.push(...ltype.lines);
-  out.push(...ltypeContinuous(ltype.th));
-  out.push(...endTab());
-
-  // LAYER
-  const layer = tableStart("LAYER", 1);
-  out.push(...layer.lines);
-  out.push(...layer0(layer.th));
-  out.push(...endTab());
-
-  // STYLE
-  const style = tableStart("STYLE", 1);
-  out.push(...style.lines);
-  out.push(...styleStandard(style.th));
-  out.push(...endTab());
-
-  out.push("0", "ENDSEC");
-  return out.join("\n");
-}
 // ✅ HEADER mínimo (añade HANDSEED)
 function _buildMinimalHeaderSection() {
   return [
@@ -753,12 +642,11 @@ function _buildMinimalHeaderSection() {
     "9",
     "$HANDSEED",
     "5",
-    "FFFF", // semilla alta para que AutoCAD no choque
+    "FFFF", // semilla alta
     "0",
     "ENDSEC",
   ].join("\n");
 }
-
 
 // ✅ NUEVO: quita XDATA (1001 + 1000..1071) para no requerir APPID
 function _stripDxfXDataFromLines(lines) {
@@ -1572,7 +1460,7 @@ function diagExportSvg() {
 
 /* ======================================================
    6B) ✅ Export DXF (ASCII) SIN atributos
-   FIX: HEADER mínimo + TABLES mínimo SIN APPID + STRIP XDATA en BLOCKS
+   FIX: HEADER mínimo + TABLES mínimo (incluye VIEW) + STRIP XDATA en BLOCKS
  ====================================================== */
 function diagExportDxf() {
   const r = appState.diagramas.lastResult;
@@ -1710,8 +1598,8 @@ function diagExportDxf() {
   // ✅ Construcción robusta “por líneas”
   const outLines = [];
 
-  const header = _buildMinimalHeaderSection(); // ✅ propio
-  const tables = _buildMinimalTablesSection(); // ✅ ahora incluye APPID ACAD
+  const header = _buildMinimalHeaderSection();
+  const tables = _buildMinimalTablesSection();
 
   const blocksSectionRaw = appState.diagramas.dxfBlocksSection; // requerido
   const blocksLines = _dxfSectionToLines(blocksSectionRaw);
