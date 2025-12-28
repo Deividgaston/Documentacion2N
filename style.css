@@ -15,72 +15,11 @@ body {
   height: 100%;
 }
 
-
-/* ===========================
-   DESIGN SYSTEM Â· 2026 PREMIUM
-   (solo presentaciÃ³n â€” NO toca JS)
-   =========================== */
-
-:root{
-  /* Brand */
-  --brand: #4F46E5;          /* Indigo */
-  --brand-700: #4338CA;
-  --brand-50: #EEF2FF;
-
-  /* Neutrals */
-  --bg: #0B1020;
-  --bg2: #0F172A;
-  --surface: rgba(255,255,255,0.92);
-  --surface-2: rgba(255,255,255,0.76);
-  --surface-solid: #FFFFFF;
-  --text: #0B1220;
-  --muted: rgba(15,23,42,0.62);
-  --muted-2: rgba(15,23,42,0.48);
-  --border: rgba(148,163,184,0.28);
-
-  /* Shadows */
-  --shadow-sm: 0 10px 26px rgba(15,23,42,0.10);
-  --shadow-md: 0 18px 45px rgba(15,23,42,0.12);
-  --shadow-lg: 0 28px 70px rgba(15,23,42,0.18);
-
-  /* Radius + spacing */
-  --r-sm: 10px;
-  --r-md: 14px;
-  --r-lg: 18px;
-  --gap: 16px;
-
-  /* Layout */
-  --container-max: 1320px;
-  --topbar-h: 68px;
-
-  /* Focus ring */
-  --ring: 0 0 0 1px rgba(79,70,229,0.30), 0 0 0 4px rgba(79,70,229,0.14);
-}
-
 body {
-  /* TipografÃ­a: sistema (rÃ¡pida) + opcional Inter (si quieres, aÃ±ade @import en tu index o aquÃ­) */
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    "SF Pro Text", Roboto, Arial, "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
-
-  /* Fondo premium: suave, con profundidad */
-  background:
-    radial-gradient(900px 420px at 50% -120px, rgba(79,70,229,0.20), transparent 60%),
-    radial-gradient(800px 520px at 110% 0%, rgba(56,189,248,0.10), transparent 55%),
-    radial-gradient(900px 520px at -10% 10%, rgba(34,197,94,0.06), transparent 50%),
-    linear-gradient(180deg, #F6F8FF 0%, #F3F6FB 55%, #EFF3FA 100%);
-
-  color: var(--text);
-}
-
-/* Accesibilidad */
-:focus-visible{
-  outline: none;
-  box-shadow: var(--ring);
-}
-
-@media (prefers-reduced-motion: reduce){
-  *{ scroll-behavior: auto !important; }
-  *{ transition: none !important; animation: none !important; }
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
+    system-ui, sans-serif;
+  background: radial-gradient(circle at top, #edf2ff 0, #f4f6fb 55%);
+  color: #1f2933;
 }
 
 /* Layout general app */
@@ -96,9 +35,6 @@ body {
   display: flex;
   flex-direction: column;
   gap: 1.1rem;
-  max-width: var(--container-max);
-  margin: 0 auto;
-  width: 100%;
 }
 
 /* Layout especÃ­fico proyecto/presupuesto */
@@ -117,9 +53,9 @@ body {
 /* Topbar principal */
 
 .app-topbar {
-  height: var(--topbar-h);
-  background: rgba(255, 255, 255, 0.88);
-  border-bottom: 1px solid var(--border);
+  height: 66px;
+  background: rgba(255, 255, 255, 0.96);
+  border-bottom: 1px solid #e2e6f0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -130,7 +66,7 @@ body {
   box-shadow:
     0 18px 45px rgba(15, 23, 42, 0.06),
     0 1px 0 rgba(148, 163, 184, 0.25);
-  backdrop-filter: blur(20px) saturate(140%);
+  backdrop-filter: blur(18px);
 }
 
 .app-topbar-left {
@@ -159,8 +95,8 @@ body {
   margin: 0 1.25rem;
   padding: 0.15rem;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.70);
-  box-shadow: inset 0 0 0 1px var(--border);
+  background: rgba(248, 250, 252, 0.9);
+  box-shadow: inset 0 0 0 1px rgba(226, 232, 240, 0.9);
 }
 
 .top-nav-link {
@@ -182,13 +118,13 @@ body {
 }
 
 .top-nav-link:hover {
-  background: var(--brand-50);
-  color: var(--brand);
+  background: #eef2ff;
+  color: #1d4fd8;
   transform: translateY(-1px);
 }
 
 .top-nav-link.active {
-  background: var(--brand);
+  background: #1d4fd8;
   color: #ffffff;
   box-shadow:
     0 10px 26px rgba(37, 99, 235, 0.45),
@@ -205,51 +141,14 @@ body {
 }
 
 .badge-user {
-  background: var(--brand-50);
-  color: var(--brand);
+  background: #eef2ff;
+  color: #1d4fd8;
   padding: 0.25rem 0.7rem;
   border-radius: 999px;
   font-weight: 500;
   font-size: 0.82rem;
   box-shadow: 0 0 0 1px rgba(191, 219, 254, 0.8);
 }
-
-
-/* ===========================
-   RESPONSIVE NAV (solo CSS)
-   =========================== */
-@media (max-width: 820px){
-  .app-topbar{
-    padding: 0 0.85rem;
-  }
-
-  .app-topbar-left{
-    gap: 0.5rem;
-  }
-
-  .app-topbar-subtitle{
-    display: none;
-  }
-
-  .app-topbar-center{
-    flex: 1;
-    margin: 0 0.6rem;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-  }
-  .app-topbar-center::-webkit-scrollbar{ display:none; }
-
-  .top-nav-link{
-    white-space: nowrap;
-    padding: 0.44rem 0.95rem;
-  }
-
-  .badge-user{
-    display: none; /* el usuario sigue existiendo (no se borra), solo se oculta en mÃ³vil */
-  }
-}
-
 
 /* Chips/pastillas (Paso 1/2/3) */
 
@@ -259,8 +158,8 @@ body {
   border-radius: 999px;
   padding: 0.18rem 0.6rem;
   font-size: 0.75rem;
-  background: var(--brand-50);
-  color: var(--brand);
+  background: #eef2ff;
+  color: #1d4fd8;
   border: 1px solid #d0d5ff;
 }
 /* ===========================
@@ -270,10 +169,12 @@ body {
 /* Tarjetas */
 
 .card {
-  background: rgba(255,255,255,0.92);
-  border-radius: var(--r-lg);
+  background: #ffffff;
+  border-radius: 1rem;
   padding: 1.1rem 1.3rem;
-  box-shadow: var(--shadow-md), 0 0 0 1px var(--border);
+  box-shadow:
+    0 18px 45px rgba(15, 23, 42, 0.06),
+    0 0 0 1px rgba(226, 232, 240, 0.95);
   border: none;
   transition:
     transform 0.12s ease,
@@ -283,7 +184,9 @@ body {
 
 .card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 22px 60px rgba(15, 23, 42, 0.14), 0 0 0 1px rgba(79,70,229,0.22);
+  box-shadow:
+    0 22px 55px rgba(15, 23, 42, 0.09),
+    0 0 0 1px rgba(191, 219, 254, 0.8);
 }
 
 .card-header {
@@ -327,7 +230,7 @@ body {
 .metric-value {
   font-size: 1.35rem;
   font-weight: 650;
-  color: var(--brand);
+  color: #1d4fd8;
 }
 
 /* Formularios */
@@ -366,11 +269,11 @@ input[type="file"],
 select,
 textarea {
   border-radius: 0.55rem;
-  border: 1px solid rgba(148,163,184,0.38);
+  border: 1px solid #d1d5db;
   padding: 0.5rem 0.65rem;
   font-size: 0.88rem;
   outline: none;
-  background: rgba(255,255,255,0.92);
+  background: #ffffff;
   transition:
     border-color 0.15s ease,
     box-shadow 0.15s ease,
@@ -381,9 +284,11 @@ textarea {
 input:focus,
 select:focus,
 textarea:focus {
-  border-color: var(--brand);
-  box-shadow: var(--ring), 0 14px 34px rgba(79,70,229,0.10);
-  background: rgba(238,242,255,0.55);
+  border-color: #1d4fd8;
+  box-shadow:
+    0 0 0 1px rgba(59, 130, 246, 0.35),
+    0 12px 30px rgba(37, 99, 235, 0.15);
+  background: #f9fbff;
   transform: translateY(-1px);
 }
 
@@ -428,28 +333,23 @@ textarea {
   box-shadow: none;
 }
 
-.btn:focus-visible{
-  outline: none;
-  box-shadow: var(--ring);
-}
-
 .btn-primary {
-  background: var(--brand);
+  background: #1d4fd8;
   color: #ffffff;
-  border-color: var(--brand);
+  border-color: #1d4fd8;
   box-shadow:
     0 12px 30px rgba(37, 99, 235, 0.45),
     0 0 0 1px rgba(191, 219, 254, 0.8);
 }
 
 .btn-primary:hover {
-  background: var(--brand-700);
-  border-color: var(--brand-700);
+  background: #1740ad;
+  border-color: #1740ad;
 }
 
 .btn-secondary {
-  background: var(--brand-50);
-  color: var(--brand);
+  background: #eef2ff;
+  color: #1d4fd8;
   border-color: #d6dafe;
   box-shadow: 0 0 0 1px rgba(191, 219, 254, 0.9);
 }
@@ -465,7 +365,7 @@ textarea {
   border-radius: 0.9rem;
   border: 1px solid #e5e7f2;
   overflow: hidden;
-  background: rgba(255,255,255,0.92);
+  background: #ffffff;
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.05);
 }
 
@@ -478,19 +378,6 @@ textarea {
 .table thead {
   background: #f9fafb;
 }
-
-
-/* Sticky header (solo CSS) */
-.table-wrapper{
-  overflow: auto;
-}
-.table thead th{
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  backdrop-filter: blur(10px);
-}
-
 
 .table th,
 .table td {
@@ -526,7 +413,7 @@ textarea {
 .alert-info {
   background: #e6efff;
   border-color: #bfd3ff;
-  color: var(--brand);
+  color: #1d4fd8;
 }
 
 .alert-success {
@@ -865,7 +752,7 @@ textarea {
 
 .doc-section-media-drop.is-drag-over {
   border-color: #6366f1;
-  background-color: var(--brand-50);
+  background-color: #eef2ff;
 }
 
 .doc-section-media-items {
@@ -886,7 +773,7 @@ textarea {
   display: flex;
   border-radius: 0.5rem;
   border: 1px solid #e5e7eb;
-  background: rgba(255,255,255,0.92);
+  background: #ffffff;
   overflow: hidden;
   min-width: 180px;
   max-width: 260px;
@@ -939,7 +826,7 @@ textarea {
   padding: 0.05rem 0.3rem;
   border-radius: 999px;
   background-color: #eff6ff;
-  color: var(--brand);
+  color: #1d4ed8;
 }
 
 .doc-section-media-remove {
@@ -989,7 +876,7 @@ textarea {
 .doc-media-item {
   border-radius: 0.5rem;
   border: 1px solid #e5e7eb;
-  background: rgba(255,255,255,0.92);
+  background: #ffffff;
   padding: 0.35rem;
   display: flex;
   flex-direction: column;
@@ -1086,7 +973,7 @@ textarea {
 
 /* Apariencia del modal (para que no se â€œfundaâ€ con el contenido) */
 .doc-modal-content {
-  background: rgba(255,255,255,0.92);
+  background: #ffffff;
   border: 1px solid rgba(15, 23, 42, 0.12);
   border-radius: 12px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
@@ -1234,11 +1121,205 @@ textarea {
 
 .diag-dropzone {
   border: 1px dashed rgba(15, 23, 42, 0.18);
-  background: rgba(255,255,255,0.92);
+  background: #ffffff;
 }
 
 .diag-dropzone.is-drag-over {
   border-color: #6366f1;
-  background-color: var(--brand-50);
+  background-color: #eef2ff;
   box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.2), 0 14px 30px rgba(99, 102, 241, 0.12);
+}
+
+/* ===========================
+   BLOQUE X Â· SIMULADOR (DASHBOARD 2026)
+   - Solo CSS (sin tocar JS)
+   - Override de inline styles con !important cuando hace falta
+   =========================== */
+
+/* Layout 2 columnas premium */
+.simulador-layout{
+  align-items: stretch !important;
+}
+
+.simulador-left-column{
+  position: sticky;
+  top: 86px; /* bajo topbar */
+  align-self: flex-start;
+  flex: 0 0 420px !important;
+  max-width: 440px !important;
+}
+
+.simulador-right-column{
+  min-width: 0 !important;
+}
+
+/* Card upgrades dentro de simulador */
+.simulador-layout .card{
+  border: 1px solid rgba(148,163,184,0.28);
+  box-shadow:
+    0 22px 60px rgba(2,6,23,0.06),
+    0 1px 0 rgba(148,163,184,0.22);
+}
+
+.simulador-layout .card-header{
+  border-bottom: 1px solid rgba(148,163,184,0.18);
+  background:
+    radial-gradient(1200px 140px at 20% 0%, rgba(79,70,229,0.10), transparent 55%),
+    linear-gradient(180deg, rgba(255,255,255,0.92), rgba(255,255,255,0.82));
+}
+
+.simulador-layout .card-title{
+  letter-spacing: 0.01em;
+}
+
+/* Tabs actor (2N/DIST/...) */
+#simActorTabs{
+  padding: 0.22rem;
+  border-radius: 999px;
+  background: rgba(248,250,252,0.9);
+  box-shadow: inset 0 0 0 1px rgba(226,232,240,0.95);
+}
+
+.sim-tab{
+  border: 0 !important;
+  border-radius: 999px !important;
+  padding: 0.38rem 0.75rem !important;
+  font-size: 0.82rem !important;
+  font-weight: 650 !important;
+  color: #475569 !important;
+  background: transparent !important;
+  cursor: pointer;
+  transition:
+    background .16s ease,
+    color .16s ease,
+    transform .08s ease,
+    box-shadow .16s ease;
+}
+
+.sim-tab:hover{
+  background: rgba(79,70,229,0.10) !important;
+  color: #1f2a44 !important;
+}
+
+.sim-tab:active{
+  transform: translateY(1px);
+}
+
+/* Estado activo (si JS aÃ±ade .active, .is-active o aria-selected) */
+.sim-tab.active,
+.sim-tab.is-active,
+.sim-tab[aria-selected="true"]{
+  background: linear-gradient(180deg, rgba(79,70,229,0.14), rgba(79,70,229,0.10)) !important;
+  color: #1f2a44 !important;
+  box-shadow:
+    0 10px 22px rgba(79,70,229,0.16),
+    inset 0 0 0 1px rgba(79,70,229,0.30) !important;
+}
+
+/* Botones export (override inline) */
+#btnSimPdf,
+#btnSimExcel,
+#btnSimActorPdf,
+#btnSimActorExcel{
+  border-radius: 999px !important;
+  border: 1px solid rgba(148,163,184,0.38) !important;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.92), rgba(255,255,255,0.82)) !important;
+  color: #0f172a !important;
+  box-shadow:
+    0 12px 26px rgba(2,6,23,0.06),
+    inset 0 0 0 1px rgba(255,255,255,0.35) !important;
+}
+
+#btnSimPdf:hover,
+#btnSimExcel:hover,
+#btnSimActorPdf:hover,
+#btnSimActorExcel:hover{
+  border-color: rgba(79,70,229,0.34) !important;
+  transform: translateY(-1px);
+}
+
+#btnSimPdf:active,
+#btnSimExcel:active,
+#btnSimActorPdf:active,
+#btnSimActorExcel:active{
+  transform: translateY(0px);
+}
+
+/* Inputs del simulador (override de inline heights) */
+#simTarifaDefecto,
+#simDtoGlobal,
+#simMgnDist,
+#simMgnSubdist,
+#simMgnInte,
+#simMgnConst{
+  border: 1px solid rgba(148,163,184,0.38) !important;
+  background: rgba(255,255,255,0.84) !important;
+  border-radius: 12px !important;
+}
+
+#simTarifaDefecto:focus,
+#simDtoGlobal:focus,
+#simMgnDist:focus,
+#simMgnSubdist:focus,
+#simMgnInte:focus,
+#simMgnConst:focus{
+  outline: none !important;
+  border-color: rgba(79,70,229,0.55) !important;
+  box-shadow: 0 0 0 4px rgba(79,70,229,0.16) !important;
+}
+
+/* Tabla lÃ­neas simuladas (si existe .table o tabla nativa) */
+.simulador-right-column table{
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.simulador-right-column thead th{
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.96), rgba(255,255,255,0.86));
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(148,163,184,0.22);
+}
+
+.simulador-right-column tbody tr{
+  transition: transform .08s ease, background .12s ease;
+}
+
+.simulador-right-column tbody tr:hover{
+  background: rgba(79,70,229,0.06);
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 1024px){
+  .simulador-left-column{
+    flex: 0 0 360px !important;
+    max-width: 380px !important;
+  }
+}
+
+@media (max-width: 820px){
+  .simulador-layout{
+    flex-direction: column !important;
+  }
+  .simulador-left-column{
+    position: relative;
+    top: auto;
+    flex: 1 1 auto !important;
+    max-width: none !important;
+    width: 100% !important;
+  }
+  #simActorTabs{
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  #simActorTabs::-webkit-scrollbar{ display:none; }
+  .sim-tab{
+    white-space: nowrap;
+  }
 }
