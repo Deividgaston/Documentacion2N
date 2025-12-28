@@ -3330,8 +3330,7 @@ function getCurrentCapsSafe() {
         return;
       }
 
-      // ✅ disparar fichas dentro del click (gesto de usuario)
-triggerDownloadSelectedFichasTecnicasFromUserGesture();
+ 
 
 exportarDocumentacionPDF().catch((err) =>
   console.error("[DOC] Error exportando PDF:", err)
