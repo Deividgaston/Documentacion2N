@@ -610,46 +610,7 @@ function renderDocFichasHTML() {
   `;
 }
 
-  const list = filtered
-    .map((m) => {
-      const checked = selected.has(m.id) ? "checked" : "";
-      const main = m.folderName
-        ? `<strong>${docEscapeHtml(
-            m.folderName
-          )}</strong> – ${docEscapeHtml(m.nombre || "")}`
-        : `<strong>${docEscapeHtml(m.nombre || "")}</strong>`;
-
-      return `
-        <label class="doc-ficha-item">
-          <input type="checkbox"
-            data-doc-ficha-media-id="${m.id}"
-            ${checked}
-          >
-          <span class="doc-ficha-main">${main}</span>
-        </label>
-      `;
-    })
-    .join("");
-
-  return `
-    <div class="doc-fichas-section">
-      <div class="doc-fichas-block">
-        <div class="doc-fichas-title">Fichas técnicas</div>
-        <p class="doc-fichas-help">
-          Selecciona las fichas que quieras incluir en el PDF técnico.
-        </p>
-        ${searchInputHtml}
-<div id="docFichasListWrap">
-  <div class="doc-fichas-list doc-fichas-media-list">
-    ${list}
-  </div>
-</div>
-
-        </div>
-      </div>
-    </div>
-  `;
-}
+  
 // ======================================================
 // DOCUMENTACIÓN GRÁFICA – SOLO IMÁGENES
 // ======================================================
