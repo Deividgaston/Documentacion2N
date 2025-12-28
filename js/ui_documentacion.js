@@ -510,9 +510,7 @@ function renderDocFichasHTML() {
     return false;
   });
 
-  const selected = new Set(
-    appState.documentacion.selectedFichasMediaIds || []
-  );
+  const selected = new Set(appState.documentacion.selectedFichasMediaIds || []);
 
   const term = (appState.documentacion.fichasSearchTerm || "")
     .trim()
@@ -537,30 +535,76 @@ function renderDocFichasHTML() {
         id="docFichasSearchInput"
         class="form-control"
         placeholder="Buscar por nombre..."
-        value="${docEscapeHtml(
-          appState.documentacion.fichasSearchTerm || ""
-        )}"
+        value="${docEscapeHtml(appState.documentacion.fichasSearchTerm || "")}"
       >
     </div>
   `;
 
- if (!filtered.length) {
+  if (!filtered.length) {
+    return `
+      <div class="doc-fichas-section">
+        <div class="doc-fichas-block">
+          <div class="doc-fichas-title">Fichas técnicas</div>
+          <p class="doc-fichas-help">
+            No se han encontrado fichas técnicas. Puedes subirlas desde
+            <strong>Gestión de documentación</strong>.
+          </p>
+          ${searchInputHtml}
+
+          <div id="docFichasListWrap">
+            <p class="text-muted" style="font-size:0.85rem;">
+              Sin resultados.
+            </p>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  const list = filtered
+    .map((m) => {
+      const checked = selected.has(m.id) ? "checked" : "";
+      const main = m.folderName
+        ? `<strong>${docEscapeHtml(m.folderName)}</strong> – ${docEscapeHtml(
+            m.nombre || ""
+          )}`
+        : `<strong>${docEscapeHtml(m.nombre || "")}</strong>`;
+
+      return `
+        <div class="doc-ficha-item-row" style="display:flex;gap:8px;align-items:center;justify-content:space-between;">
+          <label class="doc-ficha-item" style="flex:1;min-width:0;">
+            <input type="checkbox"
+              data-doc-ficha-media-id="${m.id}"
+              ${checked}
+            >
+            <span class="doc-ficha-main">${main}</span>
+          </label>
+
+          <button
+            type="button"
+            class="btn btn-xs btn-outline"
+            data-doc-ficha-download-id="${m.id}"
+            title="Descargar ficha"
+          >⬇ Descargar</button>
+        </div>
+      `;
+    })
+    .join("");
+
   return `
     <div class="doc-fichas-section">
       <div class="doc-fichas-block">
         <div class="doc-fichas-title">Fichas técnicas</div>
         <p class="doc-fichas-help">
-          No se han encontrado fichas técnicas. Puedes subirlas desde
-          <strong>Gestión de documentación</strong>.
+          Selecciona las fichas que quieras incluir en el PDF técnico.
         </p>
         ${searchInputHtml}
 
         <div id="docFichasListWrap">
-          <p class="text-muted" style="font-size:0.85rem;">
-            Sin resultados.
-          </p>
+          <div class="doc-fichas-list doc-fichas-media-list">
+            ${list}
+          </div>
         </div>
-
       </div>
     </div>
   `;
