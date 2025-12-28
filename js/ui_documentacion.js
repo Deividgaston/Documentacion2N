@@ -2606,6 +2606,50 @@ if (includePresentacion) {
 
   doc.save(baseCom + "_" + safeCom + ".pdf");
 }
+function triggerDownloadSelectedFichasTecnicasFromUserGesture() {
+  const allMedia = appState.documentacion.mediaLibrary || [];
+  const selectedIds = appState.documentacion.selectedFichasMediaIds || [];
+  if (!selectedIds.length) return 0;
+
+  const byId = {};
+  allMedia.forEach((m) => { if (m?.id) byId[m.id] = m; });
+
+  const fichas = selectedIds
+    .map((id) => byId[id])
+    .filter((m) => m && m.url);
+
+  if (!fichas.length) return 0;
+
+  // OJO: esto debe ocurrir dentro del click del botón
+  const ok = confirm(
+    `Vas a descargar ${fichas.length} ficha(s) técnica(s).\n` +
+    `Si el navegador lo pide, permite “múltiples descargas”.\n\n` +
+    `¿Descargar ahora?`
+  );
+  if (!ok) return 0;
+
+  let started = 0;
+
+  for (const m of fichas) {
+    try {
+      const a = document.createElement("a");
+      a.href = m.url;
+      a.download = (m.nombre || "ficha_tecnica.pdf")
+        .toString()
+        .trim()
+        .replace(/[\/\\?%*:|"<>]/g, "_");
+      a.target = "_self";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      started++;
+    } catch (e) {
+      console.warn("[DOC] No se pudo iniciar descarga ficha:", e);
+    }
+  }
+
+  return started;
+}
 
 // ======================================================
 // EXPORTAR PDF SEGÚN MODO
