@@ -2645,7 +2645,6 @@ async function exportarDocumentacionPDF() {
 async function downloadSelectedFichasTecnicas() {
   const allMedia = appState.documentacion.mediaLibrary || [];
   const selectedIds = appState.documentacion.selectedFichasMediaIds || [];
-
   if (!selectedIds.length) return;
 
   const byId = {};
@@ -2659,38 +2658,46 @@ async function downloadSelectedFichasTecnicas() {
 
   if (!fichas.length) return;
 
-  // Intento A: forzar descarga via <a download>. Si el servidor no permite,
-  // el navegador puede abrir el PDF en otra pestaña o ignorar "download".
-  // Además, para evitar bloqueos, lo hacemos escalonado.
+  // ✅ IMPORTANTE: pedir permiso explícito (esto crea un "gesto" de usuario)
+  const ok = confirm(
+    `Vas a descargar ${fichas.length} ficha(s) técnica(s).\n` +
+      `Si el navegador lo pide, permite “múltiples descargas”.\n\n` +
+      `¿Descargar ahora?`
+  );
+  if (!ok) return;
+
+  // Intento 1: fetch->blob (descarga real)
+  // Fallback: abrir enlace en nueva pestaña
   for (let i = 0; i < fichas.length; i++) {
     const m = fichas[i];
     const url = m.url;
 
-    // nombre sugerido
     const safeName =
       (m.nombre || "ficha_tecnica")
         .toString()
         .trim()
         .replace(/[\/\\?%*:|"<>]/g, "_") || "ficha_tecnica";
 
-    // Pequeño delay para que el navegador no bloquee por ráfaga
-    // (y para dar tiempo a crear/descargar cada archivo)
-    // eslint-disable-next-line no-await-in-loop
-    await new Promise((r) => setTimeout(r, 250));
-
     try {
+      const resp = await fetch(url, { mode: "cors" });
+      if (!resp.ok) throw new Error("HTTP " + resp.status);
+
+      const blob = await resp.blob();
+      const objUrl = URL.createObjectURL(blob);
+
       const a = document.createElement("a");
-      a.href = url;
-      a.target = "_blank";
-      a.rel = "noopener";
-      a.download = safeName; // puede ser ignorado si CORS/headers no lo permiten
+      a.href = objUrl;
+      a.download = safeName;
       document.body.appendChild(a);
       a.click();
       a.remove();
+
+      // liberar
+      setTimeout(() => URL.revokeObjectURL(objUrl), 1500);
     } catch (e) {
-      console.warn("[DOC] No se pudo disparar descarga ficha:", e);
+      console.warn("[DOC] No se pudo descargar por blob, fallback a pestaña:", e);
       try {
-        window.open(url, "_blank");
+        window.open(url, "_blank", "noopener");
       } catch (_) {}
     }
   }
