@@ -2629,12 +2629,11 @@ async function exportarDocumentacionPDF() {
     await exportarPDFComercial();
   }
 
-  // ✅ NUEVO: al acabar el PDF, descargar las fichas técnicas seleccionadas
-  // (una por una; el navegador puede pedir permiso para descargas múltiples)
+  // ✅ NUEVO: al terminar, descargar fichas (con confirm para permitir multi-descargas)
   try {
     await downloadSelectedFichasTecnicas();
   } catch (e) {
-    console.warn("[DOC] Error descargando fichas técnicas:", e);
+    console.warn("[DOC] Error descargando fichas:", e);
   }
 }
 
