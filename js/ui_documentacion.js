@@ -766,6 +766,7 @@ function refreshDocFichasOnly() {
 
   wrap.innerHTML = renderDocFichasListOnlyHTML();
 
+  // checkbox selección
   wrap.querySelectorAll("[data-doc-ficha-media-id]").forEach((chk) => {
     chk.addEventListener("change", () => {
       const id = chk.getAttribute("data-doc-ficha-media-id");
@@ -777,6 +778,15 @@ function refreshDocFichasOnly() {
 
       appState.documentacion.selectedFichasMediaIds = Array.from(set);
       saveDocStateToLocalStorage();
+    });
+  });
+
+  // botón descargar
+  wrap.querySelectorAll("[data-doc-ficha-download-id]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = btn.getAttribute("data-doc-ficha-download-id");
+      if (!id) return;
+      startSingleFichaDownloadById(id);
     });
   });
 }
