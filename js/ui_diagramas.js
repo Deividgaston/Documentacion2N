@@ -1,10 +1,10 @@
 // js/ui_diagramas.js
 // Vista: DIAGRAMAS (IA)
-// V2.10 (Hito 16+):
+// V2.11 (Hito 17):
+// - ✅ SVG: pinta unidades (qty) por dispositivo
+// - ✅ SVG: añade 2 hilos (2W) desde videoportero/control acceso -> cerradura/garaje (nodo virtual)
+// - ✅ Mantiene Export DXF (ASCII) SIN atributos
 // - ✅ Export SVG (MAESTRO) estable (líneas + nodos + textos) basado en coords del preview
-// - ✅ Mantiene Export DXF (ASCII) SIN atributos (opcional) reutilizando secciones de plantilla
-// - ✅ Eliminado SCR (botón + función + textos) (ya estaba)
-// - ✅ FIX buscador refs: ahora puedes escribir normal (sin re-render en cada tecla)
 // - ✅ Preview drag estable (mantiene add/removeEventListener)
 
 // ======================================================
@@ -88,6 +88,127 @@ function _clearDiagError() {
 }
 
 /* ======================================================
+   Helpers: detección + enriquecimiento SVG
+ ====================================================== */
+
+function _norm2(s) {
+  return String(s || "").toLowerCase();
+}
+
+function _isDoorWireDevice(p) {
+  // Videoporteros / intercom / control de accesos -> 2 hilos a cerradura/garaje
+  const t = `${p?.ref || ""} ${p?.descripcion || ""} ${p?.icon_block || ""} ${p?.iconBlock || ""}`.toUpperCase();
+  const hints = [
+    "IPSTYLE",
+    "IP STYLE",
+    "VERSO",
+    "IPONE",
+    "IP ONE",
+    "INTERCOM",
+    "VIDEO",
+    "PORTERO",
+    "ACCESS",
+    "ACCESS UNIT",
+    "READER",
+    "LECTOR",
+    "CONTROL ACCES",
+    "CONTROL DE ACCES",
+    "RFID",
+    "BLE",
+  ];
+  if (hints.some((k) => t.includes(k))) return true;
+
+  // Si explícitamente habla de garaje/cerradura también
+  const t2 = t;
+  if (t2.includes("CERRADURA") || t2.includes("GARAJE") || t2.includes("PUERTA") || t2.includes("BARRERA")) return true;
+
+  return false;
+}
+
+function _cloneDeepJson(x) {
+  try {
+    return JSON.parse(JSON.stringify(x));
+  } catch (_) {
+    return x;
+  }
+}
+
+// Enriquecemos un resultado para SVG/preview:
+// - asegura qty en placements
+// - añade nodo virtual "CERRADURA / GARAJE" por cada device que lo requiera
+// - añade conexión 2W (2 hilos)
+function _augmentResultForSvg(baseResult) {
+  const r0 = baseResult;
+  if (!r0 || typeof r0 !== "object") return r0;
+
+  const r = _cloneDeepJson(r0);
+
+  const placements = Array.isArray(r.placements) ? r.placements : [];
+  const infra = Array.isArray(r.infra) ? r.infra : [];
+  const connections = Array.isArray(r.connections) ? r.connections : [];
+
+  // Normaliza qty
+  for (const p of placements) {
+    const q = Math.max(1, Number(p?.qty || 1) || 1);
+    p.qty = q;
+  }
+
+  // Index para evitar duplicados
+  const existingNodeIds = new Set([
+    ...placements.map((p) => String(p.id)),
+    ...infra.map((n) => String(n.id)),
+  ]);
+
+  const existing2w = new Set(
+    connections
+      .filter((c) => String(c?.type || "").toUpperCase() === "2_WIRE")
+      .map((c) => `${String(c.from)}__${String(c.to)}`)
+  );
+
+  // Añade cerradura/garaje + 2 hilos
+  for (const p of placements) {
+    if (!_isDoorWireDevice(p)) continue;
+
+    const lockId = `V_LOCK_${String(p.id)}`;
+    if (!existingNodeIds.has(lockId)) {
+      infra.push({
+        id: lockId,
+        type: "VIRTUAL_LOCK_GARAGE",
+        zone: String(p.zone || "entrada_principal"),
+        meta: { role: "LOCK_GARAGE", for: String(p.id) },
+      });
+      existingNodeIds.add(lockId);
+    }
+
+    const key = `${String(p.id)}__${lockId}`;
+    if (!existing2w.has(key)) {
+      connections.push({
+        from: String(p.id),
+        to: lockId,
+        type: "2_WIRE",
+        note: "2 hilos a cerradura/garaje",
+      });
+      existing2w.add(key);
+    }
+  }
+
+  r.infra = infra;
+  r.connections = connections;
+  r.placements = placements;
+
+  return r;
+}
+
+function _strokeForConnectionType(t) {
+  const tt = String(t || "").toUpperCase();
+  if (tt === "2_WIRE" || tt === "2H" || tt === "2_HILOS") {
+    return { stroke: "rgba(245,158,11,.75)", width: 2, dash: "6 4" }; // ámbar, discontinuo
+  }
+  // UTP_CAT6
+  return { stroke: "rgba(29,79,216,.55)", width: 2, dash: "" };
+}
+
+/* ======================================================
    Preview SVG (esquemático) basado en coords
  ====================================================== */
 
@@ -102,6 +223,7 @@ function _buildSchematicCoordsFromResult(result) {
 
   const placements = Array.isArray(result?.placements) ? result.placements : [];
   const infra = Array.isArray(result?.infra) ? result.infra : [];
+  const connections = Array.isArray(result?.connections) ? result.connections : [];
 
   const perZoneCount = {};
   for (const z of zones) perZoneCount[z.key] = 0;
@@ -120,7 +242,8 @@ function _buildSchematicCoordsFromResult(result) {
 
   for (const p of placements) {
     const zone = String(p.zone || "entrada_principal");
-    const label = `${p.ref || p.id || ""}${p.qty ? ` x${p.qty}` : ""}`;
+    const qty = Math.max(1, Number(p.qty || 1) || 1);
+    const label = `${p.ref || p.id || ""}${qty > 1 ? ` x${qty}` : ""}`;
 
     const m = manual[p.id];
     const pos =
@@ -128,7 +251,7 @@ function _buildSchematicCoordsFromResult(result) {
         ? { x: m.x, y: m.y }
         : nextPos(zone);
 
-    map.set(p.id, { x: pos.x, y: pos.y, label, kind: "placement", zone });
+    map.set(p.id, { x: pos.x, y: pos.y, label, kind: "placement", zone, qty });
   }
 
   for (const n of infra) {
@@ -144,11 +267,48 @@ function _buildSchematicCoordsFromResult(result) {
     map.set(n.id, { x: pos.x, y: pos.y, label, kind: "infra", zone });
   }
 
+  // ✅ Coloca nodos virtuales "cerradura/garaje" cerca del dispositivo (si existe conexión 2_WIRE)
+  // (si el nodo ya tiene coords manuales o ya está en map, no tocamos)
+  for (const c of connections) {
+    if (String(c?.type || "").toUpperCase() !== "2_WIRE") continue;
+    const a = map.get(c.from);
+    const b = map.get(c.to);
+    if (b) continue; // ya existe
+    if (!a) continue;
+
+    const mid = String(c.to || "");
+    if (!mid) continue;
+
+    // Sólo si ese "to" existe como infra/placement en el result
+    const existsInInfra = infra.some((x) => String(x.id) === mid);
+    const existsInPlac = placements.some((x) => String(x.id) === mid);
+    if (!existsInInfra && !existsInPlac) continue;
+
+    const m = manual[mid];
+    if (m && Number.isFinite(m.x) && Number.isFinite(m.y)) {
+      map.set(mid, { x: m.x, y: m.y, label: mid, kind: "infra", zone: a.zone });
+      continue;
+    }
+
+    // offset cercano
+    map.set(mid, {
+      x: a.x + 90,
+      y: a.y + 28,
+      label: "CERRADURA / GARAJE",
+      kind: "infra",
+      zone: a.zone,
+      _virtualNear: a,
+    });
+  }
+
   return map;
 }
 
 function _renderPreviewSvg(result) {
-  const coords = _buildSchematicCoordsFromResult(result);
+  // ✅ Enriquecemos para SVG (units + 2-wire)
+  const r = _augmentResultForSvg(result);
+
+  const coords = _buildSchematicCoordsFromResult(r);
   if (!coords.size) return `<div class="muted">Sin nodos para preview.</div>`;
 
   const zones = appState.diagramas.zones || [];
@@ -157,18 +317,20 @@ function _renderPreviewSvg(result) {
 
   function _iconForNode(id, p) {
     if (p.kind === "infra") {
-      const r = appState.diagramas.lastResult || {};
-      const infra = Array.isArray(r.infra) ? r.infra : [];
+      const rr = r || appState.diagramas.lastResult || {};
+      const infra = Array.isArray(rr.infra) ? rr.infra : [];
       const it = infra.find((x) => String(x.id) === String(id));
       const t = String(it?.type || "").toUpperCase();
+
+      if (t.includes("LOCK") || t.includes("GARAGE")) return "🔒";
       if (t.includes("ROUTER")) return "🌐";
       if (t.includes("CORE")) return "🧠";
       if (t.includes("SWITCH")) return "🔀";
       return "⬛";
     }
 
-    const r = appState.diagramas.lastResult || {};
-    const placements = Array.isArray(r.placements) ? r.placements : [];
+    const rr = r || appState.diagramas.lastResult || {};
+    const placements = Array.isArray(rr.placements) ? rr.placements : [];
     const it = placements.find((x) => String(x.id) === String(id));
     const blk = String(it?.icon_block || it?.iconBlock || "").toLowerCase();
     const ref = String(it?.ref || "").toLowerCase();
@@ -199,14 +361,24 @@ function _renderPreviewSvg(result) {
   const vbW = Math.max(900, maxX + 320);
   const vbH = Math.max(420, maxY + 180);
 
-  const connections = Array.isArray(result?.connections) ? result.connections : [];
+  const connections = Array.isArray(r?.connections) ? r.connections : [];
 
   const lines = connections
     .map((c) => {
       const a = coords.get(c.from);
       const b = coords.get(c.to);
       if (!a || !b) return "";
-      return `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="rgba(29,79,216,.55)" stroke-width="2"/>`;
+      const st = _strokeForConnectionType(c.type);
+      const dash = st.dash ? ` stroke-dasharray="${st.dash}"` : "";
+      return `
+        <line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}"
+              stroke="${st.stroke}" stroke-width="${st.width}"${dash}/>
+        ${
+          String(c.type || "").toUpperCase() === "2_WIRE"
+            ? `<text x="${(a.x + b.x) / 2 + 6}" y="${(a.y + b.y) / 2 - 6}" font-size="11" fill="rgba(245,158,11,.95)">2H</text>`
+            : ""
+        }
+      `;
     })
     .join("");
 
@@ -217,6 +389,17 @@ function _renderPreviewSvg(result) {
       const stroke = isInfra ? "rgba(17,24,39,.25)" : "rgba(29,79,216,.25)";
       const label = _escapeHtml(p.label);
       const icon = _escapeHtml(_iconForNode(id, p));
+      const qty = Math.max(1, Number(p.qty || 1) || 1);
+
+      const qtyBadge =
+        !isInfra && qty > 1
+          ? `
+            <g>
+              <rect x="${p.x - 6}" y="${p.y - 34}" width="28" height="16" rx="6" ry="6" fill="rgba(17,24,39,.90)"></rect>
+              <text x="${p.x - 2}" y="${p.y - 22}" font-size="11" fill="white">x${qty}</text>
+            </g>
+          `
+          : "";
 
       return `
         <g class="diag-node" data-node-id="${_escapeHtmlAttr(id)}" style="cursor:${
@@ -225,6 +408,7 @@ function _renderPreviewSvg(result) {
           <circle class="diag-node-hit" cx="${p.x}" cy="${p.y}" r="18" fill="rgba(0,0,0,0)"></circle>
           <circle cx="${p.x}" cy="${p.y}" r="14" fill="${fill}" stroke="${stroke}" stroke-width="10"></circle>
           <text x="${p.x - 8}" y="${p.y + 7}" font-size="18" fill="white">${icon}</text>
+          ${qtyBadge}
           <text x="${p.x + 18}" y="${p.y + 5}" font-size="12" fill="rgba(17,24,39,.95)">${label}</text>
         </g>
       `;
@@ -244,7 +428,7 @@ function _renderPreviewSvg(result) {
         <div>
           <div style="font-weight:700;">Preview</div>
           <div class="muted" style="font-size:12px;">
-            Esquema por zonas (coords). Iconos = preview lógico (no CAD real).
+            Esquema por zonas (coords). Cat6 en azul · 2 hilos (cerradura/garaje) en discontinuo.
             ${appState.diagramas.previewEditMode ? "Arrastra los nodos para fijar posición." : ""}
           </div>
         </div>
@@ -362,6 +546,7 @@ function _bindPreviewInteractions() {
   }
 
   const baseResult = appState.diagramas._previewResult || appState.diagramas.lastResult;
+  const r = _augmentResultForSvg(baseResult);
 
   _bindPreviewWindowListeners(svg);
 
@@ -375,7 +560,7 @@ function _bindPreviewInteractions() {
 
     const p = _svgPoint(svg, ev.clientX, ev.clientY);
 
-    const coords = _buildSchematicCoordsFromResult(baseResult);
+    const coords = _buildSchematicCoordsFromResult(r);
     const cur = coords.get(nodeId);
     if (!cur) return;
 
@@ -404,6 +589,7 @@ function _buildPreviewOnlyResultFromAssignments() {
         zone: z.key,
         icon_block: it.iconBlock || "",
         qty: it.qty || 1,
+        descripcion: it.descripcion || "",
         meta: { source: "USER" },
       });
     }
@@ -480,14 +666,18 @@ function _renderResult() {
 
   appState.diagramas._previewResult = appState.diagramas.lastResult;
 
+  // ✅ Preview enriquecido
   const preview = _renderPreviewSvg(appState.diagramas.lastResult);
-  const pretty = _escapeHtml(JSON.stringify(appState.diagramas.lastResult, null, 2));
+
+  // ✅ JSON visible también enriquecido (para que se vea 2W + lock)
+  const enriched = _augmentResultForSvg(appState.diagramas.lastResult);
+  const pretty = _escapeHtml(JSON.stringify(enriched, null, 2));
 
   out.innerHTML = `
     ${banner}
     <div class="mb-2" style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
       <span class="chip">Diseño</span>
-      <span class="muted">UTP Cat6 · topología eficiente</span>
+      <span class="muted">UTP Cat6 · 2 hilos cerradura/garaje</span>
     </div>
 
     ${preview}
@@ -495,7 +685,7 @@ function _renderResult() {
     <div class="card mt-3" style="padding:12px; min-width:0;">
       <div class="mb-2" style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
         <span class="chip">JSON</span>
-        <span class="muted" style="font-size:12px;">Salida completa</span>
+        <span class="muted" style="font-size:12px;">Salida completa (enriquecida para SVG)</span>
       </div>
       <pre style="white-space:pre-wrap; background:#0b1020; color:#e5e7eb; padding:12px; border-radius:10px; overflow:auto;">${pretty}</pre>
       ${raw}
@@ -1128,14 +1318,24 @@ Tu respuesta DEBE empezar por "{" y terminar por "}".
 
 Objetivo: Diseñar una red eficiente UTP_CAT6 con estrella jerárquica:
 devices -> switches zona -> core -> router (en armario_cpd si existe).
+
+UNIDADES:
+- Respeta qty de cada placement (xN). Eso implica ports estimados.
+- En SVG se mostrará xN por dispositivo.
+
+CABLES:
+- Entre dispositivos de red usa UTP_CAT6.
+- Para videoportero/control accesos: SIEMPRE añade conexión "2_WIRE" hacia una "cerradura/garaje" (puede ser infra VIRTUAL_LOCK_GARAGE).
+  Ejemplo: {from:"<deviceId>", to:"V_LOCK_<deviceId>", type:"2_WIRE", note:"2 hilos a cerradura/garaje"}
+
 No inventes dispositivos finales: SOLO placements con source USER.
 Puedes proponer infraestructura VIRTUAL_* en infra.
 
 Devuelve EXACTAMENTE:
 {
   "placements":[{"id":"...","ref":"...","zone":"...","icon_block":"...","qty":1,"meta":{"source":"USER"}}],
-  "infra":[{"id":"...","type":"VIRTUAL_SWITCH_POE"|"VIRTUAL_SWITCH"|"VIRTUAL_CORE"|"VIRTUAL_ROUTER","zone":"...","meta":{}}],
-  "connections":[{"from":"...","to":"...","type":"UTP_CAT6","note":"..."}],
+  "infra":[{"id":"...","type":"VIRTUAL_SWITCH_POE"|"VIRTUAL_SWITCH"|"VIRTUAL_CORE"|"VIRTUAL_ROUTER"|"VIRTUAL_LOCK_GARAGE","zone":"...","meta":{}}],
+  "connections":[{"from":"...","to":"...","type":"UTP_CAT6"|"2_WIRE","note":"..."}],
   "summary":{"total_refs":0,"total_devices":0,"total_switches":0},
   "errors":[]
 }
@@ -1225,6 +1425,7 @@ function _localDesignFromSpec(spec) {
     let ports = 0;
     let needsPoe = false;
     for (const p of list) {
+      // ✅ qty impacta ports estimados
       ports += Math.max(1, Number(p.qty || 1) || 1);
       if (_isPoeDevice(p)) needsPoe = true;
     }
@@ -1264,13 +1465,14 @@ function _localDesignFromSpec(spec) {
     total_switches: totalSwitches,
   };
 
-  return {
+  const base = {
     placements: placements.map((p) => ({
       id: p.id,
       ref: p.ref,
       zone: p.zone,
       icon_block: p.icon_block || "",
-      qty: p.qty || 1,
+      qty: Math.max(1, Number(p.qty || 1) || 1),
+      descripcion: p.descripcion || "",
       meta: { source: "USER" },
     })),
     infra,
@@ -1278,6 +1480,9 @@ function _localDesignFromSpec(spec) {
     summary,
     errors: [],
   };
+
+  // ✅ Enriquecemos (2 hilos + nodo cerradura/garaje) para SVG
+  return _augmentResultForSvg(base);
 }
 
 /* ======================================================
@@ -1437,7 +1642,9 @@ async function diagGenerateDesign() {
       return;
     }
 
-    appState.diagramas.lastResult = obj;
+    // ✅ Enriquecemos para SVG (units + 2-wire)
+    appState.diagramas.lastResult = _augmentResultForSvg(obj);
+
     appState.diagramas.lastError = null;
     appState.diagramas.usedLocalFallback = false;
     _renderResult();
@@ -1456,13 +1663,16 @@ async function diagGenerateDesign() {
    6A) ✅ Export SVG (MAESTRO)
  ====================================================== */
 function diagExportSvg() {
-  const r = appState.diagramas.lastResult || appState.diagramas._previewResult;
-  if (!r) {
+  const base = appState.diagramas.lastResult || appState.diagramas._previewResult;
+  if (!base) {
     appState.diagramas.lastError = "No hay resultado para exportar. Genera el diseño o crea un preview manual.";
     appState.diagramas.lastRaw = null;
     _renderResult();
     return;
   }
+
+  // ✅ Export siempre enriquecido (units + 2-wire)
+  const r = _augmentResultForSvg(base);
 
   const coords = _buildSchematicCoordsFromResult(r);
   if (!coords.size) {
@@ -1501,7 +1711,13 @@ function diagExportSvg() {
       const a = coords.get(c.from);
       const b = coords.get(c.to);
       if (!a || !b) return "";
-      return `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#1d4fd8" stroke-opacity="0.55" stroke-width="2"/>`;
+      const st = _strokeForConnectionType(c.type);
+      const dash = st.dash ? ` stroke-dasharray="${st.dash}"` : "";
+      const label2h =
+        String(c.type || "").toUpperCase() === "2_WIRE"
+          ? `<text x="${(a.x + b.x) / 2 + 6}" y="${(a.y + b.y) / 2 - 6}" font-size="11" fill="rgba(245,158,11,.95)" font-family="Arial, sans-serif">2H</text>`
+          : "";
+      return `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${st.stroke}" stroke-width="${st.width}"${dash}/>${label2h}`;
     })
     .join("");
 
@@ -1509,10 +1725,19 @@ function diagExportSvg() {
     .map((p) => {
       const pos = coords.get(p.id);
       if (!pos) return "";
+      const qty = Math.max(1, Number(p.qty || 1) || 1);
       const label = _escapeHtml(String(p.ref || p.id || ""));
+      const badge =
+        qty > 1
+          ? `<g>
+               <rect x="${pos.x - 6}" y="${pos.y - 34}" width="28" height="16" rx="6" ry="6" fill="rgba(17,24,39,.90)"></rect>
+               <text x="${pos.x - 2}" y="${pos.y - 22}" font-size="11" fill="#ffffff" font-family="Arial, sans-serif">x${qty}</text>
+             </g>`
+          : "";
       return `
       <g>
         <circle cx="${pos.x}" cy="${pos.y}" r="14" fill="#1d4fd8" opacity="0.95"></circle>
+        ${badge}
         <text x="${pos.x + 18}" y="${pos.y + 5}" font-size="12" fill="#111827" font-family="Arial, sans-serif">${label}</text>
       </g>
     `;
@@ -1523,7 +1748,9 @@ function diagExportSvg() {
     .map((n) => {
       const pos = coords.get(n.id);
       if (!pos) return "";
-      const label = _escapeHtml(String(n.type || n.id || ""));
+      const t = String(n.type || n.id || "");
+      const isLock = t.toUpperCase().includes("LOCK") || t.toUpperCase().includes("GARAGE");
+      const label = _escapeHtml(isLock ? "CERRADURA / GARAJE" : t);
       return `
       <g>
         <circle cx="${pos.x}" cy="${pos.y}" r="14" fill="#111827" opacity="0.95"></circle>
@@ -1533,7 +1760,7 @@ function diagExportSvg() {
     })
     .join("");
 
-  const title = `<text x="80" y="20" font-size="14" fill="#111827" font-family="Arial, sans-serif" font-weight="700">DIAGRAMA RED UTP CAT6 (ESQUEMA)</text>`;
+  const title = `<text x="80" y="20" font-size="14" fill="#111827" font-family="Arial, sans-serif" font-weight="700">DIAGRAMA RED (UTP CAT6 + 2H)</text>`;
 
   const svgText =
     `<?xml version="1.0" encoding="UTF-8"?>\n` +
@@ -1543,7 +1770,7 @@ function diagExportSvg() {
     `</svg>\n`;
 
   const nameBase = (appState.diagramas.dxfFileName || "diagrama").replace(/\.dxf$/i, "");
-  const fileName = `${nameBase}_red_cat6.svg`;
+  const fileName = `${nameBase}_red_cat6_2h.svg`;
 
   try {
     const blob = new Blob([svgText], { type: "image/svg+xml;charset=utf-8" });
