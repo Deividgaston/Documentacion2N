@@ -663,7 +663,7 @@ function _buildMinimalTablesSection() {
   ].join("\n");
 }
 
-// ✅ NUEVO: HEADER mínimo propio (NO plantilla)
+// ✅ HEADER mínimo (añade HANDSEED)
 function _buildMinimalHeaderSection() {
   return [
     "0",
@@ -678,10 +678,15 @@ function _buildMinimalHeaderSection() {
     "$INSUNITS",
     "70",
     "4", // 4=mm
+    "9",
+    "$HANDSEED",
+    "5",
+    "FFFF", // semilla alta para que AutoCAD no choque
     "0",
     "ENDSEC",
   ].join("\n");
 }
+
 
 // ✅ NUEVO: quita XDATA (1001 + 1000..1071) para no requerir APPID
 function _stripDxfXDataFromLines(lines) {
