@@ -2611,6 +2611,10 @@ if (includePresentacion) {
 // EXPORTAR PDF SEGÚN MODO
 // ======================================================
 
+// ======================================================
+// EXPORTAR PDF SEGÚN MODO + descargar fichas seleccionadas
+// ======================================================
+
 async function exportarDocumentacionPDF() {
   if (!window.jspdf || !window.jspdf.jsPDF) {
     alert("jsPDF no está cargado.");
@@ -2624,7 +2628,16 @@ async function exportarDocumentacionPDF() {
   } else {
     await exportarPDFComercial();
   }
+
+  // ✅ NUEVO: al acabar el PDF, descargar las fichas técnicas seleccionadas
+  // (una por una; el navegador puede pedir permiso para descargas múltiples)
+  try {
+    await downloadSelectedFichasTecnicas();
+  } catch (e) {
+    console.warn("[DOC] Error descargando fichas técnicas:", e);
+  }
 }
+
 // ======================================================
 // DESCARGA FICHAS TÉCNICAS SELECCIONADAS (browser)
 // ======================================================
