@@ -3231,9 +3231,13 @@ function getCurrentCapsSafe() {
         return;
       }
 
-      exportarDocumentacionPDF().catch((err) =>
-        console.error("[DOC] Error exportando PDF:", err)
-      );
+      // ✅ disparar fichas dentro del click (gesto de usuario)
+triggerDownloadSelectedFichasTecnicasFromUserGesture();
+
+exportarDocumentacionPDF().catch((err) =>
+  console.error("[DOC] Error exportando PDF:", err)
+);
+
     });
   }
 
