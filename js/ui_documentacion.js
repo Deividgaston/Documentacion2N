@@ -3243,6 +3243,8 @@ if (!d.mediaLoaded) {
   attachDocSearchHandlers(container);
   attachDocSectionHandlers(container);
   attachDocMediaGridHandlers(container);
+  attachDocFichasHandlers(container);
+
 
   const regenBtn = container.querySelector("#docRegenerarBtn");
   if (regenBtn) {
