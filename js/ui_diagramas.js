@@ -560,109 +560,174 @@ function _dxfSectionToLines(sectionText) {
   return lines;
 }
 
-// ✅ NUEVO (mínimo): TABLES mínimo (CON APPID "ACAD")
+// ✅ TABLES mínimo CON handles (5) + owner (330)
+// (AutoCAD LT 2026 suele petar si APPID/LAYER/LTYPE/STYLE no llevan handle)
 function _buildMinimalTablesSection() {
-  return [
-    "0",
-    "SECTION",
-    "2",
-    "TABLES",
+  let h = 0x100; // handles > 0
+  const nextH = () => (h++).toString(16).toUpperCase();
 
-    // ✅ APPID (AutoCAD suele exigir ACAD si hay cualquier rastro de XDATA/APPID)
-    "0",
-    "TABLE",
-    "2",
-    "APPID",
-    "70",
-    "1",
-    "0",
-    "APPID",
-    "2",
-    "ACAD",
-    "70",
-    "0",
-    "0",
-    "ENDTAB",
+  const TABLES_OWNER = nextH(); // handle ficticio "owner" de las tablas
 
-    // LTYPE
-    "0",
-    "TABLE",
-    "2",
-    "LTYPE",
-    "70",
-    "1",
-    "0",
-    "LTYPE",
-    "2",
-    "CONTINUOUS",
-    "70",
-    "0",
-    "3",
-    "Solid line",
-    "72",
-    "65",
-    "73",
-    "0",
-    "40",
-    "0.0",
-    "0",
-    "ENDTAB",
+  function tableStart(name, count) {
+    const th = nextH(); // table handle
+    return {
+      th,
+      lines: [
+        "0",
+        "TABLE",
+        "2",
+        name,
+        "5",
+        th,
+        "330",
+        TABLES_OWNER,
+        "100",
+        "AcDbSymbolTable",
+        "70",
+        String(count),
+      ],
+    };
+  }
 
-    // LAYER
-    "0",
-    "TABLE",
-    "2",
-    "LAYER",
-    "70",
-    "1",
-    "0",
-    "LAYER",
-    "2",
-    "0",
-    "70",
-    "0",
-    "62",
-    "7",
-    "6",
-    "CONTINUOUS",
-    "0",
-    "ENDTAB",
+  function endTab() {
+    return ["0", "ENDTAB"];
+  }
 
-    // STYLE
-    "0",
-    "TABLE",
-    "2",
-    "STYLE",
-    "70",
-    "1",
-    "0",
-    "STYLE",
-    "2",
-    "STANDARD",
-    "70",
-    "0",
-    "40",
-    "0",
-    "41",
-    "1",
-    "50",
-    "0",
-    "71",
-    "0",
-    "42",
-    "2.5",
-    "3",
-    "txt",
-    "4",
-    "",
-    "0",
-    "ENDTAB",
+  function appidRecord(tableHandle, appName) {
+    const rh = nextH();
+    return [
+      "0",
+      "APPID",
+      "5",
+      rh,
+      "330",
+      tableHandle,
+      "100",
+      "AcDbSymbolTableRecord",
+      "100",
+      "AcDbRegAppTableRecord",
+      "2",
+      appName,
+      "70",
+      "0",
+    ];
+  }
 
-    "0",
-    "ENDSEC",
-  ].join("\n");
+  function ltypeContinuous(tableHandle) {
+    const rh = nextH();
+    return [
+      "0",
+      "LTYPE",
+      "5",
+      rh,
+      "330",
+      tableHandle,
+      "100",
+      "AcDbSymbolTableRecord",
+      "100",
+      "AcDbLinetypeTableRecord",
+      "2",
+      "CONTINUOUS",
+      "70",
+      "0",
+      "3",
+      "Solid line",
+      "72",
+      "65",
+      "73",
+      "0",
+      "40",
+      "0.0",
+    ];
+  }
+
+  function layer0(tableHandle) {
+    const rh = nextH();
+    return [
+      "0",
+      "LAYER",
+      "5",
+      rh,
+      "330",
+      tableHandle,
+      "100",
+      "AcDbSymbolTableRecord",
+      "100",
+      "AcDbLayerTableRecord",
+      "2",
+      "0",
+      "70",
+      "0",
+      "62",
+      "7",
+      "6",
+      "CONTINUOUS",
+    ];
+  }
+
+  function styleStandard(tableHandle) {
+    const rh = nextH();
+    return [
+      "0",
+      "STYLE",
+      "5",
+      rh,
+      "330",
+      tableHandle,
+      "100",
+      "AcDbSymbolTableRecord",
+      "100",
+      "AcDbTextStyleTableRecord",
+      "2",
+      "STANDARD",
+      "70",
+      "0",
+      "40",
+      "0",
+      "41",
+      "1",
+      "50",
+      "0",
+      "71",
+      "0",
+      "42",
+      "2.5",
+      "3",
+      "txt",
+      "4",
+      "",
+    ];
+  }
+
+  const out = ["0", "SECTION", "2", "TABLES"];
+
+  // APPID (ACAD)
+  const appid = tableStart("APPID", 1);
+  out.push(...appid.lines);
+  out.push(...appidRecord(appid.th, "ACAD"));
+  out.push(...endTab());
+
+  // LTYPE
+  const ltype = tableStart("LTYPE", 1);
+  out.push(...ltype.lines);
+  out.push(...ltypeContinuous(ltype.th));
+  out.push(...endTab());
+
+  // LAYER
+  const layer = tableStart("LAYER", 1);
+  out.push(...layer.lines);
+  out.push(...layer0(layer.th));
+  out.push(...endTab());
+
+  // STYLE
+  const style = tableStart("STYLE", 1);
+  out.push(...style.lines);
+  out.push(...styleStandard(style.th));
+  out.push(...endTab());
+
+  out.push("0", "ENDSEC");
+  return out.join("\n");
 }
-
 // ✅ HEADER mínimo (añade HANDSEED)
 function _buildMinimalHeaderSection() {
   return [
