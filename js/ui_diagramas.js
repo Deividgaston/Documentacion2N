@@ -6,17 +6,18 @@
 // - ✅ Eliminado SCR (botón + función + textos) (ya estaba)
 // - ✅ FIX buscador refs: ahora puedes escribir normal (sin re-render en cada tecla)
 // - ✅ Preview drag estable (mantiene add/removeEventListener)
-
-// ======================================================
-// ESTADO GLOBAL
-// ======================================================
+//
+// HOTFIX DXF (AutoCAD “Error en tabla APPID / línea XX”):
+// - Normaliza líneas (trim) y elimina “códigos” vacíos
+// - Sanitiza el DXF final para asegurar pares code/value válidos
+// - Mantiene TABLES mínimo SIN APPID + strip XDATA (1001..1071)
 
 window.appState = window.appState || {};
 appState.diagramas = appState.diagramas || {
   dxfFileName: "",
   dxfText: "",
   dxfBlocks: [],
-  dxfBlockAttrs: {}, // se mantiene por compatibilidad (ya no se usa para export)
+  dxfBlockAttrs: {}, // compat (no se usa para export)
 
   // cache secciones DXF plantilla
   dxfHeaderSection: "",
@@ -544,12 +545,15 @@ function _stripBom(s) {
   return String(s || "").replace(/^\uFEFF/, "");
 }
 
-// ✅ FIX: mantener vacíos como valores, pero nunca como "código"
+// ✅ HOTFIX: normaliza espacios, elimina “código” vacío y asegura pares code/value
 function _dxfSectionToLines(sectionText) {
   const t = _stripBom(String(sectionText || ""));
   if (!t.trim()) return [];
 
   let lines = t.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+
+  // normaliza: quita espacios laterales
+  lines = lines.map((ln) => String(ln ?? "").trim());
 
   // Quita líneas vacías en posición de "código" (0,2,4...) => inválidas en DXF
   lines = lines.filter((ln, idx) => !(idx % 2 === 0 && ln === ""));
@@ -560,7 +564,26 @@ function _dxfSectionToLines(sectionText) {
   return lines;
 }
 
-// ✅ NUEVO (mínimo): TABLES mínimo (SIN APPID)
+// ✅ HOTFIX: sanea cualquier array de líneas DXF (trim + sin códigos vacíos + pares)
+function _sanitizeDxfLines(lines) {
+  const src = Array.isArray(lines) ? lines : [];
+  const out = [];
+
+  // trim todo
+  const t = src.map((x) => String(x ?? "").trim());
+
+  for (let i = 0; i < t.length; i += 2) {
+    const code = String(t[i] ?? "").trim();
+    const value = String(t[i + 1] ?? "");
+    if (code === "") continue; // nunca permitir “código” vacío
+    out.push(code, value);
+  }
+
+  if (out.length % 2 === 1) out.push("");
+  return out;
+}
+
+// ✅ TABLES mínimo (SIN APPID)
 function _buildMinimalTablesSection() {
   return [
     "0",
@@ -647,7 +670,7 @@ function _buildMinimalTablesSection() {
   ].join("\n");
 }
 
-// ✅ NUEVO: HEADER mínimo propio (NO plantilla)
+// ✅ HEADER mínimo propio (NO plantilla)
 function _buildMinimalHeaderSection() {
   return [
     "0",
@@ -667,17 +690,20 @@ function _buildMinimalHeaderSection() {
   ].join("\n");
 }
 
-// ✅ NUEVO: quita XDATA (1001 + 1000..1071) para no requerir APPID
+// ✅ quita XDATA (1001 + 1000..1071) para no requerir APPID
 function _stripDxfXDataFromLines(lines) {
   const out = [];
-  for (let i = 0; i < lines.length; i += 2) {
-    const code = String(lines[i] ?? "").trim();
-    const value = String(lines[i + 1] ?? "");
+  const src = Array.isArray(lines) ? lines : [];
+  for (let i = 0; i < src.length; i += 2) {
+    const code = String(src[i] ?? "").trim();
+    const value = String(src[i + 1] ?? "");
+
+    if (!code) continue;
 
     if (code === "1001") {
       i += 2;
-      while (i < lines.length) {
-        const c = String(lines[i] ?? "").trim();
+      while (i < src.length) {
+        const c = String(src[i] ?? "").trim();
         if (!c) {
           i += 2;
           continue;
@@ -1479,7 +1505,7 @@ function diagExportSvg() {
 
 /* ======================================================
    6B) ✅ Export DXF (ASCII) SIN atributos
-   FIX: HEADER mínimo + TABLES mínimo SIN APPID + STRIP XDATA en BLOCKS
+   FIX: HEADER mínimo + TABLES mínimo SIN APPID + STRIP XDATA en BLOCKS + SANITIZE
  ====================================================== */
 function diagExportDxf() {
   const r = appState.diagramas.lastResult;
@@ -1589,7 +1615,7 @@ function diagExportDxf() {
     dxfLine(a.x, a.y, b.x, b.y);
   }
 
-  // Placements (usa bloque seleccionado; si no, círculo)
+  // Placements
   for (const p of placements) {
     const pos = coords.get(p.id);
     if (!pos) continue;
@@ -1606,7 +1632,7 @@ function diagExportDxf() {
     dxfText(pos.x + 16, pos.y + 4, 10, String(p.ref || p.id || ""));
   }
 
-  // Infra (simple círculo + texto)
+  // Infra
   for (const n of infra) {
     const pos = coords.get(n.id);
     if (!pos) continue;
@@ -1614,15 +1640,15 @@ function diagExportDxf() {
     dxfText(pos.x + 16, pos.y + 4, 10, String(n.type || n.id));
   }
 
-  // ✅ Construcción robusta “por líneas”
+  // ✅ Construcción “por líneas”
   const outLines = [];
 
-  const header = _buildMinimalHeaderSection(); // ✅ propio
-  const tables = _buildMinimalTablesSection(); // ✅ sin APPID
+  const header = _buildMinimalHeaderSection();
+  const tables = _buildMinimalTablesSection();
 
   const blocksSectionRaw = appState.diagramas.dxfBlocksSection; // requerido
   const blocksLines = _dxfSectionToLines(blocksSectionRaw);
-  const blocksCleanLines = _stripDxfXDataFromLines(blocksLines); // ✅ quita XDATA
+  const blocksCleanLines = _sanitizeDxfLines(_stripDxfXDataFromLines(blocksLines)); // ✅ strip + sanitize
 
   outLines.push(..._dxfSectionToLines(header));
   outLines.push(..._dxfSectionToLines(tables));
@@ -1630,12 +1656,12 @@ function diagExportDxf() {
 
   // ENTITIES
   outLines.push("0", "SECTION", "2", "ENTITIES");
-  outLines.push(...ent);
+  outLines.push(..._sanitizeDxfLines(ent)); // ✅ sanitize entidades (por si acaso)
   outLines.push("0", "ENDSEC");
 
   outLines.push("0", "EOF");
 
-  const out = outLines.join("\n") + "\n";
+  const out = _sanitizeDxfLines(outLines).join("\n") + "\n"; // ✅ sanitize final
 
   const nameBase = (appState.diagramas.dxfFileName || "plantilla").replace(/\.dxf$/i, "");
   const fileName = `${nameBase}_red_cat6_sin_atributos.dxf`;
