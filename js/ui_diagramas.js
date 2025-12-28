@@ -642,28 +642,35 @@ function _buildMinimalTablesSection() {
   }
 
   function layer0(tableHandle) {
-    const rh = nextH();
-    return [
-      "0",
-      "LAYER",
-      "5",
-      rh,
-      "330",
-      tableHandle,
-      "100",
-      "AcDbSymbolTableRecord",
-      "100",
-      "AcDbLayerTableRecord",
-      "2",
-      "0",
-      "70",
-      "0",
-      "62",
-      "7",
-      "6",
-      "CONTINUOUS",
-    ];
-  }
+  const rh = nextH();
+  return [
+    "0",
+    "LAYER",
+    "5",
+    rh,
+    "330",
+    tableHandle,
+    "100",
+    "AcDbSymbolTableRecord",
+    "100",
+    "AcDbLayerTableRecord",
+    "2",
+    "0",
+    "70",
+    "0",
+    "62",
+    "7",
+    "6",
+    "CONTINUOUS",
+
+    // ✅ FIX AutoCAD LT 2026: PlotStyleName requerido
+    "370",
+    "0",   // lineweight (default)
+    "390",
+    "0",   // PlotStyleName (default / bylayer)
+  ];
+}
+
 
   function styleStandard(tableHandle) {
     const rh = nextH();
