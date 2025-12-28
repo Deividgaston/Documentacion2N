@@ -2675,7 +2675,7 @@ async function exportarDocumentacionPDF() {
 
   // ✅ NUEVO: al terminar, descargar fichas (con confirm para permitir multi-descargas)
   try {
-    await downloadSelectedFichasTecnicas();
+   // await downloadSelectedFichasTecnicas();
   } catch (e) {
     console.warn("[DOC] Error descargando fichas:", e);
   }
