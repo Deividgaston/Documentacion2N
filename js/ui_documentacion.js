@@ -457,35 +457,66 @@ function renderDocSectionsHTML() {
 }
 
 
-function startSingleFichaDownloadById(mediaId) {
+async function startSingleFichaDownloadById(mediaId) {
   const all = appState.documentacion.mediaLibrary || [];
   const m = all.find((x) => x && x.id === mediaId);
+
   if (!m?.url) {
     alert("No se ha encontrado la ficha o no tiene URL.");
     return;
   }
 
   const safeName =
-    (m.nombre || "ficha_tecnica")
+    (m.nombre || "ficha_tecnica.pdf")
       .toString()
       .trim()
-      .replace(/[\/\\?%*:|"<>]/g, "_") || "ficha_tecnica";
+      .replace(/[\/\\?%*:|"<>]/g, "_") || "ficha_tecnica.pdf";
 
+  // ✅ Firebase Storage / GCS: forzar descarga por querystring
+  const forcedUrl =
+    m.url +
+    (m.url.includes("?") ? "&" : "?") +
+    "response-content-disposition=" +
+    encodeURIComponent(`attachment; filename="${safeName}"`);
+
+  // 1) Intento fuerte (mejor): fetch -> blob -> download
   try {
+    const resp = await fetch(forcedUrl, { mode: "cors", credentials: "omit" });
+    if (!resp.ok) throw new Error("HTTP " + resp.status);
+
+    const blob = await resp.blob();
+    const objUrl = URL.createObjectURL(blob);
+
     const a = document.createElement("a");
-    a.href = m.url;
+    a.href = objUrl;
     a.download = safeName;
-    a.target = "_self";
+    a.rel = "noopener";
     document.body.appendChild(a);
     a.click();
     a.remove();
+
+    setTimeout(() => URL.revokeObjectURL(objUrl), 1500);
+    return;
   } catch (e) {
-    console.warn("[DOC] No se pudo iniciar descarga ficha:", e);
-    try {
-      window.open(m.url, "_blank", "noopener");
-    } catch (_) {}
+    console.warn("[DOC] Descarga por blob falló. Fallback:", e);
+  }
+
+  // 2) Fallback: navegación directa (normalmente ya descarga por el forcedUrl)
+  try {
+    const a = document.createElement("a");
+    a.href = forcedUrl;
+    a.download = safeName; // a veces se ignora cross-origin, pero forcedUrl ayuda mucho
+    a.target = "_self";
+    a.rel = "noopener";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  } catch (e2) {
+    console.warn("[DOC] Fallback <a> falló. Abriendo pestaña:", e2);
+    try { window.open(forcedUrl, "_blank", "noopener"); } catch (_) {}
   }
 }
+
 
 // ======================================================
 // RENDER FICHAS TÉCNICAS (barra derecha)
