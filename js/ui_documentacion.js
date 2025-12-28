@@ -456,6 +456,37 @@ function renderDocSectionsHTML() {
   }).join("");
 }
 
+
+function startSingleFichaDownloadById(mediaId) {
+  const all = appState.documentacion.mediaLibrary || [];
+  const m = all.find((x) => x && x.id === mediaId);
+  if (!m?.url) {
+    alert("No se ha encontrado la ficha o no tiene URL.");
+    return;
+  }
+
+  const safeName =
+    (m.nombre || "ficha_tecnica")
+      .toString()
+      .trim()
+      .replace(/[\/\\?%*:|"<>]/g, "_") || "ficha_tecnica";
+
+  try {
+    const a = document.createElement("a");
+    a.href = m.url;
+    a.download = safeName;
+    a.target = "_self";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  } catch (e) {
+    console.warn("[DOC] No se pudo iniciar descarga ficha:", e);
+    try {
+      window.open(m.url, "_blank", "noopener");
+    } catch (_) {}
+  }
+}
+
 // ======================================================
 // RENDER FICHAS TÉCNICAS (barra derecha)
 // ======================================================
