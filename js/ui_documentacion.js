@@ -2290,49 +2290,38 @@ async function exportarPDFComercial() {
   }
 
 // Página 2 – Presentación de empresa como ficha Salesforce
-  const includePresentacion = included.presentacion_empresa !== false;
+const includePresentacion = included.presentacion_empresa !== false;
 
-  if (includePresentacion) {
-    doc.addPage();
-    const dims2 = getDocPageDimensions(doc);
-    const pw2 = dims2.width;
+if (includePresentacion) {
+  doc.addPage();
+  const dims2 = getDocPageDimensions(doc);
+  const pw2 = dims2.width;
 
-    let y2 = marginTop;
+  let y2 = marginTop; // ⬅️ arranca directamente
 
-    const sectionLabel =
-      idioma === "en"
-        ? "Company introduction"
-        : idioma === "pt"
-        ? "Apresentação da empresa"
-        : "Presentación de empresa";
+  const sectionLabel =
+    idioma === "en"
+      ? "Company introduction"
+      : idioma === "pt"
+      ? "Apresentação da empresa"
+      : "Presentación de empresa";
 
-   // quitamos el encabezado
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(12);
-    doc.setTextColor(31, 41, 55);
-    doc.text(sectionLabel, marginX, y2);
+  const bodyText = secciones["presentacion_empresa"] || "";
 
-    doc.setDrawColor(209, 213, 219);
-    doc.setLineWidth(0.4);
-    doc.line(marginX, y2 + 2.5, pw2 - marginX, y2 + 2.5);
+  drawSalesforceCard({
+    x: marginX,
+    y: y2,
+    width: pw2 - marginX * 2,
+    title: sectionLabel,
+    body: bodyText,
+    doc,
+    maxBodyWidth: pw2 - marginX * 2 - 16,
+    minHeight: 60,
+    marginTop,
+    marginBottom,
+  });
+}
 
-   y2 += 10;
-
-    const bodyText = secciones["presentacion_empresa"] || "";
-
-    drawSalesforceCard({
-      x: marginX,
-      y: y2,
-      width: pw2 - marginX * 2,
-      title: sectionLabel,
-      body: bodyText,
-      doc,
-      maxBodyWidth: pw2 - marginX * 2 - 16,
-      minHeight: 60,
-      marginTop,
-      marginBottom,
-    });
-  }
 
   // Página 3 – Resumen + Sistema
   doc.addPage();
