@@ -1,5 +1,5 @@
 /* ===========================
-   BLOQUE 1 · RESET + LAYOUT
+   BLOQUE 1 Â· RESET + LAYOUT
    =========================== */
 
 *,
@@ -15,11 +15,72 @@ body {
   height: 100%;
 }
 
+
+/* ===========================
+   DESIGN SYSTEM Â· 2026 PREMIUM
+   (solo presentaciÃ³n â€” NO toca JS)
+   =========================== */
+
+:root{
+  /* Brand */
+  --brand: #4F46E5;          /* Indigo */
+  --brand-700: #4338CA;
+  --brand-50: #EEF2FF;
+
+  /* Neutrals */
+  --bg: #0B1020;
+  --bg2: #0F172A;
+  --surface: rgba(255,255,255,0.92);
+  --surface-2: rgba(255,255,255,0.76);
+  --surface-solid: #FFFFFF;
+  --text: #0B1220;
+  --muted: rgba(15,23,42,0.62);
+  --muted-2: rgba(15,23,42,0.48);
+  --border: rgba(148,163,184,0.28);
+
+  /* Shadows */
+  --shadow-sm: 0 10px 26px rgba(15,23,42,0.10);
+  --shadow-md: 0 18px 45px rgba(15,23,42,0.12);
+  --shadow-lg: 0 28px 70px rgba(15,23,42,0.18);
+
+  /* Radius + spacing */
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 18px;
+  --gap: 16px;
+
+  /* Layout */
+  --container-max: 1320px;
+  --topbar-h: 68px;
+
+  /* Focus ring */
+  --ring: 0 0 0 1px rgba(79,70,229,0.30), 0 0 0 4px rgba(79,70,229,0.14);
+}
+
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
-    system-ui, sans-serif;
-  background: radial-gradient(circle at top, #edf2ff 0, #f4f6fb 55%);
-  color: #1f2933;
+  /* TipografÃ­a: sistema (rÃ¡pida) + opcional Inter (si quieres, aÃ±ade @import en tu index o aquÃ­) */
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "SF Pro Text", Roboto, Arial, "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
+
+  /* Fondo premium: suave, con profundidad */
+  background:
+    radial-gradient(900px 420px at 50% -120px, rgba(79,70,229,0.20), transparent 60%),
+    radial-gradient(800px 520px at 110% 0%, rgba(56,189,248,0.10), transparent 55%),
+    radial-gradient(900px 520px at -10% 10%, rgba(34,197,94,0.06), transparent 50%),
+    linear-gradient(180deg, #F6F8FF 0%, #F3F6FB 55%, #EFF3FA 100%);
+
+  color: var(--text);
+}
+
+/* Accesibilidad */
+:focus-visible{
+  outline: none;
+  box-shadow: var(--ring);
+}
+
+@media (prefers-reduced-motion: reduce){
+  *{ scroll-behavior: auto !important; }
+  *{ transition: none !important; animation: none !important; }
 }
 
 /* Layout general app */
@@ -35,9 +96,12 @@ body {
   display: flex;
   flex-direction: column;
   gap: 1.1rem;
+  max-width: var(--container-max);
+  margin: 0 auto;
+  width: 100%;
 }
 
-/* Layout específico proyecto/presupuesto */
+/* Layout especÃ­fico proyecto/presupuesto */
 
 .proyecto-layout {
   max-width: 880px;
@@ -47,15 +111,15 @@ body {
   gap: 1rem;
 }
 /* ===========================
-   BLOQUE 2 · TOPBAR + TABS
+   BLOQUE 2 Â· TOPBAR + TABS
    =========================== */
 
 /* Topbar principal */
 
 .app-topbar {
-  height: 66px;
-  background: rgba(255, 255, 255, 0.96);
-  border-bottom: 1px solid #e2e6f0;
+  height: var(--topbar-h);
+  background: rgba(255, 255, 255, 0.88);
+  border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -66,7 +130,7 @@ body {
   box-shadow:
     0 18px 45px rgba(15, 23, 42, 0.06),
     0 1px 0 rgba(148, 163, 184, 0.25);
-  backdrop-filter: blur(18px);
+  backdrop-filter: blur(20px) saturate(140%);
 }
 
 .app-topbar-left {
@@ -86,7 +150,7 @@ body {
   color: #6b7280;
 }
 
-/* Navegación (tabs) */
+/* NavegaciÃ³n (tabs) */
 
 .app-topbar-center {
   display: flex;
@@ -95,8 +159,8 @@ body {
   margin: 0 1.25rem;
   padding: 0.15rem;
   border-radius: 999px;
-  background: rgba(248, 250, 252, 0.9);
-  box-shadow: inset 0 0 0 1px rgba(226, 232, 240, 0.9);
+  background: rgba(255, 255, 255, 0.70);
+  box-shadow: inset 0 0 0 1px var(--border);
 }
 
 .top-nav-link {
@@ -118,13 +182,13 @@ body {
 }
 
 .top-nav-link:hover {
-  background: #eef2ff;
-  color: #1d4fd8;
+  background: var(--brand-50);
+  color: var(--brand);
   transform: translateY(-1px);
 }
 
 .top-nav-link.active {
-  background: #1d4fd8;
+  background: var(--brand);
   color: #ffffff;
   box-shadow:
     0 10px 26px rgba(37, 99, 235, 0.45),
@@ -141,14 +205,51 @@ body {
 }
 
 .badge-user {
-  background: #eef2ff;
-  color: #1d4fd8;
+  background: var(--brand-50);
+  color: var(--brand);
   padding: 0.25rem 0.7rem;
   border-radius: 999px;
   font-weight: 500;
   font-size: 0.82rem;
   box-shadow: 0 0 0 1px rgba(191, 219, 254, 0.8);
 }
+
+
+/* ===========================
+   RESPONSIVE NAV (solo CSS)
+   =========================== */
+@media (max-width: 820px){
+  .app-topbar{
+    padding: 0 0.85rem;
+  }
+
+  .app-topbar-left{
+    gap: 0.5rem;
+  }
+
+  .app-topbar-subtitle{
+    display: none;
+  }
+
+  .app-topbar-center{
+    flex: 1;
+    margin: 0 0.6rem;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .app-topbar-center::-webkit-scrollbar{ display:none; }
+
+  .top-nav-link{
+    white-space: nowrap;
+    padding: 0.44rem 0.95rem;
+  }
+
+  .badge-user{
+    display: none; /* el usuario sigue existiendo (no se borra), solo se oculta en mÃ³vil */
+  }
+}
+
 
 /* Chips/pastillas (Paso 1/2/3) */
 
@@ -158,23 +259,21 @@ body {
   border-radius: 999px;
   padding: 0.18rem 0.6rem;
   font-size: 0.75rem;
-  background: #eef2ff;
-  color: #1d4fd8;
+  background: var(--brand-50);
+  color: var(--brand);
   border: 1px solid #d0d5ff;
 }
 /* ===========================
-   BLOQUE 3 · CARDS + FORMULARIOS
+   BLOQUE 3 Â· CARDS + FORMULARIOS
    =========================== */
 
 /* Tarjetas */
 
 .card {
-  background: #ffffff;
-  border-radius: 1rem;
+  background: rgba(255,255,255,0.92);
+  border-radius: var(--r-lg);
   padding: 1.1rem 1.3rem;
-  box-shadow:
-    0 18px 45px rgba(15, 23, 42, 0.06),
-    0 0 0 1px rgba(226, 232, 240, 0.95);
+  box-shadow: var(--shadow-md), 0 0 0 1px var(--border);
   border: none;
   transition:
     transform 0.12s ease,
@@ -184,9 +283,7 @@ body {
 
 .card:hover {
   transform: translateY(-2px);
-  box-shadow:
-    0 22px 55px rgba(15, 23, 42, 0.09),
-    0 0 0 1px rgba(191, 219, 254, 0.8);
+  box-shadow: 0 22px 60px rgba(15, 23, 42, 0.14), 0 0 0 1px rgba(79,70,229,0.22);
 }
 
 .card-header {
@@ -212,7 +309,7 @@ body {
   font-size: 0.88rem;
 }
 
-/* Métricas */
+/* MÃ©tricas */
 
 .metric-card {
   display: flex;
@@ -230,7 +327,7 @@ body {
 .metric-value {
   font-size: 1.35rem;
   font-weight: 650;
-  color: #1d4fd8;
+  color: var(--brand);
 }
 
 /* Formularios */
@@ -269,11 +366,11 @@ input[type="file"],
 select,
 textarea {
   border-radius: 0.55rem;
-  border: 1px solid #d1d5db;
+  border: 1px solid rgba(148,163,184,0.38);
   padding: 0.5rem 0.65rem;
   font-size: 0.88rem;
   outline: none;
-  background: #ffffff;
+  background: rgba(255,255,255,0.92);
   transition:
     border-color 0.15s ease,
     box-shadow 0.15s ease,
@@ -284,11 +381,9 @@ textarea {
 input:focus,
 select:focus,
 textarea:focus {
-  border-color: #1d4fd8;
-  box-shadow:
-    0 0 0 1px rgba(59, 130, 246, 0.35),
-    0 12px 30px rgba(37, 99, 235, 0.15);
-  background: #f9fbff;
+  border-color: var(--brand);
+  box-shadow: var(--ring), 0 14px 34px rgba(79,70,229,0.10);
+  background: rgba(238,242,255,0.55);
   transform: translateY(-1px);
 }
 
@@ -297,7 +392,7 @@ textarea {
   min-height: 80px;
 }
 /* ===========================
-   BLOQUE 4 · BOTONES + TABLAS + ALERTAS + UTILS
+   BLOQUE 4 Â· BOTONES + TABLAS + ALERTAS + UTILS
    =========================== */
 
 /* Botones */
@@ -333,23 +428,28 @@ textarea {
   box-shadow: none;
 }
 
+.btn:focus-visible{
+  outline: none;
+  box-shadow: var(--ring);
+}
+
 .btn-primary {
-  background: #1d4fd8;
+  background: var(--brand);
   color: #ffffff;
-  border-color: #1d4fd8;
+  border-color: var(--brand);
   box-shadow:
     0 12px 30px rgba(37, 99, 235, 0.45),
     0 0 0 1px rgba(191, 219, 254, 0.8);
 }
 
 .btn-primary:hover {
-  background: #1740ad;
-  border-color: #1740ad;
+  background: var(--brand-700);
+  border-color: var(--brand-700);
 }
 
 .btn-secondary {
-  background: #eef2ff;
-  color: #1d4fd8;
+  background: var(--brand-50);
+  color: var(--brand);
   border-color: #d6dafe;
   box-shadow: 0 0 0 1px rgba(191, 219, 254, 0.9);
 }
@@ -365,7 +465,7 @@ textarea {
   border-radius: 0.9rem;
   border: 1px solid #e5e7f2;
   overflow: hidden;
-  background: #ffffff;
+  background: rgba(255,255,255,0.92);
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.05);
 }
 
@@ -378,6 +478,19 @@ textarea {
 .table thead {
   background: #f9fafb;
 }
+
+
+/* Sticky header (solo CSS) */
+.table-wrapper{
+  overflow: auto;
+}
+.table thead th{
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  backdrop-filter: blur(10px);
+}
+
 
 .table th,
 .table td {
@@ -413,7 +526,7 @@ textarea {
 .alert-info {
   background: #e6efff;
   border-color: #bfd3ff;
-  color: #1d4fd8;
+  color: var(--brand);
 }
 
 .alert-success {
@@ -464,7 +577,7 @@ textarea {
   text-align: center;
 }
 /* ===========================
-   BLOQUE 5 · LOGIN MODAL FLOTANTE
+   BLOQUE 5 Â· LOGIN MODAL FLOTANTE
    =========================== */
 
 .login-page {
@@ -515,7 +628,7 @@ textarea {
   text-align: center;
 }
 
-/* Animación suave de entrada */
+/* AnimaciÃ³n suave de entrada */
 
 @keyframes loginFloatIn {
   from {
@@ -528,7 +641,7 @@ textarea {
   }
 }
 /* ===========================
-   MODAL FLOTANTE · CONFIRMACIÓN PROYECTO
+   MODAL FLOTANTE Â· CONFIRMACIÃ“N PROYECTO
    =========================== */
 
 .modal-overlay {
@@ -573,7 +686,7 @@ textarea {
   gap: 0.5rem;
 }
 
-/* Animación */
+/* AnimaciÃ³n */
 
 @keyframes modalFloatIn {
   from {
@@ -585,7 +698,7 @@ textarea {
     transform: translateY(0) scale(1);
   }
 }
-/* ===== Layout específico de la página de Presupuesto (2 columnas) ===== */
+/* ===== Layout especÃ­fico de la pÃ¡gina de Presupuesto (2 columnas) ===== */
 
 .presupuesto-layout-grid {
   max-width: 1200px;
@@ -607,7 +720,7 @@ textarea {
     grid-template-columns: minmax(0, 1fr);
   }
 }
-/* ===== Layout específico de la página de Presupuesto ===== */
+/* ===== Layout especÃ­fico de la pÃ¡gina de Presupuesto ===== */
 
 .presupuesto-layout {
   display: grid;
@@ -623,14 +736,14 @@ textarea {
   gap: 1rem;
 }
 
-/* En pantallas pequeñas, las cards se apilan una debajo de otra */
+/* En pantallas pequeÃ±as, las cards se apilan una debajo de otra */
 @media (max-width: 1024px) {
   .presupuesto-layout {
     grid-template-columns: minmax(0, 1fr);
   }
 }
 /* =========================================================
-   DOCUMENTACIÓN: LAYOUT GENERAL
+   DOCUMENTACIÃ“N: LAYOUT GENERAL
 ========================================================= */
 
 .doc-layout {
@@ -672,7 +785,7 @@ textarea {
   margin-right: 0.5rem;
 }
 
-/* Botón XS reutilizable */
+/* BotÃ³n XS reutilizable */
 .btn-xs {
   font-size: 0.7rem;
   padding: 0.15rem 0.4rem;
@@ -680,7 +793,7 @@ textarea {
 }
 
 /* =========================================================
-   DOCUMENTACIÓN: MAIN (SECCIONES + LATERAL)
+   DOCUMENTACIÃ“N: MAIN (SECCIONES + LATERAL)
 ========================================================= */
 
 .doc-main {
@@ -738,7 +851,7 @@ textarea {
 }
 
 /* =========================================================
-   ZONA DE MEDIA POR SECCIÓN
+   ZONA DE MEDIA POR SECCIÃ“N
 ========================================================= */
 
 .doc-section-media-drop {
@@ -752,7 +865,7 @@ textarea {
 
 .doc-section-media-drop.is-drag-over {
   border-color: #6366f1;
-  background-color: #eef2ff;
+  background-color: var(--brand-50);
 }
 
 .doc-section-media-items {
@@ -773,7 +886,7 @@ textarea {
   display: flex;
   border-radius: 0.5rem;
   border: 1px solid #e5e7eb;
-  background: #ffffff;
+  background: rgba(255,255,255,0.92);
   overflow: hidden;
   min-width: 180px;
   max-width: 260px;
@@ -826,7 +939,7 @@ textarea {
   padding: 0.05rem 0.3rem;
   border-radius: 999px;
   background-color: #eff6ff;
-  color: #1d4ed8;
+  color: var(--brand);
 }
 
 .doc-section-media-remove {
@@ -876,7 +989,7 @@ textarea {
 .doc-media-item {
   border-radius: 0.5rem;
   border: 1px solid #e5e7eb;
-  background: #ffffff;
+  background: rgba(255,255,255,0.92);
   padding: 0.35rem;
   display: flex;
   flex-direction: column;
@@ -929,7 +1042,7 @@ textarea {
 }
 
 /* =========================================================
-   FICHAS TÉCNICAS LIST
+   FICHAS TÃ‰CNICAS LIST
 ========================================================= */
 
 .doc-fichas-list {
@@ -971,9 +1084,9 @@ textarea {
   display: none;
 }
 
-/* Apariencia del modal (para que no se “funda” con el contenido) */
+/* Apariencia del modal (para que no se â€œfundaâ€ con el contenido) */
 .doc-modal-content {
-  background: #ffffff;
+  background: rgba(255,255,255,0.92);
   border: 1px solid rgba(15, 23, 42, 0.12);
   border-radius: 12px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
@@ -1030,7 +1143,7 @@ textarea {
   gap: 0.5rem;
 }
 
-/* Backdrop común */
+/* Backdrop comÃºn */
 
 .doc-backdrop {
   position: fixed;
@@ -1043,7 +1156,7 @@ textarea {
   display: none;
 }
 /* =========================================================
-   GESTIÓN DE DOCUMENTACIÓN — LAYOUT A PANTALLA COMPLETA
+   GESTIÃ“N DE DOCUMENTACIÃ“N â€” LAYOUT A PANTALLA COMPLETA
    ========================================================= */
 
 /* Forzar que esta vista ignore el max-width del layout general */
@@ -1056,13 +1169,13 @@ textarea {
   align-items: flex-start;
 }
 
-/* Columna izquierda (Gestión) — ancho fijo */
+/* Columna izquierda (GestiÃ³n) â€” ancho fijo */
 .proyecto-layout.doc-gestion-layout .doc-gestion-card:first-child {
   flex: 0 0 380px;
   max-width: 380px;
 }
 
-/* Columna derecha (Documentos subidos) — ocupar el resto */
+/* Columna derecha (Documentos subidos) â€” ocupar el resto */
 .proyecto-layout.doc-gestion-layout .doc-gestion-card:last-child {
   flex: 1 1 auto;
   width: 100%;
@@ -1079,7 +1192,7 @@ textarea {
    (overflow + flex min-width)
 ================================ */
 
-/* Si tienes contenedor de preview típico */
+/* Si tienes contenedor de preview tÃ­pico */
 #pdfPreview, #pdfContainer, .pdf-preview, .pdf-page {
   overflow: hidden;
 }
@@ -1108,7 +1221,7 @@ textarea {
   word-break: break-word;
 }
 /* ===========================
-   DIAGRAMAS · Drag & Drop
+   DIAGRAMAS Â· Drag & Drop
    =========================== */
 
 .diag-draggable {
@@ -1121,11 +1234,11 @@ textarea {
 
 .diag-dropzone {
   border: 1px dashed rgba(15, 23, 42, 0.18);
-  background: #ffffff;
+  background: rgba(255,255,255,0.92);
 }
 
 .diag-dropzone.is-drag-over {
   border-color: #6366f1;
-  background-color: #eef2ff;
+  background-color: var(--brand-50);
   box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.2), 0 14px 30px rgba(99, 102, 241, 0.12);
 }
