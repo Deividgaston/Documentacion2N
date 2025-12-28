@@ -2803,7 +2803,8 @@ function ensureDocMediaLoadedOnce() {
   const mediaLen = Array.isArray(d.mediaLibrary) ? d.mediaLibrary.length : 0;
 
   // ✅ Solo consideramos “loaded” si hay contenido (o sea, no bloqueamos recarga si está vacío)
-  if (d.mediaLoaded && mediaLen > 0) return Promise.resolve(true);
+  if (d.mediaLoaded) return Promise.resolve(true);
+
 
   if (__docMediaLoadPromise) return __docMediaLoadPromise;
 
