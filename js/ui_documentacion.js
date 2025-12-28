@@ -793,12 +793,15 @@ function renderDocFichasListOnlyHTML() {
       mime ===
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
       mime === "application/msword"
-    ) return true;
+    )
+      return true;
     return false;
   });
 
   const selected = new Set(appState.documentacion.selectedFichasMediaIds || []);
-  const term = (appState.documentacion.fichasSearchTerm || "").trim().toLowerCase();
+  const term = (appState.documentacion.fichasSearchTerm || "")
+    .trim()
+    .toLowerCase();
 
   const filtered = term
     ? fichas.filter((m) => {
@@ -826,17 +829,28 @@ function renderDocFichasListOnlyHTML() {
         .map((m) => {
           const checked = selected.has(m.id) ? "checked" : "";
           const main = m.folderName
-            ? `<strong>${docEscapeHtml(m.folderName)}</strong> – ${docEscapeHtml(m.nombre || "")}`
+            ? `<strong>${docEscapeHtml(m.folderName)}</strong> – ${docEscapeHtml(
+                m.nombre || ""
+              )}`
             : `<strong>${docEscapeHtml(m.nombre || "")}</strong>`;
 
           return `
-            <label class="doc-ficha-item">
-              <input type="checkbox"
-                data-doc-ficha-media-id="${m.id}"
-                ${checked}
-              >
-              <span class="doc-ficha-main">${main}</span>
-            </label>
+            <div class="doc-ficha-item-row" style="display:flex;gap:8px;align-items:center;justify-content:space-between;">
+              <label class="doc-ficha-item" style="flex:1;min-width:0;">
+                <input type="checkbox"
+                  data-doc-ficha-media-id="${m.id}"
+                  ${checked}
+                >
+                <span class="doc-ficha-main">${main}</span>
+              </label>
+
+              <button
+                type="button"
+                class="btn btn-xs btn-outline"
+                data-doc-ficha-download-id="${m.id}"
+                title="Descargar ficha"
+              >⬇ Descargar</button>
+            </div>
           `;
         })
         .join("")}
