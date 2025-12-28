@@ -2625,6 +2625,63 @@ async function exportarDocumentacionPDF() {
     await exportarPDFComercial();
   }
 }
+// ======================================================
+// DESCARGA FICHAS TÉCNICAS SELECCIONADAS (browser)
+// ======================================================
+
+async function downloadSelectedFichasTecnicas() {
+  const allMedia = appState.documentacion.mediaLibrary || [];
+  const selectedIds = appState.documentacion.selectedFichasMediaIds || [];
+
+  if (!selectedIds.length) return;
+
+  const byId = {};
+  allMedia.forEach((m) => {
+    if (m?.id) byId[m.id] = m;
+  });
+
+  const fichas = selectedIds
+    .map((id) => byId[id])
+    .filter((m) => m && m.url);
+
+  if (!fichas.length) return;
+
+  // Intento A: forzar descarga via <a download>. Si el servidor no permite,
+  // el navegador puede abrir el PDF en otra pestaña o ignorar "download".
+  // Además, para evitar bloqueos, lo hacemos escalonado.
+  for (let i = 0; i < fichas.length; i++) {
+    const m = fichas[i];
+    const url = m.url;
+
+    // nombre sugerido
+    const safeName =
+      (m.nombre || "ficha_tecnica")
+        .toString()
+        .trim()
+        .replace(/[\/\\?%*:|"<>]/g, "_") || "ficha_tecnica";
+
+    // Pequeño delay para que el navegador no bloquee por ráfaga
+    // (y para dar tiempo a crear/descargar cada archivo)
+    // eslint-disable-next-line no-await-in-loop
+    await new Promise((r) => setTimeout(r, 250));
+
+    try {
+      const a = document.createElement("a");
+      a.href = url;
+      a.target = "_blank";
+      a.rel = "noopener";
+      a.download = safeName; // puede ser ignorado si CORS/headers no lo permiten
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch (e) {
+      console.warn("[DOC] No se pudo disparar descarga ficha:", e);
+      try {
+        window.open(url, "_blank");
+      } catch (_) {}
+    }
+  }
+}
 
 // ======================================================
 // HANDLERS DE UI
