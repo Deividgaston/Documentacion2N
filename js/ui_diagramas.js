@@ -560,7 +560,7 @@ function _dxfSectionToLines(sectionText) {
   return lines;
 }
 
-// ✅ NUEVO (mínimo): TABLES mínimo (evita APPID/handles conflictivos de la plantilla)
+// ✅ NUEVO (mínimo): TABLES mínimo (SIN APPID)
 function _buildMinimalTablesSection() {
   return [
     "0",
@@ -642,25 +642,60 @@ function _buildMinimalTablesSection() {
     "0",
     "ENDTAB",
 
-    // ✅ APPID (mínimo) -> evita "Error en la tabla APPID" al tener XDATA/1001 "ACAD" en BLOCKS
-    "0",
-    "TABLE",
-    "2",
-    "APPID",
-    "70",
-    "1",
-    "0",
-    "APPID",
-    "2",
-    "ACAD",
-    "70",
-    "0",
-    "0",
-    "ENDTAB",
-
     "0",
     "ENDSEC",
   ].join("\n");
+}
+
+// ✅ NUEVO: HEADER mínimo propio (NO plantilla)
+function _buildMinimalHeaderSection() {
+  return [
+    "0",
+    "SECTION",
+    "2",
+    "HEADER",
+    "9",
+    "$ACADVER",
+    "1",
+    "AC1027",
+    "9",
+    "$INSUNITS",
+    "70",
+    "4", // 4=mm
+    "0",
+    "ENDSEC",
+  ].join("\n");
+}
+
+// ✅ NUEVO: quita XDATA (1001 + 1000..1071) para no requerir APPID
+function _stripDxfXDataFromLines(lines) {
+  const out = [];
+  for (let i = 0; i < lines.length; i += 2) {
+    const code = String(lines[i] ?? "").trim();
+    const value = String(lines[i + 1] ?? "");
+
+    if (code === "1001") {
+      i += 2;
+      while (i < lines.length) {
+        const c = String(lines[i] ?? "").trim();
+        if (!c) {
+          i += 2;
+          continue;
+        }
+        const n = parseInt(c, 10);
+        if (Number.isFinite(n) && n >= 1000 && n <= 1071) {
+          i += 2;
+          continue;
+        }
+        i -= 2;
+        break;
+      }
+      continue;
+    }
+
+    out.push(code, value);
+  }
+  return out;
 }
 
 function _dxfToPairs(dxfText) {
@@ -1444,7 +1479,7 @@ function diagExportSvg() {
 
 /* ======================================================
    6B) ✅ Export DXF (ASCII) SIN atributos
-   FIX: TABLES mínimo + NO OBJECTS (evita error APPID)
+   FIX: HEADER mínimo + TABLES mínimo SIN APPID + STRIP XDATA en BLOCKS
  ====================================================== */
 function diagExportDxf() {
   const r = appState.diagramas.lastResult;
@@ -1536,7 +1571,6 @@ function diagExportDxf() {
       "50",
       _fmt(rotDeg || 0)
     );
-    // SIN ATTRIB / SEQEND (sin atributos)
   }
 
   // Título y cabeceras de zona
@@ -1583,13 +1617,16 @@ function diagExportDxf() {
   // ✅ Construcción robusta “por líneas”
   const outLines = [];
 
-  const header = appState.diagramas.dxfHeaderSection || ["0", "SECTION", "2", "HEADER", "0", "ENDSEC"].join("\n");
-  const tables = _buildMinimalTablesSection(); // ✅ FIX (incluye APPID mínimo)
-  const blocksSection = appState.diagramas.dxfBlocksSection; // requerido
+  const header = _buildMinimalHeaderSection(); // ✅ propio
+  const tables = _buildMinimalTablesSection(); // ✅ sin APPID
+
+  const blocksSectionRaw = appState.diagramas.dxfBlocksSection; // requerido
+  const blocksLines = _dxfSectionToLines(blocksSectionRaw);
+  const blocksCleanLines = _stripDxfXDataFromLines(blocksLines); // ✅ quita XDATA
 
   outLines.push(..._dxfSectionToLines(header));
   outLines.push(..._dxfSectionToLines(tables));
-  outLines.push(..._dxfSectionToLines(blocksSection));
+  outLines.push(...blocksCleanLines);
 
   // ENTITIES
   outLines.push("0", "SECTION", "2", "ENTITIES");
