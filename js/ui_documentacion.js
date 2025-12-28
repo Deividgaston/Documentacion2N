@@ -2043,113 +2043,110 @@ async function exportarPDFComercial() {
   const marginBottom = 20;
 
   // Tarjeta tipo Salesforce (no se corta entre páginas)
-  function drawSalesforceCard({
-    x,
-    y,
-    width,
-    title,
-    body,
-    doc,
-    maxBodyWidth,
-    minHeight,
-    marginTop = 20,
-    marginBottom = 20,
-  }) {
-    const paddingX = 8;
-    const paddingTop = 8;
-    const paddingBottom = 8;
+function drawSalesforceCard({
+  x,
+  y,
+  width,
+  title,
+  body,
+  doc,
+  maxBodyWidth,
+  minHeight,
+  marginTop = 20,
+  marginBottom = 20,
+}) {
+  const paddingX = 8;
+  const paddingTop = 8;
+  const paddingBottom = 8;
 
-    // 🔹 Ancho efectivo: NUNCA mayor que el ancho interior de la tarjeta
-    const innerW = width - paddingX * 2;
+  // 🔹 Ancho efectivo: NUNCA mayor que el ancho interior de la tarjeta
+  const innerW = width - paddingX * 2;
 
-    // 🔹 En comercial queremos que el texto ocupe igual en todas las cards
-    const bodyW = innerW;
+  // 🔹 En comercial queremos que el texto ocupe igual en todas las cards
+  const bodyW = innerW;
 
-    const raw = (body || "")
-      .replace(/\r\n/g, "\n")
-      .replace(/\r/g, "\n")
-      .replace(/\u2028|\u2029/g, "\n") // 👈 clave: saltos Unicode
-      .trim();
+  const raw = (body || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .replace(/\u2028|\u2029/g, "\n") // 👈 saltos Unicode
+    .trim();
 
-    // Mantener párrafos (doble salto), pero "desenrollar" saltos dentro de cada párrafo
-    const paragraphs = raw
-      .split(/\n\s*\n+/g)
-      .map((p) => p.replace(/\n+/g, " ").replace(/[ \t]+/g, " ").trim())
-      .filter(Boolean);
+  // Mantener párrafos (doble salto), pero "desenrollar" saltos dentro de cada párrafo
+  const paragraphs = raw
+    .split(/\n\s*\n+/g)
+    .map((p) => p.replace(/\n+/g, " ").replace(/[ \t]+/g, " ").trim())
+    .filter(Boolean);
 
-    // Generar líneas por párrafo y meter una línea en blanco entre párrafos
-    const lines = [];
-    for (let i = 0; i < paragraphs.length; i++) {
-      const chunk = doc.splitTextToSize(paragraphs[i], bodyW);
-      lines.push(...chunk);
-      if (i < paragraphs.length - 1) lines.push(""); // separación entre párrafos
-    }
+  // ✅ CLAVE: fijar tipografía del CUERPO antes de medir líneas
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(11);
 
-    const bodyH = lines.length * 5.0;
-
-    let cardH = paddingTop + 8 + 4 + bodyH + paddingBottom;
-    if (minHeight && cardH < minHeight) cardH = minHeight;
-
-    const dimsLocal = getDocPageDimensions(doc);
-    const pageHLocal = dimsLocal.height;
-
-    if (y + cardH > pageHLocal - marginBottom) {
-      doc.addPage();
-      y = marginTop;
-    }
-
-    doc.setFillColor(229, 231, 235);
-    doc.roundedRect(x + 1.2, y + 1.8, width, cardH, 3, 3, "F");
-
-    doc.setFillColor(255, 255, 255);
-    doc.setDrawColor(209, 213, 219);
-    doc.roundedRect(x, y, width, cardH, 3, 3, "FD");
-
-    // Título
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(20);
-    doc.setTextColor(31, 41, 55);
-    const titleLines = doc.splitTextToSize(title, innerW);
-    doc.text(titleLines, x + paddingX, y + paddingTop + 7);
-
-    // Texto del cuerpo
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(11);
-    doc.setTextColor(75, 85, 99);
-
-    const yBody = y + paddingTop + 7 + titleLines.length * 7 + 3;
-
-    if (lines.length) {
-      const xBody = x + paddingX;
-      const maxW = bodyW;
-      const lh = 5.0;
-      let yy = yBody;
-
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i] || "";
-
-        // línea en blanco entre párrafos
-        if (!line.trim()) {
-          yy += lh;
-          continue;
-        }
-
-        // si la siguiente es "" => esta es última línea de párrafo (NO justificar)
-        const next = lines[i + 1] || "";
-        const isLastOfParagraph = !next.trim();
-
-       doc.text(line, xBody, yy);
-
-
-        yy += lh;
-      }
-    }
-
-    return {
-      bottomY: y + cardH,
-      height: cardH,
-    };
+  // Generar líneas por párrafo y meter una línea en blanco entre párrafos
+  const lines = [];
+  for (let i = 0; i < paragraphs.length; i++) {
+    const chunk = doc.splitTextToSize(paragraphs[i], bodyW);
+    lines.push(...chunk);
+    if (i < paragraphs.length - 1) lines.push(""); // separación entre párrafos
   }
+
+  const bodyH = lines.length * 5.0;
+
+  let cardH = paddingTop + 8 + 4 + bodyH + paddingBottom;
+  if (minHeight && cardH < minHeight) cardH = minHeight;
+
+  const dimsLocal = getDocPageDimensions(doc);
+  const pageHLocal = dimsLocal.height;
+
+  if (y + cardH > pageHLocal - marginBottom) {
+    doc.addPage();
+    y = marginTop;
+  }
+
+  doc.setFillColor(229, 231, 235);
+  doc.roundedRect(x + 1.2, y + 1.8, width, cardH, 3, 3, "F");
+
+  doc.setFillColor(255, 255, 255);
+  doc.setDrawColor(209, 213, 219);
+  doc.roundedRect(x, y, width, cardH, 3, 3, "FD");
+
+  // Título
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(20);
+  doc.setTextColor(31, 41, 55);
+  const titleLines = doc.splitTextToSize(title, innerW);
+  doc.text(titleLines, x + paddingX, y + paddingTop + 7);
+
+  // Texto del cuerpo (ya medido con font=normal size=11)
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(11);
+  doc.setTextColor(75, 85, 99);
+
+  const yBody = y + paddingTop + 7 + titleLines.length * 7 + 3;
+
+  if (lines.length) {
+    const xBody = x + paddingX;
+    const lh = 5.0;
+    let yy = yBody;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i] || "";
+
+      // línea en blanco entre párrafos
+      if (!line.trim()) {
+        yy += lh;
+        continue;
+      }
+
+      doc.text(line, xBody, yy);
+      yy += lh;
+    }
+  }
+
+  return {
+    bottomY: y + cardH,
+    height: cardH,
+  };
+}
 
   function collectSectionImagesWithCaptions() {
     const map = appState.documentacion.sectionMedia || {};
