@@ -571,6 +571,15 @@ function _buildMinimalTablesSection() {
     "0","SECTION",
     "2","TABLES",
 
+    // ---------- APPID ----------
+    "0","TABLE",
+    "2","APPID",
+    "70","1",
+    "0","APPID",
+    "2","ACAD",
+    "70","0",
+    "0","ENDTAB",
+
     // ---------- LTYPE ----------
     "0","TABLE",
     "2","LTYPE",
@@ -593,7 +602,7 @@ function _buildMinimalTablesSection() {
     "70","0",
     "62","7",
     "6","CONTINUOUS",
-    // ✅ PlotStyleName/lineweight para LT 2026
+    // ✅ LT 2026: PlotStyleName/lineweight
     "370","0",
     "390","0",
     "0","ENDTAB",
@@ -614,7 +623,7 @@ function _buildMinimalTablesSection() {
     "4","",
     "0","ENDTAB",
 
-    // ---------- VIEW (vacía pero obligatoria en algunos LT) ----------
+    // ---------- VIEW (evita "Falta SymbolTable:VIEW") ----------
     "0","TABLE",
     "2","VIEW",
     "70","0",
@@ -623,6 +632,7 @@ function _buildMinimalTablesSection() {
     "0","ENDSEC",
   ].join("\n");
 }
+
 
 // ✅ HEADER mínimo (añade HANDSEED)
 function _buildMinimalHeaderSection() {
