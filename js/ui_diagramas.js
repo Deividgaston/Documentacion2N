@@ -278,7 +278,8 @@ function _renderPreviewSvg(result) {
 }
 
 // Drag controller para SVG
-let _diagDrag = { active: false, nodeId: null, offsetX: 0, offsetY: 0 };
+// (guard global para evitar 'already been declared' si el script se evalúa 2 veces)
+var _diagDrag = (window._diagDrag = window._diagDrag || { active: false, nodeId: null, offsetX: 0, offsetY: 0 });
 
 function _svgPoint(svg, clientX, clientY) {
   const pt = svg.createSVGPoint();
@@ -642,35 +643,33 @@ function _buildMinimalTablesSection() {
   }
 
   function layer0(tableHandle) {
-  const rh = nextH();
-  return [
-    "0",
-    "LAYER",
-    "5",
-    rh,
-    "330",
-    tableHandle,
-    "100",
-    "AcDbSymbolTableRecord",
-    "100",
-    "AcDbLayerTableRecord",
-    "2",
-    "0",
-    "70",
-    "0",
-    "62",
-    "7",
-    "6",
-    "CONTINUOUS",
-
-    // ✅ FIX AutoCAD LT 2026: PlotStyleName requerido
-    "370",
-    "0",   // lineweight (default)
-    "390",
-    "0",   // PlotStyleName (default / bylayer)
-  ];
-}
-
+    const rh = nextH();
+    return [
+      "0",
+      "LAYER",
+      "5",
+      rh,
+      "330",
+      tableHandle,
+      "100",
+      "AcDbSymbolTableRecord",
+      "100",
+      "AcDbLayerTableRecord",
+      "2",
+      "0",
+      "70",
+      "0",
+      "62",
+      "7",
+      "6",
+      "CONTINUOUS",
+      // PlotStyleName / lineweight default
+      "370",
+      "0",
+      "390",
+      "0",
+    ];
+  }
 
   function styleStandard(tableHandle) {
     const rh = nextH();
@@ -732,9 +731,15 @@ function _buildMinimalTablesSection() {
   out.push(...styleStandard(style.th));
   out.push(...endTab());
 
+  // VIEW (requerido por AutoCAD LT: SymbolTable:VIEW)
+  const view = tableStart("VIEW", 0);
+  out.push(...view.lines);
+  out.push(...endTab());
+
   out.push("0", "ENDSEC");
   return out.join("\n");
 }
+
 // ✅ HEADER mínimo (añade HANDSEED)
 function _buildMinimalHeaderSection() {
   return [
@@ -758,7 +763,6 @@ function _buildMinimalHeaderSection() {
     "ENDSEC",
   ].join("\n");
 }
-
 
 // ✅ NUEVO: quita XDATA (1001 + 1000..1071) para no requerir APPID
 function _stripDxfXDataFromLines(lines) {
@@ -974,10 +978,10 @@ async function diagImportDxfFile(file) {
 /* ======================================================
    3) Drag & drop (refs a zonas)
  ====================================================== */
-let _dragRefKey = null;
+var _dragRefKey = (window._dragRefKey = window._dragRefKey || null);
 
 function _onRefDragStart(ev, ref) {
-  _dragRefKey = String(ref || "");
+  _dragRefKey = (window._dragRefKey = String(ref || ""));
   try {
     ev.dataTransfer.setData("text/plain", _dragRefKey);
     ev.dataTransfer.effectAllowed = "copy";
@@ -1572,7 +1576,7 @@ function diagExportSvg() {
 
 /* ======================================================
    6B) ✅ Export DXF (ASCII) SIN atributos
-   FIX: HEADER mínimo + TABLES mínimo SIN APPID + STRIP XDATA en BLOCKS
+   FIX: HEADER mínimo + TABLES mínimo + VIEW + STRIP XDATA en BLOCKS
  ====================================================== */
 function diagExportDxf() {
   const r = appState.diagramas.lastResult;
@@ -1710,12 +1714,12 @@ function diagExportDxf() {
   // ✅ Construcción robusta “por líneas”
   const outLines = [];
 
-  const header = _buildMinimalHeaderSection(); // ✅ propio
-  const tables = _buildMinimalTablesSection(); // ✅ ahora incluye APPID ACAD
+  const header = _buildMinimalHeaderSection();
+  const tables = _buildMinimalTablesSection(); // incluye VIEW
 
   const blocksSectionRaw = appState.diagramas.dxfBlocksSection; // requerido
   const blocksLines = _dxfSectionToLines(blocksSectionRaw);
-  const blocksCleanLines = _stripDxfXDataFromLines(blocksLines); // ✅ quita XDATA
+  const blocksCleanLines = _stripDxfXDataFromLines(blocksLines); // quita XDATA
 
   outLines.push(..._dxfSectionToLines(header));
   outLines.push(..._dxfSectionToLines(tables));
@@ -1806,7 +1810,7 @@ function _renderRefsList() {
 
   host.querySelectorAll("[draggable='true'][data-ref]").forEach((node) => {
     node.addEventListener("dragstart", (ev) => _onRefDragStart(ev, node.dataset.ref));
-    node.addEventListener("dragend", () => (_dragRefKey = null));
+    node.addEventListener("dragend", () => (_dragRefKey = (window._dragRefKey = null)));
   });
 }
 
