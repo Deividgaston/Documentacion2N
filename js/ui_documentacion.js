@@ -2848,15 +2848,14 @@ function renderDocumentacionView() {
 
 
   // 🔥 Cargar media si NO está cargada O si está vacía (evita depender de haber pasado por Gestión)
-const mediaLen = Array.isArray(d.mediaLibrary) ? d.mediaLibrary.length : 0;
-
-if (!d.mediaLoaded || mediaLen === 0) {
+if (!d.mediaLoaded) {
   ensureDocMediaLoadedOnce().then((ok) => {
     if (ok && typeof window.renderDocumentacionView === "function") {
       window.renderDocumentacionView();
     }
   });
 }
+
 
 
 
