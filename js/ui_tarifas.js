@@ -768,7 +768,8 @@ function mostrarFormularioTipoTarifa(tipoOriginal) {
     )
     .join("");
 
-  const exportType = tarifaTipoFromId(tipo.id || tipo.templateId || "");
+  // ✅ Formato basado en la plantilla seleccionada (evita IDs custom sin SUBD/BBD/...)
+  const exportType = tarifasExportTypeFromTipo(tipo);
   const showBC3 = !esNuevo && exportType === "PVP"; // BC3 SOLO PVP
 
   detalle.innerHTML = `
@@ -1049,10 +1050,44 @@ function tarifaTipoFromId(idOrTpl) {
   return "PVP";
 }
 
+// Preferimos SIEMPRE la plantilla base elegida para determinar el "formato" de exportación.
+// Esto evita que un ID custom (sin SUBD/BBD/...) provoque columnas incorrectas.
+function tarifasGetTemplateForTipo(tipo) {
+  const t = tipo || {};
+  const tplId = String(t.templateId || "").trim();
+  if (tplId && TARIFA_TEMPLATES[tplId]) return TARIFA_TEMPLATES[tplId];
+  // fallback: intenta resolver por id (tarifas oficiales)
+  const id = String(t.id || "").trim();
+  if (id && TARIFA_TEMPLATES[id]) return TARIFA_TEMPLATES[id];
+  return null;
+}
+
+function tarifasExportTypeFromTipo(tipo) {
+  const tpl = tarifasGetTemplateForTipo(tipo);
+  if (tpl?.id) return tarifaTipoFromId(tpl.id);
+  // fallback legacy
+  return tarifaTipoFromId((tipo && (tipo.templateId || tipo.id)) || "");
+}
+
+// Devuelve las keys de precio ordenadas por la posición de columna del Excel base.
+// Ej: ES_SUBD => [subd, rp2, rp1, msrp]
+function tarifasGetTemplatePriceKeysOrdered(tipo) {
+  const tpl = tarifasGetTemplateForTipo(tipo);
+  const cols = tpl?.columnasPrecio || null;
+  if (!cols || typeof cols !== "object") return [];
+  return Object.entries(cols)
+    .slice()
+    .sort((a, b) => Number(a[1] || 0) - Number(b[1] || 0))
+    .map(([k]) => k);
+}
+
 function tarifasGetExportSpec(tipo) {
   const t = tipo || {};
   const lang = String(t.idioma || "").toUpperCase() === "EN" ? "EN" : "ES";
-  const exportType = tarifaTipoFromId(t.id || t.templateId || "");
+  // ✅ Formato basado en la plantilla base elegida (no en el ID de la tarifa)
+  const exportType = tarifasExportTypeFromTipo(t);
+  const tpl = tarifasGetTemplateForTipo(t);
+  const templatePriceKeys = tarifasGetTemplatePriceKeysOrdered(t);
 
   const L =
     lang === "EN"
@@ -1114,35 +1149,66 @@ function tarifasGetExportSpec(tipo) {
     { key: "name", header: L.name, width: 45 },
   ];
 
+  // ✅ Columnas de precio:
+  // - Si hay plantilla base, respetamos SU orden y SUS keys.
+  // - Si no, usamos fallback por exportType (legacy).
+  const buildPriceCol = (k) => {
+    // VAD: las plantillas oficiales usan 'dist' pero en export queremos 'vadMsrp'
+    const key = exportType === "VAD" && k === "dist" ? "vadMsrp" : k;
+
+    // BBD: el usuario quiere ver la columna como "BBD" (manteniendo key dist internamente)
+    const isBBD = String(tpl?.id || "").toUpperCase().includes("BBD") || exportType === "BBD";
+    const distHeader = isBBD
+      ? (lang === "EN" ? "BBD (EUR)" : "BBD (EUR)")
+      : L.dist;
+
+    const headerMap = {
+      msrp: L.msrp,
+      vadMsrp: L.vadMsrp,
+      subd: L.subd,
+      nfrDist: L.nfrDist,
+      nfrRes: L.nfrRes,
+      dist: distHeader,
+      rp2: L.rp2,
+      rp1: L.rp1,
+    };
+
+    // widths razonables
+    const widthMap = {
+      msrp: 14,
+      vadMsrp: 16,
+      subd: 14,
+      nfrDist: 18,
+      nfrRes: 18,
+      dist: 16,
+      rp2: 16,
+      rp1: 16,
+    };
+
+    return {
+      key,
+      header: headerMap[key] || headerMap[k] || String(k),
+      width: widthMap[key] || 14,
+      isMoney: true,
+    };
+  };
+
   let priceCols = [];
-  if (exportType === "PVP") {
-    priceCols = [{ key: "msrp", header: L.msrp, width: 14, isMoney: true }];
-  } else if (exportType === "SUBD") {
-    priceCols = [
-      { key: "subd", header: L.subd, width: 14, isMoney: true },
-      { key: "rp2", header: L.rp2, width: 16, isMoney: true },
-      { key: "rp1", header: L.rp1, width: 16, isMoney: true },
-      { key: "msrp", header: L.msrp, width: 14, isMoney: true },
-    ];
-  } else if (exportType === "BBD") {
-    priceCols = [
-      { key: "nfrDist", header: L.nfrDist, width: 18, isMoney: true },
-      { key: "nfrRes", header: L.nfrRes, width: 18, isMoney: true },
-      { key: "dist", header: L.dist, width: 16, isMoney: true },
-      { key: "rp2", header: L.rp2, width: 16, isMoney: true },
-      { key: "rp1", header: L.rp1, width: 16, isMoney: true },
-      { key: "msrp", header: L.msrp, width: 14, isMoney: true },
-    ];
-  } else if (exportType === "VAD") {
-    priceCols = [
-      { key: "nfrDist", header: L.nfrDist, width: 18, isMoney: true },
-      { key: "nfrRes", header: L.nfrRes, width: 18, isMoney: true },
-      { key: "vadMsrp", header: L.vadMsrp, width: 16, isMoney: true },
-      { key: "rp2", header: L.rp2, width: 16, isMoney: true },
-      { key: "rp1", header: L.rp1, width: 16, isMoney: true },
-    ];
+  if (templatePriceKeys.length) {
+    priceCols = templatePriceKeys.map((k) => buildPriceCol(k));
   } else {
-    priceCols = [{ key: "msrp", header: L.msrp, width: 14, isMoney: true }];
+    // fallback legacy
+    if (exportType === "PVP") {
+      priceCols = [buildPriceCol("msrp")];
+    } else if (exportType === "SUBD") {
+      priceCols = ["subd", "rp2", "rp1", "msrp"].map((k) => buildPriceCol(k));
+    } else if (exportType === "BBD") {
+      priceCols = ["nfrDist", "nfrRes", "dist", "rp2", "rp1", "msrp"].map((k) => buildPriceCol(k));
+    } else if (exportType === "VAD") {
+      priceCols = ["nfrDist", "nfrRes", "dist", "rp2", "rp1"].map((k) => buildPriceCol(k));
+    } else {
+      priceCols = [buildPriceCol("msrp")];
+    }
   }
 
   // Técnicos SIEMPRE (Excel/PDF), en TODAS las tarifas
