@@ -1397,6 +1397,7 @@ async function getDocLogoImage() {
 }
 
 // Justifica una línea dentro de un ancho máximo (solo se usa en PDF técnico)
+// FIX: no justificar líneas "cortas" (títulos internos) para evitar huecos enormes.
 function drawJustifiedLine(doc, text, x, y, maxWidth) {
   if (!text) {
     doc.text("", x, y);
@@ -1418,7 +1419,7 @@ function drawJustifiedLine(doc, text, x, y, maxWidth) {
   const fullWidth = doc.getTextWidth(str);
   const extraTotal = maxWidth - fullWidth;
 
-  // Si ya ocupa casi todo el ancho o es más estrecha, no forzamos nada raro
+  // Si ya ocupa todo (o se pasa), no tocamos nada
   if (extraTotal <= 0) {
     doc.text(str, x, y);
     return;
@@ -1428,17 +1429,28 @@ function drawJustifiedLine(doc, text, x, y, maxWidth) {
   const normalSpaceWidth = doc.getTextWidth(" ");
   const extraPerSpace = extraTotal / spaceCount;
 
+  // ✅ CLAVE: evitar justificar líneas cortas (p.ej. subtítulos).
+  // - Si la línea ocupa poco del ancho (ratio bajo), o
+  // - si el extra por espacio es demasiado grande, se imprime normal.
+  const ratio = fullWidth / maxWidth; // 0..1
+  if (ratio < 0.78 || extraPerSpace > normalSpaceWidth * 1.6) {
+    doc.text(str, x, y);
+    return;
+  }
+
   let cursorX = x;
 
   for (let i = 0; i < words.length; i++) {
     const w = words[i];
     doc.text(w, cursorX, y);
+
     if (i < words.length - 1) {
       const wWidth = doc.getTextWidth(w);
       cursorX += wWidth + normalSpaceWidth + extraPerSpace;
     }
   }
 }
+
 
 function getDocPageDimensions(pdf) {
   const size = pdf.internal.pageSize;
