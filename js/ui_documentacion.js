@@ -1366,7 +1366,11 @@ async function saveMediaFileToStorageAndFirestore(file, options = {}) {
       name;
 
     const ref = storage.ref().child(storagePath);
-    await ref.put(file);
+    await ref.put(file, {
+  contentType: file.type || "application/octet-stream",
+  contentDisposition: `attachment; filename="${name}"`,
+});
+
     url = await ref.getDownloadURL();
   } else {
     url = URL.createObjectURL(file);
