@@ -1331,6 +1331,15 @@ function _onZoneDragOver(ev) {
   const zone = ev.currentTarget;
   if (zone) zone.classList.add("is-drag-over");
 }
+function _onZoneCardDragEnd(ev) {
+  _dragZoneKey = (window._dragZoneKey = null);
+
+  // limpia estados visuales
+  try {
+    document.querySelectorAll(".diag-dropzone.is-drag-over").forEach((el) => el.classList.remove("is-drag-over"));
+  } catch (_) {}
+}
+
 function _onZoneDragLeave(ev) {
   const zone = ev.currentTarget;
   if (zone) zone.classList.remove("is-drag-over");
