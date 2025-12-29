@@ -2559,37 +2559,43 @@ function _renderDiagramasUI() {
     card.addEventListener("dragstart", (ev) => _onAssignmentDragStart(ev, zoneKey, id));
     card.addEventListener("dragend", _onAssignmentDragEnd);
 
-    card.addEventListener("dragover", (ev) => {
-      ev.preventDefault();
-      try {
-        ev.dataTransfer.dropEffect = "move";
-      } catch (_) {}
-    });
+   card.addEventListener("dragover", (ev) => {
+  // Si lo que arrastras es una ZONA, deja que lo gestione el contenedor .diag-dropzone
+  let payload = "";
+  try { payload = ev.dataTransfer.getData("text/plain") || ""; } catch (_) {}
+  payload = String(payload || "").trim();
+  if (payload.startsWith("ZONE:")) return; // ✅ NO preventDefault
 
-    card.addEventListener("drop", (ev) => {
-      ev.preventDefault();
-      let payload = "";
-      try {
-        payload = ev.dataTransfer.getData("text/plain") || "";
-      } catch (_) {}
-      payload = String(payload || "").trim();
-      if (!payload.startsWith("ASSIGN:")) return;
+  ev.preventDefault();
+  try { ev.dataTransfer.dropEffect = "move"; } catch (_) {}
+});
 
-      const parts = payload.split(":");
-      const srcZone = parts[1] || "";
-      const srcId = parts[2] || "";
-      if (!srcZone || !srcId) return;
+card.addEventListener("drop", (ev) => {
+  // Si lo que arrastras es una ZONA, NO interceptes el drop (lo gestiona la zona)
+  let payload = "";
+  try { payload = ev.dataTransfer.getData("text/plain") || ""; } catch (_) {}
+  payload = String(payload || "").trim();
+  if (payload.startsWith("ZONE:")) return; // ✅ NO preventDefault, deja burbujear
 
-      if (String(srcZone) === String(zoneKey)) {
-        _moveAssignmentWithinZone(zoneKey, srcId, id);
-      } else {
-        _moveAssignmentToZone(srcZone, srcId, zoneKey, id);
-      }
+  ev.preventDefault();
+  if (!payload.startsWith("ASSIGN:")) return;
 
-      _clearDiagError();
-      _renderDiagramasUI();
-      _renderResult();
-    });
+  const parts = payload.split(":");
+  const srcZone = parts[1] || "";
+  const srcId = parts[2] || "";
+  if (!srcZone || !srcId) return;
+
+  if (String(srcZone) === String(zoneKey)) {
+    _moveAssignmentWithinZone(zoneKey, srcId, id);
+  } else {
+    _moveAssignmentToZone(srcZone, srcId, zoneKey, id);
+  }
+
+  _clearDiagError();
+  _renderDiagramasUI();
+  _renderResult();
+});
+
   });
 
   host.querySelectorAll("[data-act]").forEach((node) => {
