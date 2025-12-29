@@ -164,6 +164,80 @@ function _setZoneConfig(key, patch) {
   _saveZonesConfig(s.zonesConfig);
 }
 
+/* ======================================================
+   ✅ PERSISTENCIA ASSIGNMENTS (FIX: no vuelven al inicio)
+ ====================================================== */
+
+function _loadAssignments() {
+  try {
+    const t = localStorage.getItem("diag_assignments");
+    const obj = t ? JSON.parse(t) : null;
+    return obj && typeof obj === "object" ? obj : {};
+  } catch (_) {
+    return {};
+  }
+}
+
+function _saveAssignments() {
+  try {
+    localStorage.setItem("diag_assignments", JSON.stringify(appState.diagramas.assignments || {}));
+  } catch (_) {}
+}
+
+/* ======================================================
+   MOVER / REORDENAR ASSIGNMENTS (FIX: actualiza el array)
+ ====================================================== */
+
+function _moveAssignmentWithinZone(zoneKey, srcId, beforeId) {
+  const list = appState.diagramas.assignments?.[zoneKey];
+  if (!Array.isArray(list)) return;
+
+  const from = list.findIndex((x) => String(x.id) === String(srcId));
+  if (from < 0) return;
+
+  const item = list.splice(from, 1)[0];
+
+  if (!beforeId) {
+    list.push(item);
+    _saveAssignments();
+    return;
+  }
+
+  let to = list.findIndex((x) => String(x.id) === String(beforeId));
+  if (to < 0) {
+    list.push(item);
+    _saveAssignments();
+    return;
+  }
+
+  list.splice(to, 0, item);
+  _saveAssignments();
+}
+
+function _moveAssignmentToZone(srcZone, srcId, dstZone, beforeId) {
+  const a = appState.diagramas.assignments || (appState.diagramas.assignments = {});
+  const src = a[srcZone];
+  const dst = (a[dstZone] = a[dstZone] || []);
+  if (!Array.isArray(src) || !Array.isArray(dst)) return;
+
+  const from = src.findIndex((x) => String(x.id) === String(srcId));
+  if (from < 0) return;
+
+  const item = src.splice(from, 1)[0];
+
+  if (!beforeId) {
+    dst.push(item);
+    _saveAssignments();
+    return;
+  }
+
+  const to = dst.findIndex((x) => String(x.id) === String(beforeId));
+  if (to < 0) dst.push(item);
+  else dst.splice(to, 0, item);
+
+  _saveAssignments();
+}
+
 function _budgetLineSectionLabel(l) {
   // robusto: intenta varios campos típicos
   const cand = [
@@ -301,6 +375,8 @@ function _addZoneManual() {
   appState.diagramas.assignments = appState.diagramas.assignments || {};
   if (!Array.isArray(appState.diagramas.assignments[key])) appState.diagramas.assignments[key] = [];
 
+  _saveAssignments(); // ✅ persist
+
   _clearDiagError();
   _renderDiagramasUI();
   _renderResult();
@@ -334,6 +410,7 @@ function _deleteZone(zoneKey) {
   try {
     if (appState.diagramas.assignments && appState.diagramas.assignments[zoneKey]) {
       delete appState.diagramas.assignments[zoneKey];
+      _saveAssignments(); // ✅ persist
     }
   } catch (_) {}
 
@@ -1072,7 +1149,7 @@ function diagLoadProjectRefs() {
     appState.diagramas.zonesDynamic = false;
   }
 
-  // 3) assignments
+  // 3) assignments (NO pisar lo cargado si ya existe)
   appState.diagramas.assignments = appState.diagramas.assignments || {};
   for (const z of appState.diagramas.zones) {
     if (!Array.isArray(appState.diagramas.assignments[z.key])) {
@@ -1087,6 +1164,8 @@ function diagLoadProjectRefs() {
       if (!valid.has(k)) delete appState.diagramas.assignments[k];
     }
   } catch (_) {}
+
+  _saveAssignments(); // ✅ persist coherencia
 }
 
 /* ======================================================
@@ -1388,7 +1467,6 @@ function _onZoneDrop(ev, zoneKey) {
     const srcId = parts[2] || "";
     if (!srcZone || !srcId) return;
 
-    // si cae en zona distinta, lo movemos al final (o cerca si luego lo mejoras)
     if (String(srcZone) !== String(zoneKey)) {
       _moveAssignmentToZone(srcZone, srcId, zoneKey, null);
     } else {
@@ -1415,6 +1493,8 @@ function _onZoneDrop(ev, zoneKey) {
       qty: 1,
       iconBlock: blockName,
     });
+
+    _saveAssignments(); // ✅ persist
 
     _clearDiagError();
     _renderDiagramasUI();
@@ -1445,17 +1525,19 @@ function _onZoneDrop(ev, zoneKey) {
     });
   }
 
+  _saveAssignments(); // ✅ persist
+
   _clearDiagError();
   _renderDiagramasUI();
   _renderResult();
 }
 
-
- 
 function _removeAssignment(zoneKey, id) {
   const list = appState.diagramas.assignments[zoneKey] || [];
   const idx = list.findIndex((x) => x.id === id);
   if (idx >= 0) list.splice(idx, 1);
+
+  _saveAssignments(); // ✅ persist
 
   _clearDiagError();
   _renderDiagramasUI();
@@ -1467,6 +1549,9 @@ function _updateAssignment(zoneKey, id, patch) {
   const it = list.find((x) => x.id === id);
   if (!it) return;
   Object.assign(it, patch);
+
+  _saveAssignments(); // ✅ persist
+
   _clearDiagError();
 }
 
@@ -1532,6 +1617,8 @@ function diagAutoAssignIcons() {
     const sugSw = blocks.find((b) => _norm(b).includes("switch") && _norm(b).includes("poe")) || "";
     if (sugSw) _setCpdSwitchBlock(sugSw);
   }
+
+  _saveAssignments(); // ✅ persist
 
   _renderDiagramasUI();
   _renderResult();
@@ -2517,6 +2604,9 @@ function renderDiagramasView() {
 
     appState.diagramas.zonesConfig = _loadZonesConfig();
     appState.diagramas.zonesOrder = _loadZonesOrder();
+
+    // ✅ cargar assignments persistidos (FIX principal)
+    appState.diagramas.assignments = _loadAssignments();
   } catch (_) {}
 
   diagLoadProjectRefs();
