@@ -1592,35 +1592,7 @@ function _onZoneDrop(ev, zoneKey) {
   _renderResult();
 }
 
-  // ✅ Caso 3: ref del presupuesto (REF:xxxx o xxxx)
-  let ref = payload;
-  if (ref.startsWith("REF:")) ref = ref.slice(4).trim();
-  if (!ref) return;
-
-  const source = (appState.diagramas.refs || []).find((r) => r.ref === ref);
-  if (!source) return;
-
-  const list = (appState.diagramas.assignments[zoneKey] = appState.diagramas.assignments[zoneKey] || []);
-  const existing = list.find((x) => x.ref === ref);
-
-  if (existing) {
-    existing.qty = Number(existing.qty || 0) + 1;
-  } else {
-    list.push({
-      id: `A_${zoneKey}_${Date.now()}_${Math.random().toString(16).slice(2)}`,
-      ref: source.ref,
-      descripcion: source.descripcion || "",
-      qty: Math.max(1, Number(source.qty || 1) || 1),
-      iconBlock: "",
-    });
-  }
-
-  _saveAssignments(); // ✅ persist
-
-  _clearDiagError();
-  _renderDiagramasUI();
-  _renderResult();
-}
+  
 
 function _removeAssignment(zoneKey, id) {
   const list = appState.diagramas.assignments[zoneKey] || [];
