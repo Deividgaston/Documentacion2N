@@ -1368,18 +1368,21 @@ function _onZoneDrop(ev, zoneKey) {
   payload = String(payload || "").trim();
   if (!payload) return;
 
-  // ✅ Caso 1: reorder assignment (AHORA respeta posición de drop)
+  // ✅ Caso 1: mover/reordenar assignment
   if (payload.startsWith("ASSIGN:")) {
     const parts = payload.split(":");
     const srcZone = parts[1] || "";
     const srcId = parts[2] || "";
     if (!srcZone || !srcId) return;
-    if (String(srcZone) !== String(zoneKey)) return; // solo dentro de la misma zona
 
-    // 🔥 clave: intenta detectar la tarjeta más cercana donde soltaste
-    const dstId = _findNearestAssignmentIdInZone(zone, ev.clientY);
+    // si cae en zona distinta, lo movemos al final (o cerca si luego lo mejoras)
+    if (String(srcZone) !== String(zoneKey)) {
+      _moveAssignmentToZone(srcZone, srcId, zoneKey, null);
+    } else {
+      const dstId = _findNearestAssignmentIdInZone(zone, ev.clientY);
+      _moveAssignmentWithinZone(zoneKey, srcId, dstId);
+    }
 
-    _moveAssignmentWithinZone(zoneKey, srcId, dstId);
     _clearDiagError();
     _renderDiagramasUI();
     _renderResult();
@@ -1406,8 +1409,11 @@ function _onZoneDrop(ev, zoneKey) {
     return;
   }
 
-  // ✅ Caso 3: ref del presupuesto
-  const ref = payload;
+  // ✅ Caso 3: ref del presupuesto (REF:xxxx o xxxx)
+  let ref = payload;
+  if (ref.startsWith("REF:")) ref = ref.slice(4).trim();
+  if (!ref) return;
+
   const source = (appState.diagramas.refs || []).find((r) => r.ref === ref);
   if (!source) return;
 
@@ -1430,6 +1436,7 @@ function _onZoneDrop(ev, zoneKey) {
   _renderDiagramasUI();
   _renderResult();
 }
+
 
   // 3) refs del presupuesto
   let ref = payload;
