@@ -1396,7 +1396,6 @@ function _onZoneCardDragStart(ev, zoneKey) {
 function _onZoneDragOver(ev) {
   ev.preventDefault();
 
-  // ✅ si estamos moviendo una tarjeta (ASSIGN) -> "move", si no -> "copy"
   let payload = "";
   try {
     payload = ev.dataTransfer.getData("text/plain") || "";
@@ -1404,12 +1403,14 @@ function _onZoneDragOver(ev) {
   payload = String(payload || "").trim();
 
   try {
-    ev.dataTransfer.dropEffect = payload.startsWith("ASSIGN:") ? "move" : "copy";
+    ev.dataTransfer.dropEffect =
+      payload.startsWith("ASSIGN:") || payload.startsWith("ZONE:") ? "move" : "copy";
   } catch (_) {}
 
   const zone = ev.currentTarget;
   if (zone) zone.classList.add("is-drag-over");
 }
+
 function _onZoneCardDragEnd(ev) {
   _dragZoneKey = (window._dragZoneKey = null);
 
