@@ -1314,96 +1314,43 @@ function _onZoneCardDragStart(ev, zoneKey) {
     ev.dataTransfer.effectAllowed = "move";
   } catch (_) {}
 }
-function _onZoneCardDragEnd() {
-  _dragZoneKey = window._dragZoneKey = null;
-}
-
 function _onZoneDragOver(ev) {
   ev.preventDefault();
+
+  // ✅ si estamos moviendo una tarjeta (ASSIGN) -> "move", si no -> "copy"
+  let payload = "";
   try {
-    ev.dataTransfer.dropEffect = "copy";
+    payload = ev.dataTransfer.getData("text/plain") || "";
   } catch (_) {}
+  payload = String(payload || "").trim();
+
+  try {
+    ev.dataTransfer.dropEffect = payload.startsWith("ASSIGN:") ? "move" : "copy";
+  } catch (_) {}
+
   const zone = ev.currentTarget;
   if (zone) zone.classList.add("is-drag-over");
 }
 
-function _onZoneDragLeave(ev) {
-  const zone = ev.currentTarget;
-  if (zone) zone.classList.remove("is-drag-over");
-}
+// ✅ helper: encuentra la tarjeta destino dentro de una zona según la posición Y del cursor
+function _findNearestAssignmentIdInZone(zoneEl, clientY) {
+  if (!zoneEl) return null;
+  const cards = Array.from(zoneEl.querySelectorAll(".diag-assignment[data-id]"));
+  if (!cards.length) return null;
 
-function _findAssignmentItem(zoneKey, id) {
-  const list = appState.diagramas.assignments[zoneKey] || [];
-  const idx = list.findIndex((x) => x.id === id);
-  if (idx < 0) return { idx: -1, item: null, list };
-  return { idx, item: list[idx], list };
-}
+  let bestId = null;
+  let bestDist = Infinity;
 
-function _moveAssignmentToZone(srcZone, srcId, dstZone, dstIdOrNull) {
-  if (!srcZone || !srcId || !dstZone) return;
-  if (!appState.diagramas.assignments) return;
-
-  const src = _findAssignmentItem(srcZone, srcId);
-  if (!src.item) return;
-
-  // remove from src
-  src.list.splice(src.idx, 1);
-
-  // ensure dst
-  const dstList = (appState.diagramas.assignments[dstZone] = appState.diagramas.assignments[dstZone] || []);
-
-  if (!dstIdOrNull) {
-    dstList.push(src.item);
-  } else {
-    const dstIdx = dstList.findIndex((x) => x.id === dstIdOrNull);
-    if (dstIdx < 0) dstList.push(src.item);
-    else dstList.splice(dstIdx, 0, src.item);
+  for (const c of cards) {
+    const r = c.getBoundingClientRect();
+    const midY = r.top + r.height / 2;
+    const d = Math.abs(clientY - midY);
+    if (d < bestDist) {
+      bestDist = d;
+      bestId = c.dataset.id || null;
+    }
   }
-
-  // update zone field (para preview/result)
-  try {
-    src.item.zone = dstZone;
-  } catch (_) {}
-}
-
-function _moveAssignmentWithinZone(zoneKey, srcId, dstId) {
-  const list = appState.diagramas.assignments[zoneKey] || [];
-  const srcIdx = list.findIndex((x) => x.id === srcId);
-  if (srcIdx < 0) return;
-
-  const [item] = list.splice(srcIdx, 1);
-
-  if (!dstId) {
-    list.push(item);
-  } else {
-    const dstIdx = list.findIndex((x) => x.id === dstId);
-    if (dstIdx < 0) list.push(item);
-    else list.splice(dstIdx, 0, item);
-  }
-
-  appState.diagramas.assignments[zoneKey] = list;
-}
-
-function _reorderZones(srcZoneKey, dstZoneKey) {
-  if (!srcZoneKey || !dstZoneKey) return;
-  if (srcZoneKey === "armario_cpd" || dstZoneKey === "armario_cpd") return;
-
-  const zones = (appState.diagramas.zones = appState.diagramas.zones || []);
-  const a = zones.findIndex((z) => z.key === srcZoneKey);
-  const b = zones.findIndex((z) => z.key === dstZoneKey);
-  if (a < 0 || b < 0) return;
-
-  const [item] = zones.splice(a, 1);
-  zones.splice(b, 0, item);
-
-  // asegurar armario al final (por si acaso)
-  const idxArm = zones.findIndex((z) => z.key === "armario_cpd");
-  if (idxArm >= 0 && idxArm !== zones.length - 1) {
-    const [arm] = zones.splice(idxArm, 1);
-    zones.push(arm);
-  }
-
-  _syncZonesOrderFromCurrentZones();
+  return bestId;
 }
 
 function _onZoneDrop(ev, zoneKey) {
@@ -1421,34 +1368,68 @@ function _onZoneDrop(ev, zoneKey) {
   payload = String(payload || "").trim();
   if (!payload) return;
 
-  // 1) reorder ZONAS (si sueltas ZONE sobre tarjeta zona)
-  if (payload.startsWith("ZONE:")) {
-    const srcZone = payload.slice("ZONE:".length).trim();
-    if (!srcZone) return;
-    _reorderZones(srcZone, zoneKey);
-    _renderDiagramasUI();
-    _renderResult();
-    return;
-  }
-
-  // 2) mover/reorder ASSIGNMENTS (permitimos entre zonas)
+  // ✅ Caso 1: reorder assignment (AHORA respeta posición de drop)
   if (payload.startsWith("ASSIGN:")) {
     const parts = payload.split(":");
     const srcZone = parts[1] || "";
     const srcId = parts[2] || "";
     if (!srcZone || !srcId) return;
+    if (String(srcZone) !== String(zoneKey)) return; // solo dentro de la misma zona
 
-    if (String(srcZone) === String(zoneKey)) {
-      _moveAssignmentWithinZone(zoneKey, srcId, null);
-    } else {
-      _moveAssignmentToZone(srcZone, srcId, zoneKey, null);
-    }
+    // 🔥 clave: intenta detectar la tarjeta más cercana donde soltaste
+    const dstId = _findNearestAssignmentIdInZone(zone, ev.clientY);
+
+    _moveAssignmentWithinZone(zoneKey, srcId, dstId);
+    _clearDiagError();
+    _renderDiagramasUI();
+    _renderResult();
+    return;
+  }
+
+  // ✅ Caso 2: añadir bloque DXF como elemento
+  if (payload.startsWith("DXFBLOCK:")) {
+    const blockName = payload.slice("DXFBLOCK:".length).trim();
+    if (!blockName) return;
+
+    const list = (appState.diagramas.assignments[zoneKey] = appState.diagramas.assignments[zoneKey] || []);
+    list.push({
+      id: `B_${zoneKey}_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+      ref: `BLOCK:${blockName}`,
+      descripcion: "Elemento DXF (manual)",
+      qty: 1,
+      iconBlock: blockName,
+    });
 
     _clearDiagError();
     _renderDiagramasUI();
     _renderResult();
     return;
   }
+
+  // ✅ Caso 3: ref del presupuesto
+  const ref = payload;
+  const source = (appState.diagramas.refs || []).find((r) => r.ref === ref);
+  if (!source) return;
+
+  const list = (appState.diagramas.assignments[zoneKey] = appState.diagramas.assignments[zoneKey] || []);
+  const existing = list.find((x) => x.ref === ref);
+
+  if (existing) {
+    existing.qty = Number(existing.qty || 0) + 1;
+  } else {
+    list.push({
+      id: `A_${zoneKey}_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+      ref: source.ref,
+      descripcion: source.descripcion || "",
+      qty: Math.max(1, Number(source.qty || 1) || 1),
+      iconBlock: "",
+    });
+  }
+
+  _clearDiagError();
+  _renderDiagramasUI();
+  _renderResult();
+}
 
   // 3) refs del presupuesto
   let ref = payload;
