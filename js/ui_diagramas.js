@@ -1331,6 +1331,10 @@ function _onZoneDragOver(ev) {
   const zone = ev.currentTarget;
   if (zone) zone.classList.add("is-drag-over");
 }
+function _onZoneDragLeave(ev) {
+  const zone = ev.currentTarget;
+  if (zone) zone.classList.remove("is-drag-over");
+}
 
 // ✅ helper: encuentra la tarjeta destino dentro de una zona según la posición Y del cursor
 function _findNearestAssignmentIdInZone(zoneEl, clientY) {
