@@ -1,8 +1,10 @@
 // js/ui_diagramas.js
 // Vista: DIAGRAMAS (IA)
-// V2.11 (Hito 17):
-// - ✅ SVG: pinta unidades (qty) por dispositivo
-// - ✅ SVG: añade 2 hilos (2W) desde videoportero/control acceso -> cerradura/garaje (nodo virtual)
+// V2.12 (Hito 18):
+// - ✅ Zonas dinámicas desde secciones/capítulos del presupuesto (excepto Armario/CPD fijo)
+// - ✅ Zonas (excepto Armario): iconos para renombrar y borrar
+// - ✅ Cerradura por zona (opcional): ref seleccionable + conexión 2 hilos (2_WIRE) hacia esa cerradura
+// - ✅ El resto de conexiones sigue siendo UTP CAT6
 // - ✅ Mantiene Export DXF (ASCII) SIN atributos
 // - ✅ Export SVG (MAESTRO) estable (líneas + nodos + textos) basado en coords del preview
 // - ✅ Preview drag estable (mantiene add/removeEventListener)
@@ -28,6 +30,7 @@ appState.diagramas = appState.diagramas || {
   refs: [],
   refsSearch: "",
 
+  // ZONAS (dinámicas): se recalculan desde presupuesto + overrides
   zones: [
     { key: "entrada_principal", label: "Entrada principal" },
     { key: "portales_interiores", label: "Portales interiores" },
@@ -35,6 +38,13 @@ appState.diagramas = appState.diagramas || {
     { key: "zonas_refugio", label: "Zonas refugio" },
     { key: "armario_cpd", label: "Armario / CPD" },
   ],
+
+  // overrides: { [zoneKey]: { label?: string, deleted?: boolean } }
+  zoneOverrides: {},
+
+  // cerradura por zona: { [zoneKey]: { enabled: boolean, ref: string, descripcion: string } }
+  zoneLocks: {},
+
   assignments: {},
 
   promptUiOpen: false,
@@ -88,15 +98,206 @@ function _clearDiagError() {
 }
 
 /* ======================================================
+   Zonas dinámicas desde presupuesto + overrides
+ ====================================================== */
+
+function _slugKey(s) {
+  return String(s || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 48) || "zona";
+}
+
+function _loadZoneOverridesFromStorage() {
+  try {
+    const raw = localStorage.getItem("diag_zone_overrides");
+    if (raw) appState.diagramas.zoneOverrides = JSON.parse(raw) || {};
+  } catch (_) {}
+}
+
+function _saveZoneOverridesToStorage() {
+  try {
+    localStorage.setItem("diag_zone_overrides", JSON.stringify(appState.diagramas.zoneOverrides || {}));
+  } catch (_) {}
+}
+
+function _loadZoneLocksFromStorage() {
+  try {
+    const raw = localStorage.getItem("diag_zone_locks");
+    if (raw) appState.diagramas.zoneLocks = JSON.parse(raw) || {};
+  } catch (_) {}
+}
+
+function _saveZoneLocksToStorage() {
+  try {
+    localStorage.setItem("diag_zone_locks", JSON.stringify(appState.diagramas.zoneLocks || {}));
+  } catch (_) {}
+}
+
+function _getBudgetSectionLabels() {
+  const presu = appState?.presupuesto || {};
+  // Intentos robustos (no rompas si cambia estructura):
+  // - capitulos: [{nombre|name|titulo|title}]
+  // - secciones: [{nombre|name|titulo|title}]
+  // - grupos: [{nombre|name}]
+  const candidates = [];
+
+  const caps = Array.isArray(presu.capitulos) ? presu.capitulos : [];
+  const secs = Array.isArray(presu.secciones) ? presu.secciones : [];
+  const grps = Array.isArray(presu.grupos) ? presu.grupos : [];
+
+  for (const c of caps) candidates.push(c?.nombre || c?.name || c?.titulo || c?.title);
+  for (const s of secs) candidates.push(s?.nombre || s?.name || s?.titulo || s?.title);
+  for (const g of grps) candidates.push(g?.nombre || g?.name || g?.titulo || g?.title);
+
+  // fallback: si no hay estructura, crea una zona genérica
+  const out = candidates
+    .map((x) => String(x || "").trim())
+    .filter(Boolean);
+
+  // dedupe (case-insensitive)
+  const seen = new Set();
+  const uniq = [];
+  for (const n of out) {
+    const k = n.toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k);
+    uniq.push(n);
+  }
+
+  return uniq;
+}
+
+function diagSyncZonesFromBudget() {
+  const fixed = { key: "armario_cpd", label: "Armario / CPD", fixed: true };
+
+  const labels = _getBudgetSectionLabels();
+  const overrides = appState.diagramas.zoneOverrides || {};
+  const zones = [];
+
+  // Construye zonas desde secciones/capítulos
+  for (const label of labels) {
+    const baseKey = _slugKey(label);
+    const key = baseKey === "armario_cpd" ? `zona_${baseKey}` : baseKey;
+
+    const ov = overrides[key] || {};
+    if (ov.deleted) continue;
+
+    zones.push({
+      key,
+      label: String(ov.label || label),
+      source: "budget",
+    });
+  }
+
+  // Si no hay secciones, deja una zona genérica (no CPD)
+  if (!zones.length) {
+    const key = "zona_principal";
+    const ov = overrides[key] || {};
+    if (!ov.deleted) zones.push({ key, label: String(ov.label || "Zona principal"), source: "fallback" });
+  }
+
+  // Armario/CPD siempre al final y fijo
+  zones.push({ key: fixed.key, label: fixed.label, fixed: true });
+
+  appState.diagramas.zones = zones;
+
+  // Inicializa assignments/locks por zona
+  appState.diagramas.assignments = appState.diagramas.assignments || {};
+  appState.diagramas.zoneLocks = appState.diagramas.zoneLocks || {};
+
+  for (const z of zones) {
+    if (!Array.isArray(appState.diagramas.assignments[z.key])) appState.diagramas.assignments[z.key] = [];
+    if (!appState.diagramas.zoneLocks[z.key]) {
+      appState.diagramas.zoneLocks[z.key] = { enabled: false, ref: "", descripcion: "" };
+    }
+  }
+
+  // Limpia datos de zonas que ya no existen (excepto manualCoords de nodos que sigan vivos)
+  const zoneKeys = new Set(zones.map((z) => z.key));
+  for (const k of Object.keys(appState.diagramas.assignments)) {
+    if (!zoneKeys.has(k)) delete appState.diagramas.assignments[k];
+  }
+  for (const k of Object.keys(appState.diagramas.zoneLocks)) {
+    if (!zoneKeys.has(k)) delete appState.diagramas.zoneLocks[k];
+  }
+
+  _saveZoneOverridesToStorage();
+  _saveZoneLocksToStorage();
+}
+
+function _renameZone(zoneKey) {
+  if (!zoneKey || zoneKey === "armario_cpd") return;
+
+  const z = (appState.diagramas.zones || []).find((x) => x.key === zoneKey);
+  const cur = z ? z.label : zoneKey;
+
+  const next = String(prompt("Nuevo nombre de la zona:", cur) || "").trim();
+  if (!next) return;
+
+  appState.diagramas.zoneOverrides = appState.diagramas.zoneOverrides || {};
+  appState.diagramas.zoneOverrides[zoneKey] = Object.assign({}, appState.diagramas.zoneOverrides[zoneKey] || {}, { label: next });
+
+  _saveZoneOverridesToStorage();
+
+  // re-sync para aplicar label
+  diagSyncZonesFromBudget();
+  _clearDiagError();
+  _renderDiagramasUI();
+  _renderResult();
+}
+
+function _deleteZone(zoneKey) {
+  if (!zoneKey || zoneKey === "armario_cpd") return;
+
+  const z = (appState.diagramas.zones || []).find((x) => x.key === zoneKey);
+  const label = z ? z.label : zoneKey;
+
+  const ok = confirm(`¿Eliminar la zona "${label}"? (Se borrarán también sus dispositivos y su cerradura)`);
+  if (!ok) return;
+
+  // Marca deleted
+  appState.diagramas.zoneOverrides = appState.diagramas.zoneOverrides || {};
+  appState.diagramas.zoneOverrides[zoneKey] = Object.assign({}, appState.diagramas.zoneOverrides[zoneKey] || {}, { deleted: true });
+  _saveZoneOverridesToStorage();
+
+  // Borra assignments + lock
+  const list = appState.diagramas.assignments?.[zoneKey];
+  const ids = Array.isArray(list) ? list.map((x) => String(x.id)) : [];
+
+  try {
+    delete appState.diagramas.assignments[zoneKey];
+  } catch (_) {}
+  try {
+    delete appState.diagramas.zoneLocks[zoneKey];
+  } catch (_) {}
+
+  // Limpia coords manuales de nodos que pertenecían a esa zona
+  const manual = appState.diagramas.manualCoords || {};
+  for (const id of ids) {
+    if (manual[id]) delete manual[id];
+    const lockNode = `ZLOCK_${zoneKey}`;
+    if (manual[lockNode]) delete manual[lockNode];
+  }
+  appState.diagramas.manualCoords = manual;
+
+  // Re-sync
+  diagSyncZonesFromBudget();
+
+  _clearDiagError();
+  _renderDiagramasUI();
+  _renderResult();
+}
+
+/* ======================================================
    Helpers: detección + enriquecimiento SVG
  ====================================================== */
 
-function _norm2(s) {
-  return String(s || "").toLowerCase();
-}
-
 function _isDoorWireDevice(p) {
-  // Videoporteros / intercom / control de accesos -> 2 hilos a cerradura/garaje
+  // Sólo para detectar qué dispositivos deben tirar 2 hilos hacia la cerradura de su zona (si existe)
   const t = `${p?.ref || ""} ${p?.descripcion || ""} ${p?.icon_block || ""} ${p?.iconBlock || ""}`.toUpperCase();
   const hints = [
     "IPSTYLE",
@@ -116,13 +317,7 @@ function _isDoorWireDevice(p) {
     "RFID",
     "BLE",
   ];
-  if (hints.some((k) => t.includes(k))) return true;
-
-  // Si explícitamente habla de garaje/cerradura también
-  const t2 = t;
-  if (t2.includes("CERRADURA") || t2.includes("GARAJE") || t2.includes("PUERTA") || t2.includes("BARRERA")) return true;
-
-  return false;
+  return hints.some((k) => t.includes(k));
 }
 
 function _cloneDeepJson(x) {
@@ -133,72 +328,6 @@ function _cloneDeepJson(x) {
   }
 }
 
-// Enriquecemos un resultado para SVG/preview:
-// - asegura qty en placements
-// - añade nodo virtual "CERRADURA / GARAJE" por cada device que lo requiera
-// - añade conexión 2W (2 hilos)
-function _augmentResultForSvg(baseResult) {
-  const r0 = baseResult;
-  if (!r0 || typeof r0 !== "object") return r0;
-
-  const r = _cloneDeepJson(r0);
-
-  const placements = Array.isArray(r.placements) ? r.placements : [];
-  const infra = Array.isArray(r.infra) ? r.infra : [];
-  const connections = Array.isArray(r.connections) ? r.connections : [];
-
-  // Normaliza qty
-  for (const p of placements) {
-    const q = Math.max(1, Number(p?.qty || 1) || 1);
-    p.qty = q;
-  }
-
-  // Index para evitar duplicados
-  const existingNodeIds = new Set([
-    ...placements.map((p) => String(p.id)),
-    ...infra.map((n) => String(n.id)),
-  ]);
-
-  const existing2w = new Set(
-    connections
-      .filter((c) => String(c?.type || "").toUpperCase() === "2_WIRE")
-      .map((c) => `${String(c.from)}__${String(c.to)}`)
-  );
-
-  // Añade cerradura/garaje + 2 hilos
-  for (const p of placements) {
-    if (!_isDoorWireDevice(p)) continue;
-
-    const lockId = `V_LOCK_${String(p.id)}`;
-    if (!existingNodeIds.has(lockId)) {
-      infra.push({
-        id: lockId,
-        type: "VIRTUAL_LOCK_GARAGE",
-        zone: String(p.zone || "entrada_principal"),
-        meta: { role: "LOCK_GARAGE", for: String(p.id) },
-      });
-      existingNodeIds.add(lockId);
-    }
-
-    const key = `${String(p.id)}__${lockId}`;
-    if (!existing2w.has(key)) {
-      connections.push({
-        from: String(p.id),
-        to: lockId,
-        type: "2_WIRE",
-        note: "2 hilos a cerradura/garaje",
-      });
-      existing2w.add(key);
-    }
-  }
-
-  r.infra = infra;
-  r.connections = connections;
-  r.placements = placements;
-
-  return r;
-}
-
 function _strokeForConnectionType(t) {
   const tt = String(t || "").toUpperCase();
   if (tt === "2_WIRE" || tt === "2H" || tt === "2_HILOS") {
@@ -206,6 +335,93 @@ function _strokeForConnectionType(t) {
   }
   // UTP_CAT6
   return { stroke: "rgba(29,79,216,.55)", width: 2, dash: "" };
+}
+
+// Enriquecemos un resultado para SVG/preview:
+// - asegura qty en placements
+// - añade NODO de cerradura por zona si el usuario lo habilita
+// - añade conexiones 2_WIRE desde videoportero/control acceso -> cerradura de su zona
+function _augmentResultForSvg(baseResult) {
+  const r0 = baseResult;
+  if (!r0 || typeof r0 !== "object") return r0;
+
+  const r = _cloneDeepJson(r0);
+
+  const placements = Array.isArray(r.placements) ? r.placements : [];
+  let infra = Array.isArray(r.infra) ? r.infra : [];
+  let connections = Array.isArray(r.connections) ? r.connections : [];
+
+  // Normaliza qty
+  for (const p of placements) {
+    const q = Math.max(1, Number(p?.qty || 1) || 1);
+    p.qty = q;
+  }
+
+  // ✅ Limpia “locks antiguos” (de versiones previas) para no duplicar
+  infra = infra.filter((n) => {
+    const id = String(n?.id || "");
+    return !id.startsWith("V_LOCK_") && !id.startsWith("ZLOCK_");
+  });
+  connections = connections.filter((c) => {
+    const t = String(c?.type || "").toUpperCase();
+    if (t !== "2_WIRE") return true;
+    const to = String(c?.to || "");
+    return !to.startsWith("V_LOCK_") && !to.startsWith("ZLOCK_");
+  });
+
+  const existingNodeIds = new Set([...placements.map((p) => String(p.id)), ...infra.map((n) => String(n.id))]);
+
+  // Cerraduras por zona (si enabled + ref)
+  const zoneLocks = appState.diagramas.zoneLocks || {};
+
+  for (const [zoneKey, lk] of Object.entries(zoneLocks)) {
+    if (!lk || !lk.enabled) continue;
+    const ref = String(lk.ref || "").trim();
+    if (!ref) continue;
+
+    const lockId = `ZLOCK_${zoneKey}`;
+    if (!existingNodeIds.has(lockId)) {
+      infra.push({
+        id: lockId,
+        type: "LOCK_REF",
+        zone: zoneKey,
+        meta: { role: "LOCK_GARAGE", ref, descripcion: String(lk.descripcion || "") },
+      });
+      existingNodeIds.add(lockId);
+    }
+  }
+
+  // 2W: desde dispositivos “door-wire” hacia cerradura de su zona (si existe)
+  const existing2w = new Set(
+    connections
+      .filter((c) => String(c?.type || "").toUpperCase() === "2_WIRE")
+      .map((c) => `${String(c.from)}__${String(c.to)}`)
+  );
+
+  for (const p of placements) {
+    if (!_isDoorWireDevice(p)) continue;
+    const zoneKey = String(p.zone || "");
+    const lk = zoneLocks[zoneKey];
+    if (!lk || !lk.enabled || !String(lk.ref || "").trim()) continue;
+
+    const lockId = `ZLOCK_${zoneKey}`;
+    const key = `${String(p.id)}__${lockId}`;
+    if (existing2w.has(key)) continue;
+
+    connections.push({
+      from: String(p.id),
+      to: lockId,
+      type: "2_WIRE",
+      note: "2 hilos a cerradura/garaje (por zona)",
+    });
+    existing2w.add(key);
+  }
+
+  r.infra = infra;
+  r.connections = connections;
+  r.placements = placements;
+
+  return r;
 }
 
 /* ======================================================
@@ -223,7 +439,6 @@ function _buildSchematicCoordsFromResult(result) {
 
   const placements = Array.isArray(result?.placements) ? result.placements : [];
   const infra = Array.isArray(result?.infra) ? result.infra : [];
-  const connections = Array.isArray(result?.connections) ? result.connections : [];
 
   const perZoneCount = {};
   for (const z of zones) perZoneCount[z.key] = 0;
@@ -241,7 +456,7 @@ function _buildSchematicCoordsFromResult(result) {
   const manual = appState.diagramas.manualCoords || {};
 
   for (const p of placements) {
-    const zone = String(p.zone || "entrada_principal");
+    const zone = String(p.zone || zones[0]?.key || "entrada_principal");
     const qty = Math.max(1, Number(p.qty || 1) || 1);
     const label = `${p.ref || p.id || ""}${qty > 1 ? ` x${qty}` : ""}`;
 
@@ -256,7 +471,12 @@ function _buildSchematicCoordsFromResult(result) {
 
   for (const n of infra) {
     const zone = String(n.zone || "armario_cpd");
-    const label = `${n.type || n.id || ""}`;
+    const t = String(n.type || n.id || "");
+    const metaRef = n?.meta?.ref ? ` (${String(n.meta.ref)})` : "";
+    const label =
+      t === "LOCK_REF"
+        ? `CERRADURA / GARAJE${metaRef}`
+        : `${t}`;
 
     const m = manual[n.id];
     const pos =
@@ -267,45 +487,10 @@ function _buildSchematicCoordsFromResult(result) {
     map.set(n.id, { x: pos.x, y: pos.y, label, kind: "infra", zone });
   }
 
-  // ✅ Coloca nodos virtuales "cerradura/garaje" cerca del dispositivo (si existe conexión 2_WIRE)
-  // (si el nodo ya tiene coords manuales o ya está en map, no tocamos)
-  for (const c of connections) {
-    if (String(c?.type || "").toUpperCase() !== "2_WIRE") continue;
-    const a = map.get(c.from);
-    const b = map.get(c.to);
-    if (b) continue; // ya existe
-    if (!a) continue;
-
-    const mid = String(c.to || "");
-    if (!mid) continue;
-
-    // Sólo si ese "to" existe como infra/placement en el result
-    const existsInInfra = infra.some((x) => String(x.id) === mid);
-    const existsInPlac = placements.some((x) => String(x.id) === mid);
-    if (!existsInInfra && !existsInPlac) continue;
-
-    const m = manual[mid];
-    if (m && Number.isFinite(m.x) && Number.isFinite(m.y)) {
-      map.set(mid, { x: m.x, y: m.y, label: mid, kind: "infra", zone: a.zone });
-      continue;
-    }
-
-    // offset cercano
-    map.set(mid, {
-      x: a.x + 90,
-      y: a.y + 28,
-      label: "CERRADURA / GARAJE",
-      kind: "infra",
-      zone: a.zone,
-      _virtualNear: a,
-    });
-  }
-
   return map;
 }
 
 function _renderPreviewSvg(result) {
-  // ✅ Enriquecemos para SVG (units + 2-wire)
   const r = _augmentResultForSvg(result);
 
   const coords = _buildSchematicCoordsFromResult(r);
@@ -317,37 +502,33 @@ function _renderPreviewSvg(result) {
 
   function _iconForNode(id, p) {
     if (p.kind === "infra") {
-      const rr = r || appState.diagramas.lastResult || {};
+      const rr = r || {};
       const infra = Array.isArray(rr.infra) ? rr.infra : [];
       const it = infra.find((x) => String(x.id) === String(id));
       const t = String(it?.type || "").toUpperCase();
 
-      if (t.includes("LOCK") || t.includes("GARAGE")) return "🔒";
+      if (t.includes("LOCK")) return "🔒";
       if (t.includes("ROUTER")) return "🌐";
       if (t.includes("CORE")) return "🧠";
       if (t.includes("SWITCH")) return "🔀";
       return "⬛";
     }
 
-    const rr = r || appState.diagramas.lastResult || {};
+    const rr = r || {};
     const placements = Array.isArray(rr.placements) ? rr.placements : [];
     const it = placements.find((x) => String(x.id) === String(id));
     const blk = String(it?.icon_block || it?.iconBlock || "").toLowerCase();
     const ref = String(it?.ref || "").toLowerCase();
-
     const s = `${blk} ${ref} ${String(p.label || "").toLowerCase()}`;
 
-    if (s.includes("ip style") || s.includes("ipstyle") || s.includes("ai_ip style") || s.includes("ai_ip_style"))
-      return "📟";
+    if (s.includes("ip style") || s.includes("ipstyle") || s.includes("ai_ip style") || s.includes("ai_ip_style")) return "📟";
     if (s.includes("verso")) return "📞";
     if (s.includes("ip one") || s.includes("ipone")) return "📞";
     if (s.includes("indoor") || s.includes("monitor") || s.includes("touch") || s.includes("clip")) return "🖥️";
-    if (s.includes("access") || s.includes("unit") || s.includes("reader") || s.includes("rfid") || s.includes("ble"))
-      return "🔑";
+    if (s.includes("access") || s.includes("unit") || s.includes("reader") || s.includes("rfid") || s.includes("ble")) return "🔑";
     if (s.includes("switch") || s.includes("poe")) return "🔀";
     if (s.includes("router") || s.includes("gateway")) return "🌐";
     if (s.includes("server") || s.includes("nvr")) return "🗄️";
-
     return "●";
   }
 
@@ -402,9 +583,7 @@ function _renderPreviewSvg(result) {
           : "";
 
       return `
-        <g class="diag-node" data-node-id="${_escapeHtmlAttr(id)}" style="cursor:${
-        appState.diagramas.previewEditMode ? "grab" : "default"
-      };">
+        <g class="diag-node" data-node-id="${_escapeHtmlAttr(id)}" style="cursor:${appState.diagramas.previewEditMode ? "grab" : "default"};">
           <circle class="diag-node-hit" cx="${p.x}" cy="${p.y}" r="18" fill="rgba(0,0,0,0)"></circle>
           <circle cx="${p.x}" cy="${p.y}" r="14" fill="${fill}" stroke="${stroke}" stroke-width="10"></circle>
           <text x="${p.x - 8}" y="${p.y + 7}" font-size="18" fill="white">${icon}</text>
@@ -428,14 +607,12 @@ function _renderPreviewSvg(result) {
         <div>
           <div style="font-weight:700;">Preview</div>
           <div class="muted" style="font-size:12px;">
-            Esquema por zonas (coords). Cat6 en azul · 2 hilos (cerradura/garaje) en discontinuo.
+            Cat6 en azul · 2 hilos (cerradura/garaje por zona) en discontinuo.
             ${appState.diagramas.previewEditMode ? "Arrastra los nodos para fijar posición." : ""}
           </div>
         </div>
         <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-          <button id="btnDiagToggleEdit" class="btn btn-sm">${
-            appState.diagramas.previewEditMode ? "Salir edición" : "Editar posiciones"
-          }</button>
+          <button id="btnDiagToggleEdit" class="btn btn-sm">${appState.diagramas.previewEditMode ? "Salir edición" : "Editar posiciones"}</button>
           <button id="btnDiagResetLayout" class="btn btn-sm">Reset layout</button>
           <span class="chip">SVG</span>
         </div>
@@ -666,10 +843,7 @@ function _renderResult() {
 
   appState.diagramas._previewResult = appState.diagramas.lastResult;
 
-  // ✅ Preview enriquecido
   const preview = _renderPreviewSvg(appState.diagramas.lastResult);
-
-  // ✅ JSON visible también enriquecido (para que se vea 2W + lock)
   const enriched = _augmentResultForSvg(appState.diagramas.lastResult);
   const pretty = _escapeHtml(JSON.stringify(enriched, null, 2));
 
@@ -677,7 +851,7 @@ function _renderResult() {
     ${banner}
     <div class="mb-2" style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
       <span class="chip">Diseño</span>
-      <span class="muted">UTP Cat6 · 2 hilos cerradura/garaje</span>
+      <span class="muted">UTP Cat6 · 2 hilos a cerradura por zona (opcional)</span>
     </div>
 
     ${preview}
@@ -720,6 +894,7 @@ function diagLoadProjectRefs() {
 
   appState.diagramas.refs = Array.from(map.values()).sort((a, b) => a.ref.localeCompare(b.ref));
 
+  // asegura assignments por zona (zonas ya deben estar sincronizadas)
   appState.diagramas.assignments = appState.diagramas.assignments || {};
   for (const z of appState.diagramas.zones) {
     if (!Array.isArray(appState.diagramas.assignments[z.key])) {
@@ -752,31 +927,17 @@ function _dxfSectionToLines(sectionText) {
 }
 
 // ✅ TABLES mínimo CON handles (5) + owner (330)
-// (AutoCAD LT 2026 suele petar si APPID/LAYER/LTYPE/STYLE no llevan handle)
 function _buildMinimalTablesSection() {
-  let h = 0x100; // handles > 0
+  let h = 0x100;
   const nextH = () => (h++).toString(16).toUpperCase();
 
-  const TABLES_OWNER = nextH(); // handle ficticio "owner" de las tablas
+  const TABLES_OWNER = nextH();
 
   function tableStart(name, count) {
-    const th = nextH(); // table handle
+    const th = nextH();
     return {
       th,
-      lines: [
-        "0",
-        "TABLE",
-        "2",
-        name,
-        "5",
-        th,
-        "330",
-        TABLES_OWNER,
-        "100",
-        "AcDbSymbolTable",
-        "70",
-        String(count),
-      ],
+      lines: ["0", "TABLE", "2", name, "5", th, "330", TABLES_OWNER, "100", "AcDbSymbolTable", "70", String(count)],
     };
   }
 
@@ -786,142 +947,46 @@ function _buildMinimalTablesSection() {
 
   function appidRecord(tableHandle, appName) {
     const rh = nextH();
-    return [
-      "0",
-      "APPID",
-      "5",
-      rh,
-      "330",
-      tableHandle,
-      "100",
-      "AcDbSymbolTableRecord",
-      "100",
-      "AcDbRegAppTableRecord",
-      "2",
-      appName,
-      "70",
-      "0",
-    ];
+    return ["0", "APPID", "5", rh, "330", tableHandle, "100", "AcDbSymbolTableRecord", "100", "AcDbRegAppTableRecord", "2", appName, "70", "0"];
   }
 
   function ltypeContinuous(tableHandle) {
     const rh = nextH();
-    return [
-      "0",
-      "LTYPE",
-      "5",
-      rh,
-      "330",
-      tableHandle,
-      "100",
-      "AcDbSymbolTableRecord",
-      "100",
-      "AcDbLinetypeTableRecord",
-      "2",
-      "CONTINUOUS",
-      "70",
-      "0",
-      "3",
-      "Solid line",
-      "72",
-      "65",
-      "73",
-      "0",
-      "40",
-      "0.0",
-    ];
+    return ["0", "LTYPE", "5", rh, "330", tableHandle, "100", "AcDbSymbolTableRecord", "100", "AcDbLinetypeTableRecord", "2", "CONTINUOUS", "70", "0", "3", "Solid line", "72", "65", "73", "0", "40", "0.0"];
   }
 
   function layer0(tableHandle) {
     const rh = nextH();
-    return [
-      "0",
-      "LAYER",
-      "5",
-      rh,
-      "330",
-      tableHandle,
-      "100",
-      "AcDbSymbolTableRecord",
-      "100",
-      "AcDbLayerTableRecord",
-      "2",
-      "0",
-      "70",
-      "0",
-      "62",
-      "7",
-      "6",
-      "CONTINUOUS",
-      // PlotStyleName / lineweight default
-      "370",
-      "0",
-      "390",
-      "0",
-    ];
+    return ["0", "LAYER", "5", rh, "330", tableHandle, "100", "AcDbSymbolTableRecord", "100", "AcDbLayerTableRecord", "2", "0", "70", "0", "62", "7", "6", "CONTINUOUS", "370", "0", "390", "0"];
   }
 
   function styleStandard(tableHandle) {
     const rh = nextH();
-    return [
-      "0",
-      "STYLE",
-      "5",
-      rh,
-      "330",
-      tableHandle,
-      "100",
-      "AcDbSymbolTableRecord",
-      "100",
-      "AcDbTextStyleTableRecord",
-      "2",
-      "STANDARD",
-      "70",
-      "0",
-      "40",
-      "0",
-      "41",
-      "1",
-      "50",
-      "0",
-      "71",
-      "0",
-      "42",
-      "2.5",
-      "3",
-      "txt",
-      "4",
-      "",
-    ];
+    return ["0", "STYLE", "5", rh, "330", tableHandle, "100", "AcDbSymbolTableRecord", "100", "AcDbTextStyleTableRecord", "2", "STANDARD", "70", "0", "40", "0", "41", "1", "50", "0", "71", "0", "42", "2.5", "3", "txt", "4", ""];
   }
 
   const out = ["0", "SECTION", "2", "TABLES"];
 
-  // APPID (ACAD)
   const appid = tableStart("APPID", 1);
   out.push(...appid.lines);
   out.push(...appidRecord(appid.th, "ACAD"));
   out.push(...endTab());
 
-  // LTYPE
   const ltype = tableStart("LTYPE", 1);
   out.push(...ltype.lines);
   out.push(...ltypeContinuous(ltype.th));
   out.push(...endTab());
 
-  // LAYER
   const layer = tableStart("LAYER", 1);
   out.push(...layer.lines);
   out.push(...layer0(layer.th));
   out.push(...endTab());
 
-  // STYLE
   const style = tableStart("STYLE", 1);
   out.push(...style.lines);
   out.push(...styleStandard(style.th));
   out.push(...endTab());
 
-  // VIEW (requerido por AutoCAD LT: SymbolTable:VIEW)
   const view = tableStart("VIEW", 0);
   out.push(...view.lines);
   out.push(...endTab());
@@ -932,26 +997,7 @@ function _buildMinimalTablesSection() {
 
 // ✅ HEADER mínimo (añade HANDSEED)
 function _buildMinimalHeaderSection() {
-  return [
-    "0",
-    "SECTION",
-    "2",
-    "HEADER",
-    "9",
-    "$ACADVER",
-    "1",
-    "AC1027",
-    "9",
-    "$INSUNITS",
-    "70",
-    "4", // 4=mm
-    "9",
-    "$HANDSEED",
-    "5",
-    "FFFF", // semilla alta para que AutoCAD no choque
-    "0",
-    "ENDSEC",
-  ].join("\n");
+  return ["0", "SECTION", "2", "HEADER", "9", "$ACADVER", "1", "AC1027", "9", "$INSUNITS", "70", "4", "9", "$HANDSEED", "5", "FFFF", "0", "ENDSEC"].join("\n");
 }
 
 // ✅ NUEVO: quita XDATA (1001 + 1000..1071) para no requerir APPID
@@ -1004,7 +1050,7 @@ function _dxfToPairs(dxfText) {
 // Extrae NOMBRES de bloques + nº de atributos (ATTDEF) por bloque (compat)
 function _dxfExtractBlocks(pairs) {
   const blocks = [];
-  const attrsByBlock = {}; // name -> { count, tags[] }
+  const attrsByBlock = {};
 
   let inBlocksSection = false;
   let inBlockEntity = false;
@@ -1235,6 +1281,11 @@ function _removeAssignment(zoneKey, id) {
   const idx = list.findIndex((x) => x.id === id);
   if (idx >= 0) list.splice(idx, 1);
 
+  // limpia coords manuales del nodo
+  try {
+    if (appState.diagramas.manualCoords && appState.diagramas.manualCoords[id]) delete appState.diagramas.manualCoords[id];
+  } catch (_) {}
+
   _clearDiagError();
   _renderDiagramasUI();
   _renderResult();
@@ -1265,6 +1316,7 @@ function _suggestIconBlockForItem(item, blocks) {
     { patterns: ["switch", "poe"], blockHints: ["switch", "poe"] },
     { patterns: ["router", "gateway"], blockHints: ["router", "gateway"] },
     { patterns: ["server", "nvr"], blockHints: ["server", "nvr"] },
+    { patterns: ["cerradura", "lock"], blockHints: ["lock", "cerradura"] },
   ];
   const bNorm = blocks.map((b) => ({ raw: b, n: _norm(b) }));
 
@@ -1321,12 +1373,12 @@ devices -> switches zona -> core -> router (en armario_cpd si existe).
 
 UNIDADES:
 - Respeta qty de cada placement (xN). Eso implica ports estimados.
-- En SVG se mostrará xN por dispositivo.
 
 CABLES:
 - Entre dispositivos de red usa UTP_CAT6.
-- Para videoportero/control accesos: SIEMPRE añade conexión "2_WIRE" hacia una "cerradura/garaje" (puede ser infra VIRTUAL_LOCK_GARAGE).
-  Ejemplo: {from:"<deviceId>", to:"V_LOCK_<deviceId>", type:"2_WIRE", note:"2 hilos a cerradura/garaje"}
+- Conexión a cerradura/garaje:
+  - Sólo se aplica si en esa zona el usuario ha definido una "cerradura" (zone_locks).
+  - En ese caso: desde videoportero/control accesos conecta "2_WIRE" al nodo ZLOCK_<zoneKey>.
 
 No inventes dispositivos finales: SOLO placements con source USER.
 Puedes proponer infraestructura VIRTUAL_* en infra.
@@ -1334,8 +1386,8 @@ Puedes proponer infraestructura VIRTUAL_* en infra.
 Devuelve EXACTAMENTE:
 {
   "placements":[{"id":"...","ref":"...","zone":"...","icon_block":"...","qty":1,"meta":{"source":"USER"}}],
-  "infra":[{"id":"...","type":"VIRTUAL_SWITCH_POE"|"VIRTUAL_SWITCH"|"VIRTUAL_CORE"|"VIRTUAL_ROUTER"|"VIRTUAL_LOCK_GARAGE","zone":"...","meta":{}}],
-  "connections":[{"from":"...","to":"...","type":"UTP_CAT6"|"2_WIRE","note":"..."}],
+  "infra":[{"id":"...","type":"VIRTUAL_SWITCH_POE"|"VIRTUAL_SWITCH"|"VIRTUAL_CORE"|"VIRTUAL_ROUTER","zone":"...","meta":{}}],
+  "connections":[{"from":"...","to":"...","type":"UTP_CAT6","note":"..."}],
   "summary":{"total_refs":0,"total_devices":0,"total_switches":0},
   "errors":[]
 }
@@ -1351,6 +1403,7 @@ function _getEffectiveInstructions() {
 function _buildSpecFromAssignments() {
   const zones = appState.diagramas.zones || [];
   const assignments = appState.diagramas.assignments || {};
+  const zoneLocks = appState.diagramas.zoneLocks || {};
 
   const placements = [];
   for (const z of zones) {
@@ -1370,10 +1423,18 @@ function _buildSpecFromAssignments() {
 
   if (!placements.length) throw new Error("No hay referencias asignadas. Arrastra refs a alguna zona.");
 
+  const zl = {};
+  for (const z of zones) {
+    const lk = zoneLocks[z.key];
+    if (!lk) continue;
+    zl[z.key] = { enabled: !!lk.enabled, ref: String(lk.ref || ""), descripcion: String(lk.descripcion || "") };
+  }
+
   return {
     cable: "UTP_CAT6",
     zones: zones.map((z) => ({ key: z.key, label: z.label })),
     placements,
+    zone_locks: zl,
     icon_library_blocks: (appState.diagramas.dxfBlocks || []).slice(0, 2000),
   };
 }
@@ -1391,7 +1452,7 @@ function _pickCoreZoneKey(spec) {
   const zones = Array.isArray(spec?.zones) ? spec.zones : [];
   const hasCpd = zones.some((z) => z.key === "armario_cpd");
   if (hasCpd) return "armario_cpd";
-  return zones.length ? zones[0].key : "entrada_principal";
+  return zones.length ? zones[0].key : "zona_principal";
 }
 
 function _localDesignFromSpec(spec) {
@@ -1401,7 +1462,7 @@ function _localDesignFromSpec(spec) {
   const byZone = {};
   for (const z of zones) byZone[z.key] = [];
   for (const p of placements) {
-    const zk = String(p.zone || zones[0]?.key || "entrada_principal");
+    const zk = String(p.zone || zones[0]?.key || "zona_principal");
     if (!byZone[zk]) byZone[zk] = [];
     byZone[zk].push(p);
   }
@@ -1425,7 +1486,6 @@ function _localDesignFromSpec(spec) {
     let ports = 0;
     let needsPoe = false;
     for (const p of list) {
-      // ✅ qty impacta ports estimados
       ports += Math.max(1, Number(p.qty || 1) || 1);
       if (_isPoeDevice(p)) needsPoe = true;
     }
@@ -1481,7 +1541,6 @@ function _localDesignFromSpec(spec) {
     errors: [],
   };
 
-  // ✅ Enriquecemos (2 hilos + nodo cerradura/garaje) para SVG
   return _augmentResultForSvg(base);
 }
 
@@ -1491,9 +1550,12 @@ function _localDesignFromSpec(spec) {
 function _buildHandlerEnvelope(payload) {
   const sectionKey = "diagramas_network";
   const docKey = "diagramas";
-  const sectionText = [payload.instructions, "", "INPUT_JSON:", JSON.stringify({ spec: payload.spec, network_rules: payload.network_rules })].join(
-    "\n"
-  );
+  const sectionText = [
+    payload.instructions,
+    "",
+    "INPUT_JSON:",
+    JSON.stringify({ spec: payload.spec, network_rules: payload.network_rules }),
+  ].join("\n");
 
   return {
     docKey,
@@ -1603,6 +1665,7 @@ async function diagGenerateDesign() {
       cable: "UTP_CAT6",
       topology: ["hierarchical_star", "star"],
       hints: { cpd_zone_key: "armario_cpd" },
+      zone_locks: spec.zone_locks || {},
     },
   };
 
@@ -1642,7 +1705,7 @@ async function diagGenerateDesign() {
       return;
     }
 
-    // ✅ Enriquecemos para SVG (units + 2-wire)
+    // ✅ Enriquecemos para SVG (qty + lock por zona + 2W)
     appState.diagramas.lastResult = _augmentResultForSvg(obj);
 
     appState.diagramas.lastError = null;
@@ -1671,7 +1734,6 @@ function diagExportSvg() {
     return;
   }
 
-  // ✅ Export siempre enriquecido (units + 2-wire)
   const r = _augmentResultForSvg(base);
 
   const coords = _buildSchematicCoordsFromResult(r);
@@ -1749,8 +1811,9 @@ function diagExportSvg() {
       const pos = coords.get(n.id);
       if (!pos) return "";
       const t = String(n.type || n.id || "");
-      const isLock = t.toUpperCase().includes("LOCK") || t.toUpperCase().includes("GARAGE");
-      const label = _escapeHtml(isLock ? "CERRADURA / GARAJE" : t);
+      const isLock = t === "LOCK_REF" || t.toUpperCase().includes("LOCK");
+      const metaRef = n?.meta?.ref ? ` (${String(n.meta.ref)})` : "";
+      const label = _escapeHtml(isLock ? `CERRADURA / GARAJE${metaRef}` : t);
       return `
       <g>
         <circle cx="${pos.x}" cy="${pos.y}" r="14" fill="#111827" opacity="0.95"></circle>
@@ -1803,7 +1866,6 @@ function diagExportSvg() {
 
 /* ======================================================
    6B) ✅ Export DXF (ASCII) SIN atributos
-   FIX: HEADER mínimo + TABLES mínimo + VIEW + STRIP XDATA en BLOCKS
  ====================================================== */
 function diagExportDxf() {
   const r = appState.diagramas.lastResult;
@@ -1873,31 +1935,9 @@ function diagExportDxf() {
 
   function dxfInsert(blockName, x, y, sx, sy, rotDeg) {
     const bn = String(blockName || "").replaceAll('"', "").trim();
-    ent.push(
-      "0",
-      "INSERT",
-      "8",
-      "0",
-      "2",
-      bn,
-      "10",
-      _fmt(x),
-      "20",
-      _fmt(y),
-      "30",
-      "0",
-      "41",
-      _fmt(sx),
-      "42",
-      _fmt(sy),
-      "43",
-      _fmt(1),
-      "50",
-      _fmt(rotDeg || 0)
-    );
+    ent.push("0", "INSERT", "8", "0", "2", bn, "10", _fmt(x), "20", _fmt(y), "30", "0", "41", _fmt(sx), "42", _fmt(sy), "43", _fmt(1), "50", _fmt(rotDeg || 0));
   }
 
-  // Título y cabeceras de zona
   const zones = appState.diagramas.zones || [];
   const colW = 280,
     startX = 80,
@@ -1905,7 +1945,6 @@ function diagExportDxf() {
   dxfText(80, 20, 14, "DIAGRAMA RED UTP CAT6 (ESQUEMA)");
   zones.forEach((z, i) => dxfText(startX + i * colW, titleY, 12, z.label));
 
-  // Cables
   for (const c of connections) {
     const a = coords.get(c.from);
     const b = coords.get(c.to);
@@ -1913,7 +1952,6 @@ function diagExportDxf() {
     dxfLine(a.x, a.y, b.x, b.y);
   }
 
-  // Placements (usa bloque seleccionado; si no, círculo)
   for (const p of placements) {
     const pos = coords.get(p.id);
     if (!pos) continue;
@@ -1921,16 +1959,12 @@ function diagExportDxf() {
     const wanted = String(p.icon_block || p.iconBlock || "").trim();
     const resolved = wanted ? blockMap.get(_normBlockName(wanted)) || "" : "";
 
-    if (resolved) {
-      dxfInsert(resolved, pos.x, pos.y, 1, 1, 0);
-    } else {
-      dxfCircle(pos.x, pos.y, 10);
-    }
+    if (resolved) dxfInsert(resolved, pos.x, pos.y, 1, 1, 0);
+    else dxfCircle(pos.x, pos.y, 10);
 
     dxfText(pos.x + 16, pos.y + 4, 10, String(p.ref || p.id || ""));
   }
 
-  // Infra (simple círculo + texto)
   for (const n of infra) {
     const pos = coords.get(n.id);
     if (!pos) continue;
@@ -1938,21 +1972,19 @@ function diagExportDxf() {
     dxfText(pos.x + 16, pos.y + 4, 10, String(n.type || n.id));
   }
 
-  // ✅ Construcción robusta “por líneas”
   const outLines = [];
 
   const header = _buildMinimalHeaderSection();
-  const tables = _buildMinimalTablesSection(); // incluye VIEW
+  const tables = _buildMinimalTablesSection();
 
-  const blocksSectionRaw = appState.diagramas.dxfBlocksSection; // requerido
+  const blocksSectionRaw = appState.diagramas.dxfBlocksSection;
   const blocksLines = _dxfSectionToLines(blocksSectionRaw);
-  const blocksCleanLines = _stripDxfXDataFromLines(blocksLines); // quita XDATA
+  const blocksCleanLines = _stripDxfXDataFromLines(blocksLines);
 
   outLines.push(..._dxfSectionToLines(header));
   outLines.push(..._dxfSectionToLines(tables));
   outLines.push(...blocksCleanLines);
 
-  // ENTITIES
   outLines.push("0", "SECTION", "2", "ENTITIES");
   outLines.push(...ent);
   outLines.push("0", "ENDSEC");
@@ -1994,7 +2026,7 @@ function diagExportDxf() {
 }
 
 /* ======================================================
-   7) Render UI + FIX buscador
+   7) Render UI + FIX buscador + zonas dinámicas
  ====================================================== */
 
 function _renderRefsList() {
@@ -2047,9 +2079,31 @@ function _renderDiagramasUI() {
 
   const s = appState.diagramas;
   const blocks = Array.isArray(s.dxfBlocks) ? s.dxfBlocks : [];
+  const refs = Array.isArray(s.refs) ? s.refs : [];
+  const zoneLocks = s.zoneLocks || {};
+
+  function _lockRefOptions(selectedRef) {
+    const sel = String(selectedRef || "");
+    // no forzamos filtro duro: el usuario puede elegir cualquier ref
+    return (
+      `<option value="">(sin cerradura)</option>` +
+      refs
+        .slice(0, 800)
+        .map((r) => {
+          const v = String(r.ref || "");
+          const isSel = v === sel ? " selected" : "";
+          const desc = r.descripcion ? ` · ${String(r.descripcion).slice(0, 60)}` : "";
+          return `<option value="${_escapeHtmlAttr(v)}"${isSel}>${_escapeHtml(v)}${_escapeHtml(desc)}</option>`;
+        })
+        .join("")
+    );
+  }
 
   function zoneHtml(z) {
     const list = Array.isArray(s.assignments[z.key]) ? s.assignments[z.key] : [];
+    const lk = zoneLocks[z.key] || { enabled: false, ref: "", descripcion: "" };
+    const isFixed = z.key === "armario_cpd" || !!z.fixed;
+
     const items = list
       .map((it) => {
         const blockOptions =
@@ -2072,15 +2126,11 @@ function _renderDiagramasUI() {
             <div class="grid mt-2" style="display:grid; grid-template-columns: 120px 1fr; gap:10px; align-items:center; min-width:0;">
               <div class="form-group" style="margin:0;">
                 <label style="font-size:12px;">Cantidad</label>
-                <input type="number" min="1" value="${Number(it.qty || 1)}" data-act="qty" data-zone="${_escapeHtmlAttr(
-          z.key
-        )}" data-id="${_escapeHtmlAttr(it.id)}"/>
+                <input type="number" min="1" value="${Number(it.qty || 1)}" data-act="qty" data-zone="${_escapeHtmlAttr(z.key)}" data-id="${_escapeHtmlAttr(it.id)}"/>
               </div>
               <div class="form-group" style="margin:0; min-width:0;">
                 <label style="font-size:12px;">Icono (BLOCK)</label>
-                <select style="max-width:100%;" data-act="icon" data-zone="${_escapeHtmlAttr(z.key)}" data-id="${_escapeHtmlAttr(
-          it.id
-        )}">
+                <select style="max-width:100%;" data-act="icon" data-zone="${_escapeHtmlAttr(z.key)}" data-id="${_escapeHtmlAttr(it.id)}">
                   ${blockOptions}
                 </select>
               </div>
@@ -2090,15 +2140,47 @@ function _renderDiagramasUI() {
       })
       .join("");
 
+    const headerActions = isFixed
+      ? ``
+      : `
+        <div style="display:flex; gap:8px; align-items:center;">
+          <button class="btn btn-sm" title="Renombrar" data-act="zone_rename" data-zone="${_escapeHtmlAttr(z.key)}">✏️</button>
+          <button class="btn btn-sm" title="Borrar zona" data-act="zone_delete" data-zone="${_escapeHtmlAttr(z.key)}">🗑️</button>
+        </div>
+      `;
+
     return `
-      <div class="card diag-dropzone" data-zone="${_escapeHtmlAttr(z.key)}" style="padding:12px; min-height:180px; min-width:0;">
-        <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
-          <div>
-            <div style="font-weight:700;">${_escapeHtml(z.label)}</div>
+      <div class="card diag-dropzone" data-zone="${_escapeHtmlAttr(z.key)}" style="padding:12px; min-height:220px; min-width:0;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
+          <div style="min-width:0;">
+            <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+              <div style="font-weight:700;">${_escapeHtml(z.label)}</div>
+              <span class="chip">${list.length}</span>
+            </div>
             <div class="muted" style="font-size:12px;">Suelta aquí referencias del presupuesto</div>
           </div>
-          <span class="chip">${list.length}</span>
+          ${headerActions}
         </div>
+
+        <div class="card mt-2" style="padding:10px;">
+          <div style="display:flex; justify-content:space-between; gap:10px; align-items:center;">
+            <div style="font-weight:700; font-size:12px;">Cerradura / garaje (2 hilos)</div>
+            <label style="display:flex; gap:8px; align-items:center; font-size:12px;">
+              <input type="checkbox" data-act="lock_enabled" data-zone="${_escapeHtmlAttr(z.key)}"${lk.enabled ? " checked" : ""}/>
+              Activar
+            </label>
+          </div>
+          <div class="muted" style="font-size:12px; margin-top:4px;">
+            Si activas, los videoporteros/controles de acceso de esta zona conectarán <b>2H</b> a esta cerradura.
+          </div>
+          <div class="form-group mt-2" style="margin:0;">
+            <label style="font-size:12px;">Referencia de cerradura</label>
+            <select data-act="lock_ref" data-zone="${_escapeHtmlAttr(z.key)}" style="max-width:100%;"${lk.enabled ? "" : " disabled"}>
+              ${_lockRefOptions(lk.ref)}
+            </select>
+          </div>
+        </div>
+
         ${items || `<div class="muted mt-2" style="font-size:12px;">(vacío)</div>`}
       </div>
     `;
@@ -2130,9 +2212,7 @@ function _renderDiagramasUI() {
           <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:10px;">
             <input id="diagDxfFile" type="file" accept=".dxf"/>
             <span class="muted" style="font-size:12px;">
-              ${
-                s.dxfFileName ? `Cargado: <b>${_escapeHtml(s.dxfFileName)}</b> · blocks: ${blocks.length}` : "Sin DXF cargado"
-              }
+              ${s.dxfFileName ? `Cargado: <b>${_escapeHtml(s.dxfFileName)}</b> · blocks: ${blocks.length}` : "Sin DXF cargado"}
             </span>
           </div>
         </div>
@@ -2143,8 +2223,7 @@ function _renderDiagramasUI() {
           <div style="min-width:0;">
             <h3 style="margin:0;">Ubicación de dispositivos</h3>
             <div class="muted" style="font-size:12px;">
-              Arrastra refs a zonas. AUTO sugiere iconos. Genera diseño, ajusta posiciones y exporta.
-              <b>Recomendado</b>: Exportar <b>SVG</b> (formato maestro).
+              Zonas = secciones/capítulos del presupuesto (CPD fijo). Arrastra refs, configura cerradura (opcional), genera diseño y exporta SVG.
             </div>
           </div>
           <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
@@ -2170,7 +2249,7 @@ function _renderDiagramasUI() {
           </div>
         </div>
 
-        <div class="grid mt-3" style="display:grid; grid-template-columns: 1fr 1fr; gap:14px; min-width:0;">
+        <div class="grid mt-3" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:14px; min-width:0;">
           ${s.zones.map(zoneHtml).join("")}
         </div>
 
@@ -2192,6 +2271,8 @@ function _renderDiagramasUI() {
   const btnReload = _el("btnDiagReloadRefs");
   if (btnReload) {
     btnReload.addEventListener("click", () => {
+      // re-sync por si han cambiado secciones/capítulos
+      diagSyncZonesFromBudget();
       diagLoadProjectRefs();
       _renderRefsList();
       _renderDiagramasUI();
@@ -2253,6 +2334,32 @@ function _renderDiagramasUI() {
         _updateAssignment(zoneKey, id, { iconBlock: String(node.value || "") });
         _renderResult();
       });
+    } else if (act === "zone_rename") {
+      node.addEventListener("click", () => _renameZone(zoneKey));
+    } else if (act === "zone_delete") {
+      node.addEventListener("click", () => _deleteZone(zoneKey));
+    } else if (act === "lock_enabled") {
+      node.addEventListener("change", () => {
+        appState.diagramas.zoneLocks = appState.diagramas.zoneLocks || {};
+        const lk = (appState.diagramas.zoneLocks[zoneKey] = appState.diagramas.zoneLocks[zoneKey] || { enabled: false, ref: "", descripcion: "" });
+        lk.enabled = !!node.checked;
+        _saveZoneLocksToStorage();
+        _clearDiagError();
+        _renderDiagramasUI();
+        _renderResult();
+      });
+    } else if (act === "lock_ref") {
+      node.addEventListener("change", () => {
+        const ref = String(node.value || "");
+        const src = (appState.diagramas.refs || []).find((r) => String(r.ref) === ref);
+        appState.diagramas.zoneLocks = appState.diagramas.zoneLocks || {};
+        const lk = (appState.diagramas.zoneLocks[zoneKey] = appState.diagramas.zoneLocks[zoneKey] || { enabled: false, ref: "", descripcion: "" });
+        lk.ref = ref;
+        lk.descripcion = src ? String(src.descripcion || "") : "";
+        _saveZoneLocksToStorage();
+        _clearDiagError();
+        _renderResult();
+      });
     }
   });
 }
@@ -2277,6 +2384,10 @@ function renderDiagramasView() {
     return;
   }
 
+  // storage
+  _loadZoneOverridesFromStorage();
+  _loadZoneLocksFromStorage();
+
   try {
     if (!appState.diagramas.dxfBlocksSection) {
       appState.diagramas.dxfFileName = localStorage.getItem("diag_dxf_fileName") || "";
@@ -2294,6 +2405,8 @@ function renderDiagramasView() {
     }
   } catch (_) {}
 
+  // ✅ Zonas dinámicas antes de cargar refs/asignaciones
+  diagSyncZonesFromBudget();
   diagLoadProjectRefs();
 
   root.innerHTML = `
@@ -2319,3 +2432,6 @@ window.diagGenerateDesign = diagGenerateDesign;
 window.diagAutoAssignIcons = diagAutoAssignIcons;
 window.diagExportSvg = diagExportSvg;
 window.diagExportDxf = diagExportDxf;
+
+// (opcional debug)
+window.diagSyncZonesFromBudget = diagSyncZonesFromBudget;
