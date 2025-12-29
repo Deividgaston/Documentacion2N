@@ -1,10 +1,11 @@
 // js/ui_diagramas.js
 // Vista: DIAGRAMAS (IA)
-// V2.12 (Hito 18):
-// - ✅ Zonas (ubicación de dispositivos) generadas desde SECCIONES del presupuesto
-// - ✅ Armario / CPD siempre fijo
-// - ✅ Zonas (excepto armario) con: renombrar (✏️) y borrar (🗑️)
-// - ✅ Cada sección puede tener (opcional) una referencia de CERRADURA: si se define, los "2 hilos" van a ESA cerradura (no Cat6)
+// V2.13 (Hito 19):
+// - ✅ Añadir ubicación manual (persistente) + mezcla con secciones del presupuesto
+// - ✅ Cerradura opcional (toggle) (antes siempre se incluía)
+// - ✅ Cerradura como BLOCK DXF (no desde refs del presupuesto)
+// - ✅ Armario/CPD: siempre switch POE (BLOCK seleccionable)
+// - ✅ Prompt: sin switches en cascada, minimizar saltos
 // - ✅ Mantiene SVG (MAESTRO), DXF sin atributos, preview drag, parse robusto, etc.
 
 // ======================================================
@@ -37,9 +38,12 @@ appState.diagramas = appState.diagramas || {
     { key: "armario_cpd", label: "Armario / CPD" },
   ],
   zonesDynamic: false, // true cuando vienen de secciones
-  zonesConfig: {}, // key -> { label?, deleted?, lockRef? }
+  zonesConfig: {}, // key -> { label?, deleted?, userAdded?, lockBlock?, cpdSwitchBlock? }
 
   assignments: {},
+
+  // ✅ NUEVO: incluir o no cerraduras (2H)
+  includeLocks: true,
 
   promptUiOpen: false,
   useCustomPrompt: false,
@@ -159,12 +163,24 @@ function _budgetLineSectionLabel(l) {
   return "";
 }
 
+function _getUserAddedZonesFromConfig() {
+  const cfg = (appState.diagramas.zonesConfig = appState.diagramas.zonesConfig || _loadZonesConfig());
+  const out = [];
+  for (const [key, zc] of Object.entries(cfg || {})) {
+    if (!zc || !zc.userAdded) continue;
+    if (zc.deleted) continue;
+    if (key === "armario_cpd") continue;
+    const label = _strip(zc.label) || key;
+    out.push({ key, label });
+  }
+  // orden estable por fecha embebida en key si existe (custom_169...)
+  out.sort((a, b) => String(a.key).localeCompare(String(b.key)));
+  return out;
+}
+
 function _buildZonesFromBudgetSections() {
   const presu = appState?.presupuesto;
   const lineas = Array.isArray(presu?.lineas) ? presu.lineas : [];
-
-  // si no hay lineas, no forzamos dinámico
-  if (!lineas.length) return null;
 
   const cfg = (appState.diagramas.zonesConfig = appState.diagramas.zonesConfig || _loadZonesConfig());
 
@@ -180,35 +196,73 @@ function _buildZonesFromBudgetSections() {
     labels.push(lab);
   }
 
-  // si no detectamos secciones, no cambiamos
-  if (!labels.length) return null;
-
   const out = [];
   const usedKeys = new Set();
 
-  for (const lab of labels) {
-    let base = _normKey(lab);
-    if (!base) base = "seccion";
-    let key = `sec_${base}`;
-    let i = 2;
-    while (usedKeys.has(key) || key === "armario_cpd") {
-      key = `sec_${base}_${i++}`;
+  // 1) zonas desde secciones (si hay)
+  if (labels.length) {
+    for (const lab of labels) {
+      let base = _normKey(lab);
+      if (!base) base = "seccion";
+      let key = `sec_${base}`;
+      let i = 2;
+      while (usedKeys.has(key) || key === "armario_cpd") {
+        key = `sec_${base}_${i++}`;
+      }
+      usedKeys.add(key);
+
+      const zc = cfg[key] || {};
+      if (zc.deleted) continue;
+
+      out.push({
+        key,
+        label: _strip(zc.label) || lab,
+      });
     }
-    usedKeys.add(key);
-
-    const zc = cfg[key] || {};
-    if (zc.deleted) continue;
-
-    out.push({
-      key,
-      label: _strip(zc.label) || lab,
-    });
   }
+
+  // 2) zonas manuales (persistentes)
+  const manual = _getUserAddedZonesFromConfig();
+  for (const z of manual) {
+    if (!z || !z.key) continue;
+    if (usedKeys.has(z.key)) continue;
+    usedKeys.add(z.key);
+    out.push({ key: z.key, label: z.label });
+  }
+
+  // Si no hay nada (ni secciones ni manuales) no forzamos dinámico
+  if (!out.length) return null;
 
   // armario fijo siempre al final
   out.push({ key: "armario_cpd", label: "Armario / CPD" });
 
   return out;
+}
+
+function _addZoneManual() {
+  const name = _strip(prompt("Nombre de la nueva ubicación:", ""));
+  if (!name) return;
+
+  const key = `custom_${Date.now()}`;
+  _setZoneConfig(key, { label: name, userAdded: true, deleted: false });
+
+  // Inserta antes de armario si existe
+  const zones = appState.diagramas.zones || [];
+  const idxArm = zones.findIndex((z) => z.key === "armario_cpd");
+  const zObj = { key, label: name };
+
+  if (idxArm >= 0) zones.splice(idxArm, 0, zObj);
+  else zones.push(zObj);
+
+  appState.diagramas.zones = zones;
+
+  // asegura assignments
+  appState.diagramas.assignments = appState.diagramas.assignments || {};
+  if (!Array.isArray(appState.diagramas.assignments[key])) appState.diagramas.assignments[key] = [];
+
+  _clearDiagError();
+  _renderDiagramasUI();
+  _renderResult();
 }
 
 function _renameZone(zoneKey) {
@@ -254,10 +308,17 @@ function _deleteZone(zoneKey) {
   _renderResult();
 }
 
-function _setZoneLockRef(zoneKey, ref) {
+// ✅ cerradura como BLOCK DXF (no refs)
+function _setZoneLockBlock(zoneKey, blockName) {
   if (!zoneKey || zoneKey === "armario_cpd") return;
-  const r = _strip(ref);
-  _setZoneConfig(zoneKey, { lockRef: r || "" });
+  const b = _strip(blockName);
+  _setZoneConfig(zoneKey, { lockBlock: b || "" });
+  _clearDiagError();
+}
+
+function _setCpdSwitchBlock(blockName) {
+  const b = _strip(blockName);
+  _setZoneConfig("armario_cpd", { cpdSwitchBlock: b || "" });
   _clearDiagError();
 }
 
@@ -309,8 +370,9 @@ function _cloneDeepJson(x) {
 
 // Enriquecemos un resultado para SVG/preview:
 // - asegura qty en placements
-// - añade nodo virtual "CERRADURA / GARAJE" por cada device que lo requiera
-// - ✅ NUEVO: si la zona tiene lockRef configurada, los 2 hilos van a ESA cerradura (por zona)
+// - añade nodo virtual "CERRADURA / GARAJE" + 2_WIRE si procede
+// - ✅ NUEVO: SOLO si includeLocks === true
+// - ✅ NUEVO: cerradura por zona se define por lockBlock (BLOCK DXF)
 function _augmentResultForSvg(baseResult) {
   const r0 = baseResult;
   if (!r0 || typeof r0 !== "object") return r0;
@@ -339,72 +401,96 @@ function _augmentResultForSvg(baseResult) {
       .map((c) => `${String(c.from)}__${String(c.to)}`)
   );
 
-  // ✅ Mapa zona -> lockRef (si existe)
-  const zones = appState.diagramas.zones || [];
-  const zoneLock = new Map(); // zoneKey -> { ref, nodeId }
-  for (const z of zones) {
-    if (!z || z.key === "armario_cpd") continue;
-    const cfg = _getZoneConfig(z.key);
-    const lockRef = _strip(cfg.lockRef);
-    if (!lockRef) continue;
-
-    const nodeId = `V_LOCK_ZONE_${String(z.key)}`;
-    zoneLock.set(String(z.key), { ref: lockRef, nodeId });
-  }
-
-  // ✅ Si hay lock por zona: asegúralo en infra
-  for (const [zoneKey, info] of zoneLock.entries()) {
-    if (!existingNodeIds.has(info.nodeId)) {
-      infra.push({
-        id: info.nodeId,
-        type: "VIRTUAL_LOCK_GARAGE",
-        zone: zoneKey,
-        meta: { role: "LOCK_GARAGE", ref: info.ref, scope: "ZONE" },
-      });
-      existingNodeIds.add(info.nodeId);
-    } else {
-      // si ya existe, intenta enriquecer meta/ref sin romper
-      const it = infra.find((n) => String(n.id) === String(info.nodeId));
-      if (it) {
-        it.type = it.type || "VIRTUAL_LOCK_GARAGE";
-        it.zone = it.zone || zoneKey;
-        it.meta = Object.assign({}, it.meta || {}, { ref: info.ref, scope: "ZONE" });
-      }
+  // ✅ Siempre: asegurar SW POE en armario
+  const cpdCfg = _getZoneConfig("armario_cpd");
+  const cpdSwId = "V_CPD_SW_POE";
+  if (!existingNodeIds.has(cpdSwId)) {
+    infra.push({
+      id: cpdSwId,
+      type: "VIRTUAL_SWITCH_POE",
+      zone: "armario_cpd",
+      meta: {
+        role: "CPD_SWITCH_POE",
+        icon_block: _strip(cpdCfg.cpdSwitchBlock || ""),
+      },
+    });
+    existingNodeIds.add(cpdSwId);
+  } else {
+    const it = infra.find((n) => String(n.id) === cpdSwId);
+    if (it) {
+      it.type = it.type || "VIRTUAL_SWITCH_POE";
+      it.zone = it.zone || "armario_cpd";
+      it.meta = Object.assign({}, it.meta || {}, { icon_block: _strip(cpdCfg.cpdSwitchBlock || it?.meta?.icon_block || "") });
     }
   }
 
-  // Añade cerradura/garaje + 2 hilos
-  for (const p of placements) {
-    if (!_isDoorWireDevice(p)) continue;
+  // ✅ Cerraduras solo si includeLocks
+  if (appState.diagramas.includeLocks) {
+    // mapa zona -> lockBlock
+    const zones = appState.diagramas.zones || [];
+    const zoneLock = new Map(); // zoneKey -> { block, nodeId }
+    for (const z of zones) {
+      if (!z || z.key === "armario_cpd") continue;
+      const cfg = _getZoneConfig(z.key);
+      const lockBlock = _strip(cfg.lockBlock);
+      if (!lockBlock) continue;
 
-    const zoneKey = String(p.zone || "entrada_principal");
-    const zLock = zoneLock.get(zoneKey);
+      const nodeId = `V_LOCK_ZONE_${String(z.key)}`;
+      zoneLock.set(String(z.key), { block: lockBlock, nodeId });
+    }
 
-    // target lock id:
-    const lockId = zLock ? zLock.nodeId : `V_LOCK_${String(p.id)}`;
-
-    // si NO hay lock por zona, crea lock por dispositivo (comportamiento anterior)
-    if (!zLock) {
-      if (!existingNodeIds.has(lockId)) {
+    // asegurar locks por zona en infra
+    for (const [zoneKey, info] of zoneLock.entries()) {
+      if (!existingNodeIds.has(info.nodeId)) {
         infra.push({
-          id: lockId,
+          id: info.nodeId,
           type: "VIRTUAL_LOCK_GARAGE",
           zone: zoneKey,
-          meta: { role: "LOCK_GARAGE", for: String(p.id), scope: "DEVICE" },
+          meta: { role: "LOCK_GARAGE", scope: "ZONE", icon_block: info.block },
         });
-        existingNodeIds.add(lockId);
+        existingNodeIds.add(info.nodeId);
+      } else {
+        const it = infra.find((n) => String(n.id) === String(info.nodeId));
+        if (it) {
+          it.type = it.type || "VIRTUAL_LOCK_GARAGE";
+          it.zone = it.zone || zoneKey;
+          it.meta = Object.assign({}, it.meta || {}, { scope: "ZONE", icon_block: info.block });
+        }
       }
     }
 
-    const key = `${String(p.id)}__${lockId}`;
-    if (!existing2w.has(key)) {
-      connections.push({
-        from: String(p.id),
-        to: lockId,
-        type: "2_WIRE",
-        note: zLock ? `2 hilos a cerradura (${zLock.ref})` : "2 hilos a cerradura/garaje",
-      });
-      existing2w.add(key);
+    // añade cerradura + 2 hilos
+    for (const p of placements) {
+      if (!_isDoorWireDevice(p)) continue;
+
+      const zoneKey = String(p.zone || "entrada_principal");
+      const zLock = zoneLock.get(zoneKey);
+
+      const lockId = zLock ? zLock.nodeId : `V_LOCK_${String(p.id)}`;
+
+      // si NO hay lock por zona, crea lock por dispositivo (genérico)
+      if (!zLock) {
+        if (!existingNodeIds.has(lockId)) {
+          infra.push({
+            id: lockId,
+            type: "VIRTUAL_LOCK_GARAGE",
+            zone: zoneKey,
+            meta: { role: "LOCK_GARAGE", for: String(p.id), scope: "DEVICE", icon_block: "" },
+          });
+          existingNodeIds.add(lockId);
+        }
+      }
+
+      const key = `${String(p.id)}__${lockId}`;
+      if (!existing2w.has(key)) {
+        connections.push({
+          from: String(p.id),
+          to: lockId,
+          type: "2_WIRE",
+          note: zLock ? "2 hilos a cerradura (zona)" : "2 hilos a cerradura/garaje",
+        });
+        existing2w.add(key);
+      }
     }
   }
 
@@ -473,11 +559,10 @@ function _buildSchematicCoordsFromResult(result) {
   for (const n of infra) {
     const zone = String(n.zone || "armario_cpd");
 
-    // ✅ Si es lock por zona y tiene ref, lo mostramos
     const t = String(n.type || n.id || "");
     const isLock = t.toUpperCase().includes("LOCK") || t.toUpperCase().includes("GARAGE");
-    const lockRef = isLock ? _strip(n?.meta?.ref || "") : "";
-    const label = isLock ? (lockRef ? `CERRADURA (${lockRef})` : "CERRADURA / GARAJE") : `${n.type || n.id || ""}`;
+    const isCpdSw = t.toUpperCase().includes("SWITCH") && String(n?.meta?.role || "").toUpperCase().includes("CPD");
+    const label = isCpdSw ? "SWITCH POE (CPD)" : isLock ? "CERRADURA / GARAJE" : `${n.type || n.id || ""}`;
 
     const m = manual[n.id];
     const pos =
@@ -488,19 +573,17 @@ function _buildSchematicCoordsFromResult(result) {
     map.set(n.id, { x: pos.x, y: pos.y, label, kind: "infra", zone });
   }
 
-  // ✅ Coloca nodos virtuales "cerradura/garaje" cerca del dispositivo (si existe conexión 2_WIRE)
-  // (si el nodo ya tiene coords manuales o ya está en map, no tocamos)
+  // coloca nodos virtuales "cerradura/garaje" cerca del dispositivo (si existe conexión 2_WIRE)
   for (const c of connections) {
     if (String(c?.type || "").toUpperCase() !== "2_WIRE") continue;
     const a = map.get(c.from);
     const b = map.get(c.to);
-    if (b) continue; // ya existe
+    if (b) continue;
     if (!a) continue;
 
     const mid = String(c.to || "");
     if (!mid) continue;
 
-    // Sólo si ese "to" existe como infra/placement en el result
     const existsInInfra = infra.some((x) => String(x.id) === mid);
     const existsInPlac = placements.some((x) => String(x.id) === mid);
     if (!existsInInfra && !existsInPlac) continue;
@@ -511,7 +594,6 @@ function _buildSchematicCoordsFromResult(result) {
       continue;
     }
 
-    // offset cercano
     map.set(mid, {
       x: a.x + 90,
       y: a.y + 28,
@@ -526,7 +608,6 @@ function _buildSchematicCoordsFromResult(result) {
 }
 
 function _renderPreviewSvg(result) {
-  // ✅ Enriquecemos para SVG (units + 2-wire)
   const r = _augmentResultForSvg(result);
 
   const coords = _buildSchematicCoordsFromResult(r);
@@ -542,8 +623,10 @@ function _renderPreviewSvg(result) {
       const infra = Array.isArray(rr.infra) ? rr.infra : [];
       const it = infra.find((x) => String(x.id) === String(id));
       const t = String(it?.type || "").toUpperCase();
+      const role = String(it?.meta?.role || "").toUpperCase();
 
       if (t.includes("LOCK") || t.includes("GARAGE")) return "🔒";
+      if (role.includes("CPD") && t.includes("SWITCH")) return "🔀";
       if (t.includes("ROUTER")) return "🌐";
       if (t.includes("CORE")) return "🧠";
       if (t.includes("SWITCH")) return "🔀";
@@ -626,7 +709,6 @@ function _renderPreviewSvg(result) {
         <g class="diag-node" data-node-id="${_escapeHtmlAttr(id)}" style="cursor:${
         appState.diagramas.previewEditMode ? "grab" : "default"
       };">
-
           <circle class="diag-node-hit" cx="${p.x}" cy="${p.y}" r="18" fill="rgba(0,0,0,0)"></circle>
           <circle cx="${p.x}" cy="${p.y}" r="14" fill="${fill}" stroke="${stroke}" stroke-width="10"></circle>
           <text x="${p.x - 8}" y="${p.y + 7}" font-size="18" fill="white">${icon}</text>
@@ -650,7 +732,7 @@ function _renderPreviewSvg(result) {
         <div>
           <div style="font-weight:700;">Preview</div>
           <div class="muted" style="font-size:12px;">
-            Esquema por zonas (coords). Cat6 en azul · 2 hilos (cerradura/garaje) en discontinuo.
+            Esquema por zonas (coords). Cat6 en azul · 2 hilos (si activo) en discontinuo.
             ${appState.diagramas.previewEditMode ? "Arrastra los nodos para fijar posición." : ""}
           </div>
         </div>
@@ -684,7 +766,6 @@ function _renderPreviewSvg(result) {
 }
 
 // Drag controller para SVG
-// (guard global para evitar 'already been declared' si el script se evalúa 2 veces)
 var _diagDrag = (window._diagDrag = window._diagDrag || { active: false, nodeId: null, offsetX: 0, offsetY: 0 });
 
 function _svgPoint(svg, clientX, clientY) {
@@ -888,10 +969,8 @@ function _renderResult() {
 
   appState.diagramas._previewResult = appState.diagramas.lastResult;
 
-  // ✅ Preview enriquecido
   const preview = _renderPreviewSvg(appState.diagramas.lastResult);
 
-  // ✅ JSON visible también enriquecido (para que se vea 2W + lock)
   const enriched = _augmentResultForSvg(appState.diagramas.lastResult);
   const pretty = _escapeHtml(JSON.stringify(enriched, null, 2));
 
@@ -899,7 +978,7 @@ function _renderResult() {
     ${banner}
     <div class="mb-2" style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
       <span class="chip">Diseño</span>
-      <span class="muted">UTP Cat6 · 2 hilos cerradura/garaje</span>
+      <span class="muted">UTP Cat6 · 2 hilos (si activo)</span>
     </div>
 
     ${preview}
@@ -943,8 +1022,7 @@ function diagLoadProjectRefs() {
 
   appState.diagramas.refs = Array.from(map.values()).sort((a, b) => a.ref.localeCompare(b.ref));
 
-  // 2) zones desde secciones del presupuesto (cada sección = ubicación)
-  //    + armario fijo
+  // 2) zones desde secciones del presupuesto + manuales
   appState.diagramas.zonesConfig = appState.diagramas.zonesConfig || _loadZonesConfig();
 
   const dyn = _buildZonesFromBudgetSections();
@@ -952,7 +1030,6 @@ function diagLoadProjectRefs() {
     appState.diagramas.zones = dyn;
     appState.diagramas.zonesDynamic = true;
   } else {
-    // si no hay secciones detectables, conserva lo que haya
     appState.diagramas.zonesDynamic = false;
   }
 
@@ -997,7 +1074,6 @@ function _dxfSectionToLines(sectionText) {
 }
 
 // ✅ TABLES mínimo CON handles (5) + owner (330)
-// (AutoCAD LT 2026 suele petar si APPID/LAYER/LTYPE/STYLE no llevan handle)
 function _buildMinimalTablesSection() {
   let h = 0x100; // handles > 0
   const nextH = () => (h++).toString(16).toUpperCase();
@@ -1098,7 +1174,6 @@ function _buildMinimalTablesSection() {
       "7",
       "6",
       "CONTINUOUS",
-      // PlotStyleName / lineweight default
       "370",
       "0",
       "390",
@@ -1166,7 +1241,7 @@ function _buildMinimalTablesSection() {
   out.push(...styleStandard(style.th));
   out.push(...endTab());
 
-  // VIEW (requerido por AutoCAD LT: SymbolTable:VIEW)
+  // VIEW (requerido por AutoCAD LT)
   const view = tableStart("VIEW", 0);
   out.push(...view.lines);
   out.push(...endTab());
@@ -1193,7 +1268,7 @@ function _buildMinimalHeaderSection() {
     "9",
     "$HANDSEED",
     "5",
-    "FFFF", // semilla alta para que AutoCAD no choque
+    "FFFF",
     "0",
     "ENDSEC",
   ].join("\n");
@@ -1510,6 +1585,7 @@ function _suggestIconBlockForItem(item, blocks) {
     { patterns: ["switch", "poe"], blockHints: ["switch", "poe"] },
     { patterns: ["router", "gateway"], blockHints: ["router", "gateway"] },
     { patterns: ["server", "nvr"], blockHints: ["server", "nvr"] },
+    { patterns: ["cerradura", "lock", "garage"], blockHints: ["lock", "cerradura", "garage"] },
   ];
   const bNorm = blocks.map((b) => ({ raw: b, n: _norm(b) }));
 
@@ -1549,6 +1625,13 @@ function diagAutoAssignIcons() {
     }
   }
 
+  // sugerencia para CPD switch
+  const cpdCfg = _getZoneConfig("armario_cpd");
+  if (!cpdCfg.cpdSwitchBlock) {
+    const sugSw = blocks.find((b) => _norm(b).includes("switch") && _norm(b).includes("poe")) || "";
+    if (sugSw) _setCpdSwitchBlock(sugSw);
+  }
+
   _renderDiagramasUI();
   _renderResult();
 }
@@ -1559,10 +1642,12 @@ function diagAutoAssignIcons() {
 function _defaultInstructions() {
   return `
 RESPONDE ÚNICAMENTE CON JSON (sin markdown, sin \`\`\`, sin texto).
-Tu respuesta DEBE empezar por "{" y terminar por "}".  
+Tu respuesta DEBE empezar por "{" y terminar por "}".
 
-Objetivo: Diseñar una red eficiente UTP_CAT6 con estrella jerárquica:
-devices -> switches zona -> core -> router (en armario_cpd si existe).
+Objetivo: Diseñar una red eficiente UTP_CAT6 minimizando saltos (latencia):
+- Topología: devices -> switch de zona -> CORE (CPD) -> ROUTER
+- PROHIBIDO: switches en cascada (NO switch->switch->switch). Cada switch de zona debe ir DIRECTO al CORE.
+- Minimiza hops: máximo 2 saltos desde device hasta core (device->switch->core).
 
 UNIDADES:
 - Respeta qty de cada placement (xN). Eso implica ports estimados.
@@ -1570,11 +1655,11 @@ UNIDADES:
 
 CABLES:
 - Entre dispositivos de red usa UTP_CAT6.
-- Para videoportero/control accesos: SIEMPRE añade conexión "2_WIRE" hacia una "cerradura/garaje".
-  Si el input incluye "zone_locks", usa el lock por zona (si existe) como destino 2_WIRE.
-  Si no hay lock por zona, puedes crear infra VIRTUAL_LOCK_GARAGE.
+- Para videoportero/control accesos: añade conexión "2_WIRE" SOLO si include_locks=true.
+  Si el input incluye "zone_locks" (lock_block por zona), usa ese lock por zona.
+  Si no hay lock por zona y include_locks=true, puedes crear infra VIRTUAL_LOCK_GARAGE genérico.
 
-No inventes dispositivos finales: SOLO placements con source USER.
+NO inventes dispositivos finales: SOLO placements con source USER.
 Puedes proponer infraestructura VIRTUAL_* en infra.
 
 Devuelve EXACTAMENTE:
@@ -1600,9 +1685,9 @@ function _buildZoneLocksPayload() {
   for (const z of zones) {
     if (!z || z.key === "armario_cpd") continue;
     const cfg = _getZoneConfig(z.key);
-    const lockRef = _strip(cfg.lockRef);
-    if (!lockRef) continue;
-    out.push({ zone: z.key, lock_ref: lockRef });
+    const lockBlock = _strip(cfg.lockBlock);
+    if (!lockBlock) continue;
+    out.push({ zone: z.key, lock_block: lockBlock });
   }
   return out;
 }
@@ -1632,7 +1717,12 @@ function _buildSpecFromAssignments() {
   return {
     cable: "UTP_CAT6",
     zones: zones.map((z) => ({ key: z.key, label: z.label })),
-    zone_locks: _buildZoneLocksPayload(), // ✅ NUEVO
+    include_locks: !!appState.diagramas.includeLocks,
+    zone_locks: _buildZoneLocksPayload(),
+    cpd: {
+      zone_key: "armario_cpd",
+      switch_poe_block: _strip(_getZoneConfig("armario_cpd")?.cpdSwitchBlock || ""),
+    },
     placements,
     icon_library_blocks: (appState.diagramas.dxfBlocks || []).slice(0, 2000),
   };
@@ -1677,19 +1767,38 @@ function _localDesignFromSpec(spec) {
   infra.push({ id: coreId, type: "VIRTUAL_CORE", zone: coreZone, meta: { role: "CORE" } });
   connections.push({ from: coreId, to: routerId, type: "UTP_CAT6", note: "Uplink core -> router" });
 
-  let totalSwitches = 0;
+  // ✅ CPD Switch POE siempre
+  const cpdSwId = "V_CPD_SW_POE";
+  infra.push({
+    id: cpdSwId,
+    type: "VIRTUAL_SWITCH_POE",
+    zone: "armario_cpd",
+    meta: { role: "CPD_SWITCH_POE", icon_block: _strip(spec?.cpd?.switch_poe_block || "") },
+  });
+  connections.push({ from: cpdSwId, to: coreId, type: "UTP_CAT6", note: "CPD switch -> core" });
+
+  let totalSwitches = 1; // CPD sw
+
   for (const z of zones) {
     const list = byZone[z.key] || [];
     if (!list.length) continue;
 
+    // Armario: cuelga todo del switch POE fijo (sin cascadas)
+    if (z.key === "armario_cpd") {
+      for (const p of list) {
+        connections.push({ from: p.id, to: cpdSwId, type: "UTP_CAT6", note: "Device -> CPD switch" });
+      }
+      continue;
+    }
+
     let ports = 0;
     let needsPoe = false;
     for (const p of list) {
-      // ✅ qty impacta ports estimados
       ports += Math.max(1, Number(p.qty || 1) || 1);
       if (_isPoeDevice(p)) needsPoe = true;
     }
 
+    // sin cascada: 1 switch por zona (si >24, lo dejamos en 2 pero ambos directos al core)
     const switchesNeeded = ports > 24 ? 2 : 1;
     for (let i = 1; i <= switchesNeeded; i++) {
       totalSwitches += 1;
@@ -1705,16 +1814,11 @@ function _localDesignFromSpec(spec) {
         from: swId,
         to: coreId,
         type: "UTP_CAT6",
-        note: z.key === coreZone ? "Switch local -> core" : "Uplink zona -> core",
+        note: "Uplink zona -> core (sin cascada)",
       });
 
       for (const p of list) {
-        connections.push({
-          from: p.id,
-          to: swId,
-          type: "UTP_CAT6",
-          note: "Device -> switch zona",
-        });
+        connections.push({ from: p.id, to: swId, type: "UTP_CAT6", note: "Device -> switch zona" });
       }
     }
   }
@@ -1741,7 +1845,6 @@ function _localDesignFromSpec(spec) {
     errors: [],
   };
 
-  // ✅ Enriquecemos (2 hilos + nodo cerradura/garaje) para SVG (con lock por zona si existe)
   return _augmentResultForSvg(base);
 }
 
@@ -1770,7 +1873,7 @@ function _buildHandlerEnvelope(payload) {
     content: sectionText,
     text: sectionText,
 
-    mode: "diagram_network_v5_zones_cpd",
+    mode: "diagram_network_v6_blocks_cpd_nocascade",
     instructions: payload.instructions,
     spec: payload.spec,
     network_rules: payload.network_rules,
@@ -1847,6 +1950,10 @@ async function diagGenerateDesign() {
     ? String(_el("diagPromptText").value || "")
     : appState.diagramas.customPromptText;
 
+  // ✅ lee toggle includeLocks desde UI si existe
+  const chkLocks = _el("diagIncludeLocks");
+  if (chkLocks) appState.diagramas.includeLocks = !!chkLocks.checked;
+
   let spec;
   try {
     spec = _buildSpecFromAssignments();
@@ -1862,7 +1969,7 @@ async function diagGenerateDesign() {
     network_rules: {
       cable: "UTP_CAT6",
       topology: ["hierarchical_star", "star"],
-      hints: { cpd_zone_key: "armario_cpd" },
+      hints: { cpd_zone_key: "armario_cpd", avoid_cascaded_switches: true, minimize_hops: true },
     },
   };
 
@@ -1902,7 +2009,7 @@ async function diagGenerateDesign() {
       return;
     }
 
-    // ✅ Enriquecemos para SVG (units + 2-wire) (con lock por zona si existe)
+    // ✅ Enriquecemos para SVG (includeLocks + CPD sw)
     appState.diagramas.lastResult = _augmentResultForSvg(obj);
 
     appState.diagramas.lastError = null;
@@ -1931,7 +2038,6 @@ function diagExportSvg() {
     return;
   }
 
-  // ✅ Export siempre enriquecido (units + 2-wire)
   const r = _augmentResultForSvg(base);
 
   const coords = _buildSchematicCoordsFromResult(r);
@@ -2009,9 +2115,10 @@ function diagExportSvg() {
       const pos = coords.get(n.id);
       if (!pos) return "";
       const t = String(n.type || n.id || "");
+      const role = String(n?.meta?.role || "");
       const isLock = t.toUpperCase().includes("LOCK") || t.toUpperCase().includes("GARAGE");
-      const lockRef = isLock ? _strip(n?.meta?.ref || "") : "";
-      const label = _escapeHtml(isLock ? (lockRef ? `CERRADURA (${lockRef})` : "CERRADURA / GARAJE") : t);
+      const isCpdSw = t.toUpperCase().includes("SWITCH") && role.toUpperCase().includes("CPD");
+      const label = _escapeHtml(isCpdSw ? "SWITCH POE (CPD)" : isLock ? "CERRADURA / GARAJE" : t);
       return `
       <g>
         <circle cx="${pos.x}" cy="${pos.y}" r="14" fill="#111827" opacity="0.95"></circle>
@@ -2021,7 +2128,7 @@ function diagExportSvg() {
     })
     .join("");
 
-  const title = `<text x="80" y="20" font-size="14" fill="#111827" font-family="Arial, sans-serif" font-weight="700">DIAGRAMA RED (UTP CAT6 + 2H)</text>`;
+  const title = `<text x="80" y="20" font-size="14" fill="#111827" font-family="Arial, sans-serif" font-weight="700">DIAGRAMA RED (UTP CAT6${appState.diagramas.includeLocks ? " + 2H" : ""})</text>`;
 
   const svgText =
     `<?xml version="1.0" encoding="UTF-8"?>\n` +
@@ -2031,7 +2138,7 @@ function diagExportSvg() {
     `</svg>\n`;
 
   const nameBase = (appState.diagramas.dxfFileName || "diagrama").replace(/\.dxf$/i, "");
-  const fileName = `${nameBase}_red_cat6_2h.svg`;
+  const fileName = `${nameBase}_red_cat6${appState.diagramas.includeLocks ? "_2h" : ""}.svg`;
 
   try {
     const blob = new Blob([svgText], { type: "image/svg+xml;charset=utf-8" });
@@ -2065,6 +2172,7 @@ function diagExportSvg() {
 /* ======================================================
    6B) ✅ Export DXF (ASCII) SIN atributos
    FIX: HEADER mínimo + TABLES mínimo + VIEW + STRIP XDATA en BLOCKS
+   ✅ NUEVO: infra con meta.icon_block -> INSERT si existe
  ====================================================== */
 function diagExportDxf() {
   const r = appState.diagramas.lastResult;
@@ -2163,7 +2271,7 @@ function diagExportDxf() {
   const colW = 280,
     startX = 80,
     titleY = 40;
-  dxfText(80, 20, 14, "DIAGRAMA RED UTP CAT6 (ESQUEMA)");
+  dxfText(80, 20, 14, `DIAGRAMA RED UTP CAT6${appState.diagramas.includeLocks ? " + 2H" : ""} (ESQUEMA)`);
   zones.forEach((z, i) => dxfText(startX + i * colW, titleY, 12, z.label));
 
   // Cables
@@ -2182,35 +2290,41 @@ function diagExportDxf() {
     const wanted = String(p.icon_block || p.iconBlock || "").trim();
     const resolved = wanted ? blockMap.get(_normBlockName(wanted)) || "" : "";
 
-    if (resolved) {
-      dxfInsert(resolved, pos.x, pos.y, 1, 1, 0);
-    } else {
-      dxfCircle(pos.x, pos.y, 10);
-    }
+    if (resolved) dxfInsert(resolved, pos.x, pos.y, 1, 1, 0);
+    else dxfCircle(pos.x, pos.y, 10);
 
     dxfText(pos.x + 16, pos.y + 4, 10, String(p.ref || p.id || ""));
   }
 
-  // Infra (simple círculo + texto)
+  // Infra (si meta.icon_block existe -> INSERT; si no, círculo)
   for (const n of infra) {
     const pos = coords.get(n.id);
     if (!pos) continue;
+
     const t = String(n.type || n.id || "");
+    const role = String(n?.meta?.role || "");
     const isLock = t.toUpperCase().includes("LOCK") || t.toUpperCase().includes("GARAGE");
-    const lockRef = isLock ? _strip(n?.meta?.ref || "") : "";
-    dxfCircle(pos.x, pos.y, 12);
-    dxfText(pos.x + 16, pos.y + 4, 10, isLock ? (lockRef ? `CERRADURA (${lockRef})` : "CERRADURA / GARAJE") : t);
+    const isCpdSw = t.toUpperCase().includes("SWITCH") && role.toUpperCase().includes("CPD");
+    const label = isCpdSw ? "SWITCH POE (CPD)" : isLock ? "CERRADURA / GARAJE" : t;
+
+    const wanted = _strip(n?.meta?.icon_block || "");
+    const resolved = wanted ? blockMap.get(_normBlockName(wanted)) || "" : "";
+
+    if (resolved) dxfInsert(resolved, pos.x, pos.y, 1, 1, 0);
+    else dxfCircle(pos.x, pos.y, 12);
+
+    dxfText(pos.x + 16, pos.y + 4, 10, label);
   }
 
   // ✅ Construcción robusta “por líneas”
   const outLines = [];
 
   const header = _buildMinimalHeaderSection();
-  const tables = _buildMinimalTablesSection(); // incluye VIEW
+  const tables = _buildMinimalTablesSection();
 
-  const blocksSectionRaw = appState.diagramas.dxfBlocksSection; // requerido
+  const blocksSectionRaw = appState.diagramas.dxfBlocksSection;
   const blocksLines = _dxfSectionToLines(blocksSectionRaw);
-  const blocksCleanLines = _stripDxfXDataFromLines(blocksLines); // quita XDATA
+  const blocksCleanLines = _stripDxfXDataFromLines(blocksLines);
 
   outLines.push(..._dxfSectionToLines(header));
   outLines.push(..._dxfSectionToLines(tables));
@@ -2226,7 +2340,7 @@ function diagExportDxf() {
   const out = outLines.join("\n") + "\n";
 
   const nameBase = (appState.diagramas.dxfFileName || "plantilla").replace(/\.dxf$/i, "");
-  const fileName = `${nameBase}_red_cat6_sin_atributos.dxf`;
+  const fileName = `${nameBase}_red_cat6_sin_atributos${appState.diagramas.includeLocks ? "_2h" : ""}.dxf`;
 
   try {
     const blob = new Blob([out], { type: "application/dxf" });
@@ -2311,35 +2425,50 @@ function _renderDiagramasUI() {
 
   const s = appState.diagramas;
   const blocks = Array.isArray(s.dxfBlocks) ? s.dxfBlocks : [];
-  const refs = Array.isArray(s.refs) ? s.refs : [];
+
+  function _blocksOptionsHtml(cur, { allowEmptyLabel = "(sin bloque)" } = {}) {
+    if (!blocks.length) {
+      return `<option value="">(sin DXF cargado)</option>`;
+    }
+    return (
+      `<option value="">${_escapeHtml(allowEmptyLabel)}</option>` +
+      blocks
+        .slice(0, 1200)
+        .map((b) => `<option value="${_escapeHtmlAttr(b)}"${cur === b ? " selected" : ""}>${_escapeHtml(b)}</option>`)
+        .join("")
+    );
+  }
 
   function _lockSelectHtml(zoneKey) {
     if (zoneKey === "armario_cpd") return "";
 
     const cfg = _getZoneConfig(zoneKey);
-    const cur = _strip(cfg.lockRef);
-
-    // lista acotada para no reventar el DOM
-    const options =
-      `<option value="">(sin cerradura en esta sección)</option>` +
-      refs
-        .slice(0, 800)
-        .map((r) => {
-          const v = _escapeHtmlAttr(r.ref);
-          const sel = cur && r.ref === cur ? " selected" : "";
-          const label = `${r.ref}${r.descripcion ? " · " + r.descripcion : ""}`;
-          return `<option value="${v}"${sel}>${_escapeHtml(label)}</option>`;
-        })
-        .join("");
+    const cur = _strip(cfg.lockBlock);
 
     return `
       <div class="form-group mt-2" style="margin-bottom:0;">
-        <label style="font-size:12px;">Cerradura (2 hilos, opcional)</label>
-        <select style="max-width:100%;" data-act="zoneLock" data-zone="${_escapeHtmlAttr(zoneKey)}">
-          ${options}
+        <label style="font-size:12px;">Cerradura (2 hilos, opcional) · BLOCK DXF</label>
+        <select style="max-width:100%;" data-act="zoneLockBlock" data-zone="${_escapeHtmlAttr(zoneKey)}">
+          ${_blocksOptionsHtml(cur, { allowEmptyLabel: "(sin cerradura en esta sección)" })}
         </select>
         <div class="muted" style="font-size:11px; margin-top:4px;">
-          Si defines cerradura, los dispositivos tipo videoportero/control acceso conectan en <b>2H</b> a esta referencia.
+          Si defines cerradura, los dispositivos tipo videoportero/control acceso conectan en <b>2H</b> a esta cerradura.
+        </div>
+      </div>
+    `;
+  }
+
+  function _cpdSwitchHtml() {
+    const cfg = _getZoneConfig("armario_cpd");
+    const cur = _strip(cfg.cpdSwitchBlock);
+    return `
+      <div class="form-group mt-2" style="margin-bottom:0;">
+        <label style="font-size:12px;">Switch POE (Armario/CPD) · BLOCK DXF</label>
+        <select style="max-width:100%;" data-act="cpdSwitchBlock">
+          ${_blocksOptionsHtml(cur, { allowEmptyLabel: "(sin bloque, usar círculo)" })}
+        </select>
+        <div class="muted" style="font-size:11px; margin-top:4px;">
+          Este switch existe siempre. En export DXF se inserta su bloque si está definido.
         </div>
       </div>
     `;
@@ -2351,12 +2480,7 @@ function _renderDiagramasUI() {
 
     const items = list
       .map((it) => {
-        const blockOptions =
-          `<option value="">(sin icono)</option>` +
-          blocks
-            .slice(0, 800)
-            .map((b) => `<option value="${_escapeHtmlAttr(b)}"${it.iconBlock === b ? " selected" : ""}>${_escapeHtml(b)}</option>`)
-            .join("");
+        const blockOptions = _blocksOptionsHtml(it.iconBlock, { allowEmptyLabel: "(sin icono)" });
 
         return `
           <div class="card" style="padding:10px; margin-top:8px; min-width:0;">
@@ -2389,7 +2513,6 @@ function _renderDiagramasUI() {
       })
       .join("");
 
-    // ✅ controles zona: renombrar + borrar (excepto armario)
     const zoneActions = isArmario
       ? ""
       : `
@@ -2415,7 +2538,7 @@ function _renderDiagramasUI() {
           </div>
         </div>
 
-        ${_lockSelectHtml(z.key)}
+        ${isArmario ? _cpdSwitchHtml() : _lockSelectHtml(z.key)}
         ${items || `<div class="muted mt-2" style="font-size:12px;">(vacío)</div>`}
       </div>
     `;
@@ -2426,7 +2549,9 @@ function _renderDiagramasUI() {
       <div class="card" style="padding:12px; min-width:0;">
         <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
           <h3 style="margin:0;">Referencias del proyecto</h3>
-          <button id="btnDiagReloadRefs" class="btn btn-sm">Recargar</button>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <button id="btnDiagReloadRefs" class="btn btn-sm">Recargar</button>
+          </div>
         </div>
 
         <div class="muted mt-1" style="font-size:12px;">
@@ -2461,11 +2586,15 @@ function _renderDiagramasUI() {
             <h3 style="margin:0;">Ubicación de dispositivos</h3>
             <div class="muted" style="font-size:12px;">
               Cada <b>sección del presupuesto</b> es una ubicación. Armario/CPD es fijo.
-              Arrastra refs a secciones. AUTO sugiere iconos. Genera diseño, ajusta posiciones y exporta.
-              <b>Recomendado</b>: Exportar <b>SVG</b> (formato maestro).
+              Puedes añadir ubicaciones manuales si quieres reestructurar el diagrama.
             </div>
           </div>
           <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <label class="chip" style="display:flex; gap:8px; align-items:center; cursor:pointer;">
+              <input id="diagIncludeLocks" type="checkbox"${s.includeLocks ? " checked" : ""} style="transform:translateY(1px);"/>
+              Incluir cerraduras (2H)
+            </label>
+            <button id="btnDiagAddZone" class="btn btn-sm">Añadir ubicación</button>
             <button id="btnDiagAuto" class="btn btn-secondary btn-sm">Auto</button>
             <button id="btnDiagTogglePrompt" class="btn btn-sm">Prompt</button>
             <button id="btnDiagGenerate" class="btn btn-primary btn-sm">Generar diseño</button>
@@ -2513,6 +2642,18 @@ function _renderDiagramasUI() {
       diagLoadProjectRefs();
       _renderRefsList();
       _renderDiagramasUI();
+      _renderResult();
+    });
+  }
+
+  const btnAddZone = _el("btnDiagAddZone");
+  if (btnAddZone) btnAddZone.addEventListener("click", _addZoneManual);
+
+  const chkLocks = _el("diagIncludeLocks");
+  if (chkLocks) {
+    chkLocks.addEventListener("change", () => {
+      appState.diagramas.includeLocks = !!chkLocks.checked;
+      _clearDiagError();
       _renderResult();
     });
   }
@@ -2575,9 +2716,14 @@ function _renderDiagramasUI() {
       node.addEventListener("click", () => _renameZone(zoneKey));
     } else if (act === "zoneDelete") {
       node.addEventListener("click", () => _deleteZone(zoneKey));
-    } else if (act === "zoneLock") {
+    } else if (act === "zoneLockBlock") {
       node.addEventListener("change", () => {
-        _setZoneLockRef(zoneKey, String(node.value || ""));
+        _setZoneLockBlock(zoneKey, String(node.value || ""));
+        _renderResult();
+      });
+    } else if (act === "cpdSwitchBlock") {
+      node.addEventListener("change", () => {
+        _setCpdSwitchBlock(String(node.value || ""));
         _renderResult();
       });
     }
@@ -2620,7 +2766,7 @@ function renderDiagramasView() {
       appState.diagramas.dxfObjectsSection = localStorage.getItem("diag_dxf_objectsSection") || "";
     }
 
-    // ✅ config zonas (renombres, borrados, lockRef)
+    // ✅ config zonas (renombres, borrados, lockBlock, cpdSwitchBlock)
     appState.diagramas.zonesConfig = _loadZonesConfig();
   } catch (_) {}
 
