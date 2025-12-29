@@ -1444,6 +1444,47 @@ function _findNearestAssignmentIdInZone(zoneEl, clientY) {
   }
   return bestId;
 }
+// ✅ Reordenar ZONAS (tarjetas de ubicación). Armario/CPD siempre fijo al final.
+function _reorderZones(srcKey, dstKey) {
+  srcKey = String(srcKey || "");
+  dstKey = String(dstKey || "");
+  if (!srcKey || !dstKey) return;
+
+  // no permitir mover/insertar respecto a armario (fijo)
+  if (srcKey === "armario_cpd") return;
+  if (dstKey === "armario_cpd") return;
+
+  const zones = Array.isArray(appState.diagramas.zones) ? appState.diagramas.zones : [];
+  const idxSrc = zones.findIndex((z) => String(z.key) === srcKey);
+  const idxDst = zones.findIndex((z) => String(z.key) === dstKey);
+  if (idxSrc < 0 || idxDst < 0) return;
+
+  const src = zones[idxSrc];
+  zones.splice(idxSrc, 1);
+
+  // tras extraer, recalcula destino
+  const idxDst2 = zones.findIndex((z) => String(z.key) === dstKey);
+  if (idxDst2 < 0) {
+    zones.push(src);
+  } else {
+    zones.splice(idxDst2, 0, src); // insertar "antes" del destino
+  }
+
+  // asegurar armario al final siempre
+  const idxArm = zones.findIndex((z) => String(z.key) === "armario_cpd");
+  if (idxArm >= 0 && idxArm !== zones.length - 1) {
+    const arm = zones[idxArm];
+    zones.splice(idxArm, 1);
+    zones.push(arm);
+  } else if (idxArm < 0) {
+    zones.push({ key: "armario_cpd", label: "Armario / CPD" });
+  }
+
+  appState.diagramas.zones = zones;
+
+  // ✅ persistir orden
+  _syncZonesOrderFromCurrentZones();
+}
 
 function _onZoneDrop(ev, zoneKey) {
   ev.preventDefault();
