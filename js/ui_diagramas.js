@@ -65,63 +65,7 @@ function _defaultDiagramasState() {
 // ======================================================
 
 window.appState = window.appState || {};
-appState.diagramas = appState.diagramas || {
-  dxfFileName: "",
-  dxfText: "",
-  dxfBlocks: [],
-  dxfBlockAttrs: {}, // se mantiene por compatibilidad (ya no se usa para export)
-
-  // cache secciones DXF plantilla
-  dxfHeaderSection: "",
-  dxfClassesSection: "",
-  dxfTablesSection: "",
-  dxfBlocksSection: "",
-  dxfObjectsSection: "",
-
-  refs: [],
-  refsSearch: "",
-
-  // (se mantiene por compatibilidad aunque ya no mostramos biblioteca)
-  dxfBlocksSearch: "",
-
-  // ⬇️ Zonas dinámicas (secciones del presupuesto) + armario fijo
-  zones: [
-    { key: "entrada_principal", label: "Entrada principal" },
-    { key: "portales_interiores", label: "Portales interiores" },
-    { key: "zonas_comunes", label: "Zonas comunes" },
-    { key: "zonas_refugio", label: "Zonas refugio" },
-    { key: "armario_cpd", label: "Armario / CPD" },
-  ],
-  zonesDynamic: false, // true cuando vienen de secciones
-  zonesConfig: {}, // key -> { label?, deleted?, userAdded?, lockBlock?, cpdSwitchBlock? }
-  zonesOrder: [], // array de keys (sin armario) para ordenar UI
-
-  assignments: {},
-
-  // ✅ incluir o no cerraduras (2H)
-  includeLocks: true,
-
-  promptUiOpen: false,
-  useCustomPrompt: false,
-  customPromptText: "",
-
-  // Preview positions
-  previewEditMode: false,
-  manualCoords: {},
-
-  _previewResult: null,
-
-  lastResult: null,
-  lastError: null,
-  lastRaw: null,
-  usedLocalFallback: false,
-  busy: false,
-
-  // internal (bind/unbind)
-  _previewListenersBound: false,
-  _previewMouseMoveHandler: null,
-  _previewMouseUpHandler: null,
-};
+appState.diagramas = _defaultDiagramasState();
 
 function _el(id) {
   return document.getElementById(id);
