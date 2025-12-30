@@ -312,6 +312,35 @@ function _getUserAddedZonesFromConfig() {
   out.sort((a, b) => String(a.key).localeCompare(String(b.key)));
   return out;
 }
+function _getBudgetSecKeyMap() {
+  const cfg = (appState.diagramas.zonesConfig =
+    appState.diagramas.zonesConfig || _loadZonesConfig());
+  if (!cfg.__budgetSecKeyMap || typeof cfg.__budgetSecKeyMap !== "object") {
+    cfg.__budgetSecKeyMap = {};
+    _saveZonesConfig(cfg);
+  }
+  return cfg.__budgetSecKeyMap;
+}
+
+function _getOrCreateBudgetZoneKey(label) {
+  const map = _getBudgetSecKeyMap();
+  const norm = _normKey(label);
+  if (!norm) return `sec_${Date.now()}`;
+  if (map[norm]) return String(map[norm]);
+
+  // key estable: sec_<norm> y si colisiona, añade sufijo pero lo fija en el map
+  let key = `sec_${norm}`;
+  const cfg = appState.diagramas.zonesConfig || {};
+  let i = 2;
+  while (cfg[key] && cfg[key].__taken && map[norm] !== key) key = `sec_${norm}_${i++}`;
+  map[norm] = key;
+
+  // marca como “taken” para evitar colisiones futuras
+  cfg[key] = Object.assign({}, cfg[key] || {}, { __taken: true });
+  appState.diagramas.zonesConfig = cfg;
+  _saveZonesConfig(cfg);
+  return key;
+}
 
 function _applyZonesOrder(zonesNoArmario) {
   const order = (appState.diagramas.zonesOrder =
