@@ -183,13 +183,10 @@ function _loadAssignments() {
 }
 
 function _saveAssignments() {
-  try {
-    localStorage.setItem(
-      _diagLsKey("diag_assignments"),
-      JSON.stringify(appState.diagramas.assignments || {})
-    );
-  } catch (_) {}
+  // ✅ No persistir tarjetas entre recargas
+  return;
 }
+
 
 /* ======================================================
    PERSISTENCIA LAYOUT (manualCoords)
@@ -204,12 +201,8 @@ function _loadManualCoords() {
 }
 
 function _saveManualCoords() {
-  try {
-    localStorage.setItem(
-      _diagLsKey("diag_manual_coords"),
-      JSON.stringify(appState.diagramas.manualCoords || {})
-    );
-  } catch (_) {}
+  // ✅ No persistir layout entre recargas
+  return;
 }
 
 /* ======================================================
