@@ -1,24 +1,10 @@
 // js/ui_diagramas.js
 // Vista: DIAGRAMAS (IA)
-// V2.15 (Hito 20b):
-// - ✅ VUELVE "como antes": NO se muestran bloques de biblioteca como tarjetas (solo selects)
-// - ✅ Drag & drop de referencias del proyecto (se mantiene)
-// - ✅ Drag & drop de tarjetas (assignments) ENTRE zonas (mover) + reordenar dentro de zona
-// - ✅ Drag & drop para reordenar ZONAS (tarjetas de ubicación) (Armario/CPD fijo al final)
-// - ✅ FIX: si una zona está “sin cerradura”, NO se crea cerradura genérica por dispositivo
-// - ✅ Orden de dibujo: 1) cerraduras 2) videoporteros/monitores/control accesos 3) switches
-// - ✅ Conexiones en preview con rutas ortogonales
-// - ✅ Mantiene SVG (MAESTRO)
-// - ⚠️ DXF: NO tocamos export ahora; solo mantenemos carga DXF para selects/autosugerencias
-//
-// MEJORAS estrictamente necesarias (V2.15c):
-// - ✅ FIX rendimiento: drag de nodos SVG ahora usa requestAnimationFrame (evita re-render por cada mousemove)
-// - ✅ Persistencia layout: manualCoords se guarda/carga en localStorage (no se pierden posiciones)
-//
-// FIX mínimos añadidos (V2.15d):
-// - ✅ Insertar assignment en destino cercano al soltar en OTRA zona (no siempre al final)
-// - ✅ Evitar reorder raro si beforeId === srcId
-// - ✅ Nearest card ignora la tarjeta arrastrada
+// V2.15 (Hito 20b) + fixes V2.15c/V2.15d (según tu especificación)
+
+/* ======================================================
+   ESTADO + HELPERS BÁSICOS
+ ====================================================== */
 
 function _defaultDiagramasState() {
   return {
@@ -153,7 +139,10 @@ function _loadZonesOrder() {
 
 function _saveZonesOrder(order) {
   try {
-    localStorage.setItem("diag_zones_order", JSON.stringify(Array.isArray(order) ? order : []));
+    localStorage.setItem(
+      "diag_zones_order",
+      JSON.stringify(Array.isArray(order) ? order : [])
+    );
   } catch (_) {}
 }
 
@@ -172,7 +161,7 @@ function _setZoneConfig(key, patch) {
 }
 
 /* ======================================================
-   ✅ PERSISTENCIA ASSIGNMENTS (FIX: no vuelven al inicio)
+   ✅ PERSISTENCIA ASSIGNMENTS
  ====================================================== */
 
 function _loadAssignments() {
@@ -187,7 +176,10 @@ function _loadAssignments() {
 
 function _saveAssignments() {
   try {
-    localStorage.setItem("diag_assignments", JSON.stringify(appState.diagramas.assignments || {}));
+    localStorage.setItem(
+      "diag_assignments",
+      JSON.stringify(appState.diagramas.assignments || {})
+    );
   } catch (_) {}
 }
 
@@ -207,12 +199,15 @@ function _loadManualCoords() {
 
 function _saveManualCoords() {
   try {
-    localStorage.setItem("diag_manual_coords", JSON.stringify(appState.diagramas.manualCoords || {}));
+    localStorage.setItem(
+      "diag_manual_coords",
+      JSON.stringify(appState.diagramas.manualCoords || {})
+    );
   } catch (_) {}
 }
 
 /* ======================================================
-   MOVER / REORDENAR ASSIGNMENTS (FIX: actualiza el array)
+   MOVER / REORDENAR ASSIGNMENTS
  ====================================================== */
 
 function _moveAssignmentWithinZone(zoneKey, srcId, beforeId) {
@@ -223,7 +218,7 @@ function _moveAssignmentWithinZone(zoneKey, srcId, beforeId) {
   beforeId = beforeId != null ? String(beforeId) : "";
 
   if (!srcId) return;
-  if (beforeId && beforeId === srcId) return; // ✅ FIX 2: no-op seguro
+  if (beforeId && beforeId === srcId) return; // ✅ FIX: no-op seguro
 
   const from = list.findIndex((x) => String(x.id) === srcId);
   if (from < 0) return;
@@ -257,7 +252,7 @@ function _moveAssignmentToZone(srcZone, srcId, dstZone, beforeId) {
   beforeId = beforeId != null ? String(beforeId) : "";
 
   if (!srcId) return;
-  if (beforeId && beforeId === srcId) beforeId = ""; // ✅ FIX 2 (también aquí)
+  if (beforeId && beforeId === srcId) beforeId = ""; // ✅ FIX: no-op seguro
 
   const from = src.findIndex((x) => String(x.id) === srcId);
   if (from < 0) return;
@@ -277,8 +272,11 @@ function _moveAssignmentToZone(srcZone, srcId, dstZone, beforeId) {
   _saveAssignments();
 }
 
+/* ======================================================
+   ZONAS DINÁMICAS DESDE PRESUPUESTO + ORDEN
+ ====================================================== */
+
 function _budgetLineSectionLabel(l) {
-  // robusto: intenta varios campos típicos
   const cand = [
     l?.seccion,
     l?.seccionNombre,
@@ -301,7 +299,8 @@ function _budgetLineSectionLabel(l) {
 }
 
 function _getUserAddedZonesFromConfig() {
-  const cfg = (appState.diagramas.zonesConfig = appState.diagramas.zonesConfig || _loadZonesConfig());
+  const cfg = (appState.diagramas.zonesConfig =
+    appState.diagramas.zonesConfig || _loadZonesConfig());
   const out = [];
   for (const [key, zc] of Object.entries(cfg || {})) {
     if (!zc || !zc.userAdded) continue;
@@ -315,20 +314,26 @@ function _getUserAddedZonesFromConfig() {
 }
 
 function _applyZonesOrder(zonesNoArmario) {
-  const order = (appState.diagramas.zonesOrder = appState.diagramas.zonesOrder || _loadZonesOrder());
+  const order = (appState.diagramas.zonesOrder =
+    appState.diagramas.zonesOrder || _loadZonesOrder());
   if (!Array.isArray(order) || !order.length) return zonesNoArmario;
 
   const idx = new Map(order.map((k, i) => [String(k), i]));
   return zonesNoArmario
     .slice()
-    .sort((a, b) => (idx.has(a.key) ? idx.get(a.key) : 99999) - (idx.has(b.key) ? idx.get(b.key) : 99999));
+    .sort(
+      (a, b) =>
+        (idx.has(a.key) ? idx.get(a.key) : 99999) -
+        (idx.has(b.key) ? idx.get(b.key) : 99999)
+    );
 }
 
 function _buildZonesFromBudgetSections() {
   const presu = appState?.presupuesto;
   const lineas = Array.isArray(presu?.lineas) ? presu.lineas : [];
 
-  const cfg = (appState.diagramas.zonesConfig = appState.diagramas.zonesConfig || _loadZonesConfig());
+  const cfg = (appState.diagramas.zonesConfig =
+    appState.diagramas.zonesConfig || _loadZonesConfig());
 
   const labels = [];
   const seen = new Set();
@@ -389,7 +394,9 @@ function _buildZonesFromBudgetSections() {
 
 function _syncZonesOrderFromCurrentZones() {
   const zones = appState.diagramas.zones || [];
-  const order = zones.filter((z) => z.key !== "armario_cpd").map((z) => String(z.key));
+  const order = zones
+    .filter((z) => z.key !== "armario_cpd")
+    .map((z) => String(z.key));
   appState.diagramas.zonesOrder = order;
   _saveZonesOrder(order);
 }
@@ -404,10 +411,7 @@ function _ensureZonesOrderForZones(zones) {
 
   const valid = new Set(keys);
 
-  // 1) mantener orden existente pero solo keys válidas
   const merged = order.filter((k) => valid.has(k));
-
-  // 2) añadir nuevas keys al final (sin romper orden del usuario)
   for (const k of keys) {
     if (!merged.includes(k)) merged.push(k);
   }
@@ -415,6 +419,9 @@ function _ensureZonesOrderForZones(zones) {
   appState.diagramas.zonesOrder = merged;
   _saveZonesOrder(merged);
 }
+/* ======================================================
+   ZONAS: añadir / renombrar / borrar
+ ====================================================== */
 
 function _addZoneManual() {
   const name = _strip(prompt("Nombre de la nueva ubicación:", ""));
@@ -659,7 +666,6 @@ function _strokeForConnectionType(t) {
   }
   return { stroke: "rgba(29,79,216,.55)", width: 2, dash: "" };
 }
-
 /* ======================================================
    Preview SVG (coords)
  ====================================================== */
@@ -717,6 +723,7 @@ function _buildSchematicCoordsFromResult(result) {
     map.set(n.id, { x: pos.x, y: pos.y, label, kind: "infra", zone });
   }
 
+  // nodos virtuales para 2H si existen (por si la IA devuelve "to" que no está en infra/placements)
   for (const c of connections) {
     if (String(c?.type || "").toUpperCase() !== "2_WIRE") continue;
     const a = map.get(c.from);
@@ -749,6 +756,7 @@ function _buildSchematicCoordsFromResult(result) {
 
   return map;
 }
+
 function _renderPreviewSvg(result) {
   const r = _augmentResultForSvg(result);
 
@@ -805,14 +813,14 @@ function _renderPreviewSvg(result) {
       const t = String(it?.type || "").toUpperCase();
       const role = String(it?.meta?.role || "").toUpperCase();
       const isLock = t.includes("LOCK") || t.includes("GARAGE");
-      if (isLock) return 10;
+      if (isLock) return 10; // primero
       const isSwitch = t.includes("SWITCH") || role.includes("SWITCH");
-      if (isSwitch) return 90;
+      if (isSwitch) return 90; // al final
       return 70;
     }
 
     const it = placements.find((x) => String(x.id) === String(id));
-    if (_isSwitchLikePlacement(it)) return 95;
+    if (_isSwitchLikePlacement(it)) return 95; // switches al final
     if (_isDoorWireDevice(it)) return 50;
     return 60;
   }
@@ -939,7 +947,10 @@ function _renderPreviewSvg(result) {
   `;
 }
 
-// Drag controller para SVG
+/* ======================================================
+   Drag controller para SVG (con rAF) + persist manualCoords
+ ====================================================== */
+
 var _diagDrag = (window._diagDrag = window._diagDrag || { active: false, nodeId: null, offsetX: 0, offsetY: 0 });
 
 function _svgPoint(svg, clientX, clientY) {
@@ -1078,7 +1089,6 @@ function _bindPreviewInteractions() {
     } catch (_) {}
   };
 }
-
 function _buildPreviewOnlyResultFromAssignments() {
   const zones = appState.diagramas.zones || [];
   const assignments = appState.diagramas.assignments || {};
@@ -1196,7 +1206,6 @@ function _renderResult() {
 
   _bindPreviewInteractions();
 }
-
 /* ======================================================
    1) Refs + ZONAS desde presupuesto
  ====================================================== */
@@ -1445,7 +1454,6 @@ async function diagImportDxfFile(file) {
     _renderResult();
   }
 }
-
 /* ======================================================
    3) Drag & drop (refs a zonas + mover/reorder assignments + reorder zonas)
  ====================================================== */
@@ -1464,7 +1472,9 @@ function _onRefDragStart(ev, ref) {
     ev.dataTransfer.effectAllowed = "copy";
   } catch (_) {}
   // ✅ FIX: evita que otros dragstart (zona) “pisen” este drag
-  try { ev.stopPropagation(); } catch (_) {}
+  try {
+    ev.stopPropagation();
+  } catch (_) {}
 }
 
 function _onAssignmentDragStart(ev, zoneKey, id) {
@@ -1475,8 +1485,11 @@ function _onAssignmentDragStart(ev, zoneKey, id) {
     ev.dataTransfer.effectAllowed = "move";
   } catch (_) {}
   // ✅ FIX: si no paras bubbling, el dragstart de la ZONA también se dispara y lo pisa
-  try { ev.stopPropagation(); } catch (_) {}
+  try {
+    ev.stopPropagation();
+  } catch (_) {}
 }
+
 function _onAssignmentDragEnd() {
   _dragAssign.zone = null;
   _dragAssign.id = null;
@@ -1498,7 +1511,6 @@ function _onZoneCardDragStart(ev, zoneKey) {
   } catch (_) {}
 }
 
-
 function _onZoneDragOver(ev) {
   ev.preventDefault();
   ev.stopPropagation(); // ✅ CLAVE
@@ -1517,7 +1529,7 @@ function _onZoneDragOver(ev) {
   if (zone) zone.classList.add("is-drag-over");
 }
 
-function _onZoneCardDragEnd(ev) {
+function _onZoneCardDragEnd() {
   _dragZoneKey = (window._dragZoneKey = null);
 
   // limpia estados visuales
@@ -1601,12 +1613,97 @@ function _reorderZones(srcKey, dstKey) {
   _syncZonesOrderFromCurrentZones();
 }
 
-_onZoneDrop
+// ✅ Drop handler único por ZONA: soporta
+// - REF:*  -> añadir a zona
+// - ASSIGN:srcZone:srcId -> mover / reordenar (inserta cerca por drop Y)
+// - ZONE:srcZoneKey -> reordenar ubicaciones
+function _onZoneDrop(ev, zoneKey) {
+  ev.preventDefault();
+  ev.stopPropagation();
 
-function _removeAssignment(zoneKey, id) {
-  const list = appState.diagramas.assignments[zoneKey] || [];
-  const idx = list.findIndex((x) => x.id === id);
-  if (idx >= 0) list.splice(idx, 1);
+  // limpia visual
+  try {
+    const zoneEl = ev.currentTarget;
+    if (zoneEl) zoneEl.classList.remove("is-drag-over");
+  } catch (_) {}
+
+  let payload = "";
+  try {
+    payload = ev.dataTransfer.getData("text/plain") || "";
+  } catch (_) {}
+  payload = String(payload || "").trim();
+
+  // --------------------------------------------------
+  // 1) Reordenar ZONAS
+  // --------------------------------------------------
+  if (payload.startsWith("ZONE:")) {
+    const srcKey = payload.slice("ZONE:".length);
+    const dstKey = String(zoneKey || "");
+    if (srcKey && dstKey && srcKey !== dstKey) {
+      _reorderZones(srcKey, dstKey);
+      _clearDiagError();
+      _renderDiagramasUI();
+      _renderResult();
+    }
+    return;
+  }
+
+  // --------------------------------------------------
+  // 2) Mover / reordenar ASSIGNMENTS
+  // --------------------------------------------------
+  if (payload.startsWith("ASSIGN:")) {
+    const parts = payload.split(":");
+    const srcZone = parts[1] || "";
+    const srcId = parts[2] || "";
+    const dstZone = String(zoneKey || "");
+    if (!srcZone || !srcId || !dstZone) return;
+
+    // ✅ insertar cerca por posición Y (en destino), si hay tarjetas
+    let beforeId = "";
+    try {
+      const zoneEl = ev.currentTarget;
+      const near = _findNearestAssignmentIdInZone(zoneEl, ev.clientY);
+      beforeId = near ? String(near) : "";
+    } catch (_) {}
+
+    if (String(srcZone) === String(dstZone)) {
+      _moveAssignmentWithinZone(dstZone, srcId, beforeId);
+    } else {
+      _moveAssignmentToZone(srcZone, srcId, dstZone, beforeId);
+    }
+
+    _clearDiagError();
+    _renderDiagramasUI();
+    _renderResult();
+    return;
+  }
+
+  // --------------------------------------------------
+  // 3) Añadir REF a zona
+  // --------------------------------------------------
+  const refFromPayload = payload.startsWith("REF:") ? payload.slice("REF:".length) : _dragRefKey;
+  const ref = String(refFromPayload || "").trim();
+  if (!ref) return;
+
+  const s = appState.diagramas;
+  s.assignments = s.assignments || {};
+  const list = (s.assignments[zoneKey] = s.assignments[zoneKey] || []);
+
+  // busca info en refs
+  const hit = (Array.isArray(s.refs) ? s.refs : []).find((r) => String(r.ref) === ref);
+  const desc = hit ? String(hit.descripcion || "") : "";
+  const qty = hit && Number(hit.qty || 0) > 0 ? Number(hit.qty || 1) : 1;
+
+  // id estable por ref+timestamp (evita colisiones al añadir la misma ref varias veces)
+  const id = `P_${ref}_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
+
+  list.push({
+    id,
+    ref,
+    descripcion: desc,
+    qty: Math.max(1, Number(qty || 1) || 1),
+    iconBlock: "",
+  });
 
   _saveAssignments(); // ✅ persist
 
@@ -1614,18 +1711,6 @@ function _removeAssignment(zoneKey, id) {
   _renderDiagramasUI();
   _renderResult();
 }
-
-function _updateAssignment(zoneKey, id, patch) {
-  const list = appState.diagramas.assignments[zoneKey] || [];
-  const it = list.find((x) => x.id === id);
-  if (!it) return;
-  Object.assign(it, patch);
-
-  _saveAssignments(); // ✅ persist
-
-  _clearDiagError();
-}
-
 /* ======================================================
    4) AUTO icon suggestion
  ====================================================== */
@@ -1694,6 +1779,7 @@ function diagAutoAssignIcons() {
   _renderDiagramasUI();
   _renderResult();
 }
+
 /* ======================================================
    5) Payload base (para IA y fallback local)
  ====================================================== */
@@ -1783,7 +1869,6 @@ function _buildSpecFromAssignments() {
     icon_library_blocks: (appState.diagramas.dxfBlocks || []).slice(0, 2000),
   };
 }
-
 /* ======================================================
    Fallback LOCAL (determinista)
  ====================================================== */
@@ -2074,7 +2159,6 @@ async function diagGenerateDesign() {
     _setBusy(false);
   }
 }
-
 /* ======================================================
    6A) Export SVG (MAESTRO)
  ====================================================== */
