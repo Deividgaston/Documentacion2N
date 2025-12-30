@@ -10,6 +10,55 @@
 // - ✅ Conexiones en preview con rutas ortogonales
 // - ✅ Mantiene SVG (MAESTRO)
 // - ⚠️ DXF: NO tocamos export ahora; solo mantenemos carga DXF para selects/autosugerencias
+function _defaultDiagramasState() {
+  return {
+    dxfFileName: "",
+    dxfText: "",
+    dxfBlocks: [],
+    dxfBlockAttrs: {},
+    dxfHeaderSection: "",
+    dxfClassesSection: "",
+    dxfTablesSection: "",
+    dxfBlocksSection: "",
+    dxfObjectsSection: "",
+
+    refs: [],
+    refsSearch: "",
+    dxfBlocksSearch: "",
+
+    zones: [
+      { key: "entrada_principal", label: "Entrada principal" },
+      { key: "portales_interiores", label: "Portales interiores" },
+      { key: "zonas_comunes", label: "Zonas comunes" },
+      { key: "zonas_refugio", label: "Zonas refugio" },
+      { key: "armario_cpd", label: "Armario / CPD" },
+    ],
+    zonesDynamic: false,
+    zonesConfig: {},
+    zonesOrder: [],
+
+    assignments: {},
+    includeLocks: true,
+
+    promptUiOpen: false,
+    useCustomPrompt: false,
+    customPromptText: "",
+
+    previewEditMode: false,
+    manualCoords: {},
+
+    _previewResult: null,
+    lastResult: null,
+    lastError: null,
+    lastRaw: null,
+    usedLocalFallback: false,
+    busy: false,
+
+    _previewListenersBound: false,
+    _previewMouseMoveHandler: null,
+    _previewMouseUpHandler: null,
+  };
+}
 
 // ======================================================
 // ESTADO GLOBAL
