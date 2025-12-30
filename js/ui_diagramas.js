@@ -1140,6 +1140,7 @@ function _unbindPreviewWindowListeners() {
   }
   s._previewPendingMove = null;
 
+  // mouse (legacy)
   if (s._previewMouseMoveHandler) {
     window.removeEventListener("mousemove", s._previewMouseMoveHandler, true);
     s._previewMouseMoveHandler = null;
@@ -1148,8 +1149,45 @@ function _unbindPreviewWindowListeners() {
     window.removeEventListener("mouseup", s._previewMouseUpHandler, true);
     s._previewMouseUpHandler = null;
   }
+
+  // pointer (new)
+  if (s._previewPointerMoveHandler && s._previewPointerTarget) {
+    try {
+      s._previewPointerTarget.removeEventListener(
+        "pointermove",
+        s._previewPointerMoveHandler,
+        true
+      );
+    } catch (_) {}
+  }
+  if (s._previewPointerUpHandler && s._previewPointerTarget) {
+    try {
+      s._previewPointerTarget.removeEventListener(
+        "pointerup",
+        s._previewPointerUpHandler,
+        true
+      );
+      s._previewPointerTarget.removeEventListener(
+        "pointercancel",
+        s._previewPointerUpHandler,
+        true
+      );
+      s._previewPointerTarget.removeEventListener(
+        "lostpointercapture",
+        s._previewPointerUpHandler,
+        true
+      );
+    } catch (_) {}
+  }
+
+  s._previewPointerMoveHandler = null;
+  s._previewPointerUpHandler = null;
+  s._previewPointerTarget = null;
+  s._previewActivePointerId = null;
+
   s._previewListenersBound = false;
 }
+
 
 function _bindPreviewWindowListeners(svg) {
   const s = appState.diagramas;
