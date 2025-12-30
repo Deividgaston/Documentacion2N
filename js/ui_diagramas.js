@@ -1116,7 +1116,15 @@ function _renderPreviewSvg(result) {
  ====================================================== */
 
 var _diagDrag = (window._diagDrag =
-  window._diagDrag || { active: false, nodeId: null, offsetX: 0, offsetY: 0 });
+  window._diagDrag || {
+    active: false,
+    nodeId: null,
+    nodeEl: null,
+    baseX: null,
+    baseY: null,
+    offsetX: 0,
+    offsetY: 0,
+  });
 
 function _svgPoint(svg, clientX, clientY) {
   const pt = svg.createSVGPoint();
