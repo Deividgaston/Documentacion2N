@@ -354,6 +354,31 @@ function _syncZonesOrderFromCurrentZones() {
   appState.diagramas.zonesOrder = order;
   _saveZonesOrder(order);
 }
+function _ensureZonesOrderForZones(zones) {
+  const keys = (Array.isArray(zones) ? zones : [])
+    .filter((z) => z && z.key !== "armario_cpd")
+    .map((z) => String(z.key));
+
+  let order = appState.diagramas.zonesOrder || _loadZonesOrder();
+  order = Array.isArray(order) ? order.map(String) : [];
+
+  const valid = new Set(keys);
+
+  // 1) mantener orden existente pero solo keys válidas
+  const merged = order.filter((k) => valid.has(k));
+
+  // 2) añadir nuevas keys al final (sin romper orden del usuario)
+  for (const k of keys) {
+    if (!merged.includes(k)) merged.push(k);
+  }
+
+  appState.diagramas.zonesOrder = merged;
+  _saveZonesOrder(merged);
+}
+
+
+
+
 
 function _addZoneManual() {
   const name = _strip(prompt("Nombre de la nueva ubicación:", ""));
