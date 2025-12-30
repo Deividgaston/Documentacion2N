@@ -1463,6 +1463,8 @@ function _onRefDragStart(ev, ref) {
     ev.dataTransfer.setData("text/plain", `REF:${_dragRefKey}`);
     ev.dataTransfer.effectAllowed = "copy";
   } catch (_) {}
+  // ✅ FIX: evita que otros dragstart (zona) “pisen” este drag
+  try { ev.stopPropagation(); } catch (_) {}
 }
 
 function _onAssignmentDragStart(ev, zoneKey, id) {
@@ -1472,6 +1474,8 @@ function _onAssignmentDragStart(ev, zoneKey, id) {
     ev.dataTransfer.setData("text/plain", `ASSIGN:${_dragAssign.zone}:${_dragAssign.id}`);
     ev.dataTransfer.effectAllowed = "move";
   } catch (_) {}
+  // ✅ FIX: si no paras bubbling, el dragstart de la ZONA también se dispara y lo pisa
+  try { ev.stopPropagation(); } catch (_) {}
 }
 function _onAssignmentDragEnd() {
   _dragAssign.zone = null;
@@ -1479,12 +1483,21 @@ function _onAssignmentDragEnd() {
 }
 
 function _onZoneCardDragStart(ev, zoneKey) {
+  // ✅ FIX: NO iniciar drag de ZONA si realmente estás arrastrando una tarjeta assignment
+  const t = ev.target;
+  try {
+    if (t && t.closest && t.closest(".diag-assignment")) return;
+    // ✅ FIX: evita drags accidentales al tocar inputs/selects/botones dentro de la zona
+    if (t && t.closest && t.closest("input,select,textarea,button,label")) return;
+  } catch (_) {}
+
   _dragZoneKey = (window._dragZoneKey = String(zoneKey || ""));
   try {
     ev.dataTransfer.setData("text/plain", `ZONE:${_dragZoneKey}`);
     ev.dataTransfer.effectAllowed = "move";
   } catch (_) {}
 }
+
 
 function _onZoneDragOver(ev) {
   ev.preventDefault();
