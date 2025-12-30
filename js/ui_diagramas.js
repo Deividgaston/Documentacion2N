@@ -1295,14 +1295,30 @@ function _bindPreviewInteractions() {
   if (btnReset) {
     btnReset.onclick = () => {
       appState.diagramas.manualCoords = {};
-      _saveManualCoords(); // ✅ persist reset
+      _saveManualCoords();
       _renderResult();
     };
   }
 
+  // ✅ bloquear drag nativo HTML5 en Chrome (por si acaso)
+  try {
+    svg.setAttribute("draggable", "false");
+    svg.addEventListener(
+      "dragstart",
+      (e) => {
+        try {
+          e.preventDefault();
+          e.stopPropagation();
+        } catch (_) {}
+      },
+      true
+    );
+  } catch (_) {}
+
   if (!appState.diagramas.previewEditMode) {
     _unbindPreviewWindowListeners();
     svg.onmousedown = null;
+    svg.onpointerdown = null;
     return;
   }
 
@@ -1312,33 +1328,27 @@ function _bindPreviewInteractions() {
 
   _bindPreviewWindowListeners(svg);
 
-  // ✅ FIX Chrome: evita drag nativo del navegador sobre SVG/text
+  // ✅ CSS anti-selección (Chrome)
   try {
-    svg.setAttribute("draggable", "false");
-
-    // IMPORTANTE: en Chrome a veces se inicia un drag HTML5 sobre <text> del SVG
-    // y eso rompe nuestros mousemove/mouseup.
-    svg.addEventListener(
-      "dragstart",
-      (e) => {
-        try {
-          e.preventDefault();
-        } catch (_) {}
-        try {
-          e.stopPropagation();
-        } catch (_) {}
-      },
-      true
-    );
+    svg.style.userSelect = "none";
+    svg.style.webkitUserSelect = "none";
+    svg.style.webkitUserDrag = "none";
+    svg.style.touchAction = "none"; // IMPORTANT: evita scroll/gestos
   } catch (_) {}
 
-  svg.onmousedown = (ev) => {
+  svg.onpointerdown = (ev) => {
     const t = ev.target;
     const g = t && t.closest ? t.closest(".diag-node") : null;
     if (!g) return;
 
     const nodeId = g.getAttribute("data-node-id");
     if (!nodeId) return;
+
+    // capturar este puntero (clave en Chrome)
+    try {
+      appState.diagramas._previewActivePointerId = ev.pointerId;
+      svg.setPointerCapture(ev.pointerId);
+    } catch (_) {}
 
     const p = _svgPoint(svg, ev.clientX, ev.clientY);
 
@@ -1351,12 +1361,16 @@ function _bindPreviewInteractions() {
     _diagDrag.offsetX = cur.x - p.x;
     _diagDrag.offsetY = cur.y - p.y;
 
-    // ✅ CLAVE: Chrome — evita que el navegador “capture” el gesto como drag/selección
     try {
       ev.preventDefault();
-    } catch (_) {}
-    try {
       ev.stopPropagation();
+    } catch (_) {}
+  };
+
+  // por compat (si algún browser no soporta pointer)
+  svg.onmousedown = (ev) => {
+    try {
+      ev.preventDefault();
     } catch (_) {}
   };
 }
