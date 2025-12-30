@@ -161,7 +161,7 @@ function _setZoneConfig(key, patch) {
 }
 
 /* ======================================================
-   ✅ PERSISTENCIA ASSIGNMENTS
+   ✅ PERSISTÊNCIA ASSIGNMENTS
  ====================================================== */
 
 function _loadAssignments() {
@@ -184,7 +184,7 @@ function _saveAssignments() {
 }
 
 /* ======================================================
-   ✅ PERSISTENCIA LAYOUT (manualCoords)
+   ✅ PERSISTÊNCIA LAYOUT (manualCoords)
  ====================================================== */
 
 function _loadManualCoords() {
@@ -243,7 +243,8 @@ function _moveAssignmentWithinZone(zoneKey, srcId, beforeId) {
 }
 
 function _moveAssignmentToZone(srcZone, srcId, dstZone, beforeId) {
-  const a = appState.diagramas.assignments || (appState.diagramas.assignments = {});
+  const a =
+    appState.diagramas.assignments || (appState.diagramas.assignments = {});
   const src = a[srcZone];
   const dst = (a[dstZone] = a[dstZone] || []);
   if (!Array.isArray(src) || !Array.isArray(dst)) return;
@@ -273,6 +274,62 @@ function _moveAssignmentToZone(srcZone, srcId, dstZone, beforeId) {
 }
 
 /* ======================================================
+   ✅ CRUD ASSIGNMENTS (FALTAVAM)
+   - Corrige: botão "Quitar" e mudanças de qty/icono
+ ====================================================== */
+
+function _removeAssignment(zoneKey, id) {
+  zoneKey = String(zoneKey || "");
+  id = String(id || "");
+  if (!zoneKey || !id) return;
+
+  const s = appState.diagramas;
+  s.assignments = s.assignments || {};
+  const list = s.assignments[zoneKey];
+  if (!Array.isArray(list)) return;
+
+  const idx = list.findIndex((x) => String(x.id) === id);
+  if (idx < 0) return;
+
+  list.splice(idx, 1);
+  _saveAssignments(); // ✅ persist
+  _clearDiagError();
+  _renderDiagramasUI();
+  _renderResult();
+}
+
+function _updateAssignment(zoneKey, id, patch) {
+  zoneKey = String(zoneKey || "");
+  id = String(id || "");
+  if (!zoneKey || !id) return;
+
+  const s = appState.diagramas;
+  s.assignments = s.assignments || {};
+  const list = s.assignments[zoneKey];
+  if (!Array.isArray(list)) return;
+
+  const it = list.find((x) => String(x.id) === id);
+  if (!it) return;
+
+  patch = patch && typeof patch === "object" ? patch : {};
+
+  if ("qty" in patch) {
+    const q = Math.max(1, Number(patch.qty || 1) || 1);
+    it.qty = q;
+  }
+  if ("iconBlock" in patch) {
+    it.iconBlock = String(patch.iconBlock || "");
+  }
+  if ("descripcion" in patch) {
+    it.descripcion = String(patch.descripcion || "");
+  }
+  if ("ref" in patch) {
+    it.ref = String(patch.ref || "");
+  }
+
+  _saveAssignments(); // ✅ persist
+}
+/* ======================================================
    ZONAS DINÁMICAS DESDE PRESUPUESTO + ORDEN
  ====================================================== */
 
@@ -299,8 +356,9 @@ function _budgetLineSectionLabel(l) {
 }
 
 function _getUserAddedZonesFromConfig() {
-  const cfg = (appState.diagramas.zonesConfig =
-    appState.diagramas.zonesConfig || _loadZonesConfig());
+  const cfg =
+    (appState.diagramas.zonesConfig =
+      appState.diagramas.zonesConfig || _loadZonesConfig());
   const out = [];
   for (const [key, zc] of Object.entries(cfg || {})) {
     if (!zc || !zc.userAdded) continue;
@@ -312,9 +370,11 @@ function _getUserAddedZonesFromConfig() {
   out.sort((a, b) => String(a.key).localeCompare(String(b.key)));
   return out;
 }
+
 function _getBudgetSecKeyMap() {
-  const cfg = (appState.diagramas.zonesConfig =
-    appState.diagramas.zonesConfig || _loadZonesConfig());
+  const cfg =
+    (appState.diagramas.zonesConfig =
+      appState.diagramas.zonesConfig || _loadZonesConfig());
   if (!cfg.__budgetSecKeyMap || typeof cfg.__budgetSecKeyMap !== "object") {
     cfg.__budgetSecKeyMap = {};
     _saveZonesConfig(cfg);
@@ -332,7 +392,8 @@ function _getOrCreateBudgetZoneKey(label) {
   let key = `sec_${norm}`;
   const cfg = appState.diagramas.zonesConfig || {};
   let i = 2;
-  while (cfg[key] && cfg[key].__taken && map[norm] !== key) key = `sec_${norm}_${i++}`;
+  while (cfg[key] && cfg[key].__taken && map[norm] !== key)
+    key = `sec_${norm}_${i++}`;
   map[norm] = key;
 
   // marca como “taken” para evitar colisiones futuras
@@ -343,8 +404,9 @@ function _getOrCreateBudgetZoneKey(label) {
 }
 
 function _applyZonesOrder(zonesNoArmario) {
-  const order = (appState.diagramas.zonesOrder =
-    appState.diagramas.zonesOrder || _loadZonesOrder());
+  const order =
+    (appState.diagramas.zonesOrder =
+      appState.diagramas.zonesOrder || _loadZonesOrder());
   if (!Array.isArray(order) || !order.length) return zonesNoArmario;
 
   const idx = new Map(order.map((k, i) => [String(k), i]));
@@ -361,8 +423,9 @@ function _buildZonesFromBudgetSections() {
   const presu = appState?.presupuesto;
   const lineas = Array.isArray(presu?.lineas) ? presu.lineas : [];
 
-  const cfg = (appState.diagramas.zonesConfig =
-    appState.diagramas.zonesConfig || _loadZonesConfig());
+  const cfg =
+    (appState.diagramas.zonesConfig =
+      appState.diagramas.zonesConfig || _loadZonesConfig());
 
   const labels = [];
   const seen = new Set();
@@ -379,21 +442,21 @@ function _buildZonesFromBudgetSections() {
   const out = [];
   const usedKeys = new Set();
 
- // 1) zonas desde secciones
-if (labels.length) {
-  for (const lab of labels) {
-    const key = _getOrCreateBudgetZoneKey(lab);
+  // 1) zonas desde secciones
+  if (labels.length) {
+    for (const lab of labels) {
+      const key = _getOrCreateBudgetZoneKey(lab);
 
-    const zc = cfg[key] || {};
-    if (zc.deleted) continue;
+      const zc = cfg[key] || {};
+      if (zc.deleted) continue;
 
-    out.push({
-      key,
-      label: _strip(zc.label) || lab,
-    });
+      out.push({
+        key,
+        label: _strip(zc.label) || lab,
+      });
+      usedKeys.add(key);
+    }
   }
-}
-
 
   // 2) zonas manuales
   const manual = _getUserAddedZonesFromConfig();
@@ -442,6 +505,7 @@ function _ensureZonesOrderForZones(zones) {
   appState.diagramas.zonesOrder = merged;
   _saveZonesOrder(merged);
 }
+
 /* ======================================================
    ZONAS: añadir / renombrar / borrar
  ====================================================== */
@@ -464,7 +528,8 @@ function _addZoneManual() {
   _syncZonesOrderFromCurrentZones();
 
   appState.diagramas.assignments = appState.diagramas.assignments || {};
-  if (!Array.isArray(appState.diagramas.assignments[key])) appState.diagramas.assignments[key] = [];
+  if (!Array.isArray(appState.diagramas.assignments[key]))
+    appState.diagramas.assignments[key] = [];
 
   _saveAssignments(); // ✅ persist
 
@@ -494,7 +559,12 @@ function _deleteZone(zoneKey) {
   const z = (appState.diagramas.zones || []).find((x) => x.key === zoneKey);
   const label = z ? z.label : zoneKey;
 
-  if (!confirm(`¿Eliminar la sección "${label}"? (Se ocultará y se borrarán sus asignaciones)`)) return;
+  if (
+    !confirm(
+      `¿Eliminar la sección "${label}"? (Se ocultará y se borrarán sus asignaciones)`
+    )
+  )
+    return;
 
   _setZoneConfig(zoneKey, { deleted: true });
 
@@ -505,7 +575,9 @@ function _deleteZone(zoneKey) {
     }
   } catch (_) {}
 
-  appState.diagramas.zones = (appState.diagramas.zones || []).filter((x) => x.key !== zoneKey);
+  appState.diagramas.zones = (appState.diagramas.zones || []).filter(
+    (x) => x.key !== zoneKey
+  );
   _syncZonesOrderFromCurrentZones();
 
   _clearDiagError();
@@ -532,7 +604,9 @@ function _setCpdSwitchBlock(blockName) {
  ====================================================== */
 
 function _isDoorWireDevice(p) {
-  const t = `${p?.ref || ""} ${p?.descripcion || ""} ${p?.icon_block || ""} ${p?.iconBlock || ""}`.toUpperCase();
+  const t = `${p?.ref || ""} ${p?.descripcion || ""} ${p?.icon_block || ""} ${
+    p?.iconBlock || ""
+  }`.toUpperCase();
   const hints = [
     "IPSTYLE",
     "IP STYLE",
@@ -554,12 +628,20 @@ function _isDoorWireDevice(p) {
     "MONITOR",
   ];
   if (hints.some((k) => t.includes(k))) return true;
-  if (t.includes("CERRADURA") || t.includes("GARAJE") || t.includes("PUERTA") || t.includes("BARRERA")) return true;
+  if (
+    t.includes("CERRADURA") ||
+    t.includes("GARAJE") ||
+    t.includes("PUERTA") ||
+    t.includes("BARRERA")
+  )
+    return true;
   return false;
 }
 
 function _isSwitchLikePlacement(p) {
-  const t = `${p?.ref || ""} ${p?.descripcion || ""} ${p?.icon_block || ""} ${p?.iconBlock || ""}`.toUpperCase();
+  const t = `${p?.ref || ""} ${p?.descripcion || ""} ${p?.icon_block || ""} ${
+    p?.iconBlock || ""
+  }`.toUpperCase();
   return t.includes("SWITCH") || t.includes("POE");
 }
 
@@ -618,7 +700,9 @@ function _augmentResultForSvg(baseResult) {
       it.type = it.type || "VIRTUAL_SWITCH_POE";
       it.zone = it.zone || "armario_cpd";
       it.meta = Object.assign({}, it.meta || {}, {
-        icon_block: _strip(cpdCfg.cpdSwitchBlock || it?.meta?.icon_block || ""),
+        icon_block: _strip(
+          cpdCfg.cpdSwitchBlock || it?.meta?.icon_block || ""
+        ),
       });
     }
   }
@@ -641,7 +725,11 @@ function _augmentResultForSvg(baseResult) {
           id: info.nodeId,
           type: "VIRTUAL_LOCK_GARAGE",
           zone: zoneKey,
-          meta: { role: "LOCK_GARAGE", scope: "ZONE", icon_block: info.block },
+          meta: {
+            role: "LOCK_GARAGE",
+            scope: "ZONE",
+            icon_block: info.block,
+          },
         });
         existingNodeIds.add(info.nodeId);
       } else {
@@ -649,7 +737,10 @@ function _augmentResultForSvg(baseResult) {
         if (it) {
           it.type = it.type || "VIRTUAL_LOCK_GARAGE";
           it.zone = it.zone || zoneKey;
-          it.meta = Object.assign({}, it.meta || {}, { scope: "ZONE", icon_block: info.block });
+          it.meta = Object.assign({}, it.meta || {}, {
+            scope: "ZONE",
+            icon_block: info.block,
+          });
         }
       }
     }
@@ -727,9 +818,19 @@ function _buildSchematicCoordsFromResult(result) {
     const label = `${p.ref || p.id || ""}${qty > 1 ? ` x${qty}` : ""}`;
 
     const m = manual[p.id];
-    const pos = m && Number.isFinite(m.x) && Number.isFinite(m.y) ? { x: m.x, y: m.y } : nextPos(zone);
+    const pos =
+      m && Number.isFinite(m.x) && Number.isFinite(m.y)
+        ? { x: m.x, y: m.y }
+        : nextPos(zone);
 
-    map.set(p.id, { x: pos.x, y: pos.y, label, kind: "placement", zone, qty });
+    map.set(p.id, {
+      x: pos.x,
+      y: pos.y,
+      label,
+      kind: "placement",
+      zone,
+      qty,
+    });
   }
 
   for (const n of infra) {
@@ -737,11 +838,20 @@ function _buildSchematicCoordsFromResult(result) {
 
     const t = String(n.type || n.id || "");
     const isLock = t.toUpperCase().includes("LOCK") || t.toUpperCase().includes("GARAGE");
-    const isCpdSw = t.toUpperCase().includes("SWITCH") && String(n?.meta?.role || "").toUpperCase().includes("CPD");
-    const label = isCpdSw ? "SWITCH POE (CPD)" : isLock ? "CERRADURA / GARAJE" : `${n.type || n.id || ""}`;
+    const isCpdSw =
+      t.toUpperCase().includes("SWITCH") &&
+      String(n?.meta?.role || "").toUpperCase().includes("CPD");
+    const label = isCpdSw
+      ? "SWITCH POE (CPD)"
+      : isLock
+      ? "CERRADURA / GARAJE"
+      : `${n.type || n.id || ""}`;
 
     const m = manual[n.id];
-    const pos = m && Number.isFinite(m.x) && Number.isFinite(m.y) ? { x: m.x, y: m.y } : nextPos(zone);
+    const pos =
+      m && Number.isFinite(m.x) && Number.isFinite(m.y)
+        ? { x: m.x, y: m.y }
+        : nextPos(zone);
 
     map.set(n.id, { x: pos.x, y: pos.y, label, kind: "infra", zone });
   }
@@ -814,11 +924,13 @@ function _renderPreviewSvg(result) {
 
     const s = `${blk} ${ref} ${String(p.label || "").toLowerCase()}`;
 
-    if (s.includes("ip style") || s.includes("ipstyle") || s.includes("ai_ip style") || s.includes("ai_ip_style")) return "📟";
+    if (s.includes("ip style") || s.includes("ipstyle") || s.includes("ai_ip style") || s.includes("ai_ip_style"))
+      return "📟";
     if (s.includes("verso")) return "📞";
     if (s.includes("ip one") || s.includes("ipone")) return "📞";
     if (s.includes("indoor") || s.includes("monitor") || s.includes("touch") || s.includes("clip")) return "🖥️";
-    if (s.includes("access") || s.includes("unit") || s.includes("reader") || s.includes("rfid") || s.includes("ble")) return "🔑";
+    if (s.includes("access") || s.includes("unit") || s.includes("reader") || s.includes("rfid") || s.includes("ble"))
+      return "🔑";
     if (s.includes("switch") || s.includes("poe")) return "🔀";
     if (s.includes("router") || s.includes("gateway")) return "🌐";
     if (s.includes("server") || s.includes("nvr")) return "🗄️";
@@ -944,7 +1056,9 @@ function _renderPreviewSvg(result) {
           </div>
         </div>
         <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-          <button id="btnDiagToggleEdit" class="btn btn-sm">${appState.diagramas.previewEditMode ? "Salir edición" : "Editar posiciones"}</button>
+          <button id="btnDiagToggleEdit" class="btn btn-sm">${
+            appState.diagramas.previewEditMode ? "Salir edición" : "Editar posiciones"
+          }</button>
           <button id="btnDiagResetLayout" class="btn btn-sm">Reset layout</button>
           <span class="chip">SVG</span>
         </div>
@@ -974,7 +1088,8 @@ function _renderPreviewSvg(result) {
    Drag controller para SVG (con rAF) + persist manualCoords
  ====================================================== */
 
-var _diagDrag = (window._diagDrag = window._diagDrag || { active: false, nodeId: null, offsetX: 0, offsetY: 0 });
+var _diagDrag = (window._diagDrag =
+  window._diagDrag || { active: false, nodeId: null, offsetX: 0, offsetY: 0 });
 
 function _svgPoint(svg, clientX, clientY) {
   const pt = svg.createSVGPoint();
@@ -1083,7 +1198,8 @@ function _bindPreviewInteractions() {
     return;
   }
 
-  const baseResult = appState.diagramas._previewResult || appState.diagramas.lastResult;
+  const baseResult =
+    appState.diagramas._previewResult || appState.diagramas.lastResult;
   const r = _augmentResultForSvg(baseResult);
 
   _bindPreviewWindowListeners(svg);
@@ -1112,6 +1228,7 @@ function _bindPreviewInteractions() {
     } catch (_) {}
   };
 }
+
 function _buildPreviewOnlyResultFromAssignments() {
   const zones = appState.diagramas.zones || [];
   const assignments = appState.diagramas.assignments || {};
@@ -1140,7 +1257,8 @@ function _renderResult() {
   if (!out) return;
 
   const previewOnly = _buildPreviewOnlyResultFromAssignments();
-  const hasPreviewPlacements = previewOnly.placements && previewOnly.placements.length > 0;
+  const hasPreviewPlacements =
+    previewOnly.placements && previewOnly.placements.length > 0;
 
   if (appState.diagramas.lastError) {
     const raw = appState.diagramas.lastRaw
@@ -1157,7 +1275,9 @@ function _renderResult() {
     if (hasPreviewPlacements) {
       appState.diagramas._previewResult = previewOnly;
       out.innerHTML = `
-        <div class="alert alert-error">${_escapeHtml(appState.diagramas.lastError)}</div>
+        <div class="alert alert-error">${_escapeHtml(
+          appState.diagramas.lastError
+        )}</div>
         ${_renderPreviewSvg(previewOnly)}
         ${raw}
       `;
@@ -1165,7 +1285,9 @@ function _renderResult() {
       return;
     }
 
-    out.innerHTML = `<div class="alert alert-error">${_escapeHtml(appState.diagramas.lastError)}</div>${raw}`;
+    out.innerHTML = `<div class="alert alert-error">${_escapeHtml(
+      appState.diagramas.lastError
+    )}</div>${raw}`;
     _bindPreviewInteractions();
     return;
   }
@@ -1253,11 +1375,15 @@ function diagLoadProjectRefs() {
     }
   }
 
-  appState.diagramas.refs = Array.from(map.values()).sort((a, b) => a.ref.localeCompare(b.ref));
+  appState.diagramas.refs = Array.from(map.values()).sort((a, b) =>
+    a.ref.localeCompare(b.ref)
+  );
 
   // 2) zones desde secciones del presupuesto + manuales
-  appState.diagramas.zonesConfig = appState.diagramas.zonesConfig || _loadZonesConfig();
-  appState.diagramas.zonesOrder = appState.diagramas.zonesOrder || _loadZonesOrder();
+  appState.diagramas.zonesConfig =
+    appState.diagramas.zonesConfig || _loadZonesConfig();
+  appState.diagramas.zonesOrder =
+    appState.diagramas.zonesOrder || _loadZonesOrder();
 
   const dyn = _buildZonesFromBudgetSections();
   if (dyn) {
@@ -1292,6 +1418,7 @@ function diagLoadProjectRefs() {
 
   _saveAssignments(); // ✅ persist coherencia
 }
+
 /* ======================================================
    2) DXF (solo carga para selects/autosugerencias)
  ====================================================== */
@@ -1308,7 +1435,8 @@ function _dxfToPairs(dxfText) {
   const pairs = [];
   for (let i = 0; i < lines.length - 1; i += 2) {
     const code = lines[i] != null ? String(lines[i]).trim() : "";
-    const value = lines[i + 1] != null ? String(lines[i + 1]).trimEnd() : "";
+    const value =
+      lines[i + 1] != null ? String(lines[i + 1]).trimEnd() : "";
     if (code === "" && value === "" && i > 50) continue;
     pairs.push([code, value.trim()]);
   }
@@ -1331,7 +1459,8 @@ function _dxfExtractBlocks(pairs) {
     if (c === "0" && v === "SECTION") {
       const next = pairs[i + 1];
       if (next && next[0] === "2") {
-        inBlocksSection = String(next[1] || "").toUpperCase() === "BLOCKS";
+        inBlocksSection =
+          String(next[1] || "").toUpperCase() === "BLOCKS";
         inBlockEntity = false;
         curName = null;
         curTags = [];
@@ -1359,7 +1488,10 @@ function _dxfExtractBlocks(pairs) {
     if (c === "0" && v === "ENDBLK") {
       if (curName) {
         if (!blocks.includes(curName)) blocks.push(curName);
-        attrsByBlock[curName] = { count: curTags.length, tags: curTags.slice() };
+        attrsByBlock[curName] = {
+          count: curTags.length,
+          tags: curTags.slice(),
+        };
       }
       inBlockEntity = false;
       curName = null;
@@ -1400,7 +1532,10 @@ function _extractDxfSection(dxfText, sectionName) {
   const name = String(sectionName || "").trim().toUpperCase();
   if (!name) return "";
 
-  const reStart = new RegExp(String.raw`(?:^|\n)\s*0\s*\n\s*SECTION\s*\n\s*2\s*\n\s*${name}\b`, "i");
+  const reStart = new RegExp(
+    String.raw`(?:^|\n)\s*0\s*\n\s*SECTION\s*\n\s*2\s*\n\s*${name}\b`,
+    "i"
+  );
   const m0 = reStart.exec(text);
   if (!m0) return "";
 
@@ -1439,35 +1574,69 @@ async function diagImportDxfFile(file) {
 
   try {
     const text0 = await file.text();
-    if (/\x00/.test(text0)) throw new Error("DXF parece binario. Exporta como DXF ASCII.");
+    if (/\x00/.test(text0))
+      throw new Error("DXF parece binario. Exporta como DXF ASCII.");
 
     const text = _stripBom(text0);
     appState.diagramas.dxfText = text;
 
     const pairs = _dxfToPairs(text);
     const ex = _dxfExtractBlocks(pairs);
-    appState.diagramas.dxfBlocks = (ex.blocks || []).sort((a, b) => a.localeCompare(b));
+    appState.diagramas.dxfBlocks = (ex.blocks || []).sort((a, b) =>
+      a.localeCompare(b)
+    );
     appState.diagramas.dxfBlockAttrs = ex.attrsByBlock || {};
 
-    appState.diagramas.dxfHeaderSection = _extractDxfSection(text, "HEADER") || "";
-    appState.diagramas.dxfClassesSection = _extractDxfSection(text, "CLASSES") || "";
-    appState.diagramas.dxfTablesSection = _extractDxfSection(text, "TABLES") || "";
-    appState.diagramas.dxfBlocksSection = _extractDxfSection(text, "BLOCKS") || "";
-    appState.diagramas.dxfObjectsSection = _extractDxfSection(text, "OBJECTS") || "";
+    appState.diagramas.dxfHeaderSection =
+      _extractDxfSection(text, "HEADER") || "";
+    appState.diagramas.dxfClassesSection =
+      _extractDxfSection(text, "CLASSES") || "";
+    appState.diagramas.dxfTablesSection =
+      _extractDxfSection(text, "TABLES") || "";
+    appState.diagramas.dxfBlocksSection =
+      _extractDxfSection(text, "BLOCKS") || "";
+    appState.diagramas.dxfObjectsSection =
+      _extractDxfSection(text, "OBJECTS") || "";
 
     if (!appState.diagramas.dxfBlocksSection) {
-      throw new Error("El DXF no contiene SECTION/BLOCKS (o no está en formato ASCII esperado).");
+      throw new Error(
+        "El DXF no contiene SECTION/BLOCKS (o no está en formato ASCII esperado)."
+      );
     }
 
     try {
-      localStorage.setItem("diag_dxf_fileName", appState.diagramas.dxfFileName || "");
-      localStorage.setItem("diag_dxf_blocks", JSON.stringify(appState.diagramas.dxfBlocks || []));
-      localStorage.setItem("diag_dxf_blockAttrs", JSON.stringify(appState.diagramas.dxfBlockAttrs || {}));
-      localStorage.setItem("diag_dxf_headerSection", appState.diagramas.dxfHeaderSection || "");
-      localStorage.setItem("diag_dxf_classesSection", appState.diagramas.dxfClassesSection || "");
-      localStorage.setItem("diag_dxf_tablesSection", appState.diagramas.dxfTablesSection || "");
-      localStorage.setItem("diag_dxf_blocksSection", appState.diagramas.dxfBlocksSection || "");
-      localStorage.setItem("diag_dxf_objectsSection", appState.diagramas.dxfObjectsSection || "");
+      localStorage.setItem(
+        "diag_dxf_fileName",
+        appState.diagramas.dxfFileName || ""
+      );
+      localStorage.setItem(
+        "diag_dxf_blocks",
+        JSON.stringify(appState.diagramas.dxfBlocks || [])
+      );
+      localStorage.setItem(
+        "diag_dxf_blockAttrs",
+        JSON.stringify(appState.diagramas.dxfBlockAttrs || {})
+      );
+      localStorage.setItem(
+        "diag_dxf_headerSection",
+        appState.diagramas.dxfHeaderSection || ""
+      );
+      localStorage.setItem(
+        "diag_dxf_classesSection",
+        appState.diagramas.dxfClassesSection || ""
+      );
+      localStorage.setItem(
+        "diag_dxf_tablesSection",
+        appState.diagramas.dxfTablesSection || ""
+      );
+      localStorage.setItem(
+        "diag_dxf_blocksSection",
+        appState.diagramas.dxfBlocksSection || ""
+      );
+      localStorage.setItem(
+        "diag_dxf_objectsSection",
+        appState.diagramas.dxfObjectsSection || ""
+      );
     } catch (_) {}
 
     _renderDiagramasUI();
@@ -1483,7 +1652,8 @@ async function diagImportDxfFile(file) {
 var _dragRefKey = (window._dragRefKey = window._dragRefKey || null);
 
 // assignment drag state
-var _dragAssign = (window._dragAssign = window._dragAssign || { zone: null, id: null });
+var _dragAssign = (window._dragAssign =
+  window._dragAssign || { zone: null, id: null });
 
 // zone drag state
 var _dragZoneKey = (window._dragZoneKey = window._dragZoneKey || null);
@@ -1504,7 +1674,10 @@ function _onAssignmentDragStart(ev, zoneKey, id) {
   _dragAssign.zone = String(zoneKey || "");
   _dragAssign.id = String(id || "");
   try {
-    ev.dataTransfer.setData("text/plain", `ASSIGN:${_dragAssign.zone}:${_dragAssign.id}`);
+    ev.dataTransfer.setData(
+      "text/plain",
+      `ASSIGN:${_dragAssign.zone}:${_dragAssign.id}`
+    );
     ev.dataTransfer.effectAllowed = "move";
   } catch (_) {}
   // ✅ FIX: si no paras bubbling, el dragstart de la ZONA también se dispara y lo pisa
@@ -1524,7 +1697,8 @@ function _onZoneCardDragStart(ev, zoneKey) {
   try {
     if (t && t.closest && t.closest(".diag-assignment")) return;
     // ✅ FIX: evita drags accidentales al tocar inputs/selects/botones dentro de la zona
-    if (t && t.closest && t.closest("input,select,textarea,button,label")) return;
+    if (t && t.closest && t.closest("input,select,textarea,button,label"))
+      return;
   } catch (_) {}
 
   _dragZoneKey = (window._dragZoneKey = String(zoneKey || ""));
@@ -1545,7 +1719,10 @@ function _onZoneDragOver(ev) {
   payload = String(payload || "").trim();
 
   try {
-    ev.dataTransfer.dropEffect = payload.startsWith("ASSIGN:") || payload.startsWith("ZONE:") ? "move" : "copy";
+    ev.dataTransfer.dropEffect =
+      payload.startsWith("ASSIGN:") || payload.startsWith("ZONE:")
+        ? "move"
+        : "copy";
   } catch (_) {}
 
   const zone = ev.currentTarget;
@@ -1557,7 +1734,9 @@ function _onZoneCardDragEnd() {
 
   // limpia estados visuales
   try {
-    document.querySelectorAll(".diag-dropzone.is-drag-over").forEach((el) => el.classList.remove("is-drag-over"));
+    document
+      .querySelectorAll(".diag-dropzone.is-drag-over")
+      .forEach((el) => el.classList.remove("is-drag-over"));
   } catch (_) {}
 }
 
@@ -1569,7 +1748,9 @@ function _onZoneDragLeave(ev) {
 // ✅ helper: encuentra la tarjeta destino dentro de una zona según la posición Y del cursor
 function _findNearestAssignmentIdInZone(zoneEl, clientY) {
   if (!zoneEl) return null;
-  const cards = Array.from(zoneEl.querySelectorAll(".diag-assignment[data-id]"));
+  const cards = Array.from(
+    zoneEl.querySelectorAll(".diag-assignment[data-id]")
+  );
   if (!cards.length) return null;
 
   let bestId = null;
@@ -1604,7 +1785,9 @@ function _reorderZones(srcKey, dstKey) {
   if (srcKey === "armario_cpd") return;
   if (dstKey === "armario_cpd") return;
 
-  const zones = Array.isArray(appState.diagramas.zones) ? appState.diagramas.zones : [];
+  const zones = Array.isArray(appState.diagramas.zones)
+    ? appState.diagramas.zones
+    : [];
   const idxSrc = zones.findIndex((z) => String(z.key) === srcKey);
   const idxDst = zones.findIndex((z) => String(z.key) === dstKey);
   if (idxSrc < 0 || idxDst < 0) return;
@@ -1704,7 +1887,9 @@ function _onZoneDrop(ev, zoneKey) {
   // --------------------------------------------------
   // 3) Añadir REF a zona
   // --------------------------------------------------
-  const refFromPayload = payload.startsWith("REF:") ? payload.slice("REF:".length) : _dragRefKey;
+  const refFromPayload = payload.startsWith("REF:")
+    ? payload.slice("REF:".length)
+    : _dragRefKey;
   const ref = String(refFromPayload || "").trim();
   if (!ref) return;
 
@@ -1713,7 +1898,9 @@ function _onZoneDrop(ev, zoneKey) {
   const list = (s.assignments[zoneKey] = s.assignments[zoneKey] || []);
 
   // busca info en refs
-  const hit = (Array.isArray(s.refs) ? s.refs : []).find((r) => String(r.ref) === ref);
+  const hit = (Array.isArray(s.refs) ? s.refs : []).find(
+    (r) => String(r.ref) === ref
+  );
   const desc = hit ? String(hit.descripcion || "") : "";
   const qty = hit && Number(hit.qty || 0) > 0 ? Number(hit.qty || 1) : 1;
 
@@ -1802,7 +1989,6 @@ function diagAutoAssignIcons() {
   _renderDiagramasUI();
   _renderResult();
 }
-
 /* ======================================================
    5) Payload base (para IA y fallback local)
  ====================================================== */
@@ -2003,7 +2189,6 @@ function _localDesignFromSpec(spec) {
 
   return _augmentResultForSvg(base);
 }
-
 /* ======================================================
    IA (opcional) + parse robusto
  ====================================================== */
@@ -2328,7 +2513,6 @@ function diagExportSvg() {
     _renderResult();
   }
 }
-
 /* ======================================================
    6B) Export DXF
    ⚠️ lo dejamos tal cual en tu proyecto (no incluido aquí a propósito)
@@ -2386,7 +2570,6 @@ function _renderRefsList() {
     node.addEventListener("dragend", () => (_dragRefKey = (window._dragRefKey = null)));
   });
 }
-
 function _renderDiagramasUI() {
   const host = _el("diagMain");
   if (!host) return;
@@ -2673,8 +2856,7 @@ function _renderDiagramasUI() {
       zone.addEventListener("dragend", _onZoneCardDragEnd);
     }
   });
-
-  // ✅ Cards: mover/reordenar assignments (drop sobre otra tarjeta = insertar antes)
+  // ✅ Cards: mover/reordenar assignments (drop sobre outra tarjeta = insertar antes)
   host.querySelectorAll(".diag-assignment[data-zone][data-id]").forEach((card) => {
     const zoneKey = card.dataset.zone;
     const id = card.dataset.id;
@@ -2773,7 +2955,6 @@ function _renderDiagramasUI() {
     }
   });
 }
-
 /* ======================================================
    Public view
  ====================================================== */
@@ -2848,3 +3029,53 @@ window.diagAutoAssignIcons = diagAutoAssignIcons;
 window.diagExportSvg = diagExportSvg;
 window.diagExportDxf = diagExportDxf;
 window.diagLoadProjectRefs = diagLoadProjectRefs;
+/* ======================================================
+   Helpers faltantes: actualizar / quitar assignment
+   (necesarios porque _renderDiagramasUI los usa)
+ ====================================================== */
+
+function _findAssignment(zoneKey, id) {
+  const s = appState.diagramas;
+  const list = s && s.assignments ? s.assignments[zoneKey] : null;
+  if (!Array.isArray(list)) return null;
+  const idx = list.findIndex((x) => String(x?.id) === String(id));
+  if (idx < 0) return null;
+  return { list, idx, item: list[idx] };
+}
+
+function _updateAssignment(zoneKey, id, patch) {
+  zoneKey = String(zoneKey || "");
+  id = String(id || "");
+  if (!zoneKey || !id) return;
+
+  const hit = _findAssignment(zoneKey, id);
+  if (!hit) return;
+
+  const cur = hit.item || {};
+  const next = Object.assign({}, cur, patch || {});
+
+  // saneo básico
+  if ("qty" in next) next.qty = Math.max(1, Number(next.qty || 1) || 1);
+  if ("iconBlock" in next) next.iconBlock = String(next.iconBlock || "");
+
+  hit.list[hit.idx] = next;
+
+  _saveAssignments(); // ✅ persist
+}
+
+function _removeAssignment(zoneKey, id) {
+  zoneKey = String(zoneKey || "");
+  id = String(id || "");
+  if (!zoneKey || !id) return;
+
+  const hit = _findAssignment(zoneKey, id);
+  if (!hit) return;
+
+  hit.list.splice(hit.idx, 1);
+
+  _saveAssignments(); // ✅ persist
+
+  _clearDiagError();
+  _renderDiagramasUI();
+  _renderResult();
+}
