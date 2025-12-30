@@ -1540,13 +1540,20 @@ function _findNearestAssignmentIdInZone(zoneEl, clientY) {
   let bestId = null;
   let bestDist = Infinity;
 
+  // ✅ ignora la tarjeta que estás arrastrando (si existe)
+  const draggingId = _dragAssign && _dragAssign.id ? String(_dragAssign.id) : null;
+
   for (const c of cards) {
+    const cid = c.dataset.id || null;
+    if (draggingId && cid === draggingId) continue;
+
     const r = c.getBoundingClientRect();
     const midY = r.top + r.height / 2;
     const d = Math.abs(clientY - midY);
+
     if (d < bestDist) {
       bestDist = d;
-      bestId = c.dataset.id || null;
+      bestId = cid;
     }
   }
   return bestId;
