@@ -2900,38 +2900,10 @@ function _renderDiagramasUI() {
       } catch (_) {}
     });
 
-    card.addEventListener("drop", (ev) => {
-  let payload = "";
-  try {
-    payload = ev.dataTransfer.getData("text/plain") || "";
-  } catch (_) {}
-  payload = String(payload || "").trim();
-
-  // ✅ Si es ZONA: no interceptamos la lógica; deja que lo gestione la zona
-  if (payload.startsWith("ZONE:")) {
-    ev.preventDefault();
-    return;
-  }
-
+   card.addEventListener("drop", (ev) => {
+  // NO gestionar aquí el drop
+  // El orden lo decide _onZoneDrop() usando clientY
   ev.preventDefault();
-  ev.stopPropagation(); // ✅ CLAVE: evita que también dispare _onZoneDrop
-
-  if (!payload.startsWith("ASSIGN:")) return;
-
-  const parts = payload.split(":");
-  const srcZone = parts[1] || "";
-  const srcId = parts[2] || "";
-  if (!srcZone || !srcId) return;
-
-  if (String(srcZone) === String(zoneKey)) {
-    _moveAssignmentWithinZone(zoneKey, srcId, id);
-  } else {
-    _moveAssignmentToZone(srcZone, srcId, zoneKey, id);
-  }
-
-  _clearDiagError();
-  _renderDiagramasUI();
-  _renderResult();
 });
 
   });
