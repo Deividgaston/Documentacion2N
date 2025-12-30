@@ -1014,7 +1014,7 @@ function _renderPreviewSvg(result) {
       const path = _orthPath(a, b, i, c.type);
       const label2h =
         String(c.type || "").toUpperCase() === "2_WIRE"
-          ? `<text x="${(a.x + b.x) / 2 + 6}" y="${(a.y + b.y) / 2 - 6}" font-size="11" fill="rgba(245,158,11,.95)">2H</text>`
+          ? `<text x="${(a.x + b.x) / 2 + 6}" y="${(a.y + b.y) / 2 - 6}" font-size="11" fill="rgba(245,158,11,.95)" pointer-events="none">2H</text>`
           : "";
       return `${path}${label2h}`;
     })
@@ -1035,7 +1035,7 @@ function _renderPreviewSvg(result) {
           ? `
             <g>
               <rect x="${p.x - 6}" y="${p.y - 34}" width="28" height="16" rx="6" ry="6" fill="rgba(17,24,39,.90)"></rect>
-              <text x="${p.x - 2}" y="${p.y - 22}" font-size="11" fill="white">x${qty}</text>
+              <text x="${p.x - 2}" y="${p.y - 22}" font-size="11" fill="white" pointer-events="none">x${qty}</text>
             </g>
           `
           : "";
@@ -1051,9 +1051,9 @@ function _renderPreviewSvg(result) {
         )}" style="${nodeStyle}">
           <circle class="diag-node-hit" cx="${p.x}" cy="${p.y}" r="18" fill="rgba(0,0,0,0)"></circle>
           <circle cx="${p.x}" cy="${p.y}" r="14" fill="${fill}" stroke="${stroke}" stroke-width="10"></circle>
-          <text x="${p.x - 8}" y="${p.y + 7}" font-size="18" fill="white">${icon}</text>
+          <text x="${p.x - 8}" y="${p.y + 7}" font-size="18" fill="white" pointer-events="none">${icon}</text>
           ${qtyBadge}
-          <text x="${p.x + 18}" y="${p.y + 5}" font-size="12" fill="rgba(17,24,39,.95)">${label}</text>
+          <text x="${p.x + 18}" y="${p.y + 5}" font-size="12" fill="rgba(17,24,39,.95)" pointer-events="none">${label}</text>
         </g>
       `;
     })
@@ -1062,7 +1062,7 @@ function _renderPreviewSvg(result) {
   const headers = zones
     .map((z, i) => {
       const x = startX + i * colW;
-      return `<text x="${x}" y="36" font-size="13" fill="rgba(107,114,128,.95)">${_escapeHtml(
+      return `<text x="${x}" y="36" font-size="13" fill="rgba(107,114,128,.95)" pointer-events="none">${_escapeHtml(
         z.label
       )}</text>`;
     })
