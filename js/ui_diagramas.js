@@ -1339,6 +1339,11 @@ function _bindPreviewInteractions() {
     const nodeId = g.getAttribute("data-node-id");
     if (!nodeId) return;
 
+    // ✅ por si quedó transform colgado de un drag anterior
+    try {
+      g.removeAttribute("transform");
+    } catch (_) {}
+
     // capturar puntero (clave)
     try {
       appState.diagramas._previewActivePointerId = ev.pointerId;
@@ -1353,8 +1358,8 @@ function _bindPreviewInteractions() {
 
     _diagDrag.active = true;
     _diagDrag.nodeId = nodeId;
-    _diagDrag.nodeEl = g;        // ✅ referencia DOM
-    _diagDrag.baseX = cur.x;     // ✅ base para translate
+    _diagDrag.nodeEl = g; // ✅ referencia DOM
+    _diagDrag.baseX = cur.x; // ✅ base para translate
     _diagDrag.baseY = cur.y;
     _diagDrag.offsetX = cur.x - p.x;
     _diagDrag.offsetY = cur.y - p.y;
