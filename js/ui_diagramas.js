@@ -1609,7 +1609,8 @@ function _onZoneDrop(ev, zoneKey) {
   payload = String(payload || "").trim();
   if (!payload) {
     if (_dragZoneKey) payload = `ZONE:${String(_dragZoneKey)}`;
-    else if (_dragAssign && _dragAssign.zone && _dragAssign.id) payload = `ASSIGN:${String(_dragAssign.zone)}:${String(_dragAssign.id)}`;
+    else if (_dragAssign && _dragAssign.zone && _dragAssign.id)
+      payload = `ASSIGN:${String(_dragAssign.zone)}:${String(_dragAssign.id)}`;
     else if (_dragRefKey) payload = `REF:${String(_dragRefKey)}`;
   }
 
@@ -1626,6 +1627,10 @@ function _onZoneDrop(ev, zoneKey) {
 
     if (String(srcZoneKey) !== String(zoneKey)) {
       _reorderZones(srcZoneKey, zoneKey);
+
+      // ✅ limpieza: evita que quede “enganchado” el último drag de zona
+      _dragZoneKey = (window._dragZoneKey = null);
+
       _clearDiagError();
       _renderDiagramasUI();
       _renderResult();
@@ -1668,7 +1673,6 @@ function _onZoneDrop(ev, zoneKey) {
     });
 
     _saveAssignments();
-
     _clearDiagError();
     _renderDiagramasUI();
     _renderResult();
@@ -1686,9 +1690,8 @@ function _onZoneDrop(ev, zoneKey) {
   const list = (appState.diagramas.assignments[zoneKey] = appState.diagramas.assignments[zoneKey] || []);
   const existing = list.find((x) => x.ref === ref);
 
-  if (existing) {
-    existing.qty = Number(existing.qty || 0) + 1;
-  } else {
+  if (existing) existing.qty = Number(existing.qty || 0) + 1;
+  else {
     list.push({
       id: `A_${zoneKey}_${Date.now()}_${Math.random().toString(16).slice(2)}`,
       ref: source.ref,
@@ -1699,7 +1702,6 @@ function _onZoneDrop(ev, zoneKey) {
   }
 
   _saveAssignments();
-
   _clearDiagError();
   _renderDiagramasUI();
   _renderResult();
