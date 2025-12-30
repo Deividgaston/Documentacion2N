@@ -1880,8 +1880,9 @@ function _onZoneDrop(ev, zoneKey) {
     let beforeId = "";
     try {
       const zoneEl = ev.currentTarget;
-      const near = _findNearestAssignmentIdInZone(zoneEl, ev.clientY);
-      beforeId = near ? String(near) : "";
+      const before = _findBeforeAssignmentIdInZone(zoneEl, ev.clientY);
+      beforeId = before ? String(before) : "";
+
     } catch (_) {}
 
     if (String(srcZone) === String(dstZone)) {
