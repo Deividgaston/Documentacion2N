@@ -1761,35 +1761,31 @@ function _onZoneDragLeave(ev) {
   if (zone) zone.classList.remove("is-drag-over");
 }
 
-// ✅ helper: encuentra la tarjeta destino dentro de una zona según la posición Y del cursor
-function _findNearestAssignmentIdInZone(zoneEl, clientY) {
+// ✅ helper: devuelve el ID de la tarjeta ANTES de la que hay que insertar (según Y del cursor)
+// Si no hay, devuelve null => append al final.
+function _findBeforeAssignmentIdInZone(zoneEl, clientY) {
   if (!zoneEl) return null;
-  const cards = Array.from(
-    zoneEl.querySelectorAll(".diag-assignment[data-id]")
-  );
+
+  const cards = Array.from(zoneEl.querySelectorAll(".diag-assignment[data-id]"));
   if (!cards.length) return null;
 
-  let bestId = null;
-  let bestDist = Infinity;
-
-  // ✅ ignora la tarjeta que estás arrastrando (si existe)
   const draggingId = _dragAssign && _dragAssign.id ? String(_dragAssign.id) : null;
 
   for (const c of cards) {
     const cid = c.dataset.id || null;
+    if (!cid) continue;
     if (draggingId && cid === draggingId) continue;
 
     const r = c.getBoundingClientRect();
     const midY = r.top + r.height / 2;
-    const d = Math.abs(clientY - midY);
 
-    if (d < bestDist) {
-      bestDist = d;
-      bestId = cid;
-    }
+    // si el cursor está por encima del centro de esta tarjeta, insertamos ANTES de ella
+    if (clientY < midY) return cid;
   }
-  return bestId;
+
+  return null; // => al final
 }
+
 
 // ✅ Reordenar ZONAS (tarjetas de ubicación). Armario/CPD siempre fijo al final.
 function _reorderZones(srcKey, dstKey) {
