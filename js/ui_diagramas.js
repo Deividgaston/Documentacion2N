@@ -2901,36 +2901,39 @@ function _renderDiagramasUI() {
     });
 
     card.addEventListener("drop", (ev) => {
-      let payload = "";
-      try {
-        payload = ev.dataTransfer.getData("text/plain") || "";
-      } catch (_) {}
-      payload = String(payload || "").trim();
+  let payload = "";
+  try {
+    payload = ev.dataTransfer.getData("text/plain") || "";
+  } catch (_) {}
+  payload = String(payload || "").trim();
 
-      // ✅ Si es ZONA: no interceptamos la lógica; deja que lo gestione la zona
-      if (payload.startsWith("ZONE:")) {
-        ev.preventDefault();
-        return;
-      }
+  // ✅ Si es ZONA: no interceptamos la lógica; deja que lo gestione la zona
+  if (payload.startsWith("ZONE:")) {
+    ev.preventDefault();
+    return;
+  }
 
-      ev.preventDefault();
-      if (!payload.startsWith("ASSIGN:")) return;
+  ev.preventDefault();
+  ev.stopPropagation(); // ✅ CLAVE: evita que también dispare _onZoneDrop
 
-      const parts = payload.split(":");
-      const srcZone = parts[1] || "";
-      const srcId = parts[2] || "";
-      if (!srcZone || !srcId) return;
+  if (!payload.startsWith("ASSIGN:")) return;
 
-      if (String(srcZone) === String(zoneKey)) {
-        _moveAssignmentWithinZone(zoneKey, srcId, id);
-      } else {
-        _moveAssignmentToZone(srcZone, srcId, zoneKey, id);
-      }
+  const parts = payload.split(":");
+  const srcZone = parts[1] || "";
+  const srcId = parts[2] || "";
+  if (!srcZone || !srcId) return;
 
-      _clearDiagError();
-      _renderDiagramasUI();
-      _renderResult();
-    });
+  if (String(srcZone) === String(zoneKey)) {
+    _moveAssignmentWithinZone(zoneKey, srcId, id);
+  } else {
+    _moveAssignmentToZone(srcZone, srcId, zoneKey, id);
+  }
+
+  _clearDiagError();
+  _renderDiagramasUI();
+  _renderResult();
+});
+
   });
 
   host.querySelectorAll("[data-act]").forEach((node) => {
