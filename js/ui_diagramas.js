@@ -1248,6 +1248,26 @@ function _bindPreviewInteractions() {
 
   _bindPreviewWindowListeners(svg);
 
+  // ✅ FIX Chrome: evita drag nativo del navegador sobre SVG/text
+  try {
+    svg.setAttribute("draggable", "false");
+
+    // IMPORTANTE: en Chrome a veces se inicia un drag HTML5 sobre <text> del SVG
+    // y eso rompe nuestros mousemove/mouseup.
+    svg.addEventListener(
+      "dragstart",
+      (e) => {
+        try {
+          e.preventDefault();
+        } catch (_) {}
+        try {
+          e.stopPropagation();
+        } catch (_) {}
+      },
+      true
+    );
+  } catch (_) {}
+
   svg.onmousedown = (ev) => {
     const t = ev.target;
     const g = t && t.closest ? t.closest(".diag-node") : null;
@@ -1267,11 +1287,16 @@ function _bindPreviewInteractions() {
     _diagDrag.offsetX = cur.x - p.x;
     _diagDrag.offsetY = cur.y - p.y;
 
+    // ✅ CLAVE: Chrome — evita que el navegador “capture” el gesto como drag/selección
     try {
       ev.preventDefault();
     } catch (_) {}
+    try {
+      ev.stopPropagation();
+    } catch (_) {}
   };
 }
+
 
 /* ======================================================
    Preview-only result desde assignments (sin IA)
