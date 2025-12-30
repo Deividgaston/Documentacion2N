@@ -10,6 +10,11 @@
 // - ✅ Conexiones en preview con rutas ortogonales
 // - ✅ Mantiene SVG (MAESTRO)
 // - ⚠️ DXF: NO tocamos export ahora; solo mantenemos carga DXF para selects/autosugerencias
+//
+// MEJORAS estrictamente necesarias (V2.15c):
+// - ✅ FIX rendimiento: drag de nodos SVG ahora usa requestAnimationFrame (evita re-render por cada mousemove)
+// - ✅ Persistencia layout: manualCoords se guarda/carga en localStorage (no se pierden posiciones)
+
 function _defaultDiagramasState() {
   return {
     dxfFileName: "",
@@ -57,6 +62,10 @@ function _defaultDiagramasState() {
     _previewListenersBound: false,
     _previewMouseMoveHandler: null,
     _previewMouseUpHandler: null,
+
+    // ✅ throttle render preview drag
+    _previewRaf: 0,
+    _previewPendingMove: null,
   };
 }
 
@@ -174,6 +183,26 @@ function _loadAssignments() {
 function _saveAssignments() {
   try {
     localStorage.setItem("diag_assignments", JSON.stringify(appState.diagramas.assignments || {}));
+  } catch (_) {}
+}
+
+/* ======================================================
+   ✅ PERSISTENCIA LAYOUT (manualCoords)
+ ====================================================== */
+
+function _loadManualCoords() {
+  try {
+    const t = localStorage.getItem("diag_manual_coords");
+    const obj = t ? JSON.parse(t) : null;
+    return obj && typeof obj === "object" ? obj : {};
+  } catch (_) {
+    return {};
+  }
+}
+
+function _saveManualCoords() {
+  try {
+    localStorage.setItem("diag_manual_coords", JSON.stringify(appState.diagramas.manualCoords || {}));
   } catch (_) {}
 }
 
@@ -347,6 +376,7 @@ function _syncZonesOrderFromCurrentZones() {
   appState.diagramas.zonesOrder = order;
   _saveZonesOrder(order);
 }
+
 function _ensureZonesOrderForZones(zones) {
   const keys = (Array.isArray(zones) ? zones : [])
     .filter((z) => z && z.key !== "armario_cpd")
@@ -368,10 +398,6 @@ function _ensureZonesOrderForZones(zones) {
   appState.diagramas.zonesOrder = merged;
   _saveZonesOrder(merged);
 }
-
-
-
-
 
 function _addZoneManual() {
   const name = _strip(prompt("Nombre de la nueva ubicación:", ""));
@@ -913,6 +939,15 @@ function _svgPoint(svg, clientX, clientY) {
 
 function _unbindPreviewWindowListeners() {
   const s = appState.diagramas;
+
+  if (s._previewRaf) {
+    try {
+      cancelAnimationFrame(s._previewRaf);
+    } catch (_) {}
+    s._previewRaf = 0;
+  }
+  s._previewPendingMove = null;
+
   if (s._previewMouseMoveHandler) {
     window.removeEventListener("mousemove", s._previewMouseMoveHandler, true);
     s._previewMouseMoveHandler = null;
@@ -929,21 +964,38 @@ function _bindPreviewWindowListeners(svg) {
 
   _unbindPreviewWindowListeners();
 
+  // ✅ throttle con rAF: evita re-render por cada mousemove
+  function _scheduleRender() {
+    if (s._previewRaf) return;
+    s._previewRaf = requestAnimationFrame(() => {
+      s._previewRaf = 0;
+      if (!s._previewPendingMove) return;
+      const { nodeId, nx, ny } = s._previewPendingMove;
+      s._previewPendingMove = null;
+
+      s.manualCoords = s.manualCoords || {};
+      s.manualCoords[nodeId] = { x: nx, y: ny };
+
+      _renderResult();
+    });
+  }
+
   s._previewMouseMoveHandler = (ev) => {
     if (!_diagDrag.active || !_diagDrag.nodeId) return;
     const p = _svgPoint(svg, ev.clientX, ev.clientY);
     const nx = p.x + _diagDrag.offsetX;
     const ny = p.y + _diagDrag.offsetY;
 
-    s.manualCoords = s.manualCoords || {};
-    s.manualCoords[_diagDrag.nodeId] = { x: nx, y: ny };
-
-    _renderResult();
+    s._previewPendingMove = { nodeId: _diagDrag.nodeId, nx, ny };
+    _scheduleRender();
   };
 
   s._previewMouseUpHandler = () => {
     _diagDrag.active = false;
     _diagDrag.nodeId = null;
+
+    // ✅ persistir layout al soltar
+    _saveManualCoords();
   };
 
   window.addEventListener("mousemove", s._previewMouseMoveHandler, true);
@@ -970,6 +1022,7 @@ function _bindPreviewInteractions() {
   if (btnReset) {
     btnReset.onclick = () => {
       appState.diagramas.manualCoords = {};
+      _saveManualCoords(); // ✅ persist reset
       _renderResult();
     };
   }
@@ -1622,7 +1675,6 @@ function _onZoneDrop(ev, zoneKey) {
   _renderDiagramasUI();
   _renderResult();
 }
-
 
 function _removeAssignment(zoneKey, id) {
   const list = appState.diagramas.assignments[zoneKey] || [];
@@ -2581,72 +2633,71 @@ function _renderDiagramasUI() {
     }
   });
 
-// ✅ Cards: mover/reordenar assignments (drop sobre otra tarjeta = insertar antes)
-host.querySelectorAll(".diag-assignment[data-zone][data-id]").forEach((card) => {
-  const zoneKey = card.dataset.zone;
-  const id = card.dataset.id;
+  // ✅ Cards: mover/reordenar assignments (drop sobre otra tarjeta = insertar antes)
+  host.querySelectorAll(".diag-assignment[data-zone][data-id]").forEach((card) => {
+    const zoneKey = card.dataset.zone;
+    const id = card.dataset.id;
 
-  card.addEventListener("dragstart", (ev) => _onAssignmentDragStart(ev, zoneKey, id));
-  card.addEventListener("dragend", _onAssignmentDragEnd);
+    card.addEventListener("dragstart", (ev) => _onAssignmentDragStart(ev, zoneKey, id));
+    card.addEventListener("dragend", _onAssignmentDragEnd);
 
-  card.addEventListener("dragover", (ev) => {
-    let payload = "";
-    try {
-      payload = ev.dataTransfer.getData("text/plain") || "";
-    } catch (_) {}
-    payload = String(payload || "").trim();
+    card.addEventListener("dragover", (ev) => {
+      let payload = "";
+      try {
+        payload = ev.dataTransfer.getData("text/plain") || "";
+      } catch (_) {}
+      payload = String(payload || "").trim();
 
-    // ✅ IMPORTANTE: si arrastras una ZONA encima de una tarjeta,
-    // hay que hacer preventDefault para que el navegador permita el drop.
-    // NO hacemos stopPropagation: dejamos que burbujee y lo gestione la zona.
-    if (payload.startsWith("ZONE:")) {
+      // ✅ IMPORTANTE: si arrastras una ZONA encima de una tarjeta,
+      // hay que hacer preventDefault para que el navegador permita el drop.
+      // NO hacemos stopPropagation: dejamos que burbujee y lo gestione la zona.
+      if (payload.startsWith("ZONE:")) {
+        ev.preventDefault();
+        try {
+          ev.dataTransfer.dropEffect = "move";
+        } catch (_) {}
+        return;
+      }
+
       ev.preventDefault();
       try {
         ev.dataTransfer.dropEffect = "move";
       } catch (_) {}
-      return;
-    }
+    });
 
-    ev.preventDefault();
-    try {
-      ev.dataTransfer.dropEffect = "move";
-    } catch (_) {}
-  });
+    card.addEventListener("drop", (ev) => {
+      let payload = "";
+      try {
+        payload = ev.dataTransfer.getData("text/plain") || "";
+      } catch (_) {}
+      payload = String(payload || "").trim();
 
-  card.addEventListener("drop", (ev) => {
-    let payload = "";
-    try {
-      payload = ev.dataTransfer.getData("text/plain") || "";
-    } catch (_) {}
-    payload = String(payload || "").trim();
+      // ✅ Si es ZONA: permitimos drop (preventDefault) pero NO interceptamos la lógica;
+      // deja que burbujee al .diag-dropzone
+      if (payload.startsWith("ZONE:")) {
+        ev.preventDefault();
+        return;
+      }
 
-    // ✅ Si es ZONA: permitimos drop (preventDefault) pero NO interceptamos la lógica;
-    // deja que burbujee al .diag-dropzone
-    if (payload.startsWith("ZONE:")) {
       ev.preventDefault();
-      return;
-    }
+      if (!payload.startsWith("ASSIGN:")) return;
 
-    ev.preventDefault();
-    if (!payload.startsWith("ASSIGN:")) return;
+      const parts = payload.split(":");
+      const srcZone = parts[1] || "";
+      const srcId = parts[2] || "";
+      if (!srcZone || !srcId) return;
 
-    const parts = payload.split(":");
-    const srcZone = parts[1] || "";
-    const srcId = parts[2] || "";
-    if (!srcZone || !srcId) return;
+      if (String(srcZone) === String(zoneKey)) {
+        _moveAssignmentWithinZone(zoneKey, srcId, id);
+      } else {
+        _moveAssignmentToZone(srcZone, srcId, zoneKey, id);
+      }
 
-    if (String(srcZone) === String(zoneKey)) {
-      _moveAssignmentWithinZone(zoneKey, srcId, id);
-    } else {
-      _moveAssignmentToZone(srcZone, srcId, zoneKey, id);
-    }
-
-    _clearDiagError();
-    _renderDiagramasUI();
-    _renderResult();
+      _clearDiagError();
+      _renderDiagramasUI();
+      _renderResult();
+    });
   });
-});
-
 
   host.querySelectorAll("[data-act]").forEach((node) => {
     const act = node.dataset.act;
@@ -2688,7 +2739,7 @@ host.querySelectorAll(".diag-assignment[data-zone][data-id]").forEach((card) => 
    Public view
  ====================================================== */
 function renderDiagramasView() {
- appState.diagramas = _defaultDiagramasState();
+  appState.diagramas = _defaultDiagramasState();
 
   const root = document.getElementById("appContent");
   if (!root) return;
@@ -2725,8 +2776,11 @@ function renderDiagramasView() {
     appState.diagramas.zonesConfig = _loadZonesConfig();
     appState.diagramas.zonesOrder = _loadZonesOrder();
 
-    // ✅ cargar assignments persistidos (FIX principal)
+    // ✅ cargar assignments persistidos
     appState.diagramas.assignments = _loadAssignments();
+
+    // ✅ cargar layout persistido
+    appState.diagramas.manualCoords = _loadManualCoords();
   } catch (_) {}
 
   diagLoadProjectRefs();
