@@ -59,6 +59,17 @@ function _defaultDiagramasState() {
   };
 }
 
+function _diagProjectKey() {
+  const p = appState?.presupuesto || {};
+  return String(
+    p.id || p.presupuestoId || p.uuid || p.uid || p.nombre || "default"
+  );
+}
+
+function _diagLsKey(base) {
+  return `${base}__${_diagProjectKey()}`;
+}
+
 // ======================================================
 // ESTADO GLOBAL
 // ======================================================
