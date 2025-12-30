@@ -569,7 +569,10 @@ function _deleteZone(zoneKey) {
   _setZoneConfig(zoneKey, { deleted: true });
 
   try {
-    if (appState.diagramas.assignments && appState.diagramas.assignments[zoneKey]) {
+    if (
+      appState.diagramas.assignments &&
+      appState.diagramas.assignments[zoneKey]
+    ) {
       delete appState.diagramas.assignments[zoneKey];
       _saveAssignments(); // ✅ persist
     }
@@ -598,7 +601,6 @@ function _setCpdSwitchBlock(blockName) {
   _setZoneConfig("armario_cpd", { cpdSwitchBlock: b || "" });
   _clearDiagError();
 }
-
 /* ======================================================
    Helpers: detección + enriquecimiento SVG
  ====================================================== */
@@ -780,6 +782,7 @@ function _strokeForConnectionType(t) {
   }
   return { stroke: "rgba(29,79,216,.55)", width: 2, dash: "" };
 }
+
 /* ======================================================
    Preview SVG (coords)
  ====================================================== */
@@ -889,7 +892,6 @@ function _buildSchematicCoordsFromResult(result) {
 
   return map;
 }
-
 function _renderPreviewSvg(result) {
   const r = _augmentResultForSvg(result);
 
@@ -1155,29 +1157,30 @@ function _bindPreviewWindowListeners(svg) {
     _scheduleRender();
   };
 
-s._previewMouseUpHandler = () => {
-  // ✅ commit del último move pendiente ANTES de guardar
-  if (s._previewPendingMove && s._previewPendingMove.nodeId) {
-    const { nodeId, nx, ny } = s._previewPendingMove;
-    s._previewPendingMove = null;
+  s._previewMouseUpHandler = () => {
+    // ✅ commit del último move pendiente ANTES de guardar
+    if (s._previewPendingMove && s._previewPendingMove.nodeId) {
+      const { nodeId, nx, ny } = s._previewPendingMove;
+      s._previewPendingMove = null;
 
-    s.manualCoords = s.manualCoords || {};
-    s.manualCoords[nodeId] = { x: nx, y: ny };
-  }
+      s.manualCoords = s.manualCoords || {};
+      s.manualCoords[nodeId] = { x: nx, y: ny };
+    }
 
-  // ✅ corta cualquier rAF pendiente
-  if (s._previewRaf) {
-    try { cancelAnimationFrame(s._previewRaf); } catch (_) {}
-    s._previewRaf = 0;
-  }
+    // ✅ corta cualquier rAF pendiente
+    if (s._previewRaf) {
+      try {
+        cancelAnimationFrame(s._previewRaf);
+      } catch (_) {}
+      s._previewRaf = 0;
+    }
 
-  _diagDrag.active = false;
-  _diagDrag.nodeId = null;
+    _diagDrag.active = false;
+    _diagDrag.nodeId = null;
 
-  _saveManualCoords();  // ✅ ahora sí, guarda el último punto real
-  _renderResult();      // ✅ refresca para que se vea fijo
-};
-
+    _saveManualCoords(); // ✅ ahora sí, guarda el último punto real
+    _renderResult(); // ✅ refresca para que se vea fijo
+  };
 
   window.addEventListener("mousemove", s._previewMouseMoveHandler, true);
   window.addEventListener("mouseup", s._previewMouseUpHandler, true);
@@ -1367,6 +1370,7 @@ function _renderResult() {
 
   _bindPreviewInteractions();
 }
+
 /* ======================================================
    1) Refs + ZONAS desde presupuesto
  ====================================================== */
@@ -1434,7 +1438,6 @@ function diagLoadProjectRefs() {
 
   _saveAssignments(); // ✅ persist coherencia
 }
-
 /* ======================================================
    2) DXF (solo carga para selects/autosugerencias)
  ====================================================== */
@@ -1662,6 +1665,7 @@ async function diagImportDxfFile(file) {
     _renderResult();
   }
 }
+
 /* ======================================================
    3) Drag & drop (refs a zonas + mover/reorder assignments + reorder zonas)
  ====================================================== */
@@ -1769,7 +1773,8 @@ function _findBeforeAssignmentIdInZone(zoneEl, clientY) {
   const cards = Array.from(zoneEl.querySelectorAll(".diag-assignment[data-id]"));
   if (!cards.length) return null;
 
-  const draggingId = _dragAssign && _dragAssign.id ? String(_dragAssign.id) : null;
+  const draggingId =
+    _dragAssign && _dragAssign.id ? String(_dragAssign.id) : null;
 
   for (const c of cards) {
     const cid = c.dataset.id || null;
@@ -1785,7 +1790,6 @@ function _findBeforeAssignmentIdInZone(zoneEl, clientY) {
 
   return null; // => al final
 }
-
 
 // ✅ Reordenar ZONAS (tarjetas de ubicación). Armario/CPD siempre fijo al final.
 function _reorderZones(srcKey, dstKey) {
@@ -1882,7 +1886,6 @@ function _onZoneDrop(ev, zoneKey) {
       const zoneEl = ev.currentTarget;
       const before = _findBeforeAssignmentIdInZone(zoneEl, ev.clientY);
       beforeId = before ? String(before) : "";
-
     } catch (_) {}
 
     if (String(srcZone) === String(dstZone)) {
@@ -1934,6 +1937,7 @@ function _onZoneDrop(ev, zoneKey) {
   _renderDiagramasUI();
   _renderResult();
 }
+
 /* ======================================================
    4) AUTO icon suggestion
  ====================================================== */
@@ -1946,12 +1950,21 @@ function _suggestIconBlockForItem(item, blocks) {
   const rules = [
     { patterns: ["ip style", "ipstyle"], blockHints: ["ip style", "ipstyle"] },
     { patterns: ["ip one", "ipone"], blockHints: ["ip one", "ipone"] },
-    { patterns: ["indoor", "monitor", "pantalla"], blockHints: ["indoor", "monitor"] },
-    { patterns: ["access", "unit", "ble", "rfid", "lector"], blockHints: ["access", "unit"] },
+    {
+      patterns: ["indoor", "monitor", "pantalla"],
+      blockHints: ["indoor", "monitor"],
+    },
+    {
+      patterns: ["access", "unit", "ble", "rfid", "lector"],
+      blockHints: ["access", "unit"],
+    },
     { patterns: ["switch", "poe"], blockHints: ["switch", "poe"] },
     { patterns: ["router", "gateway"], blockHints: ["router", "gateway"] },
     { patterns: ["server", "nvr"], blockHints: ["server", "nvr"] },
-    { patterns: ["cerradura", "lock", "garage"], blockHints: ["lock", "cerradura", "garage"] },
+    {
+      patterns: ["cerradura", "lock", "garage"],
+      blockHints: ["lock", "cerradura", "garage"],
+    },
   ];
   const bNorm = blocks.map((b) => ({ raw: b, n: _norm(b) }));
 
@@ -1972,9 +1985,12 @@ function _suggestIconBlockForItem(item, blocks) {
 }
 
 function diagAutoAssignIcons() {
-  const blocks = Array.isArray(appState.diagramas.dxfBlocks) ? appState.diagramas.dxfBlocks : [];
+  const blocks = Array.isArray(appState.diagramas.dxfBlocks)
+    ? appState.diagramas.dxfBlocks
+    : [];
   if (!blocks.length) {
-    appState.diagramas.lastError = "Carga primero la plantilla DXF para poder sugerir iconos (BLOCKS).";
+    appState.diagramas.lastError =
+      "Carga primero la plantilla DXF para poder sugerir iconos (BLOCKS).";
     appState.diagramas.lastRaw = null;
     _renderResult();
     return;
@@ -1993,7 +2009,10 @@ function diagAutoAssignIcons() {
 
   const cpdCfg = _getZoneConfig("armario_cpd");
   if (!cpdCfg.cpdSwitchBlock) {
-    const sugSw = blocks.find((b) => _norm(b).includes("switch") && _norm(b).includes("poe")) || "";
+    const sugSw =
+      blocks.find(
+        (b) => _norm(b).includes("switch") && _norm(b).includes("poe")
+      ) || "";
     if (sugSw) _setCpdSwitchBlock(sugSw);
   }
 
@@ -2002,6 +2021,7 @@ function diagAutoAssignIcons() {
   _renderDiagramasUI();
   _renderResult();
 }
+
 /* ======================================================
    5) Payload base (para IA y fallback local)
  ====================================================== */
@@ -2039,7 +2059,8 @@ Devuelve EXACTAMENTE:
 
 function _getEffectiveInstructions() {
   const s = appState.diagramas;
-  if (s.useCustomPrompt && String(s.customPromptText || "").trim()) return String(s.customPromptText).trim();
+  if (s.useCustomPrompt && String(s.customPromptText || "").trim())
+    return String(s.customPromptText).trim();
   return _defaultInstructions();
 }
 
@@ -2076,7 +2097,10 @@ function _buildSpecFromAssignments() {
     }
   }
 
-  if (!placements.length) throw new Error("No hay referencias asignadas. Arrastra refs a alguna zona.");
+  if (!placements.length)
+    throw new Error(
+      "No hay referencias asignadas. Arrastra refs a alguna zona."
+    );
 
   return {
     cable: "UTP_CAT6",
@@ -2085,18 +2109,30 @@ function _buildSpecFromAssignments() {
     zone_locks: _buildZoneLocksPayload(),
     cpd: {
       zone_key: "armario_cpd",
-      switch_poe_block: _strip(_getZoneConfig("armario_cpd")?.cpdSwitchBlock || ""),
+      switch_poe_block: _strip(
+        _getZoneConfig("armario_cpd")?.cpdSwitchBlock || ""
+      ),
     },
     placements,
     icon_library_blocks: (appState.diagramas.dxfBlocks || []).slice(0, 2000),
   };
 }
+
 /* ======================================================
    Fallback LOCAL (determinista)
  ====================================================== */
 function _isPoeDevice(p) {
   const t = `${p.ref || ""} ${p.descripcion || ""}`.toUpperCase();
-  const poeHints = ["IPSTYLE", "IP STYLE", "ACCESS", "UNIT", "READER", "INTERCOM", "IP ONE", "VERSO"];
+  const poeHints = [
+    "IPSTYLE",
+    "IP STYLE",
+    "ACCESS",
+    "UNIT",
+    "READER",
+    "INTERCOM",
+    "IP ONE",
+    "VERSO",
+  ];
   return poeHints.some((k) => t.includes(k));
 }
 
@@ -2126,18 +2162,41 @@ function _localDesignFromSpec(spec) {
 
   const routerId = `V_ROUTER_${coreZone}`;
   const coreId = `V_CORE_${coreZone}`;
-  infra.push({ id: routerId, type: "VIRTUAL_ROUTER", zone: coreZone, meta: { role: "EDGE" } });
-  infra.push({ id: coreId, type: "VIRTUAL_CORE", zone: coreZone, meta: { role: "CORE" } });
-  connections.push({ from: coreId, to: routerId, type: "UTP_CAT6", note: "Uplink core -> router" });
+  infra.push({
+    id: routerId,
+    type: "VIRTUAL_ROUTER",
+    zone: coreZone,
+    meta: { role: "EDGE" },
+  });
+  infra.push({
+    id: coreId,
+    type: "VIRTUAL_CORE",
+    zone: coreZone,
+    meta: { role: "CORE" },
+  });
+  connections.push({
+    from: coreId,
+    to: routerId,
+    type: "UTP_CAT6",
+    note: "Uplink core -> router",
+  });
 
   const cpdSwId = "V_CPD_SW_POE";
   infra.push({
     id: cpdSwId,
     type: "VIRTUAL_SWITCH_POE",
     zone: "armario_cpd",
-    meta: { role: "CPD_SWITCH_POE", icon_block: _strip(spec?.cpd?.switch_poe_block || "") },
+    meta: {
+      role: "CPD_SWITCH_POE",
+      icon_block: _strip(spec?.cpd?.switch_poe_block || ""),
+    },
   });
-  connections.push({ from: cpdSwId, to: coreId, type: "UTP_CAT6", note: "CPD switch -> core" });
+  connections.push({
+    from: cpdSwId,
+    to: coreId,
+    type: "UTP_CAT6",
+    note: "CPD switch -> core",
+  });
 
   let totalSwitches = 1;
 
@@ -2147,7 +2206,12 @@ function _localDesignFromSpec(spec) {
 
     if (z.key === "armario_cpd") {
       for (const p of list) {
-        connections.push({ from: p.id, to: cpdSwId, type: "UTP_CAT6", note: "Device -> CPD switch" });
+        connections.push({
+          from: p.id,
+          to: cpdSwId,
+          type: "UTP_CAT6",
+          note: "Device -> CPD switch",
+        });
       }
       continue;
     }
@@ -2170,17 +2234,30 @@ function _localDesignFromSpec(spec) {
         meta: { ports_estimated: ports, index: i },
       });
 
-      connections.push({ from: swId, to: coreId, type: "UTP_CAT6", note: "Uplink zona -> core (sin cascada)" });
+      connections.push({
+        from: swId,
+        to: coreId,
+        type: "UTP_CAT6",
+        note: "Uplink zona -> core (sin cascada)",
+      });
 
       for (const p of list) {
-        connections.push({ from: p.id, to: swId, type: "UTP_CAT6", note: "Device -> switch zona" });
+        connections.push({
+          from: p.id,
+          to: swId,
+          type: "UTP_CAT6",
+          note: "Device -> switch zona",
+        });
       }
     }
   }
 
   const summary = {
     total_refs: placements.length,
-    total_devices: placements.reduce((a, p) => a + Math.max(1, Number(p.qty || 1) || 1), 0),
+    total_devices: placements.reduce(
+      (a, p) => a + Math.max(1, Number(p.qty || 1) || 1),
+      0
+    ),
     total_switches: totalSwitches,
   };
 
@@ -2202,6 +2279,7 @@ function _localDesignFromSpec(spec) {
 
   return _augmentResultForSvg(base);
 }
+
 /* ======================================================
    IA (opcional) + parse robusto
  ====================================================== */
@@ -2234,7 +2312,10 @@ function _buildHandlerEnvelope(payload) {
     instructions: payload.instructions,
     spec: payload.spec,
     network_rules: payload.network_rules,
-    user: { email: appState?.user?.email || "", role: appState?.user?.role || "" },
+    user: {
+      email: appState?.user?.email || "",
+      role: appState?.user?.role || "",
+    },
 
     jsonOnly: true,
     response_format: "json",
@@ -2245,7 +2326,15 @@ function _coerceTextFromHandlerResponse(res) {
   if (res == null) return "";
   if (typeof res === "string") return res;
 
-  const candidates = [res.text, res.output_text, res.outputText, res.content, res.result, res.data, res.response];
+  const candidates = [
+    res.text,
+    res.output_text,
+    res.outputText,
+    res.content,
+    res.result,
+    res.data,
+    res.response,
+  ];
   for (const c of candidates) {
     if (typeof c === "string" && c.trim()) return c;
   }
@@ -2284,14 +2373,23 @@ function _parseJsonRobust(res) {
   const jsonText = _extractJsonString(rawText);
 
   if (!jsonText) {
-    return { ok: false, error: 'La IA devolvió texto sin JSON reconocible (no encuentro "{ ... }").', raw: rawText };
+    return {
+      ok: false,
+      error:
+        'La IA devolvió texto sin JSON reconocible (no encuentro "{ ... }").',
+      raw: rawText,
+    };
   }
 
   try {
     const obj = JSON.parse(jsonText);
     return { ok: true, obj, raw: rawText };
   } catch (_) {
-    return { ok: false, error: "El JSON extraído no se puede parsear (JSON.parse falla).", raw: rawText };
+    return {
+      ok: false,
+      error: "El JSON extraído no se puede parsear (JSON.parse falla).",
+      raw: rawText,
+    };
   }
 }
 
@@ -2302,7 +2400,9 @@ async function diagGenerateDesign() {
   appState.diagramas.usedLocalFallback = false;
   _renderResult();
 
-  appState.diagramas.useCustomPrompt = !!(_el("diagUseCustomPrompt") && _el("diagUseCustomPrompt").checked);
+  appState.diagramas.useCustomPrompt = !!(
+    _el("diagUseCustomPrompt") && _el("diagUseCustomPrompt").checked
+  );
   appState.diagramas.customPromptText = _el("diagPromptText")
     ? String(_el("diagPromptText").value || "")
     : appState.diagramas.customPromptText;
@@ -2325,11 +2425,16 @@ async function diagGenerateDesign() {
     network_rules: {
       cable: "UTP_CAT6",
       topology: ["hierarchical_star", "star"],
-      hints: { cpd_zone_key: "armario_cpd", avoid_cascaded_switches: true, minimize_hops: true },
+      hints: {
+        cpd_zone_key: "armario_cpd",
+        avoid_cascaded_switches: true,
+        minimize_hops: true,
+      },
     },
   };
 
-  const handler = window.handleDocSectionAI || window.handleAI || window.callGemini || null;
+  const handler =
+    window.handleDocSectionAI || window.handleAI || window.callGemini || null;
 
   if (typeof handler !== "function") {
     appState.diagramas.lastResult = _localDesignFromSpec(spec);
@@ -2355,8 +2460,13 @@ async function diagGenerateDesign() {
 
     const obj = parsed.obj;
 
-    if (!obj || typeof obj !== "object") throw new Error("Respuesta IA inválida.");
-    if (!("placements" in obj) || !("connections" in obj) || !("errors" in obj)) {
+    if (!obj || typeof obj !== "object")
+      throw new Error("Respuesta IA inválida.");
+    if (
+      !("placements" in obj) ||
+      !("connections" in obj) ||
+      !("errors" in obj)
+    ) {
       appState.diagramas.lastRaw = parsed.raw || null;
       appState.diagramas.lastResult = _localDesignFromSpec(spec);
       appState.diagramas.usedLocalFallback = true;
@@ -2380,13 +2490,15 @@ async function diagGenerateDesign() {
     _setBusy(false);
   }
 }
+
 /* ======================================================
    6A) Export SVG (MAESTRO)
  ====================================================== */
 function diagExportSvg() {
   const base = appState.diagramas.lastResult || appState.diagramas._previewResult;
   if (!base) {
-    appState.diagramas.lastError = "No hay resultado para exportar. Genera el diseño o crea un preview manual.";
+    appState.diagramas.lastError =
+      "No hay resultado para exportar. Genera el diseño o crea un preview manual.";
     appState.diagramas.lastRaw = null;
     _renderResult();
     return;
@@ -2472,9 +2584,13 @@ function diagExportSvg() {
       if (!pos) return "";
       const t = String(n.type || n.id || "");
       const role = String(n?.meta?.role || "");
-      const isLock = t.toUpperCase().includes("LOCK") || t.toUpperCase().includes("GARAGE");
-      const isCpdSw = t.toUpperCase().includes("SWITCH") && role.toUpperCase().includes("CPD");
-      const label = _escapeHtml(isCpdSw ? "SWITCH POE (CPD)" : isLock ? "CERRADURA / GARAJE" : t);
+      const isLock =
+        t.toUpperCase().includes("LOCK") || t.toUpperCase().includes("GARAGE");
+      const isCpdSw =
+        t.toUpperCase().includes("SWITCH") && role.toUpperCase().includes("CPD");
+      const label = _escapeHtml(
+        isCpdSw ? "SWITCH POE (CPD)" : isLock ? "CERRADURA / GARAJE" : t
+      );
       return `
       <g>
         <circle cx="${pos.x}" cy="${pos.y}" r="14" fill="#111827" opacity="0.95"></circle>
@@ -2495,8 +2611,13 @@ function diagExportSvg() {
     `${title}\n${headers}\n${lines}\n${placementNodes}\n${infraNodes}\n` +
     `</svg>\n`;
 
-  const nameBase = (appState.diagramas.dxfFileName || "diagrama").replace(/\.dxf$/i, "");
-  const fileName = `${nameBase}_red_cat6${appState.diagramas.includeLocks ? "_2h" : ""}.svg`;
+  const nameBase = (appState.diagramas.dxfFileName || "diagrama").replace(
+    /\.dxf$/i,
+    ""
+  );
+  const fileName = `${nameBase}_red_cat6${
+    appState.diagramas.includeLocks ? "_2h" : ""
+  }.svg`;
 
   try {
     const blob = new Blob([svgText], { type: "image/svg+xml;charset=utf-8" });
@@ -2522,17 +2643,20 @@ function diagExportSvg() {
     });
   } catch (e) {
     console.error(e);
-    appState.diagramas.lastError = "No se pudo descargar el SVG (bloqueado por el navegador).";
+    appState.diagramas.lastError =
+      "No se pudo descargar el SVG (bloqueado por el navegador).";
     _renderResult();
   }
 }
+
 /* ======================================================
    6B) Export DXF
    ⚠️ lo dejamos tal cual en tu proyecto (no incluido aquí a propósito)
  ====================================================== */
 function diagExportDxf() {
   // IMPORTANTE: lo saltamos ahora como pediste. Mantén tu implementación existente.
-  appState.diagramas.lastError = "Export DXF: pendiente (no tocado en esta versión).";
+  appState.diagramas.lastError =
+    "Export DXF: pendiente (no tocado en esta versión).";
   appState.diagramas.lastRaw = null;
   _renderResult();
 }
@@ -2548,7 +2672,11 @@ function _renderRefsList() {
   const refs = Array.isArray(s.refs) ? s.refs : [];
   const q = String(s.refsSearch || "").toLowerCase().trim();
   const filtered = q
-    ? refs.filter((r) => (r.ref || "").toLowerCase().includes(q) || (r.descripcion || "").toLowerCase().includes(q))
+    ? refs.filter(
+        (r) =>
+          (r.ref || "").toLowerCase().includes(q) ||
+          (r.descripcion || "").toLowerCase().includes(q)
+      )
     : refs;
 
   host.innerHTML = `
@@ -2575,14 +2703,24 @@ function _renderRefsList() {
             .join("")
         : `<div class="muted">No hay referencias. Genera un presupuesto primero.</div>`
     }
-    ${filtered.length > 300 ? `<div class="muted mt-2">Mostrando 300.</div>` : ""}
+    ${
+      filtered.length > 300
+        ? `<div class="muted mt-2">Mostrando 300.</div>`
+        : ""
+    }
   `;
 
   host.querySelectorAll("[draggable='true'][data-ref]").forEach((node) => {
-    node.addEventListener("dragstart", (ev) => _onRefDragStart(ev, node.dataset.ref));
-    node.addEventListener("dragend", () => (_dragRefKey = (window._dragRefKey = null)));
+    node.addEventListener("dragstart", (ev) =>
+      _onRefDragStart(ev, node.dataset.ref)
+    );
+    node.addEventListener(
+      "dragend",
+      () => (_dragRefKey = (window._dragRefKey = null))
+    );
   });
 }
+
 function _renderDiagramasUI() {
   const host = _el("diagMain");
   if (!host) return;
@@ -2598,7 +2736,12 @@ function _renderDiagramasUI() {
       `<option value="">${_escapeHtml(allowEmptyLabel)}</option>` +
       blocks
         .slice(0, 1200)
-        .map((b) => `<option value="${_escapeHtmlAttr(b)}"${cur === b ? " selected" : ""}>${_escapeHtml(b)}</option>`)
+        .map(
+          (b) =>
+            `<option value="${_escapeHtmlAttr(b)}"${
+              cur === b ? " selected" : ""
+            }>${_escapeHtml(b)}</option>`
+        )
         .join("")
     );
   }
@@ -2612,8 +2755,12 @@ function _renderDiagramasUI() {
     return `
       <div class="form-group mt-2" style="margin-bottom:0;">
         <label style="font-size:12px;">Cerradura (2 hilos, opcional) · BLOCK DXF</label>
-        <select style="max-width:100%;" data-act="zoneLockBlock" data-zone="${_escapeHtmlAttr(zoneKey)}">
-          ${_blocksOptionsHtml(cur, { allowEmptyLabel: "(sin cerradura en esta sección)" })}
+        <select style="max-width:100%;" data-act="zoneLockBlock" data-zone="${_escapeHtmlAttr(
+          zoneKey
+        )}">
+          ${_blocksOptionsHtml(cur, {
+            allowEmptyLabel: "(sin cerradura en esta sección)",
+          })}
         </select>
       </div>
     `;
@@ -2626,19 +2773,25 @@ function _renderDiagramasUI() {
       <div class="form-group mt-2" style="margin-bottom:0;">
         <label style="font-size:12px;">Switch POE (Armario/CPD) · BLOCK DXF</label>
         <select style="max-width:100%;" data-act="cpdSwitchBlock">
-          ${_blocksOptionsHtml(cur, { allowEmptyLabel: "(sin bloque, usar círculo)" })}
+          ${_blocksOptionsHtml(cur, {
+            allowEmptyLabel: "(sin bloque, usar círculo)",
+          })}
         </select>
       </div>
     `;
   }
 
   function zoneHtml(z) {
-    const list = Array.isArray(s.assignments[z.key]) ? s.assignments[z.key] : [];
+    const list = Array.isArray(s.assignments[z.key])
+      ? s.assignments[z.key]
+      : [];
     const isArmario = z.key === "armario_cpd";
 
     const items = list
       .map((it) => {
-        const blockOptions = _blocksOptionsHtml(it.iconBlock, { allowEmptyLabel: "(sin icono)" });
+        const blockOptions = _blocksOptionsHtml(it.iconBlock, {
+          allowEmptyLabel: "(sin icono)",
+        });
 
         return `
           <div class="card diag-assignment" style="padding:10px; margin-top:8px; min-width:0;"
@@ -2648,28 +2801,32 @@ function _renderDiagramasUI() {
             <div style="display:flex; justify-content:space-between; gap:10px; align-items:flex-start;">
               <div style="min-width:0;">
                 <div style="font-weight:600;">${_escapeHtml(it.ref)}</div>
-                <div class="muted" style="font-size:12px;">${_escapeHtml(it.descripcion || "")}</div>
+                <div class="muted" style="font-size:12px;">${_escapeHtml(
+                  it.descripcion || ""
+                )}</div>
               </div>
               <div style="display:flex; gap:8px; align-items:center;">
                 <span class="chip" title="Arrastra para mover/reordenar">↕︎</span>
-                <button class="btn btn-sm" data-act="remove" data-zone="${_escapeHtmlAttr(z.key)}" data-id="${_escapeHtmlAttr(
-          it.id
-        )}">Quitar</button>
+                <button class="btn btn-sm" data-act="remove" data-zone="${_escapeHtmlAttr(
+                  z.key
+                )}" data-id="${_escapeHtmlAttr(it.id)}">Quitar</button>
               </div>
             </div>
 
             <div class="grid mt-2" style="display:grid; grid-template-columns: 120px 1fr; gap:10px; align-items:center; min-width:0;">
               <div class="form-group" style="margin:0;">
                 <label style="font-size:12px;">Cantidad</label>
-                <input type="number" min="1" value="${Number(it.qty || 1)}" data-act="qty" data-zone="${_escapeHtmlAttr(
+                <input type="number" min="1" value="${Number(
+                  it.qty || 1
+                )}" data-act="qty" data-zone="${_escapeHtmlAttr(
           z.key
         )}" data-id="${_escapeHtmlAttr(it.id)}"/>
               </div>
               <div class="form-group" style="margin:0; min-width:0;">
                 <label style="font-size:12px;">Icono (BLOCK)</label>
-                <select style="max-width:100%;" data-act="icon" data-zone="${_escapeHtmlAttr(z.key)}" data-id="${_escapeHtmlAttr(
-          it.id
-        )}">
+                <select style="max-width:100%;" data-act="icon" data-zone="${_escapeHtmlAttr(
+                  z.key
+                )}" data-id="${_escapeHtmlAttr(it.id)}">
                   ${blockOptions}
                 </select>
               </div>
@@ -2683,21 +2840,33 @@ function _renderDiagramasUI() {
       ? ""
       : `
         <div style="display:flex; gap:8px; align-items:center;">
-          <button class="btn btn-sm" title="Renombrar sección" data-act="zoneRename" data-zone="${_escapeHtmlAttr(z.key)}">✏️</button>
-          <button class="btn btn-sm" title="Borrar sección" data-act="zoneDelete" data-zone="${_escapeHtmlAttr(z.key)}">🗑️</button>
+          <button class="btn btn-sm" title="Renombrar sección" data-act="zoneRename" data-zone="${_escapeHtmlAttr(
+            z.key
+          )}">✏️</button>
+          <button class="btn btn-sm" title="Borrar sección" data-act="zoneDelete" data-zone="${_escapeHtmlAttr(
+            z.key
+          )}">🗑️</button>
         </div>
       `;
 
     // ✅ ZONA draggable (reordenar ubicaciones) excepto armario
-    const zoneDragAttrs = !isArmario ? `draggable="true" data-zone-card="1"` : `data-zone-card="0"`;
+    const zoneDragAttrs = !isArmario
+      ? `draggable="true" data-zone-card="1"`
+      : `data-zone-card="0"`;
 
     return `
-      <div class="card diag-dropzone" ${zoneDragAttrs} data-zone="${_escapeHtmlAttr(z.key)}" style="padding:12px; min-height:180px; min-width:0;">
+      <div class="card diag-dropzone" ${zoneDragAttrs} data-zone="${_escapeHtmlAttr(
+      z.key
+    )}" style="padding:12px; min-height:180px; min-width:0;">
         <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
           <div style="min-width:0;">
             <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
               <div style="font-weight:700;">${_escapeHtml(z.label)}</div>
-              ${isArmario ? `<span class="chip">Fijo</span>` : `<span class="chip" title="Arrastra para mover esta ubicación">↔︎</span>`}
+              ${
+                isArmario
+                  ? `<span class="chip">Fijo</span>`
+                  : `<span class="chip" title="Arrastra para mover esta ubicación">↔︎</span>`
+              }
             </div>
             <div class="muted" style="font-size:12px;">Suelta aquí referencias · o arrastra tarjetas entre ubicaciones</div>
           </div>
@@ -2744,7 +2913,13 @@ function _renderDiagramasUI() {
           <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:10px;">
             <input id="diagDxfFile" type="file" accept=".dxf"/>
             <span class="muted" style="font-size:12px;">
-              ${s.dxfFileName ? `Cargado: <b>${_escapeHtml(s.dxfFileName)}</b> · blocks: ${blocks.length}` : "Sin DXF cargado"}
+              ${
+                s.dxfFileName
+                  ? `Cargado: <b>${_escapeHtml(s.dxfFileName)}</b> · blocks: ${
+                      blocks.length
+                    }`
+                  : "Sin DXF cargado"
+              }
             </span>
           </div>
         </div>
@@ -2760,7 +2935,9 @@ function _renderDiagramasUI() {
           </div>
           <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
             <label class="chip" style="display:flex; gap:8px; align-items:center; cursor:pointer;">
-              <input id="diagIncludeLocks" type="checkbox"${s.includeLocks ? " checked" : ""} style="transform:translateY(1px);"/>
+              <input id="diagIncludeLocks" type="checkbox"${
+                s.includeLocks ? " checked" : ""
+              } style="transform:translateY(1px);"/>
               Incluir cerraduras (2H)
             </label>
             <button id="btnDiagAddZone" class="btn btn-sm">Añadir ubicación</button>
@@ -2773,16 +2950,22 @@ function _renderDiagramasUI() {
           </div>
         </div>
 
-        <div id="diagPromptBox" class="card mt-3" style="padding:12px; display:${s.promptUiOpen ? "" : "none"};">
+        <div id="diagPromptBox" class="card mt-3" style="padding:12px; display:${
+          s.promptUiOpen ? "" : "none"
+        };">
           <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
             <h4 style="margin:0;">Prompt</h4>
             <span class="muted" style="font-size:12px;">Editable</span>
           </div>
           <label style="display:flex; gap:8px; align-items:center; margin-top:10px;">
-            <input id="diagUseCustomPrompt" type="checkbox"${s.useCustomPrompt ? " checked" : ""}/> Usar prompt personalizado
+            <input id="diagUseCustomPrompt" type="checkbox"${
+              s.useCustomPrompt ? " checked" : ""
+            }/> Usar prompt personalizado
           </label>
           <div class="form-group mt-2">
-            <textarea id="diagPromptText" rows="12">${_escapeHtml(s.customPromptText || _defaultInstructions())}</textarea>
+            <textarea id="diagPromptText" rows="12">${_escapeHtml(
+              s.customPromptText || _defaultInstructions()
+            )}</textarea>
           </div>
         </div>
 
@@ -2864,49 +3047,57 @@ function _renderDiagramasUI() {
     zone.addEventListener("drop", (ev) => _onZoneDrop(ev, zoneKey));
 
     // zone card dragstart (reorder ubicaciones)
-    if (zone.getAttribute("draggable") === "true" && zone.dataset.zoneCard === "1") {
-      zone.addEventListener("dragstart", (ev) => _onZoneCardDragStart(ev, zoneKey));
+    if (
+      zone.getAttribute("draggable") === "true" &&
+      zone.dataset.zoneCard === "1"
+    ) {
+      zone.addEventListener("dragstart", (ev) =>
+        _onZoneCardDragStart(ev, zoneKey)
+      );
       zone.addEventListener("dragend", _onZoneCardDragEnd);
     }
   });
-  // ✅ Cards: mover/reordenar assignments (drop sobre outra tarjeta = insertar antes)
-  host.querySelectorAll(".diag-assignment[data-zone][data-id]").forEach((card) => {
-    const zoneKey = card.dataset.zone;
-    const id = card.dataset.id;
 
-    card.addEventListener("dragstart", (ev) => _onAssignmentDragStart(ev, zoneKey, id));
-    card.addEventListener("dragend", _onAssignmentDragEnd);
+  // ✅ Cards: mover/reordenar assignments
+  host.querySelectorAll(".diag-assignment[data-zone][data-id]").forEach(
+    (card) => {
+      const zoneKey = card.dataset.zone;
+      const id = card.dataset.id;
 
-    card.addEventListener("dragover", (ev) => {
-      let payload = "";
-      try {
-        payload = ev.dataTransfer.getData("text/plain") || "";
-      } catch (_) {}
-      payload = String(payload || "").trim();
+      card.addEventListener("dragstart", (ev) =>
+        _onAssignmentDragStart(ev, zoneKey, id)
+      );
+      card.addEventListener("dragend", _onAssignmentDragEnd);
 
-      // ✅ Si arrastras una ZONA encima de una tarjeta:
-      // hacemos preventDefault para permitir drop, pero dejamos burbujear a la zona.
-      if (payload.startsWith("ZONE:")) {
+      card.addEventListener("dragover", (ev) => {
+        let payload = "";
+        try {
+          payload = ev.dataTransfer.getData("text/plain") || "";
+        } catch (_) {}
+        payload = String(payload || "").trim();
+
+        // ✅ si arrastras una ZONA encima de una tarjeta
+        if (payload.startsWith("ZONE:")) {
+          ev.preventDefault();
+          try {
+            ev.dataTransfer.dropEffect = "move";
+          } catch (_) {}
+          return;
+        }
+
         ev.preventDefault();
         try {
           ev.dataTransfer.dropEffect = "move";
         } catch (_) {}
-        return;
-      }
+      });
 
-      ev.preventDefault();
-      try {
-        ev.dataTransfer.dropEffect = "move";
-      } catch (_) {}
-    });
-
-   card.addEventListener("drop", (ev) => {
-  // NO gestionar aquí el drop
-  // El orden lo decide _onZoneDrop() usando clientY
-  ev.preventDefault();
-});
-
-  });
+      card.addEventListener("drop", (ev) => {
+        // NO gestionar aquí el drop
+        // El orden lo decide _onZoneDrop() usando clientY
+        ev.preventDefault();
+      });
+    }
+  );
 
   host.querySelectorAll("[data-act]").forEach((node) => {
     const act = node.dataset.act;
@@ -2918,12 +3109,16 @@ function _renderDiagramasUI() {
     } else if (act === "qty") {
       node.addEventListener("change", () => {
         const v = Number(node.value || 1);
-        _updateAssignment(zoneKey, id, { qty: Math.max(1, Number.isFinite(v) ? v : 1) });
+        _updateAssignment(zoneKey, id, {
+          qty: Math.max(1, Number.isFinite(v) ? v : 1),
+        });
         _renderResult();
       });
     } else if (act === "icon") {
       node.addEventListener("change", () => {
-        _updateAssignment(zoneKey, id, { iconBlock: String(node.value || "") });
+        _updateAssignment(zoneKey, id, {
+          iconBlock: String(node.value || ""),
+        });
         _renderResult();
       });
     } else if (act === "zoneRename") {
@@ -2943,6 +3138,7 @@ function _renderDiagramasUI() {
     }
   });
 }
+
 /* ======================================================
    Public view
  ====================================================== */
@@ -2953,7 +3149,9 @@ function renderDiagramasView() {
   if (!root) return;
 
   const caps = appState?.user?.capabilities;
-  const allowed = (caps?.pages && !!caps.pages.diagramas) || (caps?.views && !!caps.views.diagramas);
+  const allowed =
+    (caps?.pages && !!caps.pages.diagramas) ||
+    (caps?.views && !!caps.views.diagramas);
 
   if (!allowed) {
     root.innerHTML = `
@@ -2967,18 +3165,24 @@ function renderDiagramasView() {
 
   try {
     if (!appState.diagramas.dxfBlocksSection) {
-      appState.diagramas.dxfFileName = localStorage.getItem("diag_dxf_fileName") || "";
+      appState.diagramas.dxfFileName =
+        localStorage.getItem("diag_dxf_fileName") || "";
       const b = localStorage.getItem("diag_dxf_blocks");
       if (b) appState.diagramas.dxfBlocks = JSON.parse(b) || [];
 
       const ba = localStorage.getItem("diag_dxf_blockAttrs");
       if (ba) appState.diagramas.dxfBlockAttrs = JSON.parse(ba) || {};
 
-      appState.diagramas.dxfHeaderSection = localStorage.getItem("diag_dxf_headerSection") || "";
-      appState.diagramas.dxfClassesSection = localStorage.getItem("diag_dxf_classesSection") || "";
-      appState.diagramas.dxfTablesSection = localStorage.getItem("diag_dxf_tablesSection") || "";
-      appState.diagramas.dxfBlocksSection = localStorage.getItem("diag_dxf_blocksSection") || "";
-      appState.diagramas.dxfObjectsSection = localStorage.getItem("diag_dxf_objectsSection") || "";
+      appState.diagramas.dxfHeaderSection =
+        localStorage.getItem("diag_dxf_headerSection") || "";
+      appState.diagramas.dxfClassesSection =
+        localStorage.getItem("diag_dxf_classesSection") || "";
+      appState.diagramas.dxfTablesSection =
+        localStorage.getItem("diag_dxf_tablesSection") || "";
+      appState.diagramas.dxfBlocksSection =
+        localStorage.getItem("diag_dxf_blocksSection") || "";
+      appState.diagramas.dxfObjectsSection =
+        localStorage.getItem("diag_dxf_objectsSection") || "";
     }
 
     appState.diagramas.zonesConfig = _loadZonesConfig();
@@ -3017,11 +3221,11 @@ window.diagAutoAssignIcons = diagAutoAssignIcons;
 window.diagExportSvg = diagExportSvg;
 window.diagExportDxf = diagExportDxf;
 window.diagLoadProjectRefs = diagLoadProjectRefs;
+
 /* ======================================================
    Helpers faltantes: actualizar / quitar assignment
    (necesarios porque _renderDiagramasUI los usa)
  ====================================================== */
-
 function _findAssignment(zoneKey, id) {
   const s = appState.diagramas;
   const list = s && s.assignments ? s.assignments[zoneKey] : null;
