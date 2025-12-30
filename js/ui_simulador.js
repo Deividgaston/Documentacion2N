@@ -66,6 +66,37 @@ function buildLineaKey(baseLinea, index) {
 }
 
 // ===============================
+// Helpers ref / lookup Firestore (FIX: evitar fallbacks inconsistentes)
+// ===============================
+function normalizeRefVariants(ref) {
+  const raw = String(ref || "").trim();
+  const noSpaces = raw.replace(/\s+/g, "");
+  const upper = noSpaces.toUpperCase();
+  const alnumOnly = upper.replace(/[^A-Z0-9]/g, ""); // quita -,_,.,/
+  // algunas refs pueden venir ya "limpias" en Firestore, otras no
+  // devolvemos variantes para maximizar match
+  const variants = [];
+  if (noSpaces) variants.push(noSpaces);
+  if (upper && upper !== noSpaces) variants.push(upper);
+  if (alnumOnly && alnumOnly !== upper) variants.push(alnumOnly);
+  return variants;
+}
+
+function lookupTarifaInfo(tarifasBase, ref) {
+  if (!tarifasBase) return null;
+  const vars = normalizeRefVariants(ref);
+  for (const k of vars) {
+    if (k && tarifasBase[k]) return { key: k, info: tarifasBase[k] };
+  }
+  // último intento: algunas BBDD guardan en minúsculas
+  for (const k of vars) {
+    const low = String(k || "").toLowerCase();
+    if (low && tarifasBase[low]) return { key: low, info: tarifasBase[low] };
+  }
+  return null;
+}
+
+// ===============================
 // Cargar tarifas base (PVP) desde Firestore
 // ===============================
 async function getTarifasBase2N() {
@@ -143,13 +174,6 @@ function getLabelActor(tab) {
 }
 
 function getFactorActor(tab, mgnDist, mgnSubdist, mgnInte, mgnConst) {
-  // Queremos:
-  // 2N tab = precio 2N (tarifa + dto adicional) => factor 1
-  // DIST tab = precioDist = aplicarMargenSobreVenta(precio2N, mgnDist)
-  // SUBDIST tab = aplicarMargenSobreVenta(precioDist, mgnSubdist)
-  // INTE tab = aplicarMargenSobreVenta(precioSubdist, mgnInte)
-  // CONST tab = aplicarMargenSobreVenta(precioInte, mgnConst)
-
   const step = (pct) => aplicarMargenSobreVenta(1, pct);
 
   const f2n   = 1;
@@ -495,11 +519,11 @@ async function recalcularSimulador() {
   const lineasSim = lineasBase.map((lBase, index) => {
     const key = buildLineaKey(lBase, index);
 
-    const refNorm = String(lBase.ref || "")
-      .trim()
-      .replace(/\s+/g, "");
+    // FIX: lookup robusto contra Firestore para que TODAS las refs usen el PVP base real
+    const lookup = lookupTarifaInfo(tarifasBase, lBase.ref);
+    const infoTarifa = (lookup && lookup.info) ? lookup.info : {};
+    const refFinal = (lookup && lookup.key) ? lookup.key : String(lBase.ref || "").trim().replace(/\s+/g, "");
 
-    const infoTarifa = tarifasBase[refNorm] || {};
     const basePvp =
       Number(infoTarifa.pvp) || Number(lBase.pvp || 0) || 0;
 
@@ -532,7 +556,7 @@ async function recalcularSimulador() {
 
     return {
       key,
-      ref: refNorm || lBase.ref || "-",
+      ref: refFinal || "-",
       descripcion:
         lBase.descripcion ||
         infoTarifa.descripcion ||
