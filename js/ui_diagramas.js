@@ -1490,15 +1490,21 @@ function _reorderZones(srcKey, dstKey) {
 
 function _onZoneDrop(ev, zoneKey) {
   ev.preventDefault();
-   ev.stopPropagation(); // ✅ CLAVE (SIN ESTO NO SE QUEDA)
+  ev.stopPropagation(); // ✅ CLAVE
   const zone = ev.currentTarget;
   if (zone) zone.classList.remove("is-drag-over");
 
   let payload = "";
   try {
     payload = ev.dataTransfer.getData("text/plain") || "";
-  } catch (_) {
-    payload = _dragRefKey || "";
+  } catch (_) {}
+
+  // ✅ Fallbacks por navegador (si getData viene vacío)
+  payload = String(payload || "").trim();
+  if (!payload) {
+    if (_dragZoneKey) payload = `ZONE:${String(_dragZoneKey)}`;
+    else if (_dragAssign && _dragAssign.zone && _dragAssign.id) payload = `ASSIGN:${String(_dragAssign.zone)}:${String(_dragAssign.id)}`;
+    else if (_dragRefKey) payload = `REF:${String(_dragRefKey)}`;
   }
 
   payload = String(payload || "").trim();
@@ -1509,7 +1515,6 @@ function _onZoneDrop(ev, zoneKey) {
     const srcZoneKey = payload.slice("ZONE:".length).trim();
     if (!srcZoneKey) return;
 
-    // no mover armario, ni soltar sobre armario
     if (String(srcZoneKey) === "armario_cpd") return;
     if (String(zoneKey) === "armario_cpd") return;
 
@@ -1593,6 +1598,7 @@ function _onZoneDrop(ev, zoneKey) {
   _renderDiagramasUI();
   _renderResult();
 }
+
 
 function _removeAssignment(zoneKey, id) {
   const list = appState.diagramas.assignments[zoneKey] || [];
