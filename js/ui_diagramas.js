@@ -1,6 +1,6 @@
 // js/ui_diagramas.js
 // Vista: DIAGRAMAS (IA)
-// V2.15 (Hito 20b) + fixes V2.15c/V2.15d (según tu especificación)
+// V2.15 (Hito 20b) + fixes V2.15c/V2.15d
 
 /* ======================================================
    ESTADO + HELPERS BÁSICOS
@@ -54,7 +54,6 @@ function _defaultDiagramasState() {
     _previewMouseMoveHandler: null,
     _previewMouseUpHandler: null,
 
-    // ✅ throttle render preview drag
     _previewRaf: 0,
     _previewPendingMove: null,
   };
@@ -161,7 +160,7 @@ function _setZoneConfig(key, patch) {
 }
 
 /* ======================================================
-   ✅ PERSISTÊNCIA ASSIGNMENTS
+   PERSISTENCIA ASSIGNMENTS
  ====================================================== */
 
 function _loadAssignments() {
@@ -184,7 +183,7 @@ function _saveAssignments() {
 }
 
 /* ======================================================
-   ✅ PERSISTÊNCIA LAYOUT (manualCoords)
+   PERSISTENCIA LAYOUT (manualCoords)
  ====================================================== */
 
 function _loadManualCoords() {
@@ -218,7 +217,7 @@ function _moveAssignmentWithinZone(zoneKey, srcId, beforeId) {
   beforeId = beforeId != null ? String(beforeId) : "";
 
   if (!srcId) return;
-  if (beforeId && beforeId === srcId) return; // ✅ FIX: no-op seguro
+  if (beforeId && beforeId === srcId) return;
 
   const from = list.findIndex((x) => String(x.id) === srcId);
   if (from < 0) return;
@@ -253,7 +252,7 @@ function _moveAssignmentToZone(srcZone, srcId, dstZone, beforeId) {
   beforeId = beforeId != null ? String(beforeId) : "";
 
   if (!srcId) return;
-  if (beforeId && beforeId === srcId) beforeId = ""; // ✅ FIX: no-op seguro
+  if (beforeId && beforeId === srcId) beforeId = "";
 
   const from = src.findIndex((x) => String(x.id) === srcId);
   if (from < 0) return;
@@ -272,7 +271,6 @@ function _moveAssignmentToZone(srcZone, srcId, dstZone, beforeId) {
 
   _saveAssignments();
 }
-
 /* ======================================================
    ✅ CRUD ASSIGNMENTS (FALTAVAM)
    - Corrige: botão "Quitar" e mudanças de qty/icono
@@ -329,6 +327,7 @@ function _updateAssignment(zoneKey, id, patch) {
 
   _saveAssignments(); // ✅ persist
 }
+
 /* ======================================================
    ZONAS DINÁMICAS DESDE PRESUPUESTO + ORDEN
  ====================================================== */
@@ -388,7 +387,6 @@ function _getOrCreateBudgetZoneKey(label) {
   if (!norm) return `sec_${Date.now()}`;
   if (map[norm]) return String(map[norm]);
 
-  // key estable: sec_<norm> y si colisiona, añade sufijo pero lo fija en el map
   let key = `sec_${norm}`;
   const cfg = appState.diagramas.zonesConfig || {};
   let i = 2;
@@ -396,7 +394,6 @@ function _getOrCreateBudgetZoneKey(label) {
     key = `sec_${norm}_${i++}`;
   map[norm] = key;
 
-  // marca como “taken” para evitar colisiones futuras
   cfg[key] = Object.assign({}, cfg[key] || {}, { __taken: true });
   appState.diagramas.zonesConfig = cfg;
   _saveZonesConfig(cfg);
@@ -442,7 +439,6 @@ function _buildZonesFromBudgetSections() {
   const out = [];
   const usedKeys = new Set();
 
-  // 1) zonas desde secciones
   if (labels.length) {
     for (const lab of labels) {
       const key = _getOrCreateBudgetZoneKey(lab);
@@ -458,7 +454,6 @@ function _buildZonesFromBudgetSections() {
     }
   }
 
-  // 2) zonas manuales
   const manual = _getUserAddedZonesFromConfig();
   for (const z of manual) {
     if (!z || !z.key) continue;
@@ -469,10 +464,8 @@ function _buildZonesFromBudgetSections() {
 
   if (!out.length) return null;
 
-  // ✅ aplica orden persistente (sin armario)
   const ordered = _applyZonesOrder(out);
 
-  // armario fijo al final
   ordered.push({ key: "armario_cpd", label: "Armario / CPD" });
 
   return ordered;
@@ -601,6 +594,7 @@ function _setCpdSwitchBlock(blockName) {
   _setZoneConfig("armario_cpd", { cpdSwitchBlock: b || "" });
   _clearDiagError();
 }
+
 /* ======================================================
    Helpers: detección + enriquecimiento SVG
  ====================================================== */
@@ -654,7 +648,6 @@ function _cloneDeepJson(x) {
     return x;
   }
 }
-
 // ✅ FIX: si una zona NO tiene lockBlock, NO se crea cerradura genérica por dispositivo.
 function _augmentResultForSvg(baseResult) {
   const r0 = baseResult;
@@ -840,7 +833,8 @@ function _buildSchematicCoordsFromResult(result) {
     const zone = String(n.zone || "armario_cpd");
 
     const t = String(n.type || n.id || "");
-    const isLock = t.toUpperCase().includes("LOCK") || t.toUpperCase().includes("GARAGE");
+    const isLock =
+      t.toUpperCase().includes("LOCK") || t.toUpperCase().includes("GARAGE");
     const isCpdSw =
       t.toUpperCase().includes("SWITCH") &&
       String(n?.meta?.role || "").toUpperCase().includes("CPD");
@@ -859,7 +853,7 @@ function _buildSchematicCoordsFromResult(result) {
     map.set(n.id, { x: pos.x, y: pos.y, label, kind: "infra", zone });
   }
 
-  // nodos virtuales para 2H si existen (por si la IA devuelve "to" que no está en infra/placements)
+  // nodos virtuales para 2H si existen
   for (const c of connections) {
     if (String(c?.type || "").toUpperCase() !== "2_WIRE") continue;
     const a = map.get(c.from);
@@ -892,6 +886,7 @@ function _buildSchematicCoordsFromResult(result) {
 
   return map;
 }
+
 function _renderPreviewSvg(result) {
   const r = _augmentResultForSvg(result);
 
@@ -926,12 +921,29 @@ function _renderPreviewSvg(result) {
 
     const s = `${blk} ${ref} ${String(p.label || "").toLowerCase()}`;
 
-    if (s.includes("ip style") || s.includes("ipstyle") || s.includes("ai_ip style") || s.includes("ai_ip_style"))
+    if (
+      s.includes("ip style") ||
+      s.includes("ipstyle") ||
+      s.includes("ai_ip style") ||
+      s.includes("ai_ip_style")
+    )
       return "📟";
     if (s.includes("verso")) return "📞";
     if (s.includes("ip one") || s.includes("ipone")) return "📞";
-    if (s.includes("indoor") || s.includes("monitor") || s.includes("touch") || s.includes("clip")) return "🖥️";
-    if (s.includes("access") || s.includes("unit") || s.includes("reader") || s.includes("rfid") || s.includes("ble"))
+    if (
+      s.includes("indoor") ||
+      s.includes("monitor") ||
+      s.includes("touch") ||
+      s.includes("clip")
+    )
+      return "🖥️";
+    if (
+      s.includes("access") ||
+      s.includes("unit") ||
+      s.includes("reader") ||
+      s.includes("rfid") ||
+      s.includes("ble")
+    )
       return "🔑";
     if (s.includes("switch") || s.includes("poe")) return "🔀";
     if (s.includes("router") || s.includes("gateway")) return "🌐";
@@ -950,14 +962,14 @@ function _renderPreviewSvg(result) {
       const t = String(it?.type || "").toUpperCase();
       const role = String(it?.meta?.role || "").toUpperCase();
       const isLock = t.includes("LOCK") || t.includes("GARAGE");
-      if (isLock) return 10; // primero
+      if (isLock) return 10;
       const isSwitch = t.includes("SWITCH") || role.includes("SWITCH");
-      if (isSwitch) return 90; // al final
+      if (isSwitch) return 90;
       return 70;
     }
 
     const it = placements.find((x) => String(x.id) === String(id));
-    if (_isSwitchLikePlacement(it)) return 95; // switches al final
+    if (_isSwitchLikePlacement(it)) return 95;
     if (_isDoorWireDevice(it)) return 50;
     return 60;
   }
@@ -1029,7 +1041,11 @@ function _renderPreviewSvg(result) {
           : "";
 
       return `
-        <g class="diag-node" data-node-id="${_escapeHtmlAttr(id)}" style="cursor:${appState.diagramas.previewEditMode ? "grab" : "default"};">
+        <g class="diag-node" data-node-id="${_escapeHtmlAttr(
+          id
+        )}" style="cursor:${
+        appState.diagramas.previewEditMode ? "grab" : "default"
+      };">
           <circle class="diag-node-hit" cx="${p.x}" cy="${p.y}" r="18" fill="rgba(0,0,0,0)"></circle>
           <circle cx="${p.x}" cy="${p.y}" r="14" fill="${fill}" stroke="${stroke}" stroke-width="10"></circle>
           <text x="${p.x - 8}" y="${p.y + 7}" font-size="18" fill="white">${icon}</text>
@@ -1043,7 +1059,9 @@ function _renderPreviewSvg(result) {
   const headers = zones
     .map((z, i) => {
       const x = startX + i * colW;
-      return `<text x="${x}" y="36" font-size="13" fill="rgba(107,114,128,.95)">${_escapeHtml(z.label)}</text>`;
+      return `<text x="${x}" y="36" font-size="13" fill="rgba(107,114,128,.95)">${_escapeHtml(
+        z.label
+      )}</text>`;
     })
     .join("");
 
@@ -1054,7 +1072,11 @@ function _renderPreviewSvg(result) {
           <div style="font-weight:700;">Preview</div>
           <div class="muted" style="font-size:12px;">
             Esquema por zonas (coords). Cat6 en azul · 2 hilos (si activo) en discontinuo.
-            ${appState.diagramas.previewEditMode ? "Arrastra los nodos para fijar posición." : ""}
+            ${
+              appState.diagramas.previewEditMode
+                ? "Arrastra los nodos para fijar posición."
+                : ""
+            }
           </div>
         </div>
         <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
@@ -1085,7 +1107,6 @@ function _renderPreviewSvg(result) {
     </div>
   `;
 }
-
 /* ======================================================
    Drag controller para SVG (con rAF) + persist manualCoords
  ====================================================== */
@@ -1248,6 +1269,10 @@ function _bindPreviewInteractions() {
   };
 }
 
+/* ======================================================
+   Preview-only result desde assignments (sin IA)
+ ====================================================== */
+
 function _buildPreviewOnlyResultFromAssignments() {
   const zones = appState.diagramas.zones || [];
   const assignments = appState.diagramas.assignments || {};
@@ -1270,6 +1295,10 @@ function _buildPreviewOnlyResultFromAssignments() {
 
   return { placements, infra: [], connections: [], summary: {}, errors: [] };
 }
+
+/* ======================================================
+   Render Result
+ ====================================================== */
 
 function _renderResult() {
   const out = _el("diagOutput");
@@ -1370,7 +1399,6 @@ function _renderResult() {
 
   _bindPreviewInteractions();
 }
-
 /* ======================================================
    1) Refs + ZONAS desde presupuesto
  ====================================================== */
@@ -1438,6 +1466,7 @@ function diagLoadProjectRefs() {
 
   _saveAssignments(); // ✅ persist coherencia
 }
+
 /* ======================================================
    2) DXF (solo carga para selects/autosugerencias)
  ====================================================== */
@@ -1665,7 +1694,6 @@ async function diagImportDxfFile(file) {
     _renderResult();
   }
 }
-
 /* ======================================================
    3) Drag & drop (refs a zonas + mover/reorder assignments + reorder zonas)
  ====================================================== */
@@ -1937,7 +1965,6 @@ function _onZoneDrop(ev, zoneKey) {
   _renderDiagramasUI();
   _renderResult();
 }
-
 /* ======================================================
    4) AUTO icon suggestion
  ====================================================== */
@@ -2279,7 +2306,6 @@ function _localDesignFromSpec(spec) {
 
   return _augmentResultForSvg(base);
 }
-
 /* ======================================================
    IA (opcional) + parse robusto
  ====================================================== */
@@ -2490,7 +2516,6 @@ async function diagGenerateDesign() {
     _setBusy(false);
   }
 }
-
 /* ======================================================
    6A) Export SVG (MAESTRO)
  ====================================================== */
@@ -2660,7 +2685,6 @@ function diagExportDxf() {
   appState.diagramas.lastRaw = null;
   _renderResult();
 }
-
 /* ======================================================
    7) Render UI
  ====================================================== */
