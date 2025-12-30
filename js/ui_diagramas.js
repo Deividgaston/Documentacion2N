@@ -1169,9 +1169,15 @@ function diagLoadProjectRefs() {
   if (dyn) {
     appState.diagramas.zones = dyn;
     appState.diagramas.zonesDynamic = true;
-    _syncZonesOrderFromCurrentZones(); // asegura que nuevas zonas queden persistidas
+
+    // ✅ CLAVE: NO sobrescribir el orden del usuario al recargar.
+    // En su lugar, mantener el orden persistido y añadir nuevas zonas al final.
+    _ensureZonesOrderForZones(appState.diagramas.zones);
   } else {
     appState.diagramas.zonesDynamic = false;
+
+    // opcional: también asegurar orden para zonas “estáticas”
+    _ensureZonesOrderForZones(appState.diagramas.zones || []);
   }
 
   // 3) assignments (NO pisar lo cargado si ya existe)
