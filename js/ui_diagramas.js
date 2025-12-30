@@ -176,18 +176,16 @@ function _setZoneConfig(key, patch) {
 
 function _loadAssignments() {
   try {
-    const t = localStorage.getItem("diag_assignments");
+    const t = localStorage.getItem(_diagLsKey("diag_assignments"));
     const obj = t ? JSON.parse(t) : null;
     return obj && typeof obj === "object" ? obj : {};
-  } catch (_) {
-    return {};
-  }
+  } catch (_) { return {}; }
 }
 
 function _saveAssignments() {
   try {
     localStorage.setItem(
-      "diag_assignments",
+      _diagLsKey("diag_assignments"),
       JSON.stringify(appState.diagramas.assignments || {})
     );
   } catch (_) {}
@@ -199,18 +197,16 @@ function _saveAssignments() {
 
 function _loadManualCoords() {
   try {
-    const t = localStorage.getItem("diag_manual_coords");
+    const t = localStorage.getItem(_diagLsKey("diag_manual_coords"));
     const obj = t ? JSON.parse(t) : null;
     return obj && typeof obj === "object" ? obj : {};
-  } catch (_) {
-    return {};
-  }
+  } catch (_) { return {}; }
 }
 
 function _saveManualCoords() {
   try {
     localStorage.setItem(
-      "diag_manual_coords",
+      _diagLsKey("diag_manual_coords"),
       JSON.stringify(appState.diagramas.manualCoords || {})
     );
   } catch (_) {}
