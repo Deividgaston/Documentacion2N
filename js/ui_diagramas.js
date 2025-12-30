@@ -1489,6 +1489,7 @@ function _reorderZones(srcKey, dstKey) {
 
 function _onZoneDrop(ev, zoneKey) {
   ev.preventDefault();
+   ev.stopPropagation(); // ✅ CLAVE (SIN ESTO NO SE QUEDA)
   const zone = ev.currentTarget;
   if (zone) zone.classList.remove("is-drag-over");
 
