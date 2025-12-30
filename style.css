@@ -1,9 +1,9 @@
 /* ===========================
-   BLOQUE 1 Ã‚Â· RESET + LAYOUT
+   BLOQUE 1 · RESET + LAYOUT
    =========================== */
 
 /* ======================================================
-   SISTEMA VISUAL (TOKENS) Ã¢â‚¬â€œ Premium 2026 (sin JS)
+   SISTEMA VISUAL (TOKENS) – Premium 2026 (sin JS)
    - Solo estilos: NO cambia IDs/clases ni estructura.
    - Sin modo oscuro (evita problemas).
 ====================================================== */
@@ -64,7 +64,7 @@ body {
   color: var(--text);
 }
 
-/* Accesibilidad / microinteracciÃƒÂ³n consistente */
+/* Accesibilidad / microinteracción consistente */
 :where(a, button, input, select, textarea, .btn, .top-nav-link):focus-visible {
   outline: none;
   box-shadow: var(--ring);
@@ -95,7 +95,7 @@ body {
   gap: 1.1rem;
 }
 
-/* Layout especÃƒÂ­fico proyecto/presupuesto */
+/* Layout específico proyecto/presupuesto */
 
 .proyecto-layout {
   max-width: 880px;
@@ -104,8 +104,9 @@ body {
   flex-direction: column;
   gap: 1rem;
 }
+
 /* ===========================
-   BLOQUE 2 Ã‚Â· TOPBAR + TABS
+   BLOQUE 2 · TOPBAR + TABS
    =========================== */
 
 /* Topbar principal */
@@ -142,7 +143,7 @@ body {
   color: #6b7280;
 }
 
-/* NavegaciÃƒÂ³n (tabs) */
+/* Navegación (tabs) */
 
 .app-topbar-center {
   display: flex;
@@ -159,7 +160,7 @@ body {
   -webkit-overflow-scrolling: touch;
 }
 
-/* Scrollbar discreto en navegaciÃƒÂ³n (solo si aparece) */
+/* Scrollbar discreto en navegación (solo si aparece) */
 .app-topbar-center::-webkit-scrollbar {
   height: 8px;
 }
@@ -232,8 +233,9 @@ body {
   color: #1d4fd8;
   border: 1px solid #d0d5ff;
 }
+
 /* ===========================
-   BLOQUE 3 Ã‚Â· CARDS + FORMULARIOS
+   BLOQUE 3 · CARDS + FORMULARIOS
    =========================== */
 
 /* Tarjetas */
@@ -282,7 +284,7 @@ body {
   font-size: 0.88rem;
 }
 
-/* MÃƒÂ©tricas */
+/* Métricas */
 
 .metric-card {
   display: flex;
@@ -366,8 +368,9 @@ textarea {
   resize: vertical;
   min-height: 80px;
 }
+
 /* ===========================
-   BLOQUE 4 Ã‚Â· BOTONES + TABLAS + ALERTAS + UTILS
+   BLOQUE 4 · BOTONES + TABLAS + ALERTAS + UTILS
    =========================== */
 
 /* Botones */
@@ -551,8 +554,9 @@ textarea {
 .text-center {
   text-align: center;
 }
+
 /* ===========================
-   BLOQUE 5 Ã‚Â· LOGIN MODAL FLOTANTE
+   BLOQUE 5 · LOGIN MODAL FLOTANTE
    =========================== */
 
 .login-page {
@@ -603,7 +607,7 @@ textarea {
   text-align: center;
 }
 
-/* AnimaciÃƒÂ³n suave de entrada */
+/* Animación suave de entrada */
 
 @keyframes loginFloatIn {
   from {
@@ -615,8 +619,9 @@ textarea {
     transform: translateY(0) scale(1);
   }
 }
+
 /* ===========================
-   MODAL FLOTANTE Ã‚Â· CONFIRMACIÃƒâ€œN PROYECTO
+   MODAL FLOTANTE · CONFIRMACIÓN PROYECTO
    =========================== */
 
 .modal-overlay {
@@ -661,7 +666,7 @@ textarea {
   gap: 0.5rem;
 }
 
-/* AnimaciÃƒÂ³n */
+/* Animación */
 
 @keyframes modalFloatIn {
   from {
@@ -673,7 +678,8 @@ textarea {
     transform: translateY(0) scale(1);
   }
 }
-/* ===== Layout especÃƒÂ­fico de la pÃƒÂ¡gina de Presupuesto (2 columnas) ===== */
+
+/* ===== Layout específico de la página de Presupuesto (2 columnas) ===== */
 
 .presupuesto-layout-grid {
   max-width: 1200px;
@@ -695,7 +701,8 @@ textarea {
     grid-template-columns: minmax(0, 1fr);
   }
 }
-/* ===== Layout especÃƒÂ­fico de la pÃƒÂ¡gina de Presupuesto ===== */
+
+/* ===== Layout específico de la página de Presupuesto ===== */
 
 .presupuesto-layout {
   display: grid;
@@ -711,14 +718,15 @@ textarea {
   gap: 1rem;
 }
 
-/* En pantallas pequeÃƒÂ±as, las cards se apilan una debajo de otra */
+/* En pantallas pequeñas, las cards se apilan una debajo de otra */
 @media (max-width: 1024px) {
   .presupuesto-layout {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
 /* =========================================================
-   DOCUMENTACIÃƒâ€œN: LAYOUT GENERAL
+   DOCUMENTACIÓN: LAYOUT GENERAL
 ========================================================= */
 
 .doc-layout {
@@ -760,7 +768,7 @@ textarea {
   margin-right: 0.5rem;
 }
 
-/* BotÃƒÂ³n XS reutilizable */
+/* Botón XS reutilizable */
 .btn-xs {
   font-size: 0.7rem;
   padding: 0.15rem 0.4rem;
@@ -768,7 +776,7 @@ textarea {
 }
 
 /* =========================================================
-   DOCUMENTACIÃƒâ€œN: MAIN (SECCIONES + LATERAL)
+   DOCUMENTACIÓN: MAIN (SECCIONES + LATERAL)
 ========================================================= */
 
 .doc-main {
@@ -826,7 +834,7 @@ textarea {
 }
 
 /* =========================================================
-   ZONA DE MEDIA POR SECCIÃƒâ€œN
+   ZONA DE MEDIA POR SECCIÓN
 ========================================================= */
 
 .doc-section-media-drop {
@@ -1017,7 +1025,7 @@ textarea {
 }
 
 /* =========================================================
-   FICHAS TÃƒâ€°CNICAS LIST
+   FICHAS TÉCNICAS LIST
 ========================================================= */
 
 .doc-fichas-list {
@@ -1059,7 +1067,7 @@ textarea {
   display: none;
 }
 
-/* Apariencia del modal (para que no se Ã¢â‚¬Å“fundaÃ¢â‚¬Â con el contenido) */
+/* Apariencia del modal */
 .doc-modal-content {
   background: #ffffff;
   border: 1px solid rgba(15, 23, 42, 0.12);
@@ -1118,7 +1126,7 @@ textarea {
   gap: 0.5rem;
 }
 
-/* Backdrop comÃƒÂºn */
+/* Backdrop común */
 
 .doc-backdrop {
   position: fixed;
@@ -1130,11 +1138,11 @@ textarea {
 .doc-backdrop.hidden {
   display: none;
 }
+
 /* =========================================================
-   GESTIÃƒâ€œN DE DOCUMENTACIÃƒâ€œN Ã¢â‚¬â€ LAYOUT A PANTALLA COMPLETA
+   GESTIÓN DE DOCUMENTACIÓN – LAYOUT A PANTALLA COMPLETA
    ========================================================= */
 
-/* Forzar que esta vista ignore el max-width del layout general */
 .proyecto-layout.doc-gestion-layout {
   max-width: 100% !important;
   width: 100% !important;
@@ -1144,20 +1152,19 @@ textarea {
   align-items: flex-start;
 }
 
-/* Columna izquierda (GestiÃƒÂ³n) Ã¢â‚¬â€ ancho fijo */
+/* Columna izquierda – ancho fijo */
 .proyecto-layout.doc-gestion-layout .doc-gestion-card:first-child {
   flex: 0 0 380px;
   max-width: 380px;
 }
 
-/* Columna derecha (Documentos subidos) Ã¢â‚¬â€ ocupar el resto */
+/* Columna derecha – ocupar el resto */
 .proyecto-layout.doc-gestion-layout .doc-gestion-card:last-child {
   flex: 1 1 auto;
   width: 100%;
   min-width: 0;
 }
 
-/* Asegurar que ambas cards usan todo el ancho posible dentro del layout */
 .doc-gestion-layout .doc-gestion-card {
   width: 100%;
 }
@@ -1167,36 +1174,60 @@ textarea {
    (overflow + flex min-width)
 ================================ */
 
-/* Si tienes contenedor de preview tÃƒÂ­pico */
-#pdfPreview, #pdfContainer, .pdf-preview, .pdf-page {
+#pdfPreview,
+#pdfContainer,
+.pdf-preview,
+.pdf-page {
   overflow: hidden;
 }
 
-/* Cualquier "card" dentro del PDF/preview */
-#pdfPreview .card, #pdfPreview .pdf-card, #pdfPreview .doc-card, #pdfPreview .doc-section,
-#pdfContainer .card, #pdfContainer .pdf-card, #pdfContainer .doc-card, #pdfContainer .doc-section,
-.pdf-preview .card, .pdf-preview .pdf-card, .pdf-preview .doc-card, .pdf-preview .doc-section,
-.pdf-page .card, .pdf-page .pdf-card, .pdf-page .doc-card, .pdf-page .doc-section {
-  overflow: hidden;          /* clave: que no pinte fuera */
+#pdfPreview .card,
+#pdfPreview .pdf-card,
+#pdfPreview .doc-card,
+#pdfPreview .doc-section,
+#pdfContainer .card,
+#pdfContainer .pdf-card,
+#pdfContainer .doc-card,
+#pdfContainer .doc-section,
+.pdf-preview .card,
+.pdf-preview .pdf-card,
+.pdf-preview .doc-card,
+.pdf-preview .doc-section,
+.pdf-page .card,
+.pdf-page .pdf-card,
+.pdf-page .doc-card,
+.pdf-page .doc-section {
+  overflow: hidden;
 }
 
-/* Clave en layouts flex: permitir que el texto reduzca ancho */
-#pdfPreview * , #pdfContainer * , .pdf-preview * , .pdf-page * {
+#pdfPreview *,
+#pdfContainer *,
+.pdf-preview *,
+.pdf-page * {
   min-width: 0;
   max-width: 100%;
   box-sizing: border-box;
 }
 
-/* Forzar wrapping real en texto */
-#pdfPreview p, #pdfContainer p, .pdf-preview p, .pdf-page p,
-#pdfPreview div, #pdfContainer div, .pdf-preview div, .pdf-page div,
-#pdfPreview span, #pdfContainer span, .pdf-preview span, .pdf-page span {
+#pdfPreview p,
+#pdfContainer p,
+.pdf-preview p,
+.pdf-page p,
+#pdfPreview div,
+#pdfContainer div,
+.pdf-preview div,
+.pdf-page div,
+#pdfPreview span,
+#pdfContainer span,
+.pdf-preview span,
+.pdf-page span {
   white-space: normal;
   overflow-wrap: anywhere;
   word-break: break-word;
 }
+
 /* ===========================
-   DIAGRAMAS Ã‚Â· Drag & Drop
+   DIAGRAMAS · Drag & Drop
    =========================== */
 
 .diag-draggable {
@@ -1219,56 +1250,51 @@ textarea {
 }
 
 /* ===========================
-   BLOQUE X Ã‚Â· SIMULADOR (DASHBOARD 2026)
-   - Solo CSS (sin tocar JS)
-   - Override de inline styles con !important cuando hace falta
+   BLOQUE X · SIMULADOR (DASHBOARD 2026)
    =========================== */
 
-/* Layout 2 columnas premium */
-.simulador-layout{
+.simulador-layout {
   align-items: stretch !important;
 }
 
-.simulador-left-column{
+.simulador-left-column {
   position: sticky;
-  top: 86px; /* bajo topbar */
+  top: 86px;
   align-self: flex-start;
   flex: 0 0 420px !important;
   max-width: 440px !important;
 }
 
-.simulador-right-column{
+.simulador-right-column {
   min-width: 0 !important;
 }
 
-/* Card upgrades dentro de simulador */
-.simulador-layout .card{
-  border: 1px solid rgba(148,163,184,0.28);
+.simulador-layout .card {
+  border: 1px solid rgba(148, 163, 184, 0.28);
   box-shadow:
-    0 22px 60px rgba(2,6,23,0.06),
-    0 1px 0 rgba(148,163,184,0.22);
+    0 22px 60px rgba(2, 6, 23, 0.06),
+    0 1px 0 rgba(148, 163, 184, 0.22);
 }
 
-.simulador-layout .card-header{
-  border-bottom: 1px solid rgba(148,163,184,0.18);
+.simulador-layout .card-header {
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
   background:
-    radial-gradient(1200px 140px at 20% 0%, rgba(79,70,229,0.10), transparent 55%),
-    linear-gradient(180deg, rgba(255,255,255,0.92), rgba(255,255,255,0.82));
+    radial-gradient(1200px 140px at 20% 0%, rgba(79, 70, 229, 0.10), transparent 55%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.82));
 }
 
-.simulador-layout .card-title{
+.simulador-layout .card-title {
   letter-spacing: 0.01em;
 }
 
-/* Tabs actor (2N/DIST/...) */
-#simActorTabs{
+#simActorTabs {
   padding: 0.22rem;
   border-radius: 999px;
-  background: rgba(248,250,252,0.9);
-  box-shadow: inset 0 0 0 1px rgba(226,232,240,0.95);
+  background: rgba(248, 250, 252, 0.9);
+  box-shadow: inset 0 0 0 1px rgba(226, 232, 240, 0.95);
 }
 
-.sim-tab{
+.sim-tab {
   border: 0 !important;
   border-radius: 999px !important;
   padding: 0.38rem 0.75rem !important;
@@ -1278,71 +1304,70 @@ textarea {
   background: transparent !important;
   cursor: pointer;
   transition:
-    background .16s ease,
-    color .16s ease,
-    transform .08s ease,
-    box-shadow .16s ease;
+    background 0.16s ease,
+    color 0.16s ease,
+    transform 0.08s ease,
+    box-shadow 0.16s ease;
 }
 
-.sim-tab:hover{
-  background: rgba(79,70,229,0.10) !important;
+.sim-tab:hover {
+  background: rgba(79, 70, 229, 0.10) !important;
   color: #1f2a44 !important;
 }
 
-.sim-tab:active{
+.sim-tab:active {
   transform: translateY(1px);
 }
 
-/* Estado activo (si JS aÃƒÂ±ade .active, .is-active o aria-selected) */
 .sim-tab.active,
 .sim-tab.is-active,
-.sim-tab[aria-selected="true"]{
-  background: linear-gradient(180deg, rgba(79,70,229,0.14), rgba(79,70,229,0.10)) !important;
+.sim-tab[aria-selected="true"] {
+  background: linear-gradient(180deg, rgba(79, 70, 229, 0.14), rgba(79, 70, 229, 0.10)) !important;
   color: #1f2a44 !important;
   box-shadow:
-    0 10px 22px rgba(79,70,229,0.16),
-    inset 0 0 0 1px rgba(79,70,229,0.30) !important;
+    0 10px 22px rgba(79, 70, 229, 0.16),
+    inset 0 0 0 1px rgba(79, 70, 229, 0.30) !important;
 }
 
 /* Botones export (override inline) */
 #btnSimPdf,
 #btnSimExcel,
 #btnSimActorPdf,
-#btnSimActorExcel{
+#btnSimActorExcel {
   border-radius: 999px !important;
-  border: 1px solid rgba(148,163,184,0.38) !important;
+  border: 1px solid rgba(148, 163, 184, 0.38) !important;
   background:
-    linear-gradient(180deg, rgba(255,255,255,0.92), rgba(255,255,255,0.82)) !important;
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.82)) !important;
   color: #0f172a !important;
   box-shadow:
-    0 12px 26px rgba(2,6,23,0.06),
-    inset 0 0 0 1px rgba(255,255,255,0.35) !important;
+    0 12px 26px rgba(2, 6, 23, 0.06),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.35) !important;
 }
 
 #btnSimPdf:hover,
 #btnSimExcel:hover,
 #btnSimActorPdf:hover,
-#btnSimActorExcel:hover{
-  border-color: rgba(79,70,229,0.34) !important;
+#btnSimActorExcel:hover {
+  border-color: rgba(79, 70, 229, 0.34) !important;
   transform: translateY(-1px);
 }
 
 #btnSimPdf:active,
 #btnSimExcel:active,
 #btnSimActorPdf:active,
-#btnSimActorExcel:active{
+#btnSimActorExcel:active {
   transform: translateY(0px);
 }
 
-/* Inputs del simulador (override de inline heights) */
+/* Inputs del simulador */
 #simTarifaDefecto,
 #simDtoGlobal,
 #simMgnDist,
 #simMgnSubdist,
 #simMgnInte,
-#simMgnConst{
-  border: 1px solid rgba(148,163,184,0.38) !important;
-  background: rgba(255,255,255,0.84) !important;
+#simMgnConst {
+  border: 1px solid rgba(148, 163, 184, 0.38) !important;
+  background: rgba(255, 255, 255, 0.84) !important;
   border-radius: 12px !important;
 }
 
@@ -1351,71 +1376,73 @@ textarea {
 #simMgnDist:focus,
 #simMgnSubdist:focus,
 #simMgnInte:focus,
-#simMgnConst:focus{
+#simMgnConst:focus {
   outline: none !important;
-  border-color: rgba(79,70,229,0.55) !important;
-  box-shadow: 0 0 0 4px rgba(79,70,229,0.16) !important;
+  border-color: rgba(79, 70, 229, 0.55) !important;
+  box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.16) !important;
 }
 
-/* Tabla lÃƒÂ­neas simuladas (si existe .table o tabla nativa) */
-.simulador-right-column table{
+/* Tabla líneas simuladas */
+.simulador-right-column table {
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
 }
 
-.simulador-right-column thead th{
+.simulador-right-column thead th {
   position: sticky;
   top: 0;
   z-index: 2;
   background:
-    linear-gradient(180deg, rgba(255,255,255,0.96), rgba(255,255,255,0.86));
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.86));
   backdrop-filter: blur(10px);
-  border-bottom: 1px solid rgba(148,163,184,0.22);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.22);
 }
 
-.simulador-right-column tbody tr{
-  transition: transform .08s ease, background .12s ease;
+.simulador-right-column tbody tr {
+  transition: transform 0.08s ease, background 0.12s ease;
 }
 
-.simulador-right-column tbody tr:hover{
-  background: rgba(79,70,229,0.06);
+.simulador-right-column tbody tr:hover {
+  background: rgba(79, 70, 229, 0.06);
 }
 
-/* ===== Responsive ===== */
-@media (max-width: 1024px){
-  .simulador-left-column{
+@media (max-width: 1024px) {
+  .simulador-left-column {
     flex: 0 0 360px !important;
     max-width: 380px !important;
   }
 }
 
-@media (max-width: 820px){
-  .simulador-layout{
+@media (max-width: 820px) {
+  .simulador-layout {
     flex-direction: column !important;
   }
-  .simulador-left-column{
+  .simulador-left-column {
     position: relative;
     top: auto;
     flex: 1 1 auto !important;
     max-width: none !important;
     width: 100% !important;
   }
-  #simActorTabs{
+  #simActorTabs {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
   }
-  #simActorTabs::-webkit-scrollbar{ display:none; }
-  .sim-tab{
+  #simActorTabs::-webkit-scrollbar {
+    display: none;
+  }
+  .sim-tab {
     white-space: nowrap;
   }
 }
+
 /* =========================================================
    DOCUMENTACIÓN · FICHAS TÉCNICAS (fila + botón Descargar)
    ========================================================= */
 
-.doc-ficha-item-row{
+.doc-ficha-item-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1423,46 +1450,51 @@ textarea {
   padding: 0.2rem 0.1rem;
 }
 
-.doc-ficha-item-row .doc-ficha-item{
+.doc-ficha-item-row .doc-ficha-item {
   flex: 1 1 auto;
-  min-width: 0; /* clave: permite truncar texto en flex */
+  min-width: 0;
 }
 
-/* Texto de ficha: que no “empuje” al botón */
-.doc-ficha-item-row .doc-ficha-main{
+.doc-ficha-item-row .doc-ficha-main {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
-  -webkit-line-clamp: 2;      /* 2 líneas */
+  -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
 }
 
-/* Botón Descargar compacto y consistente con tu sistema */
-.doc-ficha-item-row [data-doc-ficha-download-id]{
+.doc-ficha-item-row [data-doc-ficha-download-id] {
   flex: 0 0 auto;
   white-space: nowrap;
 }
 
-/* Opcional: que el checkbox no se descuadre en 2 líneas */
-.doc-ficha-item-row .doc-ficha-item input[type="checkbox"]{
+.doc-ficha-item-row .doc-ficha-item input[type="checkbox"] {
   margin-top: 0.2rem;
 }
+
 /* ===========================
    FIX DRAG & DROP DIAGRAMAS
-   Evita que el hover mueva tarjetas durante drag
+   Cambios estrictamente necesarios:
+   - Evita que hover/focus/hover en botones mueva elementos durante drag
    =========================== */
 
-#diagMain .diag-dropzone.card:hover,
-#diagMain .diag-assignment.card:hover,
-#diagMain .diag-draggable.card:hover {
+#diagMain .card:hover {
   transform: none !important;
 }
 
-/* Si quieres mantener sombra bonita sin mover */
-#diagMain .diag-dropzone.card:hover,
-#diagMain .diag-assignment.card:hover,
-#diagMain .diag-draggable.card:hover {
+#diagMain input:focus,
+#diagMain select:focus,
+#diagMain textarea:focus {
+  transform: none !important;
+}
+
+#diagMain .btn:hover {
+  transform: none !important;
+}
+
+/* Mantener sombra bonita sin mover (solo diagramas) */
+#diagMain .card:hover {
   box-shadow:
     0 22px 55px rgba(15, 23, 42, 0.09),
     0 0 0 1px rgba(191, 219, 254, 0.8) !important;
