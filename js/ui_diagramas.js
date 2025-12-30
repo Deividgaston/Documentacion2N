@@ -1194,12 +1194,13 @@ function _bindPreviewWindowListeners(svg) {
 
   _unbindPreviewWindowListeners();
 
-  // ✅ throttle con rAF: evita re-render por cada mousemove
+  // ✅ throttle con rAF: evita re-render por cada move
   function _scheduleRender() {
     if (s._previewRaf) return;
     s._previewRaf = requestAnimationFrame(() => {
       s._previewRaf = 0;
       if (!s._previewPendingMove) return;
+
       const { nodeId, nx, ny } = s._previewPendingMove;
       s._previewPendingMove = null;
 
@@ -1210,18 +1211,8 @@ function _bindPreviewWindowListeners(svg) {
     });
   }
 
-  s._previewMouseMoveHandler = (ev) => {
-    if (!_diagDrag.active || !_diagDrag.nodeId) return;
-    const p = _svgPoint(svg, ev.clientX, ev.clientY);
-    const nx = p.x + _diagDrag.offsetX;
-    const ny = p.y + _diagDrag.offsetY;
-
-    s._previewPendingMove = { nodeId: _diagDrag.nodeId, nx, ny };
-    _scheduleRender();
-  };
-
-  s._previewMouseUpHandler = () => {
-    // ✅ commit del último move pendiente ANTES de guardar
+  // ✅ commit final + persist
+  function _commitAndStop() {
     if (s._previewPendingMove && s._previewPendingMove.nodeId) {
       const { nodeId, nx, ny } = s._previewPendingMove;
       s._previewPendingMove = null;
@@ -1230,7 +1221,6 @@ function _bindPreviewWindowListeners(svg) {
       s.manualCoords[nodeId] = { x: nx, y: ny };
     }
 
-    // ✅ corta cualquier rAF pendiente
     if (s._previewRaf) {
       try {
         cancelAnimationFrame(s._previewRaf);
@@ -1241,12 +1231,48 @@ function _bindPreviewWindowListeners(svg) {
     _diagDrag.active = false;
     _diagDrag.nodeId = null;
 
-    _saveManualCoords(); // ✅ ahora sí, guarda el último punto real
-    _renderResult(); // ✅ refresca para que se vea fijo
+    _saveManualCoords();
+    _renderResult();
+  }
+
+  // ✅ Pointer move (capturado en el SVG)
+  s._previewPointerMoveHandler = (ev) => {
+    if (!_diagDrag.active || !_diagDrag.nodeId) return;
+    if (s._previewActivePointerId != null && ev.pointerId !== s._previewActivePointerId)
+      return;
+
+    const p = _svgPoint(svg, ev.clientX, ev.clientY);
+    const nx = p.x + _diagDrag.offsetX;
+    const ny = p.y + _diagDrag.offsetY;
+
+    s._previewPendingMove = { nodeId: _diagDrag.nodeId, nx, ny };
+    _scheduleRender();
+
+    try {
+      ev.preventDefault();
+    } catch (_) {}
   };
 
-  window.addEventListener("mousemove", s._previewMouseMoveHandler, true);
-  window.addEventListener("mouseup", s._previewMouseUpHandler, true);
+  // ✅ Pointer up/cancel/lostcapture
+  s._previewPointerUpHandler = (ev) => {
+    if (s._previewActivePointerId != null && ev.pointerId !== s._previewActivePointerId)
+      return;
+
+    s._previewActivePointerId = null;
+    _commitAndStop();
+
+    try {
+      ev.preventDefault();
+    } catch (_) {}
+  };
+
+  // Bind en el SVG (no en window) + captura
+  s._previewPointerTarget = svg;
+  svg.addEventListener("pointermove", s._previewPointerMoveHandler, true);
+  svg.addEventListener("pointerup", s._previewPointerUpHandler, true);
+  svg.addEventListener("pointercancel", s._previewPointerUpHandler, true);
+  svg.addEventListener("lostpointercapture", s._previewPointerUpHandler, true);
+
   s._previewListenersBound = true;
 }
 
