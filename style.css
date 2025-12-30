@@ -1448,3 +1448,22 @@ textarea {
 .doc-ficha-item-row .doc-ficha-item input[type="checkbox"]{
   margin-top: 0.2rem;
 }
+/* ===========================
+   FIX DRAG & DROP DIAGRAMAS
+   Evita que el hover mueva tarjetas durante drag
+   =========================== */
+
+#diagMain .diag-dropzone.card:hover,
+#diagMain .diag-assignment.card:hover,
+#diagMain .diag-draggable.card:hover {
+  transform: none !important;
+}
+
+/* Si quieres mantener sombra bonita sin mover */
+#diagMain .diag-dropzone.card:hover,
+#diagMain .diag-assignment.card:hover,
+#diagMain .diag-draggable.card:hover {
+  box-shadow:
+    0 22px 55px rgba(15, 23, 42, 0.09),
+    0 0 0 1px rgba(191, 219, 254, 0.8) !important;
+}
