@@ -1395,6 +1395,7 @@ function _onZoneCardDragStart(ev, zoneKey) {
 }
 function _onZoneDragOver(ev) {
   ev.preventDefault();
+  ev.stopPropagation(); // ✅ CLAVE
 
   let payload = "";
   try {
