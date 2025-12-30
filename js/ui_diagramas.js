@@ -2688,6 +2688,8 @@ host.querySelectorAll(".diag-assignment[data-zone][data-id]").forEach((card) => 
    Public view
  ====================================================== */
 function renderDiagramasView() {
+ appState.diagramas = _defaultDiagramasState();
+
   const root = document.getElementById("appContent");
   if (!root) return;
 
