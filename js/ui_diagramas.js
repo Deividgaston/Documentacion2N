@@ -1299,8 +1299,12 @@ function _bindPreviewInteractions() {
     };
   }
 
-  // ✅ bloquear drag nativo HTML5 en Chrome (por si acaso)
+  // anti-drag nativo / selección (Chrome)
   try {
+    svg.style.userSelect = "none";
+    svg.style.webkitUserSelect = "none";
+    svg.style.webkitUserDrag = "none";
+    svg.style.touchAction = "none";
     svg.setAttribute("draggable", "false");
     svg.addEventListener(
       "dragstart",
@@ -1316,8 +1320,8 @@ function _bindPreviewInteractions() {
 
   if (!appState.diagramas.previewEditMode) {
     _unbindPreviewWindowListeners();
-    svg.onmousedown = null;
     svg.onpointerdown = null;
+    svg.onmousedown = null;
     return;
   }
 
@@ -1327,14 +1331,6 @@ function _bindPreviewInteractions() {
 
   _bindPreviewWindowListeners(svg);
 
-  // ✅ CSS anti-selección (Chrome)
-  try {
-    svg.style.userSelect = "none";
-    svg.style.webkitUserSelect = "none";
-    svg.style.webkitUserDrag = "none";
-    svg.style.touchAction = "none"; // IMPORTANT: evita scroll/gestos
-  } catch (_) {}
-
   svg.onpointerdown = (ev) => {
     const t = ev.target;
     const g = t && t.closest ? t.closest(".diag-node") : null;
@@ -1343,7 +1339,7 @@ function _bindPreviewInteractions() {
     const nodeId = g.getAttribute("data-node-id");
     if (!nodeId) return;
 
-    // capturar este puntero (clave en Chrome)
+    // capturar puntero (clave)
     try {
       appState.diagramas._previewActivePointerId = ev.pointerId;
       svg.setPointerCapture(ev.pointerId);
@@ -1357,6 +1353,9 @@ function _bindPreviewInteractions() {
 
     _diagDrag.active = true;
     _diagDrag.nodeId = nodeId;
+    _diagDrag.nodeEl = g;        // ✅ referencia DOM
+    _diagDrag.baseX = cur.x;     // ✅ base para translate
+    _diagDrag.baseY = cur.y;
     _diagDrag.offsetX = cur.x - p.x;
     _diagDrag.offsetY = cur.y - p.y;
 
@@ -1366,7 +1365,7 @@ function _bindPreviewInteractions() {
     } catch (_) {}
   };
 
-  // por compat (si algún browser no soporta pointer)
+  // compat (evita selección)
   svg.onmousedown = (ev) => {
     try {
       ev.preventDefault();
