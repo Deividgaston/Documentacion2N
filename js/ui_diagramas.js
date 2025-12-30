@@ -187,6 +187,13 @@ function _saveAssignments() {
   return;
 }
 
+function _clearProjectDiagramPersistence() {
+  try {
+    // Solo borra lo que hace que “reaparezcan tarjetas/posiciones” por proyecto
+    localStorage.removeItem(_diagLsKey("diag_assignments"));
+    localStorage.removeItem(_diagLsKey("diag_manual_coords"));
+  } catch (_) {}
+}
 
 /* ======================================================
    PERSISTENCIA LAYOUT (manualCoords)
