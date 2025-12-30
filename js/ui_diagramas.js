@@ -379,27 +379,21 @@ function _buildZonesFromBudgetSections() {
   const out = [];
   const usedKeys = new Set();
 
-  // 1) zonas desde secciones
-  if (labels.length) {
-    for (const lab of labels) {
-      let base = _normKey(lab);
-      if (!base) base = "seccion";
-      let key = `sec_${base}`;
-      let i = 2;
-      while (usedKeys.has(key) || key === "armario_cpd") {
-        key = `sec_${base}_${i++}`;
-      }
-      usedKeys.add(key);
+ // 1) zonas desde secciones
+if (labels.length) {
+  for (const lab of labels) {
+    const key = _getOrCreateBudgetZoneKey(lab);
 
-      const zc = cfg[key] || {};
-      if (zc.deleted) continue;
+    const zc = cfg[key] || {};
+    if (zc.deleted) continue;
 
-      out.push({
-        key,
-        label: _strip(zc.label) || lab,
-      });
-    }
+    out.push({
+      key,
+      label: _strip(zc.label) || lab,
+    });
   }
+}
+
 
   // 2) zonas manuales
   const manual = _getUserAddedZonesFromConfig();
