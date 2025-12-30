@@ -3366,11 +3366,16 @@ function renderDiagramasView() {
     appState.diagramas.zonesConfig = _loadZonesConfig();
     appState.diagramas.zonesOrder = _loadZonesOrder();
 
-    // ✅ cargar assignments persistidos
-    appState.diagramas.assignments = _loadAssignments();
+    // ✅ NO mantener tarjetas/layout entre recargas:
+    // - borrar cualquier persistencia anterior DEL PROYECTO ACTUAL
+    // - y arrancar siempre limpio
+    try {
+      localStorage.removeItem(_diagLsKey("diag_assignments"));
+      localStorage.removeItem(_diagLsKey("diag_manual_coords"));
+    } catch (_) {}
 
-    // ✅ cargar layout persistido
-    appState.diagramas.manualCoords = _loadManualCoords();
+    appState.diagramas.assignments = {};
+    appState.diagramas.manualCoords = {};
   } catch (_) {}
 
   diagLoadProjectRefs();
