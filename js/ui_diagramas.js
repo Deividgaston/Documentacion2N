@@ -14,6 +14,11 @@
 // MEJORAS estrictamente necesarias (V2.15c):
 // - ✅ FIX rendimiento: drag de nodos SVG ahora usa requestAnimationFrame (evita re-render por cada mousemove)
 // - ✅ Persistencia layout: manualCoords se guarda/carga en localStorage (no se pierden posiciones)
+//
+// FIX mínimos añadidos (V2.15d):
+// - ✅ Insertar assignment en destino cercano al soltar en OTRA zona (no siempre al final)
+// - ✅ Evitar reorder raro si beforeId === srcId
+// - ✅ Nearest card ignora la tarjeta arrastrada
 
 function _defaultDiagramasState() {
   return {
@@ -214,7 +219,13 @@ function _moveAssignmentWithinZone(zoneKey, srcId, beforeId) {
   const list = appState.diagramas.assignments?.[zoneKey];
   if (!Array.isArray(list)) return;
 
-  const from = list.findIndex((x) => String(x.id) === String(srcId));
+  srcId = String(srcId || "");
+  beforeId = beforeId != null ? String(beforeId) : "";
+
+  if (!srcId) return;
+  if (beforeId && beforeId === srcId) return; // ✅ FIX 2: no-op seguro
+
+  const from = list.findIndex((x) => String(x.id) === srcId);
   if (from < 0) return;
 
   const item = list.splice(from, 1)[0];
@@ -225,7 +236,7 @@ function _moveAssignmentWithinZone(zoneKey, srcId, beforeId) {
     return;
   }
 
-  let to = list.findIndex((x) => String(x.id) === String(beforeId));
+  let to = list.findIndex((x) => String(x.id) === beforeId);
   if (to < 0) {
     list.push(item);
     _saveAssignments();
@@ -242,7 +253,13 @@ function _moveAssignmentToZone(srcZone, srcId, dstZone, beforeId) {
   const dst = (a[dstZone] = a[dstZone] || []);
   if (!Array.isArray(src) || !Array.isArray(dst)) return;
 
-  const from = src.findIndex((x) => String(x.id) === String(srcId));
+  srcId = String(srcId || "");
+  beforeId = beforeId != null ? String(beforeId) : "";
+
+  if (!srcId) return;
+  if (beforeId && beforeId === srcId) beforeId = ""; // ✅ FIX 2 (también aquí)
+
+  const from = src.findIndex((x) => String(x.id) === srcId);
   if (from < 0) return;
 
   const item = src.splice(from, 1)[0];
@@ -253,7 +270,7 @@ function _moveAssignmentToZone(srcZone, srcId, dstZone, beforeId) {
     return;
   }
 
-  const to = dst.findIndex((x) => String(x.id) === String(beforeId));
+  const to = dst.findIndex((x) => String(x.id) === beforeId);
   if (to < 0) dst.push(item);
   else dst.splice(to, 0, item);
 
@@ -732,7 +749,6 @@ function _buildSchematicCoordsFromResult(result) {
 
   return map;
 }
-
 function _renderPreviewSvg(result) {
   const r = _augmentResultForSvg(result);
 
@@ -1244,7 +1260,6 @@ function diagLoadProjectRefs() {
 
   _saveAssignments(); // ✅ persist coherencia
 }
-
 /* ======================================================
    2) DXF (solo carga para selects/autosugerencias)
  ====================================================== */
@@ -1470,6 +1485,7 @@ function _onZoneCardDragStart(ev, zoneKey) {
     ev.dataTransfer.effectAllowed = "move";
   } catch (_) {}
 }
+
 function _onZoneDragOver(ev) {
   ev.preventDefault();
   ev.stopPropagation(); // ✅ CLAVE
@@ -1767,7 +1783,6 @@ function diagAutoAssignIcons() {
   _renderDiagramasUI();
   _renderResult();
 }
-
 /* ======================================================
    5) Payload base (para IA y fallback local)
  ====================================================== */
@@ -1976,9 +1991,12 @@ function _localDesignFromSpec(spec) {
 function _buildHandlerEnvelope(payload) {
   const sectionKey = "diagramas_network";
   const docKey = "diagramas";
-  const sectionText = [payload.instructions, "", "INPUT_JSON:", JSON.stringify({ spec: payload.spec, network_rules: payload.network_rules })].join(
-    "\n"
-  );
+  const sectionText = [
+    payload.instructions,
+    "",
+    "INPUT_JSON:",
+    JSON.stringify({ spec: payload.spec, network_rules: payload.network_rules }),
+  ].join("\n");
 
   return {
     docKey,
@@ -2188,7 +2206,9 @@ function diagExportSvg() {
   const headers = zones
     .map((z, i) => {
       const x = startX + i * colW;
-      return `<text x="${x}" y="36" font-size="13" fill="#6b7280" font-family="Arial, sans-serif">${_escapeHtml(z.label)}</text>`;
+      return `<text x="${x}" y="36" font-size="13" fill="#6b7280" font-family="Arial, sans-serif">${_escapeHtml(
+        z.label
+      )}</text>`;
     })
     .join("");
 
@@ -2305,7 +2325,6 @@ function diagExportDxf() {
 /* ======================================================
    7) Render UI
  ====================================================== */
-
 function _renderRefsList() {
   const host = _el("diagRefsList");
   if (!host) return;
@@ -2313,7 +2332,9 @@ function _renderRefsList() {
   const s = appState.diagramas;
   const refs = Array.isArray(s.refs) ? s.refs : [];
   const q = String(s.refsSearch || "").toLowerCase().trim();
-  const filtered = q ? refs.filter((r) => (r.ref || "").toLowerCase().includes(q) || (r.descripcion || "").toLowerCase().includes(q)) : refs;
+  const filtered = q
+    ? refs.filter((r) => (r.ref || "").toLowerCase().includes(q) || (r.descripcion || "").toLowerCase().includes(q))
+    : refs;
 
   host.innerHTML = `
     ${
@@ -2493,7 +2514,9 @@ function _renderDiagramasUI() {
         </div>
 
         <div class="form-group mt-2">
-          <input id="diagRefsSearch" type="text" placeholder="Buscar ref/descripcion..." value="${_escapeHtml(s.refsSearch || "")}"/>
+          <input id="diagRefsSearch" type="text" placeholder="Buscar ref/descripcion..." value="${_escapeHtml(
+            s.refsSearch || ""
+          )}"/>
         </div>
 
         <div id="diagRefsList" style="max-height:520px; overflow:auto; border:1px solid rgba(15,23,42,.08); border-radius:10px; padding:8px;"></div>
@@ -2648,9 +2671,8 @@ function _renderDiagramasUI() {
       } catch (_) {}
       payload = String(payload || "").trim();
 
-      // ✅ IMPORTANTE: si arrastras una ZONA encima de una tarjeta,
-      // hay que hacer preventDefault para que el navegador permita el drop.
-      // NO hacemos stopPropagation: dejamos que burbujee y lo gestione la zona.
+      // ✅ Si arrastras una ZONA encima de una tarjeta:
+      // hacemos preventDefault para permitir drop, pero dejamos burbujear a la zona.
       if (payload.startsWith("ZONE:")) {
         ev.preventDefault();
         try {
@@ -2672,8 +2694,7 @@ function _renderDiagramasUI() {
       } catch (_) {}
       payload = String(payload || "").trim();
 
-      // ✅ Si es ZONA: permitimos drop (preventDefault) pero NO interceptamos la lógica;
-      // deja que burbujee al .diag-dropzone
+      // ✅ Si es ZONA: no interceptamos la lógica; deja que lo gestione la zona
       if (payload.startsWith("ZONE:")) {
         ev.preventDefault();
         return;
