@@ -1040,12 +1040,15 @@ function _renderPreviewSvg(result) {
           `
           : "";
 
+      // ✅ FIX Chrome: evita selección/drag nativo del navegador sobre SVG/text
+      const nodeStyle = `cursor:${
+        appState.diagramas.previewEditMode ? "grab" : "default"
+      }; user-select:none; -webkit-user-select:none; -ms-user-select:none; -webkit-user-drag:none;`;
+
       return `
         <g class="diag-node" data-node-id="${_escapeHtmlAttr(
           id
-        )}" style="cursor:${
-        appState.diagramas.previewEditMode ? "grab" : "default"
-      };">
+        )}" style="${nodeStyle}">
           <circle class="diag-node-hit" cx="${p.x}" cy="${p.y}" r="18" fill="rgba(0,0,0,0)"></circle>
           <circle cx="${p.x}" cy="${p.y}" r="14" fill="${fill}" stroke="${stroke}" stroke-width="10"></circle>
           <text x="${p.x - 8}" y="${p.y + 7}" font-size="18" fill="white">${icon}</text>
@@ -1107,6 +1110,7 @@ function _renderPreviewSvg(result) {
     </div>
   `;
 }
+
 /* ======================================================
    Drag controller para SVG (con rAF) + persist manualCoords
  ====================================================== */
