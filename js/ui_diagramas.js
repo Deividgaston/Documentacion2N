@@ -2557,57 +2557,72 @@ function _renderDiagramasUI() {
     }
   });
 
-  // ✅ Cards: mover/reordenar assignments (drop sobre otra tarjeta = insertar antes)
-  host.querySelectorAll(".diag-assignment[data-zone][data-id]").forEach((card) => {
-    const zoneKey = card.dataset.zone;
-    const id = card.dataset.id;
+// ✅ Cards: mover/reordenar assignments (drop sobre otra tarjeta = insertar antes)
+host.querySelectorAll(".diag-assignment[data-zone][data-id]").forEach((card) => {
+  const zoneKey = card.dataset.zone;
+  const id = card.dataset.id;
 
-    card.addEventListener("dragstart", (ev) => _onAssignmentDragStart(ev, zoneKey, id));
-    card.addEventListener("dragend", _onAssignmentDragEnd);
+  card.addEventListener("dragstart", (ev) => _onAssignmentDragStart(ev, zoneKey, id));
+  card.addEventListener("dragend", _onAssignmentDragEnd);
 
-    card.addEventListener("dragover", (ev) => {
-      // Si lo que arrastras es una ZONA, deja que lo gestione el contenedor .diag-dropzone
-      let payload = "";
-      try {
-        payload = ev.dataTransfer.getData("text/plain") || "";
-      } catch (_) {}
-      payload = String(payload || "").trim();
-      if (payload.startsWith("ZONE:")) return; // ✅ NO preventDefault
+  card.addEventListener("dragover", (ev) => {
+    let payload = "";
+    try {
+      payload = ev.dataTransfer.getData("text/plain") || "";
+    } catch (_) {}
+    payload = String(payload || "").trim();
 
+    // ✅ IMPORTANTE: si arrastras una ZONA encima de una tarjeta,
+    // hay que hacer preventDefault para que el navegador permita el drop.
+    // NO hacemos stopPropagation: dejamos que burbujee y lo gestione la zona.
+    if (payload.startsWith("ZONE:")) {
       ev.preventDefault();
       try {
         ev.dataTransfer.dropEffect = "move";
       } catch (_) {}
-    });
+      return;
+    }
 
-    card.addEventListener("drop", (ev) => {
-      // Si lo que arrastras es una ZONA, NO interceptes el drop (lo gestiona la zona)
-      let payload = "";
-      try {
-        payload = ev.dataTransfer.getData("text/plain") || "";
-      } catch (_) {}
-      payload = String(payload || "").trim();
-      if (payload.startsWith("ZONE:")) return; // ✅ NO preventDefault, deja burbujear
-
-      ev.preventDefault();
-      if (!payload.startsWith("ASSIGN:")) return;
-
-      const parts = payload.split(":");
-      const srcZone = parts[1] || "";
-      const srcId = parts[2] || "";
-      if (!srcZone || !srcId) return;
-
-      if (String(srcZone) === String(zoneKey)) {
-        _moveAssignmentWithinZone(zoneKey, srcId, id);
-      } else {
-        _moveAssignmentToZone(srcZone, srcId, zoneKey, id);
-      }
-
-      _clearDiagError();
-      _renderDiagramasUI();
-      _renderResult();
-    });
+    ev.preventDefault();
+    try {
+      ev.dataTransfer.dropEffect = "move";
+    } catch (_) {}
   });
+
+  card.addEventListener("drop", (ev) => {
+    let payload = "";
+    try {
+      payload = ev.dataTransfer.getData("text/plain") || "";
+    } catch (_) {}
+    payload = String(payload || "").trim();
+
+    // ✅ Si es ZONA: permitimos drop (preventDefault) pero NO interceptamos la lógica;
+    // deja que burbujee al .diag-dropzone
+    if (payload.startsWith("ZONE:")) {
+      ev.preventDefault();
+      return;
+    }
+
+    ev.preventDefault();
+    if (!payload.startsWith("ASSIGN:")) return;
+
+    const parts = payload.split(":");
+    const srcZone = parts[1] || "";
+    const srcId = parts[2] || "";
+    if (!srcZone || !srcId) return;
+
+    if (String(srcZone) === String(zoneKey)) {
+      _moveAssignmentWithinZone(zoneKey, srcId, id);
+    } else {
+      _moveAssignmentToZone(srcZone, srcId, zoneKey, id);
+    }
+
+    _clearDiagError();
+    _renderDiagramasUI();
+    _renderResult();
+  });
+});
+
 
   host.querySelectorAll("[data-act]").forEach((node) => {
     const act = node.dataset.act;
