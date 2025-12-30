@@ -2227,6 +2227,35 @@ function _localDesignFromSpec(spec) {
 
   let totalSwitches = 1;
 
+  // helper: asigna cada placement a 1 switch (distribución por qty)
+  function _assignPlacementsToSwitches(list, switchesNeeded) {
+    const items = (Array.isArray(list) ? list : []).slice();
+    // opcional: ordena por qty desc para repartir mejor
+    items.sort(
+      (a, b) =>
+        (Math.max(1, Number(b?.qty || 1) || 1) || 1) -
+        (Math.max(1, Number(a?.qty || 1) || 1) || 1)
+    );
+
+    const buckets = Array.from({ length: switchesNeeded }, () => ({
+      load: 0,
+      items: [],
+    }));
+
+    for (const p of items) {
+      const w = Math.max(1, Number(p?.qty || 1) || 1);
+      // greedy: mete en el bucket con menos carga
+      let best = 0;
+      for (let i = 1; i < buckets.length; i++) {
+        if (buckets[i].load < buckets[best].load) best = i;
+      }
+      buckets[best].items.push(p);
+      buckets[best].load += w;
+    }
+
+    return buckets.map((b) => b.items);
+  }
+
   for (const z of zones) {
     const list = byZone[z.key] || [];
     if (!list.length) continue;
@@ -2251,8 +2280,13 @@ function _localDesignFromSpec(spec) {
     }
 
     const switchesNeeded = ports > 24 ? 2 : 1;
+
+    // ✅ NUEVO: repartir placements entre switches (cada placement a 1 switch)
+    const perSwitchLists = _assignPlacementsToSwitches(list, switchesNeeded);
+
     for (let i = 1; i <= switchesNeeded; i++) {
       totalSwitches += 1;
+
       const swId = `V_SW_${z.key}_${i}`;
       infra.push({
         id: swId,
@@ -2268,7 +2302,9 @@ function _localDesignFromSpec(spec) {
         note: "Uplink zona -> core (sin cascada)",
       });
 
-      for (const p of list) {
+      // ✅ SOLO conecta a este switch los placements asignados a este switch
+      const assigned = perSwitchLists[i - 1] || [];
+      for (const p of assigned) {
         connections.push({
           from: p.id,
           to: swId,
