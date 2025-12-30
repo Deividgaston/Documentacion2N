@@ -1155,13 +1155,29 @@ function _bindPreviewWindowListeners(svg) {
     _scheduleRender();
   };
 
-  s._previewMouseUpHandler = () => {
-    _diagDrag.active = false;
-    _diagDrag.nodeId = null;
+s._previewMouseUpHandler = () => {
+  // ✅ commit del último move pendiente ANTES de guardar
+  if (s._previewPendingMove && s._previewPendingMove.nodeId) {
+    const { nodeId, nx, ny } = s._previewPendingMove;
+    s._previewPendingMove = null;
 
-    // ✅ persistir layout al soltar
-    _saveManualCoords();
-  };
+    s.manualCoords = s.manualCoords || {};
+    s.manualCoords[nodeId] = { x: nx, y: ny };
+  }
+
+  // ✅ corta cualquier rAF pendiente
+  if (s._previewRaf) {
+    try { cancelAnimationFrame(s._previewRaf); } catch (_) {}
+    s._previewRaf = 0;
+  }
+
+  _diagDrag.active = false;
+  _diagDrag.nodeId = null;
+
+  _saveManualCoords();  // ✅ ahora sí, guarda el último punto real
+  _renderResult();      // ✅ refresca para que se vea fijo
+};
+
 
   window.addEventListener("mousemove", s._previewMouseMoveHandler, true);
   window.addEventListener("mouseup", s._previewMouseUpHandler, true);
