@@ -71,30 +71,18 @@ function simuladorTarifaFieldFromId(tarifaId) {
   }
 }
 
-/**
- * ✅ FIX CLAVE:
- * - Mejoramos clasificación A/B/C/D:
- *   - usa texto combinado (presupuesto + Firestore)
- *   - más patrones (accesorios/repuestos)
- *   - licencias: solo GRUPO_D si hay señales claras (my2n/subscription/cloud)
- */
+// ====== FIX CLAVE ======
+// Patrones de grupo para clasificar el SKU.
+// (Se usa la descripción REAL de la tarifa base siempre que exista)
 const SIM_GROUP_PATTERNS = {
   GRUPO_D: [
     "my2n",
     "subscription",
     "suscripción",
-    "subscription plan",
-    "cloud",
-    "saas",
     "spare part",
     "spare parts",
-    "service part",
-    "replacement",
     "repuesto",
     "repuestos",
-    "recambio",
-    "repair",
-    "rma",
   ],
   GRUPO_C: [
     "fortis",
@@ -103,97 +91,56 @@ const SIM_GROUP_PATTERNS = {
     "indoor compact",
     "indoor talk",
     "indoor clip",
-    "indoor",
     "ip one",
     "ip uni",
     "ip base",
     "ip vario",
     "sip audio",
-    "intercom",
-    "verso",
-    "ip style",
-    "access unit", // ojo: en tarifas lo tratabas como familia; aquí lo dejamos como C por seguridad
+    // FIX: IP Phone / D7A / teléfonos (ej: 1120102)
+    "ip phone",
+    "d7a",
+    "d7x",
+    "desk phone",
+    "hotel phone",
   ],
   GRUPO_B: [
     "accessory",
     "accessories",
     "accesorio",
     "accesorios",
+    "caja",
+    "empotrar",
+    "marco",
+    "soporte",
     "installation accessory",
     "installation accessories",
     "power supply",
     "fuente de alimentación",
-    "fuente de alimentacion",
-    "alimentación",
-    "alimentacion",
     "psu",
     "mounting frame",
     "mounting accessories",
     "flush box",
     "backplate",
     "frame",
-    "cover",
-    "hood",
-    "rain",
-    "bracket",
-    "holder",
-    "stand",
-    "adapter",
-    "adaptor",
-    "kit",
-    "cable",
-    "conector",
-    "connector",
-    "module",
-    "modulo",
-    "módulo",
-    "reader",
-    "lector",
-    "keypad",
-    "teclado",
-    "caja",
-    "empotrar",
-    "marco",
-    "soporte",
-    "placa",
-    "camara",
-    "cámara",
+    // FIX: típicos accesorios en proyectos
     "usb",
+    "camera usb",
+    "cámara usb",
+    "camara usb",
+    "camera",
+    "cámara",
+    "camara",
   ],
   // GRUPO_A = resto
 };
 
-function _simText(v) {
-  return (v || "").toString().toLowerCase().trim();
-}
-
-function _simContainsAny(text, arr) {
-  return arr.some((p) => text.includes(p));
-}
-
-function simuladorClasificarGrupoCombinado({ descPresu, descFs }) {
-  const tPresu = _simText(descPresu);
-  const tFs = _simText(descFs);
-  const t = `${tPresu} ${tFs}`.trim();
-  if (!t) return "GRUPO_A";
-
-  // 1) GRUPO_D con señales claras
-  if (_simContainsAny(t, SIM_GROUP_PATTERNS.GRUPO_D)) return "GRUPO_D";
-
-  // 2) Licencias: SOLO D si hay my2n/subscription/cloud; si no, las dejamos en A (como tu label A incluye licencias)
-  const isLicense = t.includes("license") || t.includes("licence") || t.includes("licencia");
-  if (isLicense) {
-    const dSignals = ["my2n", "subscription", "suscripción", "cloud", "saas"];
-    if (_simContainsAny(t, dSignals)) return "GRUPO_D";
-    return "GRUPO_A";
+function simuladorClasificarGrupoPorDescripcion(descripcionRaw) {
+  const desc = (descripcionRaw || "").toString().toLowerCase();
+  if (!desc) return "GRUPO_A";
+  for (const gid of ["GRUPO_D", "GRUPO_C", "GRUPO_B"]) {
+    const patterns = SIM_GROUP_PATTERNS[gid] || [];
+    if (patterns.some((p) => desc.includes(p))) return gid;
   }
-
-  // 3) GRUPO_C
-  if (_simContainsAny(t, SIM_GROUP_PATTERNS.GRUPO_C)) return "GRUPO_C";
-
-  // 4) GRUPO_B
-  if (_simContainsAny(t, SIM_GROUP_PATTERNS.GRUPO_B)) return "GRUPO_B";
-
   return "GRUPO_A";
 }
 
@@ -260,7 +207,7 @@ async function simuladorGetTarifaTipoBBD() {
 }
 
 console.log(
-  "%cUI Simulador · v4.9 · tab 2N + tabs actor sin promotor + edición solo en 2N",
+  "%cUI Simulador · v5.0 · descuentos NO lineales por grupo (BBD) + FIX clasificación por descripción base",
   "color:#22c55e; font-weight:bold;"
 );
 
@@ -293,7 +240,7 @@ async function getTarifasBase2N() {
     return appState.tarifasBaseSimCache;
   }
 
-  if (typeof cargarTarifasDesdeFirestoreFirestore !== "function" && typeof cargarTarifasDesdeFirestore !== "function") {
+  if (typeof cargarTarifasDesdeFirestore !== "function") {
     console.warn(
       "[Simulador] cargarTarifasDesdeFirestore no está disponible. Devuelvo objeto vacío."
     );
@@ -301,33 +248,9 @@ async function getTarifasBase2N() {
     return appState.tarifasBaseSimCache;
   }
 
-  // compat
-  const fn = (typeof cargarTarifasDesdeFirestore === "function")
-    ? cargarTarifasDesdeFirestore
-    : cargarTarifasDesdeFirestore;
-
-  const tarifas = await fn();
+  const tarifas = await cargarTarifasDesdeFirestore();
   appState.tarifasBaseSimCache = tarifas || {};
   return appState.tarifasBaseSimCache;
-}
-
-// ✅ helper: buscar referencia en cache aunque venga con formatos distintos
-function simuladorFindTarifaInfo(tarifasBase, refNorm, refRaw) {
-  if (!tarifasBase) return {};
-  const a = String(refNorm || "").trim();
-  const b = String(refRaw || "").trim();
-  if (a && tarifasBase[a]) return tarifasBase[a];
-  if (b && tarifasBase[b]) return tarifasBase[b];
-
-  // intenta quitar espacios / guiones
-  const c = a.replace(/[\s-]+/g, "");
-  if (c && tarifasBase[c]) return tarifasBase[c];
-
-  // intenta versión numérica (por si alguien guardó sin ceros a la izquierda)
-  const n = String(Number(a));
-  if (n !== "NaN" && tarifasBase[n]) return tarifasBase[n];
-
-  return {};
 }
 
 // ===============================
@@ -661,6 +584,30 @@ function renderSimuladorView() {
 }
 
 // ===============================
+// FIX: descripción “buena” para clasificar grupo
+// Prioridad: tarifa base (Firestore) -> línea presupuesto
+// ===============================
+function simuladorGetBestDescripcionParaGrupo(infoTarifa, lBase) {
+  const pick = (obj, keys) => {
+    for (const k of keys) {
+      const v = obj && obj[k];
+      if (v !== undefined && v !== null && String(v).trim() !== "") return String(v);
+    }
+    return "";
+  };
+
+  // 1) desde tarifas base (más fiable)
+  const fromTarifa = pick(infoTarifa, ["descripcion", "desc", "Nombre", "name", "producto", "Producto"]);
+  if (fromTarifa) return fromTarifa;
+
+  // 2) fallback presupuesto
+  const fromLinea = pick(lBase, ["descripcion", "desc", "nombre", "name", "titulo"]);
+  if (fromLinea) return fromLinea;
+
+  return "";
+}
+
+// ===============================
 // Lógica principal de simulación
 // ===============================
 async function recalcularSimulador() {
@@ -731,10 +678,11 @@ async function recalcularSimulador() {
   const lineasSim = lineasBase.map((lBase, index) => {
     const key = buildLineaKey(lBase, index);
 
-    const refRaw = String(lBase.ref || "");
-    const refNorm = refRaw.trim().replace(/\s+/g, "");
+    const refNorm = String(lBase.ref || "")
+      .trim()
+      .replace(/\s+/g, "");
 
-    const infoTarifa = simuladorFindTarifaInfo(tarifasBase, refNorm, refRaw) || {};
+    const infoTarifa = tarifasBase[refNorm] || {};
     const basePvp =
       Number(infoTarifa.pvp) || Number(lBase.pvp || 0) || 0;
 
@@ -749,13 +697,10 @@ async function recalcularSimulador() {
     if (esTab2N && editedMap[key]) dtoLinea = Number(cfg.dtoLinea || 0) || 0;
     else dtoLinea = dtoGlobal;
 
-    // ✅ GRUPO: usar descripción combinada (presupuesto + Firestore)
-    const descPresu =
-      lBase.descripcion || lBase.desc || lBase.nombre || lBase.name || "";
-    const descFs =
-      infoTarifa.descripcion || infoTarifa.desc || infoTarifa.Nombre || infoTarifa.name || "";
-
-    const gid = simuladorClasificarGrupoCombinado({ descPresu, descFs });
+    // ===== FIX: Grupo por descripción “buena” =====
+    // (antes muchas líneas venían con descripción corta del presupuesto, y caían en GRUPO_A)
+    const descForGroup = simuladorGetBestDescripcionParaGrupo(infoTarifa, lBase);
+    const gid = simuladorClasificarGrupoPorDescripcion(descForGroup);
 
     // Dto tarifa (NO lineal): depende del grupo de producto de la referencia
     // Nota: el % mostrado sigue siendo % vs PVP (como querías)
@@ -783,7 +728,10 @@ async function recalcularSimulador() {
     return {
       key,
       ref: refNorm || lBase.ref || "-",
-      descripcion: descPresu || descFs || "Producto sin descripción",
+      descripcion:
+        lBase.descripcion ||
+        infoTarifa.descripcion ||
+        "Producto sin descripción",
       seccion: lBase.seccion || "",
       titulo: lBase.titulo || "",
       cantidad,
@@ -795,7 +743,8 @@ async function recalcularSimulador() {
       pvpFinalUd,
       subtotalTarifa,
       subtotalFinal,
-      __gid: gid, // debug opcional
+      __gid: gid,                 // (debug útil si quieres verlo luego)
+      __descGrupo: descForGroup,  // (debug útil)
     };
   });
 
