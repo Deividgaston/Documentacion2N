@@ -18,7 +18,7 @@ appState.simulador = appState.simulador || {
   actorTab: "2N",              // "2N" | "DIST" | "SUBDIST" | "INTE" | "CONST"
 };
 
-// Cache + índice normalizado (FIX descuentos no lineales por mismatch de keys)
+// Cache + índice normalizado
 appState.tarifasBaseSimCache = appState.tarifasBaseSimCache || null;
 appState.tarifasBaseSimIndex = appState.tarifasBaseSimIndex || null;
 
@@ -31,6 +31,7 @@ const getPresupuestoActual =
 /**
  * TARIFAS DEFINIDAS (alineadas con tu Excel/Firestore)
  * dto = descuento sobre el PVP base (campo pvp).
+ * OJO: dto se usa solo como FALLBACK si Firestore no tiene el precio de esa tarifa.
  */
 const TARIFAS_2N = [
   { id: "NFR_DIST",     label: "NFR Distributor (EUR)",               dto: 55 },
@@ -48,7 +49,7 @@ const TARIFAS_MAP = TARIFAS_2N.reduce((acc, t) => {
 }, {});
 
 console.log(
-  "%cUI Simulador · v4.9 · tab 2N + tabs actor sin promotor + edición solo en 2N",
+  "%cUI Simulador · v4.9 · tarifas desde Firestore si existen + fallback dto",
   "color:#22c55e; font-weight:bold;"
 );
 
@@ -68,15 +69,14 @@ function buildLineaKey(baseLinea, index) {
 }
 
 // ===============================
-// Helpers ref / lookup Firestore (FIX: evitar fallbacks inconsistentes)
-// - Creamos un índice normalizado UNA vez por carga, y buscamos siempre ahí.
+// Helpers ref / lookup Firestore (índice normalizado)
 // ===============================
 function _normalizeKeyForIndex(k) {
   return String(k || "")
     .trim()
     .replace(/\s+/g, "")
     .toUpperCase()
-    .replace(/[^A-Z0-9]/g, ""); // quita -,_,.,/
+    .replace(/[^A-Z0-9]/g, "");
 }
 
 function buildTarifasIndex(tarifasBase) {
@@ -86,7 +86,7 @@ function buildTarifasIndex(tarifasBase) {
   Object.keys(tarifasBase).forEach((k) => {
     const norm = _normalizeKeyForIndex(k);
     if (!norm) return;
-    if (!idx[norm]) idx[norm] = tarifasBase[k]; // primera gana
+    if (!idx[norm]) idx[norm] = tarifasBase[k];
   });
 
   return idx;
@@ -99,37 +99,11 @@ function lookupTarifaInfoIndexed(tarifasIndex, ref) {
   return tarifasIndex[norm] || null;
 }
 
-// (legacy) se mantiene por si lo usas en otros sitios, pero ya no es necesario
-function normalizeRefVariants(ref) {
-  const raw = String(ref || "").trim();
-  const noSpaces = raw.replace(/\s+/g, "");
-  const upper = noSpaces.toUpperCase();
-  const alnumOnly = upper.replace(/[^A-Z0-9]/g, ""); // quita -,_,.,/
-  const variants = [];
-  if (noSpaces) variants.push(noSpaces);
-  if (upper && upper !== noSpaces) variants.push(upper);
-  if (alnumOnly && alnumOnly !== upper) variants.push(alnumOnly);
-  return variants;
-}
-function lookupTarifaInfo(tarifasBase, ref) {
-  if (!tarifasBase) return null;
-  const vars = normalizeRefVariants(ref);
-  for (const k of vars) {
-    if (k && tarifasBase[k]) return { key: k, info: tarifasBase[k] };
-  }
-  for (const k of vars) {
-    const low = String(k || "").toLowerCase();
-    if (low && tarifasBase[low]) return { key: low, info: tarifasBase[low] };
-  }
-  return null;
-}
-
 // ===============================
-// Cargar tarifas base (PVP) desde Firestore
+// Cargar tarifas base desde Firestore
 // ===============================
 async function getTarifasBase2N() {
   if (appState.tarifasBaseSimCache) {
-    // Asegurar índice si vienes de una sesión antigua
     if (!appState.tarifasBaseSimIndex) {
       appState.tarifasBaseSimIndex = buildTarifasIndex(appState.tarifasBaseSimCache);
     }
@@ -153,13 +127,12 @@ async function getTarifasBase2N() {
 
   const tarifas = await cargarTarifasDesdeFirestore();
   appState.tarifasBaseSimCache = tarifas || {};
-  appState.tarifasBaseSimIndex = buildTarifasIndex(appState.tarifasBaseSimCache); // <-- FIX CLAVE
+  appState.tarifasBaseSimIndex = buildTarifasIndex(appState.tarifasBaseSimCache);
   return appState.tarifasBaseSimCache;
 }
 
 // ===============================
 // Leer configuración de líneas desde el DOM
-// (solo Dto línea; editable SOLO en pestaña 2N)
 // ===============================
 function leerConfigLineasDesdeDOM() {
   const detalle = document.getElementById("simDetalle");
@@ -180,12 +153,12 @@ function leerConfigLineasDesdeDOM() {
 }
 
 // ===============================
-// Helpers actor tabs (MISMOS CÁLCULOS que tu archivo original)
+// Helpers cálculo
 // ===============================
 function calcDtoVsPvp(pvpBase, precio) {
   const b = Number(pvpBase) || 0;
   const p = Number(precio) || 0;
-  return b > 0 ? (1 - p / b) * 100 : 0; // <- fórmula EXACTA (la tuya)
+  return b > 0 ? (1 - p / b) * 100 : 0;
 }
 
 function aplicarMargenSobreVenta(cost, marginPct) {
@@ -193,7 +166,7 @@ function aplicarMargenSobreVenta(cost, marginPct) {
   if (m <= 0) return cost;
   const f = m / 100;
   if (f >= 0.99) return cost / 0.01;
-  return cost / (1 - f); // <- EXACTO como el archivo original
+  return cost / (1 - f);
 }
 
 function getLabelActor(tab) {
@@ -224,6 +197,41 @@ function getFactorActor(tab, mgnDist, mgnSubdist, mgnInte, mgnConst) {
     case "CONST":  return fConst;
     default:       return f2n;
   }
+}
+
+// ===============================
+// FIX CLAVE: obtener PRECIO de tarifa desde Firestore (si existe)
+// - Soporta nombres típicos: MSRP/RRP1/RRP2/DIST_PRICE/NFR_DIST/NFR_RESELLER
+// - y variantes: msrp, rrp1, rrp_1, rp1, rp_1, distPrice, dist_price, nfrDist, etc.
+// ===============================
+function _pickFirstNumber(obj, keys) {
+  if (!obj) return null;
+  for (const k of keys) {
+    if (!k) continue;
+    const v = obj[k];
+    const n = Number(v);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return null;
+}
+
+function getPrecioTarifaDesdeInfo(infoTarifa, tarifaId) {
+  if (!infoTarifa || !tarifaId) return null;
+
+  const id = String(tarifaId);
+
+  // Candidatos por tarifa
+  const candidatesById = {
+    MSRP: ["MSRP", "msrp", "pvp", "PVP"], // si tu base realmente es MSRP, aquí cae; si no, usa pvp como fallback
+    RRP1: ["RRP1", "rrp1", "RRP_1", "rrp_1", "RP1", "rp1", "RP_1", "rp_1"],
+    RRP2: ["RRP2", "rrp2", "RRP_2", "rrp_2", "RP2", "rp2", "RP_2", "rp_2"],
+    DIST_PRICE: ["DIST_PRICE", "dist_price", "distPrice", "DISTPRICE", "distprice", "DISTRIBUTOR_PRICE", "distributor_price"],
+    NFR_DIST: ["NFR_DIST", "nfr_dist", "nfrDist", "NFRDIST"],
+    NFR_RESELLER: ["NFR_RESELLER", "nfr_reseller", "nfrReseller", "NFRRESELLER"],
+  };
+
+  const keys = candidatesById[id] || [id, id.toLowerCase()];
+  return _pickFirstNumber(infoTarifa, keys);
 }
 
 // ===============================
@@ -555,33 +563,40 @@ async function recalcularSimulador() {
   const lineasSim = lineasBase.map((lBase, index) => {
     const key = buildLineaKey(lBase, index);
 
-    // FIX: lookup robusto por índice normalizado (evita fallbacks inconsistentes)
     const infoTarifa = lookupTarifaInfoIndexed(tarifasIndex, lBase.ref) || {};
     const refFinal = String(lBase.ref || "").trim().replace(/\s+/g, "");
 
-    const basePvp =
-      Number(infoTarifa.pvp) || Number(lBase.pvp || 0) || 0;
-
+    const basePvp = Number(infoTarifa.pvp) || Number(lBase.pvp || 0) || 0;
     const cantidad = Number(lBase.cantidad || 0) || 0;
 
     // Tarifa SIEMPRE global
     const tarifaId = tarifaDefecto;
+    const objTarifa = TARIFAS_MAP[tarifaId] || TARIFAS_MAP["DIST_PRICE"];
+    const dtoTarifaFallback = objTarifa ? objTarifa.dto || 0 : 0;
 
-    // Dto línea: solo se puede EDITAR en pestaña 2N
+    // 1) Precio tarifa desde Firestore si existe
+    const precioTarifaFs = getPrecioTarifaDesdeInfo(infoTarifa, tarifaId);
+
+    // 2) Si no existe, fallback a dto sobre PVP
+    const pvpTarifaUd = (Number(precioTarifaFs) > 0)
+      ? Number(precioTarifaFs)
+      : (basePvp * (1 - dtoTarifaFallback / 100));
+
+    // Dto tarifa mostrado: REAL vs PVP (si Firestore trae precio, esto refleja el dto real)
+    const dtoTarifaReal = calcDtoVsPvp(basePvp, pvpTarifaUd);
+
+    // Dto línea: solo editable en 2N
     const cfg = configPrev[key] || {};
     let dtoLinea;
     if (esTab2N && editedMap[key]) dtoLinea = Number(cfg.dtoLinea || 0) || 0;
     else dtoLinea = dtoGlobal;
 
-    const objTarifa = TARIFAS_MAP[tarifaId] || TARIFAS_MAP["DIST_PRICE"];
-    const dtoTarifa = objTarifa ? objTarifa.dto || 0 : 0;
-
-    const factorTarifa = 1 - dtoTarifa / 100;
     const factorLinea = 1 - dtoLinea / 100;
 
+    // Precio 2N = precioTarifa * (1 - dtoLinea)
+    const pvpFinalUd = pvpTarifaUd * factorLinea;
+
     const subtotalPvpBase = basePvp * cantidad;
-    const pvpTarifaUd = basePvp * factorTarifa;
-    const pvpFinalUd = basePvp * factorTarifa * factorLinea; // <- precio 2N
     const subtotalTarifa = pvpTarifaUd * cantidad;
     const subtotalFinal = pvpFinalUd * cantidad;
 
@@ -601,7 +616,10 @@ async function recalcularSimulador() {
       cantidad,
       basePvp,
       tarifaId,
-      dtoTarifa,
+
+      // IMPORTANTE: dtoTarifa ahora es REAL vs PVP (no el fijo)
+      dtoTarifa: dtoTarifaReal,
+
       dtoLinea,
       pvpTarifaUd,
       pvpFinalUd,
@@ -621,7 +639,7 @@ async function recalcularSimulador() {
   const totalActor = totalFinal2N * actorFactor;
   const dtoActorTotal = totalPvpBase > 0 ? (1 - totalActor / totalPvpBase) * 100 : 0;
 
-  // ===== Tabla en la derecha (según pestaña) =====
+  // ===== Tabla derecha =====
   let html = `
     <div style="display:flex; justify-content:space-between; align-items:flex-end; gap:0.75rem; margin-bottom:0.5rem; flex-wrap:wrap;">
       <div style="font-size:0.9rem; color:#111827;">
@@ -709,7 +727,7 @@ async function recalcularSimulador() {
 
   detalle.innerHTML = html;
 
-  // pintar tabs activos (mínimo)
+  // pintar tabs activos
   const tabsWrap = document.getElementById("simActorTabs");
   if (tabsWrap) {
     tabsWrap.querySelectorAll(".sim-tab").forEach((b) => {
@@ -738,7 +756,7 @@ async function recalcularSimulador() {
     });
   }
 
-  // ===== BLOQUE 2: Resumen (referencia PVP) =====
+  // ===== Resumen =====
   const tarifaLabel = TARIFAS_MAP[tarifaDefecto]?.label || tarifaDefecto;
 
   const dtoTarifaEf =
@@ -782,7 +800,7 @@ async function recalcularSimulador() {
     </div>
   `;
 
-  // ===== BLOQUE 3: Cadena (hasta constructora) =====
+  // ===== Cadena =====
   const precio2N = totalFinal2N;
 
   const precioDist    = aplicarMargenSobreVenta(precio2N,      mgnDist);
@@ -879,7 +897,6 @@ async function exportarSimuladorPDF(actorTab) {
 
   const dtoActorTotal = totalPvpBase > 0 ? (1 - totalActor / totalPvpBase) * 100 : 0;
 
-  // jsPDF + autoTable
   const jsPDFGlobal = window.jspdf || window.jsPDF;
   if (!jsPDFGlobal) {
     alert("No está disponible la librería jsPDF. Revisa la carga de scripts.");
@@ -984,7 +1001,6 @@ async function exportarSimuladorPDF(actorTab) {
 
 // ===============================
 // EXPORTAR A EXCEL (por pestaña)
-// Requiere SheetJS (window.XLSX). Si no está, avisa.
 // ===============================
 function exportarSimuladorExcel(actorTab) {
   const XLSX = window.XLSX;
