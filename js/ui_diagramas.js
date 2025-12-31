@@ -782,6 +782,23 @@ function _strokeForConnectionType(t) {
   }
   return { stroke: "rgba(29,79,216,.55)", width: 2, dash: "" };
 }
+function _labelForConnectionType(t) {
+  const tt = String(t || "").toUpperCase();
+  if (tt === "UTP_CAT6" || tt === "CAT6" || tt === "UTP") return "Cat6";
+  if (tt === "2_WIRE" || tt === "2H" || tt === "2_HILOS") return "2H";
+  return tt || "";
+}
+
+function _isSwitchInfraNode(n) {
+  const t = String(n?.type || "").toUpperCase();
+  const role = String(n?.meta?.role || "").toUpperCase();
+  return t.includes("SWITCH") || role.includes("SWITCH");
+}
+
+function _isLockInfraNode(n) {
+  const t = String(n?.type || "").toUpperCase();
+  return t.includes("LOCK") || t.includes("GARAGE");
+}
 
 /* ======================================================
    Preview SVG (coords)
