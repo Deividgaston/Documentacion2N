@@ -663,14 +663,25 @@ function _augmentResultForSvg(baseResult) {
   const r = _cloneDeepJson(r0);
 
   const placements = Array.isArray(r.placements) ? r.placements : [];
-  const infra = Array.isArray(r.infra) ? r.infra : [];
-  const connections = Array.isArray(r.connections) ? r.connections : [];
+  let infra = Array.isArray(r.infra) ? r.infra : [];
+  let connections = Array.isArray(r.connections) ? r.connections : [];
 
   for (const p of placements) {
     const q = Math.max(1, Number(p?.qty || 1) || 1);
     p.qty = q;
   }
 
+  // --------------------------------------------------
+  // ✅ 1) NO crear infra "fantasma" en previews vacíos
+  //     (p.ej. preview manual: placements sí, pero connections = [])
+  // --------------------------------------------------
+  const hasAnyConn = connections.length > 0;
+  const hasAnyInfraCoreLike = infra.some((n) => {
+    const t = String(n?.type || "").toUpperCase();
+    return t.includes("CORE") || t.includes("ROUTER");
+  });
+
+  // set ids existentes
   const existingNodeIds = new Set([
     ...placements.map((p) => String(p.id)),
     ...infra.map((n) => String(n.id)),
@@ -682,33 +693,42 @@ function _augmentResultForSvg(baseResult) {
       .map((c) => `${String(c.from)}__${String(c.to)}`)
   );
 
-  // ✅ Siempre: asegurar SW POE en armario
+  // --------------------------------------------------
+  // ✅ 2) CPD switch: solo si hay diseño real (hay conexiones o core/router)
+  //     Esto elimina el "switch suelto" en preview manual.
+  // --------------------------------------------------
   const cpdCfg = _getZoneConfig("armario_cpd");
   const cpdSwId = "V_CPD_SW_POE";
-  if (!existingNodeIds.has(cpdSwId)) {
-    infra.push({
-      id: cpdSwId,
-      type: "VIRTUAL_SWITCH_POE",
-      zone: "armario_cpd",
-      meta: {
-        role: "CPD_SWITCH_POE",
-        icon_block: _strip(cpdCfg.cpdSwitchBlock || ""),
-      },
-    });
-    existingNodeIds.add(cpdSwId);
-  } else {
-    const it = infra.find((n) => String(n.id) === cpdSwId);
-    if (it) {
-      it.type = it.type || "VIRTUAL_SWITCH_POE";
-      it.zone = it.zone || "armario_cpd";
-      it.meta = Object.assign({}, it.meta || {}, {
-        icon_block: _strip(
-          cpdCfg.cpdSwitchBlock || it?.meta?.icon_block || ""
-        ),
+
+  if (hasAnyConn || hasAnyInfraCoreLike) {
+    if (!existingNodeIds.has(cpdSwId)) {
+      infra.push({
+        id: cpdSwId,
+        type: "VIRTUAL_SWITCH_POE",
+        zone: "armario_cpd",
+        meta: {
+          role: "CPD_SWITCH_POE",
+          icon_block: _strip(cpdCfg.cpdSwitchBlock || ""),
+        },
       });
+      existingNodeIds.add(cpdSwId);
+    } else {
+      const it = infra.find((n) => String(n.id) === cpdSwId);
+      if (it) {
+        it.type = it.type || "VIRTUAL_SWITCH_POE";
+        it.zone = it.zone || "armario_cpd";
+        it.meta = Object.assign({}, it.meta || {}, {
+          icon_block: _strip(
+            cpdCfg.cpdSwitchBlock || it?.meta?.icon_block || ""
+          ),
+        });
+      }
     }
   }
 
+  // --------------------------------------------------
+  // ✅ 3) Locks por zona (solo si existe lockBlock)
+  // --------------------------------------------------
   if (appState.diagramas.includeLocks) {
     const zones = appState.diagramas.zones || [];
     const zoneLock = new Map();
@@ -747,6 +767,7 @@ function _augmentResultForSvg(baseResult) {
       }
     }
 
+    // conecta 2 hilos desde door devices a lock por zona
     for (const p of placements) {
       if (!_isDoorWireDevice(p)) continue;
 
@@ -768,12 +789,30 @@ function _augmentResultForSvg(baseResult) {
     }
   }
 
+  // --------------------------------------------------
+  // ✅ 4) Eliminar switches NO conectados a nada
+  // --------------------------------------------------
+  const degree = new Map(); // id -> count
+  for (const c of connections) {
+    const a = String(c?.from || "");
+    const b = String(c?.to || "");
+    if (a) degree.set(a, (degree.get(a) || 0) + 1);
+    if (b) degree.set(b, (degree.get(b) || 0) + 1);
+  }
+
+  infra = infra.filter((n) => {
+    if (!_isSwitchInfraNode(n)) return true;
+    const id = String(n?.id || "");
+    return (degree.get(id) || 0) > 0;
+  });
+
   r.infra = infra;
   r.connections = connections;
   r.placements = placements;
 
   return r;
 }
+
 
 function _strokeForConnectionType(t) {
   const tt = String(t || "").toUpperCase();
