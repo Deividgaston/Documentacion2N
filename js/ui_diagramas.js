@@ -656,6 +656,7 @@ function _cloneDeepJson(x) {
   }
 }
 // ✅ FIX: si una zona NO tiene lockBlock, NO se crea cerradura genérica por dispositivo.
+// ✅ FIX: si una zona NO tiene lockBlock, NO se crea cerradura genérica por dispositivo.
 function _augmentResultForSvg(baseResult) {
   const r0 = baseResult;
   if (!r0 || typeof r0 !== "object") return r0;
@@ -786,6 +787,34 @@ function _augmentResultForSvg(baseResult) {
         });
         existing2w.add(key);
       }
+    }
+  }
+
+  // ======================================================
+  // ✅ 3.5) ELIMINAR VIRTUAL CORE y redirigir a SWITCH POE (CPD)
+  // ======================================================
+  const cpdSwitch = infra.find((n) => {
+    const t = String(n?.type || "").toUpperCase();
+    const role = String(n?.meta?.role || "").toUpperCase();
+    return t.includes("SWITCH") && role.includes("CPD");
+  });
+
+  if (cpdSwitch) {
+    const coreIds = infra
+      .filter((n) => String(n?.type || "").toUpperCase().includes("CORE"))
+      .map((n) => String(n.id));
+
+    if (coreIds.length) {
+      connections = connections.map((c) => {
+        const from = String(c?.from || "");
+        const to = String(c?.to || "");
+
+        if (coreIds.includes(from)) return Object.assign({}, c, { from: cpdSwitch.id });
+        if (coreIds.includes(to)) return Object.assign({}, c, { to: cpdSwitch.id });
+        return c;
+      });
+
+      infra = infra.filter((n) => !coreIds.includes(String(n.id)));
     }
   }
 
