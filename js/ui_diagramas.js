@@ -2971,27 +2971,92 @@ function diagExportSvg() {
     })
     .join("");
 
-    const lines = connections
-    .map((c) => {
+  // ======================================================
+  // ✅ NUEVO: mismo routing “carril superior + bus por zona” en export SVG
+  // ======================================================
+  function _getInfraByIdExp(id) {
+    return infra.find((n) => String(n.id) === String(id)) || null;
+  }
+  function _isSwitchIdExp(id) {
+    const n = _getInfraByIdExp(id);
+    return n ? _isSwitchInfraNode(n) : false;
+  }
+  function _isCoreIdExp(id) {
+    const n = _getInfraByIdExp(id);
+    const t = String(n?.type || "").toUpperCase();
+    return !!n && (t.includes("CORE") || t.includes("ROUTER"));
+  }
+
+  const TRUNK_Y = 64;
+
+  const zoneBusY = (() => {
+    const m = {};
+    for (const z of zones) m[z.key] = 160;
+    for (const n of infra) {
+      if (!_isSwitchInfraNode(n)) continue;
+      const p = coords.get(String(n.id));
+      if (!p) continue;
+      const zk = String(n.zone || "");
+      m[zk] = Math.max(m[zk] || 0, p.y + 30);
+    }
+    return m;
+  })();
+
+  function _lanePathExp(a, b, laneY, idx, type) {
+    const st = _strokeForConnectionType(type);
+    const dash = st.dash ? ` stroke-dasharray="${st.dash}"` : "";
+    const dy = ((idx % 7) - 3) * 2;
+    const y = laneY + dy;
+    const d = `M ${a.x} ${a.y} L ${a.x} ${y} L ${b.x} ${y} L ${b.x} ${b.y}`;
+    return `<path d="${d}" fill="none" stroke="${st.stroke}" stroke-width="${st.width}"${dash}/>`;
+  }
+
+  function _wireLabelExp(a, b, type) {
+    const lab = _labelForConnectionType(type);
+    if (!lab) return "";
+    const lx = (a.x + b.x) / 2 + 8;
+    const ly = (a.y + b.y) / 2 - 10;
+    return `<text x="${lx}" y="${ly}" font-size="11" fill="#6b7280" font-family="Arial, sans-serif">${_escapeHtml(
+      lab
+    )}</text>`;
+  }
+
+  const lines = connections
+    .map((c, i) => {
       const a = coords.get(c.from);
       const b = coords.get(c.to);
       if (!a || !b) return "";
-      const st = _strokeForConnectionType(c.type);
-      const dash = st.dash ? ` stroke-dasharray="${st.dash}"` : "";
 
-      const lab = _labelForConnectionType(c.type);
-      const lx = (a.x + b.x) / 2 + 8;
-      const ly = (a.y + b.y) / 2 - 10;
+      const fromIsSw = _isSwitchIdExp(c.from);
+      const toIsSw = _isSwitchIdExp(c.to);
+      const fromIsCore = _isCoreIdExp(c.from);
+      const toIsCore = _isCoreIdExp(c.to);
 
-      const label =
-        lab
-          ? `<text x="${lx}" y="${ly}" font-size="11" fill="#6b7280" font-family="Arial, sans-serif">${_escapeHtml(lab)}</text>`
-          : "";
+      const isUplink = (fromIsSw && toIsCore) || (toIsSw && fromIsCore);
 
-      return `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${st.stroke}" stroke-width="${st.width}"${dash}/>${label}`;
+      const isAccess =
+        (fromIsSw && !toIsSw && !toIsCore) ||
+        (toIsSw && !fromIsSw && !fromIsCore);
+
+      let path = "";
+      if (isUplink) {
+        path = _lanePathExp(a, b, TRUNK_Y, i, c.type);
+      } else if (isAccess) {
+        const swId = fromIsSw ? String(c.from) : String(c.to);
+        const swInfra = _getInfraByIdExp(swId);
+        const zk = String(swInfra?.zone || "");
+        const busY = zoneBusY[zk] || 160;
+        path = _lanePathExp(a, b, busY, i, c.type);
+      } else {
+        // fallback recta (no romper)
+        const st = _strokeForConnectionType(c.type);
+        const dash = st.dash ? ` stroke-dasharray="${st.dash}"` : "";
+        path = `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${st.stroke}" stroke-width="${st.width}"${dash}/>`;
+      }
+
+      return `${path}${_wireLabelExp(a, b, c.type)}`;
     })
     .join("");
-
 
   const placementNodes = placements
     .map((p) => {
