@@ -1153,7 +1153,68 @@ function _renderPreviewSvg(result) {
 
   const connections = Array.isArray(r?.connections) ? r.connections : [];
 
-    function _orthPath(a, b, idx, type) {
+  // ======================================================
+  // ✅ NUEVO: carril superior (uplinks) + carril inferior por zona (access)
+  // ======================================================
+  const infraArr = Array.isArray(r?.infra) ? r.infra : [];
+
+  function _getInfraById(id) {
+    return infraArr.find((n) => String(n.id) === String(id)) || null;
+  }
+
+  function _isSwitchId(id) {
+    const n = _getInfraById(id);
+    return n ? _isSwitchInfraNode(n) : false;
+  }
+
+  function _isCoreId(id) {
+    const n = _getInfraById(id);
+    const t = String(n?.type || "").toUpperCase();
+    // CORE o ROUTER se consideran “cabecera” para el carril superior
+    return !!n && (t.includes("CORE") || t.includes("ROUTER"));
+  }
+
+  // Carril superior fijo: uplinks switch <-> core/router
+  const TRUNK_Y = 64;
+
+  // Carril inferior por zona: device <-> switch (debajo del switch más bajo de la zona)
+  const zoneBusY = (() => {
+    const m = {};
+    for (const z of zones) m[z.key] = 160;
+
+    for (const n of infraArr) {
+      if (!_isSwitchInfraNode(n)) continue;
+      const p = coords.get(String(n.id));
+      if (!p) continue;
+      const zk = String(n.zone || "");
+      m[zk] = Math.max(m[zk] || 0, p.y + 30);
+    }
+    return m;
+  })();
+
+  function _lanePath(a, b, laneY, idx, type) {
+    const st = _strokeForConnectionType(type);
+    const dash = st.dash ? ` stroke-dasharray="${st.dash}"` : "";
+
+    // micro-separación para que “paralelos” no se pisen
+    const dy = ((idx % 7) - 3) * 2;
+    const y = laneY + dy;
+
+    const d = `M ${a.x} ${a.y} L ${a.x} ${y} L ${b.x} ${y} L ${b.x} ${b.y}`;
+    return `<path d="${d}" fill="none" stroke="${st.stroke}" stroke-width="${st.width}"${dash}/>`;
+  }
+
+  function _wireLabel(a, b, type) {
+    const lab = _labelForConnectionType(type);
+    if (!lab) return "";
+    const lx = (a.x + b.x) / 2 + 8;
+    const ly = (a.y + b.y) / 2 - 10;
+    return `<text x="${lx}" y="${ly}" font-size="11" fill="rgba(17,24,39,.70)" pointer-events="none">${_escapeHtml(
+      lab
+    )}</text>`;
+  }
+
+  function _orthPath(a, b, idx, type) {
     const st = _strokeForConnectionType(type);
     const dash = st.dash ? ` stroke-dasharray="${st.dash}"` : "";
     const pad = 10;
@@ -1175,29 +1236,42 @@ function _renderPreviewSvg(result) {
     return `<path d="${d}" fill="none" stroke="${st.stroke}" stroke-width="${st.width}"${dash}/>`;
   }
 
-
-    const lines = connections
+  const lines = connections
     .map((c, i) => {
       const a = coords.get(c.from);
       const b = coords.get(c.to);
       if (!a || !b) return "";
 
-      const path = _orthPath(a, b, i, c.type);
+      const fromIsSw = _isSwitchId(c.from);
+      const toIsSw = _isSwitchId(c.to);
+      const fromIsCore = _isCoreId(c.from);
+      const toIsCore = _isCoreId(c.to);
 
-      // ✅ etiqueta de cable SIEMPRE
-      const lab = _labelForConnectionType(c.type);
-      const lx = (a.x + b.x) / 2 + 8;
-      const ly = (a.y + b.y) / 2 - 10;
+      // ✅ uplink: switch <-> core/router por carril superior
+      const isUplink = (fromIsSw && toIsCore) || (toIsSw && fromIsCore);
 
-      const label =
-        lab
-          ? `<text x="${lx}" y="${ly}" font-size="11" fill="rgba(17,24,39,.70)" pointer-events="none">${_escapeHtml(lab)}</text>`
-          : "";
+      // ✅ access: device <-> switch por carril inferior de la zona
+      const isAccess =
+        (fromIsSw && !toIsSw && !toIsCore) ||
+        (toIsSw && !fromIsSw && !fromIsCore);
 
-      return `${path}${label}`;
+      let path = "";
+      if (isUplink) {
+        path = _lanePath(a, b, TRUNK_Y, i, c.type);
+      } else if (isAccess) {
+        const swId = fromIsSw ? String(c.from) : String(c.to);
+        const swInfra = _getInfraById(swId);
+        const zk = String(swInfra?.zone || "");
+        const busY = zoneBusY[zk] || 160;
+        path = _lanePath(a, b, busY, i, c.type);
+      } else {
+        // fallback para casos raros (no romper)
+        path = _orthPath(a, b, i, c.type);
+      }
+
+      return `${path}${_wireLabel(a, b, c.type)}`;
     })
     .join("");
-
 
   const nodes = Array.from(coords.entries())
     .sort((a, b) => _nodePriority(a[0], a[1]) - _nodePriority(b[0], b[1]))
@@ -1219,7 +1293,6 @@ function _renderPreviewSvg(result) {
           `
           : "";
 
-      // ✅ FIX Chrome: evita selección/drag nativo del navegador sobre SVG/text
       const nodeStyle = `cursor:${
         appState.diagramas.previewEditMode ? "grab" : "default"
       }; user-select:none; -webkit-user-select:none; -ms-user-select:none; -webkit-user-drag:none;`;
