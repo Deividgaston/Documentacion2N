@@ -207,7 +207,9 @@ function _loadManualCoords() {
     const t = localStorage.getItem(_diagLsKey("diag_manual_coords"));
     const obj = t ? JSON.parse(t) : null;
     return obj && typeof obj === "object" ? obj : {};
-  } catch (_) { return {}; }
+  } catch (_) {
+    return {};
+  }
 }
 
 function _saveManualCoords() {
