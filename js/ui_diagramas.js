@@ -3742,6 +3742,7 @@ function renderDiagramasView() {
   _renderResult();
 }
 
+
 // exports
 window.renderDiagramasView = renderDiagramasView;
 window.diagImportDxfFile = diagImportDxfFile;
