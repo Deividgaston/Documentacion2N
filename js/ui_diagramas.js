@@ -2841,20 +2841,27 @@ function diagExportSvg() {
     })
     .join("");
 
-  const lines = connections
+    const lines = connections
     .map((c) => {
       const a = coords.get(c.from);
       const b = coords.get(c.to);
       if (!a || !b) return "";
       const st = _strokeForConnectionType(c.type);
       const dash = st.dash ? ` stroke-dasharray="${st.dash}"` : "";
-      const label2h =
-        String(c.type || "").toUpperCase() === "2_WIRE"
-          ? `<text x="${(a.x + b.x) / 2 + 6}" y="${(a.y + b.y) / 2 - 6}" font-size="11" fill="rgba(245,158,11,.95)" font-family="Arial, sans-serif">2H</text>`
+
+      const lab = _labelForConnectionType(c.type);
+      const lx = (a.x + b.x) / 2 + 8;
+      const ly = (a.y + b.y) / 2 - 10;
+
+      const label =
+        lab
+          ? `<text x="${lx}" y="${ly}" font-size="11" fill="#6b7280" font-family="Arial, sans-serif">${_escapeHtml(lab)}</text>`
           : "";
-      return `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${st.stroke}" stroke-width="${st.width}"${dash}/>${label2h}`;
+
+      return `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${st.stroke}" stroke-width="${st.width}"${dash}/>${label}`;
     })
     .join("");
+
 
   const placementNodes = placements
     .map((p) => {
