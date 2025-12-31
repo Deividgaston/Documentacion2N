@@ -179,13 +179,16 @@ function _loadAssignments() {
     const t = localStorage.getItem(_diagLsKey("diag_assignments"));
     const obj = t ? JSON.parse(t) : null;
     return obj && typeof obj === "object" ? obj : {};
-  } catch (_) { return {}; }
+  } catch (_) {
+    return {};
+  }
 }
 
 function _saveAssignments() {
   // ✅ No persistir tarjetas entre recargas
   return;
 }
+
 
 function _clearProjectDiagramPersistence() {
   try {
