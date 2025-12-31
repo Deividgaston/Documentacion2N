@@ -1119,19 +1119,28 @@ function _renderPreviewSvg(result) {
   }
 
 
-  const lines = connections
+    const lines = connections
     .map((c, i) => {
       const a = coords.get(c.from);
       const b = coords.get(c.to);
       if (!a || !b) return "";
+
       const path = _orthPath(a, b, i, c.type);
-      const label2h =
-        String(c.type || "").toUpperCase() === "2_WIRE"
-          ? `<text x="${(a.x + b.x) / 2 + 6}" y="${(a.y + b.y) / 2 - 6}" font-size="11" fill="rgba(245,158,11,.95)" pointer-events="none">2H</text>`
+
+      // ✅ etiqueta de cable SIEMPRE
+      const lab = _labelForConnectionType(c.type);
+      const lx = (a.x + b.x) / 2 + 8;
+      const ly = (a.y + b.y) / 2 - 10;
+
+      const label =
+        lab
+          ? `<text x="${lx}" y="${ly}" font-size="11" fill="rgba(17,24,39,.70)" pointer-events="none">${_escapeHtml(lab)}</text>`
           : "";
-      return `${path}${label2h}`;
+
+      return `${path}${label}`;
     })
     .join("");
+
 
   const nodes = Array.from(coords.entries())
     .sort((a, b) => _nodePriority(a[0], a[1]) - _nodePriority(b[0], b[1]))
