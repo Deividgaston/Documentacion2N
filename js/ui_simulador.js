@@ -18,7 +18,9 @@ appState.simulador = appState.simulador || {
   actorTab: "2N",              // "2N" | "DIST" | "SUBDIST" | "INTE" | "CONST"
 };
 
+// Cache + índice normalizado (FIX descuentos no lineales por mismatch de keys)
 appState.tarifasBaseSimCache = appState.tarifasBaseSimCache || null;
+appState.tarifasBaseSimIndex = appState.tarifasBaseSimIndex || null;
 
 // Helpers del presupuesto (expuestos en ui_presupuesto.js)
 const getPresupuestoActual =
@@ -67,28 +69,54 @@ function buildLineaKey(baseLinea, index) {
 
 // ===============================
 // Helpers ref / lookup Firestore (FIX: evitar fallbacks inconsistentes)
+// - Creamos un índice normalizado UNA vez por carga, y buscamos siempre ahí.
 // ===============================
+function _normalizeKeyForIndex(k) {
+  return String(k || "")
+    .trim()
+    .replace(/\s+/g, "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, ""); // quita -,_,.,/
+}
+
+function buildTarifasIndex(tarifasBase) {
+  const idx = {};
+  if (!tarifasBase || typeof tarifasBase !== "object") return idx;
+
+  Object.keys(tarifasBase).forEach((k) => {
+    const norm = _normalizeKeyForIndex(k);
+    if (!norm) return;
+    if (!idx[norm]) idx[norm] = tarifasBase[k]; // primera gana
+  });
+
+  return idx;
+}
+
+function lookupTarifaInfoIndexed(tarifasIndex, ref) {
+  if (!tarifasIndex) return null;
+  const norm = _normalizeKeyForIndex(ref);
+  if (!norm) return null;
+  return tarifasIndex[norm] || null;
+}
+
+// (legacy) se mantiene por si lo usas en otros sitios, pero ya no es necesario
 function normalizeRefVariants(ref) {
   const raw = String(ref || "").trim();
   const noSpaces = raw.replace(/\s+/g, "");
   const upper = noSpaces.toUpperCase();
   const alnumOnly = upper.replace(/[^A-Z0-9]/g, ""); // quita -,_,.,/
-  // algunas refs pueden venir ya "limpias" en Firestore, otras no
-  // devolvemos variantes para maximizar match
   const variants = [];
   if (noSpaces) variants.push(noSpaces);
   if (upper && upper !== noSpaces) variants.push(upper);
   if (alnumOnly && alnumOnly !== upper) variants.push(alnumOnly);
   return variants;
 }
-
 function lookupTarifaInfo(tarifasBase, ref) {
   if (!tarifasBase) return null;
   const vars = normalizeRefVariants(ref);
   for (const k of vars) {
     if (k && tarifasBase[k]) return { key: k, info: tarifasBase[k] };
   }
-  // último intento: algunas BBDD guardan en minúsculas
   for (const k of vars) {
     const low = String(k || "").toLowerCase();
     if (low && tarifasBase[low]) return { key: low, info: tarifasBase[low] };
@@ -101,6 +129,10 @@ function lookupTarifaInfo(tarifasBase, ref) {
 // ===============================
 async function getTarifasBase2N() {
   if (appState.tarifasBaseSimCache) {
+    // Asegurar índice si vienes de una sesión antigua
+    if (!appState.tarifasBaseSimIndex) {
+      appState.tarifasBaseSimIndex = buildTarifasIndex(appState.tarifasBaseSimCache);
+    }
     console.log(
       "%cSimulador · tarifas base desde caché (" +
         Object.keys(appState.tarifasBaseSimCache).length +
@@ -115,11 +147,13 @@ async function getTarifasBase2N() {
       "[Simulador] cargarTarifasDesdeFirestore no está disponible. Devuelvo objeto vacío."
     );
     appState.tarifasBaseSimCache = {};
+    appState.tarifasBaseSimIndex = {};
     return appState.tarifasBaseSimCache;
   }
 
   const tarifas = await cargarTarifasDesdeFirestore();
   appState.tarifasBaseSimCache = tarifas || {};
+  appState.tarifasBaseSimIndex = buildTarifasIndex(appState.tarifasBaseSimCache); // <-- FIX CLAVE
   return appState.tarifasBaseSimCache;
 }
 
@@ -511,6 +545,8 @@ async function recalcularSimulador() {
   const editedMap = appState.simulador.lineDtoEdited || {};
 
   const tarifasBase = await getTarifasBase2N();
+  const tarifasIndex = appState.tarifasBaseSimIndex || buildTarifasIndex(tarifasBase);
+  appState.tarifasBaseSimIndex = tarifasIndex;
 
   let totalPvpBase = 0;
   let totalBaseTarifa = 0;
@@ -519,10 +555,9 @@ async function recalcularSimulador() {
   const lineasSim = lineasBase.map((lBase, index) => {
     const key = buildLineaKey(lBase, index);
 
-    // FIX: lookup robusto contra Firestore para que TODAS las refs usen el PVP base real
-    const lookup = lookupTarifaInfo(tarifasBase, lBase.ref);
-    const infoTarifa = (lookup && lookup.info) ? lookup.info : {};
-    const refFinal = (lookup && lookup.key) ? lookup.key : String(lBase.ref || "").trim().replace(/\s+/g, "");
+    // FIX: lookup robusto por índice normalizado (evita fallbacks inconsistentes)
+    const infoTarifa = lookupTarifaInfoIndexed(tarifasIndex, lBase.ref) || {};
+    const refFinal = String(lBase.ref || "").trim().replace(/\s+/g, "");
 
     const basePvp =
       Number(infoTarifa.pvp) || Number(lBase.pvp || 0) || 0;
