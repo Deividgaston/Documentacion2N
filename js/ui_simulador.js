@@ -96,12 +96,6 @@ const SIM_GROUP_PATTERNS = {
     "ip base",
     "ip vario",
     "sip audio",
-    // FIX: IP Phone / D7A / teléfonos (ej: 1120102)
-    "ip phone",
-    "d7a",
-    "d7x",
-    "desk phone",
-    "hotel phone",
   ],
   GRUPO_B: [
     "accessory",
@@ -122,6 +116,14 @@ const SIM_GROUP_PATTERNS = {
     "flush box",
     "backplate",
     "frame",
+
+    // ✅ FIX: IP Phone / D7A/D7X / teléfonos (refs tipo 1120102, 1120105) => deben ser GRUPO_B (dist=0.25)
+    "ip phone",
+    "d7a",
+    "d7x",
+    "desk phone",
+    "hotel phone",
+
     // FIX: típicos accesorios en proyectos
     "usb",
     "camera usb",
@@ -502,6 +504,7 @@ function renderSimuladorView() {
                   style="
                     padding:0.25rem 0.75rem;
                     font-size:0.78rem;
+                    border-radius:999px;
                     border-radius:999px;
                     border:1px solid #d1d5db;
                     background:#ffffff;
