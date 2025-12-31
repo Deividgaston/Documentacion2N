@@ -1096,11 +1096,13 @@ function _renderPreviewSvg(result) {
 
   const connections = Array.isArray(r?.connections) ? r.connections : [];
 
-  function _orthPath(a, b, idx, type) {
+    function _orthPath(a, b, idx, type) {
     const st = _strokeForConnectionType(type);
     const dash = st.dash ? ` stroke-dasharray="${st.dash}"` : "";
     const pad = 10;
-    const channel = (idx % 6) * 6;
+
+    // ✅ más separación para que no se “junten” los cables
+    const channel = (idx % 10) * 10;
 
     const x1 = a.x,
       y1 = a.y;
@@ -1115,6 +1117,7 @@ function _renderPreviewSvg(result) {
     const d = `M ${x1} ${y1} L ${midX - pad} ${y1} L ${midX - pad} ${y2} L ${x2} ${y2}`;
     return `<path d="${d}" fill="none" stroke="${st.stroke}" stroke-width="${st.width}"${dash}/>`;
   }
+
 
   const lines = connections
     .map((c, i) => {
