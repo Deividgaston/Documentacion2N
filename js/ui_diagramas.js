@@ -847,98 +847,152 @@ function _buildSchematicCoordsFromResult(result) {
   const zones = appState.diagramas.zones || [];
   const zoneIndex = new Map(zones.map((z, i) => [z.key, i]));
 
-  const colW = 280;
-  const rowH = 90;
+  // Layout tokens (claridad > densidad)
+  const colW = 320;        // +ancho para que no se apelmacen cables
+  const rowH = 92;         // +alto para separar dispositivos
   const startX = 80;
-  const startY = 90;
+  const startY = 110;
 
-  const LOCK_OFFSET_X = 170; // ✅ cerradura a la derecha dentro de la misma zona
+  const SWITCH_Y = startY;                 // switches arriba
+  const DEVICES_START_Y = startY + rowH;   // devices debajo del switch
+  const LOCK_OFFSET_X = 210;               // cerradura a la derecha dentro de zona
 
   const placements = Array.isArray(result?.placements) ? result.placements : [];
   const infra = Array.isArray(result?.infra) ? result.infra : [];
   const connections = Array.isArray(result?.connections) ? result.connections : [];
-
-  const perZoneCount = {};
-  for (const z of zones) perZoneCount[z.key] = 0;
 
   function baseXForZone(zoneKey) {
     const i = zoneIndex.has(zoneKey) ? zoneIndex.get(zoneKey) : 0;
     return startX + i * colW;
   }
 
-  function nextPos(zoneKey) {
-    const x = baseXForZone(zoneKey);
-    const n = perZoneCount[zoneKey] || 0;
-    perZoneCount[zoneKey] = n + 1;
-    const y = startY + n * rowH;
-    return { x, y };
-  }
-
   const map = new Map();
   const manual = appState.diagramas.manualCoords || {};
 
-  // para centrar cerradura a la derecha: track de minY/maxY por zona en nodos "principales"
-  const zMinY = {};
-  const zMaxY = {};
-
-  function _touchZoneY(zoneKey, y) {
-    if (!Number.isFinite(y)) return;
-    if (!(zoneKey in zMinY)) zMinY[zoneKey] = y;
-    if (!(zoneKey in zMaxY)) zMaxY[zoneKey] = y;
-    zMinY[zoneKey] = Math.min(zMinY[zoneKey], y);
-    zMaxY[zoneKey] = Math.max(zMaxY[zoneKey], y);
+  // ---- helpers: clasificar infra por zona
+  function _isCoreInfra(n) {
+    const t = String(n?.type || "").toUpperCase();
+    return t.includes("CORE") || t.includes("ROUTER");
   }
 
-  // 1) placements (dispositivos)
+  function _isCpdSwitch(n) {
+    const t = String(n?.type || "").toUpperCase();
+    const role = String(n?.meta?.role || "").toUpperCase();
+    return t.includes("SWITCH") && role.includes("CPD");
+  }
+
+  function _switchLabel(n) {
+    const tU = String(n?.type || n?.id || "").toUpperCase();
+    const roleU = String(n?.meta?.role || "").toUpperCase();
+    const poe = tU.includes("POE");
+    return `SWITCH${poe ? " POE" : ""}${roleU.includes("CPD") ? " (CPD)" : ""}`;
+  }
+
+  // Track vertical span de devices por zona para centrar lock
+  const devMinY = {};
+  const devMaxY = {};
+  function _touchDevY(zoneKey, y) {
+    if (!Number.isFinite(y)) return;
+    if (!(zoneKey in devMinY)) devMinY[zoneKey] = y;
+    if (!(zoneKey in devMaxY)) devMaxY[zoneKey] = y;
+    devMinY[zoneKey] = Math.min(devMinY[zoneKey], y);
+    devMaxY[zoneKey] = Math.max(devMaxY[zoneKey], y);
+  }
+
+  // ---- 1) Colocar infra NO-lock: switches arriba, core/router (CPD) arriba también
+  // Contadores por zona
+  const zoneSwitchCount = {};
+  const zoneDeviceCount = {};
+  for (const z of zones) {
+    zoneSwitchCount[z.key] = 0;
+    zoneDeviceCount[z.key] = 0;
+  }
+
+  // Primero: CORE/ROUTER y switches CPD (en armario_cpd), luego switches de zona
+  for (const n of infra) {
+    const zone = String(n.zone || "armario_cpd");
+    if (_isLockInfraNode(n)) continue; // locks después
+
+    const m = manual[n.id];
+    if (m && Number.isFinite(m.x) && Number.isFinite(m.y)) {
+      const label = _isSwitchInfraNode(n) ? _switchLabel(n) : `${n.type || n.id || ""}`;
+      map.set(n.id, { x: m.x, y: m.y, label, kind: "infra", zone });
+      continue;
+    }
+
+    const bx = baseXForZone(zone);
+
+    // En CPD: router/core/switch CPD en “cabecera” ordenada
+    if (zone === "armario_cpd" && (_isCoreInfra(n) || _isCpdSwitch(n) || _isSwitchInfraNode(n))) {
+      const idx = zoneSwitchCount[zone] || 0;
+      zoneSwitchCount[zone] = idx + 1;
+
+      const label = _isSwitchInfraNode(n) ? _switchLabel(n) : `${n.type || n.id || ""}`;
+      map.set(n.id, {
+        x: bx,
+        y: SWITCH_Y + idx * (rowH * 0.75),
+        label,
+        kind: "infra",
+        zone,
+      });
+      continue;
+    }
+
+    // Switches de zona: SIEMPRE arriba de la columna de esa zona
+    if (_isSwitchInfraNode(n)) {
+      const idx = zoneSwitchCount[zone] || 0;
+      zoneSwitchCount[zone] = idx + 1;
+
+      map.set(n.id, {
+        x: bx,
+        y: SWITCH_Y + idx * (rowH * 0.75),
+        label: _switchLabel(n),
+        kind: "infra",
+        zone,
+      });
+      continue;
+    }
+
+    // Otros infra (raros): después de switches
+    const idx = zoneSwitchCount[zone] || 0;
+    zoneSwitchCount[zone] = idx + 1;
+
+    map.set(n.id, {
+      x: bx,
+      y: SWITCH_Y + idx * (rowH * 0.75),
+      label: `${n.type || n.id || ""}`,
+      kind: "infra",
+      zone,
+    });
+  }
+
+  // ---- 2) Colocar placements (devices) SIEMPRE debajo del bloque de switches
   for (const p of placements) {
     const zone = String(p.zone || "entrada_principal");
     const qty = Math.max(1, Number(p.qty || 1) || 1);
     const label = `${p.ref || p.id || ""}${qty > 1 ? ` x${qty}` : ""}`;
 
     const m = manual[p.id];
-    const pos =
-      m && Number.isFinite(m.x) && Number.isFinite(m.y)
-        ? { x: m.x, y: m.y }
-        : nextPos(zone);
+    if (m && Number.isFinite(m.x) && Number.isFinite(m.y)) {
+      map.set(p.id, { x: m.x, y: m.y, label, kind: "placement", zone, qty });
+      _touchDevY(zone, m.y);
+      continue;
+    }
 
-    map.set(p.id, {
-      x: pos.x,
-      y: pos.y,
-      label,
-      kind: "placement",
-      zone,
-      qty,
-    });
-    _touchZoneY(zone, pos.y);
+    const bx = baseXForZone(zone);
+    const swRows = Math.max(1, zoneSwitchCount[zone] || 1); // deja hueco aunque no haya switch dibujado
+    const y0 = DEVICES_START_Y + (swRows - 1) * (rowH * 0.75);
+
+    const idx = zoneDeviceCount[zone] || 0;
+    zoneDeviceCount[zone] = idx + 1;
+
+    const y = y0 + idx * rowH;
+
+    map.set(p.id, { x: bx, y, label, kind: "placement", zone, qty });
+    _touchDevY(zone, y);
   }
 
-  // 2) infra NO-lock (switch/core/router)
-  for (const n of infra) {
-    const zone = String(n.zone || "armario_cpd");
-    const tU = String(n.type || n.id || "").toUpperCase();
-    const roleU = String(n?.meta?.role || "").toUpperCase();
-
-    const isLock = _isLockInfraNode(n);
-    if (isLock) continue; // locks las colocamos después a la derecha
-
-    const isSwitch = tU.includes("SWITCH") || roleU.includes("SWITCH");
-    const isPoe = tU.includes("POE");
-
-    const label = isSwitch
-      ? `SWITCH${isPoe ? " POE" : ""}${roleU.includes("CPD") ? " (CPD)" : ""}`
-      : `${n.type || n.id || ""}`;
-
-    const m = manual[n.id];
-    const pos =
-      m && Number.isFinite(m.x) && Number.isFinite(m.y)
-        ? { x: m.x, y: m.y }
-        : nextPos(zone);
-
-    map.set(n.id, { x: pos.x, y: pos.y, label, kind: "infra", zone });
-    _touchZoneY(zone, pos.y);
-  }
-
-  // 3) infra LOCK: a la derecha del resto de la zona y centrada verticalmente
+  // ---- 3) Locks: a la derecha y centradas respecto a devices
   for (const n of infra) {
     const zone = String(n.zone || "armario_cpd");
     if (!_isLockInfraNode(n)) continue;
@@ -950,8 +1004,12 @@ function _buildSchematicCoordsFromResult(result) {
     }
 
     const bx = baseXForZone(zone);
+
+    // centro = media del rango de devices; si no hay devices, al primer bloque de devices
     const midY =
-      zone in zMinY && zone in zMaxY ? (zMinY[zone] + zMaxY[zone]) / 2 : startY;
+      zone in devMinY && zone in devMaxY
+        ? (devMinY[zone] + devMaxY[zone]) / 2
+        : DEVICES_START_Y;
 
     map.set(n.id, {
       x: bx + LOCK_OFFSET_X,
@@ -963,13 +1021,12 @@ function _buildSchematicCoordsFromResult(result) {
     });
   }
 
-  // 4) nodos virtuales para 2H si existen (legacy safety)
+  // ---- 4) Safety legacy: nodos virtuales para 2H si hiciera falta
   for (const c of connections) {
     if (String(c?.type || "").toUpperCase() !== "2_WIRE") continue;
     const a = map.get(c.from);
     const b = map.get(c.to);
-    if (b) continue;
-    if (!a) continue;
+    if (b || !a) continue;
 
     const mid = String(c.to || "");
     if (!mid) continue;
@@ -985,8 +1042,8 @@ function _buildSchematicCoordsFromResult(result) {
     }
 
     map.set(mid, {
-      x: a.x + 90,
-      y: a.y + 28,
+      x: a.x + LOCK_OFFSET_X,
+      y: a.y,
       label: "CERRADURA / GARAJE",
       kind: "infra",
       zone: a.zone,
