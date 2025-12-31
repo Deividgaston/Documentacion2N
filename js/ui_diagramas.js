@@ -198,6 +198,7 @@ function _clearProjectDiagramPersistence() {
   } catch (_) {}
 }
 
+
 /* ======================================================
    PERSISTENCIA LAYOUT (manualCoords)
  ====================================================== */
