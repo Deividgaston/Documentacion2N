@@ -852,6 +852,8 @@ function _buildSchematicCoordsFromResult(result) {
   const startX = 80;
   const startY = 90;
 
+  const LOCK_OFFSET_X = 170; // ✅ cerradura a la derecha dentro de la misma zona
+
   const placements = Array.isArray(result?.placements) ? result.placements : [];
   const infra = Array.isArray(result?.infra) ? result.infra : [];
   const connections = Array.isArray(result?.connections) ? result.connections : [];
@@ -859,9 +861,13 @@ function _buildSchematicCoordsFromResult(result) {
   const perZoneCount = {};
   for (const z of zones) perZoneCount[z.key] = 0;
 
-  function nextPos(zoneKey) {
+  function baseXForZone(zoneKey) {
     const i = zoneIndex.has(zoneKey) ? zoneIndex.get(zoneKey) : 0;
-    const x = startX + i * colW;
+    return startX + i * colW;
+  }
+
+  function nextPos(zoneKey) {
+    const x = baseXForZone(zoneKey);
     const n = perZoneCount[zoneKey] || 0;
     perZoneCount[zoneKey] = n + 1;
     const y = startY + n * rowH;
@@ -871,6 +877,19 @@ function _buildSchematicCoordsFromResult(result) {
   const map = new Map();
   const manual = appState.diagramas.manualCoords || {};
 
+  // para centrar cerradura a la derecha: track de minY/maxY por zona en nodos "principales"
+  const zMinY = {};
+  const zMaxY = {};
+
+  function _touchZoneY(zoneKey, y) {
+    if (!Number.isFinite(y)) return;
+    if (!(zoneKey in zMinY)) zMinY[zoneKey] = y;
+    if (!(zoneKey in zMaxY)) zMaxY[zoneKey] = y;
+    zMinY[zoneKey] = Math.min(zMinY[zoneKey], y);
+    zMaxY[zoneKey] = Math.max(zMaxY[zoneKey], y);
+  }
+
+  // 1) placements (dispositivos)
   for (const p of placements) {
     const zone = String(p.zone || "entrada_principal");
     const qty = Math.max(1, Number(p.qty || 1) || 1);
@@ -890,21 +909,23 @@ function _buildSchematicCoordsFromResult(result) {
       zone,
       qty,
     });
+    _touchZoneY(zone, pos.y);
   }
 
+  // 2) infra NO-lock (switch/core/router)
   for (const n of infra) {
     const zone = String(n.zone || "armario_cpd");
+    const tU = String(n.type || n.id || "").toUpperCase();
+    const roleU = String(n?.meta?.role || "").toUpperCase();
 
-    const t = String(n.type || n.id || "");
-    const isLock =
-      t.toUpperCase().includes("LOCK") || t.toUpperCase().includes("GARAGE");
-    const isCpdSw =
-      t.toUpperCase().includes("SWITCH") &&
-      String(n?.meta?.role || "").toUpperCase().includes("CPD");
-    const label = isCpdSw
-      ? "SWITCH POE (CPD)"
-      : isLock
-      ? "CERRADURA / GARAJE"
+    const isLock = _isLockInfraNode(n);
+    if (isLock) continue; // locks las colocamos después a la derecha
+
+    const isSwitch = tU.includes("SWITCH") || roleU.includes("SWITCH");
+    const isPoe = tU.includes("POE");
+
+    const label = isSwitch
+      ? `SWITCH${isPoe ? " POE" : ""}${roleU.includes("CPD") ? " (CPD)" : ""}`
       : `${n.type || n.id || ""}`;
 
     const m = manual[n.id];
@@ -914,9 +935,35 @@ function _buildSchematicCoordsFromResult(result) {
         : nextPos(zone);
 
     map.set(n.id, { x: pos.x, y: pos.y, label, kind: "infra", zone });
+    _touchZoneY(zone, pos.y);
   }
 
-  // nodos virtuales para 2H si existen
+  // 3) infra LOCK: a la derecha del resto de la zona y centrada verticalmente
+  for (const n of infra) {
+    const zone = String(n.zone || "armario_cpd");
+    if (!_isLockInfraNode(n)) continue;
+
+    const m = manual[n.id];
+    if (m && Number.isFinite(m.x) && Number.isFinite(m.y)) {
+      map.set(n.id, { x: m.x, y: m.y, label: "CERRADURA / GARAJE", kind: "infra", zone });
+      continue;
+    }
+
+    const bx = baseXForZone(zone);
+    const midY =
+      zone in zMinY && zone in zMaxY ? (zMinY[zone] + zMaxY[zone]) / 2 : startY;
+
+    map.set(n.id, {
+      x: bx + LOCK_OFFSET_X,
+      y: midY,
+      label: "CERRADURA / GARAJE",
+      kind: "infra",
+      zone,
+      _lockRight: true,
+    });
+  }
+
+  // 4) nodos virtuales para 2H si existen (legacy safety)
   for (const c of connections) {
     if (String(c?.type || "").toUpperCase() !== "2_WIRE") continue;
     const a = map.get(c.from);
