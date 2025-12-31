@@ -3,8 +3,7 @@
 
 window.appState = window.appState || {};
 appState.simulador = appState.simulador || {
-  // nivel de precio 2N (se calcula por grupo con la lógica BBD)
-  tarifaDefecto: "dist",
+  tarifaDefecto: "DIST_PRICE", // Tarifa global por defecto (2N)
   dtoGlobal: 0,                // descuento adicional global sobre tarifa (2N)
   lineasSimuladas: [],         // último resultado
   lineDtoEdited: {},           // mapa: key -> true si el dto de esa línea se ha editado a mano
@@ -28,20 +27,18 @@ const getPresupuestoActual =
     : null;
 
 /**
- * TARIFAS DEFINIDAS (alineadas con tu Excel/Firestore)
- * dto = descuento sobre el PVP base (campo pvp).
+ * TARIFAS 2N (selector)
+ * OJO: el descuento NO es lineal.
+ * En el simulador se calcula por referencia según el GRUPO (A/B/C/D)
+ * usando la tarifa ES_BBD (tarifas_tipos) y el campo elegido (nfrDist/nfrRes/dist/rp2/rp1/msrp).
  */
-// ✅ NUEVO: el simulador NO usa descuentos lineales.
-// El usuario elige el "nivel" (NFR/Dist/RP/MSRP) y el descuento real sale de la tarifa BBD
-// (por grupo A/B/C/D) definida en Firestore (/tarifas_tipos, ES_BBD).
-// id = key de descuento (coincide con ui_tarifas.js: nfrDist, nfrRes, dist, rp2, rp1)
 const TARIFAS_2N = [
-  { id: "nfrDist", label: "NFR Distributor (EUR)" },
-  { id: "nfrRes",  label: "NFR Reseller (EUR)" },
-  { id: "dist",    label: "Distributor Price (EUR)" },
-  { id: "rp2",     label: "Recommended Reseller Price 2 (EUR)" },
-  { id: "rp1",     label: "Recommended Reseller Price 1 (EUR)" },
-  { id: "msrp",    label: "MSRP (EUR)" },
+  { id: "NFR_DIST",     label: "NFR Distributor (EUR)" },
+  { id: "NFR_RESELLER", label: "NFR Reseller (EUR)" },
+  { id: "DIST_PRICE",   label: "Distributor Price (EUR)" },
+  { id: "RRP2",         label: "Recommended Reseller Price 2 (EUR)" },
+  { id: "RRP1",         label: "Recommended Reseller Price 1 (EUR)" },
+  { id: "MSRP",         label: "MSRP (EUR)" },
 ];
 
 // Mapa id -> objeto tarifa
@@ -50,48 +47,146 @@ const TARIFAS_MAP = TARIFAS_2N.reduce((acc, t) => {
   return acc;
 }, {});
 
-async function _getTipoBBDForSimulador() {
-  try {
-    if (typeof window.loadTarifasTiposFromFirestore === "function") {
-      await window.loadTarifasTiposFromFirestore();
-    }
-  } catch (e) {
-    console.warn("[Simulador] No se pudieron cargar tarifas_tipos (se usará fallback en memoria)", e);
+// ===============================
+// Tarifa NO lineal (por grupo) - fuente: tarifas_tipos/ES_BBD
+// ===============================
+
+const SIMULADOR_BBD_TIPO_ID = "ES_BBD";
+
+function simuladorTarifaFieldFromId(tarifaId) {
+  switch (String(tarifaId || "")) {
+    case "NFR_DIST":
+      return "nfrDist";
+    case "NFR_RESELLER":
+      return "nfrRes";
+    case "DIST_PRICE":
+      return "dist";
+    case "RRP2":
+      return "rp2";
+    case "RRP1":
+      return "rp1";
+    case "MSRP":
+    default:
+      return "msrp"; // msrp => dto 0
   }
-
-  // Preferimos ES_BBD (que contiene todos los niveles) como pidió el usuario.
-  const t = (window.appState && appState.tarifasTipos && appState.tarifasTipos.ES_BBD)
-    ? appState.tarifasTipos.ES_BBD
-    : null;
-
-  return t;
 }
 
-function _clasificarGrupoSafe(desc) {
-  if (typeof window.clasificarGrupoPorDescripcion === "function") {
-    return window.clasificarGrupoPorDescripcion(desc);
+const SIM_GROUP_PATTERNS = {
+  GRUPO_D: [
+    "my2n",
+    "subscription",
+    "suscripción",
+    "spare part",
+    "spare parts",
+    "repuesto",
+    "repuestos",
+  ],
+  GRUPO_C: [
+    "fortis",
+    "indoor view",
+    "indoor touch",
+    "indoor compact",
+    "indoor talk",
+    "indoor clip",
+    "ip one",
+    "ip uni",
+    "ip base",
+    "ip vario",
+    "sip audio",
+  ],
+  GRUPO_B: [
+    "accessory",
+    "accessories",
+    "accesorio",
+    "accesorios",
+    "caja",
+    "empotrar",
+    "marco",
+    "soporte",
+    "installation accessory",
+    "installation accessories",
+    "power supply",
+    "fuente de alimentación",
+    "psu",
+    "mounting frame",
+    "mounting accessories",
+    "flush box",
+    "backplate",
+    "frame",
+  ],
+  // GRUPO_A = resto
+};
+
+function simuladorClasificarGrupoPorDescripcion(descripcionRaw) {
+  const desc = (descripcionRaw || "").toString().toLowerCase();
+  if (!desc) return "GRUPO_A";
+  for (const gid of ["GRUPO_D", "GRUPO_C", "GRUPO_B"]) {
+    const patterns = SIM_GROUP_PATTERNS[gid] || [];
+    if (patterns.some((p) => desc.includes(p))) return gid;
   }
-  // fallback mínimo
-  const s = String(desc || "").toLowerCase();
-  if (!s) return "GRUPO_A";
-  if (s.includes("my2n") || s.includes("subscription") || s.includes("suscripción") || s.includes("repuesto")) return "GRUPO_D";
-  if (s.includes("fortis") || s.includes("indoor") || s.includes("ip one") || s.includes("ip vario") || s.includes("sip audio")) return "GRUPO_C";
-  if (s.includes("accessory") || s.includes("accesorio") || s.includes("power supply") || s.includes("psu") || s.includes("frame")) return "GRUPO_B";
   return "GRUPO_A";
 }
 
-function _getDtoPctFromBBD(tipoBbd, lineaDesc, priceKey) {
-  const key = String(priceKey || "").trim();
-  if (!key || key === "msrp") return 0;
+function simuladorNormalizeGrupos(gruposRaw) {
+  const grupos = gruposRaw && typeof gruposRaw === "object" ? gruposRaw : {};
+  const out = {
+    GRUPO_A: {},
+    GRUPO_B: {},
+    GRUPO_C: {},
+    GRUPO_D: {},
+  };
+  Object.keys(out).forEach((gid) => {
+    const g = grupos[gid] && typeof grupos[gid] === "object" ? grupos[gid] : {};
+    out[gid] = {
+      nfrDist: Number(g.nfrDist) || 0,
+      nfrRes: Number(g.nfrRes) || 0,
+      dist: Number(g.dist) || 0,
+      rp2: Number(g.rp2) || 0,
+      rp1: Number(g.rp1) || 0,
+      subd: Number(g.subd) || 0,
+      vad: Number(g.vad) || 0,
+    };
+  });
+  return out;
+}
 
-  const tipo = tipoBbd || null;
-  const grupos = (tipo && tipo.grupos && typeof tipo.grupos === "object") ? tipo.grupos : {};
-  const gid = _clasificarGrupoSafe(lineaDesc);
-  const g = (grupos && grupos[gid] && typeof grupos[gid] === "object") ? grupos[gid] : {};
+async function simuladorGetTarifaTipoBBD() {
+  // 1) Si ya está cargada por ui_tarifas.js
+  if (appState?.tarifasTipos?.[SIMULADOR_BBD_TIPO_ID]) {
+    const t = appState.tarifasTipos[SIMULADOR_BBD_TIPO_ID];
+    return { id: t.id || SIMULADOR_BBD_TIPO_ID, grupos: simuladorNormalizeGrupos(t.grupos) };
+  }
 
-  const v = Number(g[key]);
-  if (!isNaN(v) && v > 0) return v * 100;
-  return 0;
+  // 2) Cache local del simulador
+  if (appState?.simuladorTarifaBBD) return appState.simuladorTarifaBBD;
+
+  // 3) Firestore directo
+  try {
+    const db = firebase.firestore();
+    const doc = await db.collection("tarifas_tipos").doc(SIMULADOR_BBD_TIPO_ID).get();
+    const data = doc.exists ? doc.data() || {} : {};
+    const tipo = {
+      id: data.id || SIMULADOR_BBD_TIPO_ID,
+      grupos: simuladorNormalizeGrupos(data.grupos),
+    };
+    appState.simuladorTarifaBBD = tipo;
+    return tipo;
+  } catch (e) {
+    console.warn("[Simulador] No se pudo leer tarifas_tipos/ES_BBD, usando fallback en memoria:", e);
+  }
+
+  // 4) Fallback (mismos valores que DEFAULT_TIPOS_TARIFA.ES_BBD)
+  const fallback = {
+    id: SIMULADOR_BBD_TIPO_ID,
+    grupos: simuladorNormalizeGrupos({
+      GRUPO_A: { nfrDist: 0.55, nfrRes: 0.5, dist: 0.39, rp2: 0.28, rp1: 0.1 },
+      GRUPO_B: { nfrDist: 0.55, nfrRes: 0.5, dist: 0.25, rp2: 0.15, rp1: 0.05 },
+      GRUPO_C: { nfrDist: 0.55, nfrRes: 0.5, dist: 0.35, rp2: 0.26, rp1: 0.1 },
+      GRUPO_D: { nfrDist: 0.0,  nfrRes: 0.0, dist: 0.2,  rp2: 0.1,  rp1: 0.1 },
+    }),
+  };
+  appState.simuladorTarifaBBD = fallback;
+  return fallback;
 }
 
 console.log(
@@ -537,12 +632,10 @@ async function recalcularSimulador() {
 
   const tarifasBase = await getTarifasBase2N();
 
-  // ✅ Descuentos NO lineales por grupo: usamos la lógica de la tarifa BBD (tarifas_tipos)
-  // No tocamos los cálculos de márgenes/porcentajes existentes; solo calculamos el dtoTarifa por referencia.
-  const tipoBBD = await _getTipoBBDForSimulador();
-  const gruposBBD = (window.normalizarGrupos && tipoBBD)
-    ? window.normalizarGrupos(tipoBBD.grupos)
-    : (tipoBBD && typeof tipoBBD.grupos === "object" ? tipoBBD.grupos : {});
+  // ✅ Para aplicar descuentos NO lineales por referencia (según grupo)
+  // siempre usamos la tarifa ES_BBD (contiene nfrDist/nfrRes/dist/rp2/rp1).
+  const bbdTipo = await simuladorGetTarifaTipoBBD();
+  const tarifaField = simuladorTarifaFieldFromId(tarifaDefecto);
 
   let totalPvpBase = 0;
   let totalBaseTarifa = 0;
@@ -570,25 +663,18 @@ async function recalcularSimulador() {
     if (esTab2N && editedMap[key]) dtoLinea = Number(cfg.dtoLinea || 0) || 0;
     else dtoLinea = dtoGlobal;
 
+    // Dto tarifa (NO lineal): depende del grupo de producto de la referencia
+    // Nota: el % mostrado sigue siendo % vs PVP (como querías)
     const descForGroup =
-      lBase.descripcion ||
-      infoTarifa.descripcion ||
-      infoTarifa.desc ||
-      infoTarifa.Nombre ||
-      infoTarifa.name ||
-      "";
+      lBase.descripcion || lBase.desc || lBase.nombre || lBase.name || "";
+    const gid = simuladorClasificarGrupoPorDescripcion(descForGroup);
 
-    const gid = (typeof window.clasificarGrupoPorDescripcion === "function")
-      ? window.clasificarGrupoPorDescripcion(descForGroup)
-      : "GRUPO_A";
-
-    // tarifaId ahora es el "nivel": nfrDist/nfrRes/dist/rp2/rp1/msrp
-    // MSRP => dto 0 (precio PVP)
     let dtoTarifa = 0;
-    if (tarifaId && tarifaId !== "msrp") {
-      const g = (gruposBBD && gruposBBD[gid]) || {};
-      const v = Number(g[tarifaId]);
-      dtoTarifa = Number.isFinite(v) ? v * 100 : 0;
+    if (tarifaField === "msrp") {
+      dtoTarifa = 0;
+    } else {
+      const dtoDec = Number(bbdTipo?.grupos?.[gid]?.[tarifaField] ?? 0) || 0;
+      dtoTarifa = dtoDec * 100;
     }
 
     const factorTarifa = 1 - dtoTarifa / 100;
