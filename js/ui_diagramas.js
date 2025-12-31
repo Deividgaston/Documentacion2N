@@ -2587,24 +2587,11 @@ function _localDesignFromSpec(spec) {
   const connections = [];
 
   const routerId = `V_ROUTER_${coreZone}`;
-  const coreId = `V_CORE_${coreZone}`;
   infra.push({
     id: routerId,
     type: "VIRTUAL_ROUTER",
     zone: coreZone,
     meta: { role: "EDGE" },
-  });
-  infra.push({
-    id: coreId,
-    type: "VIRTUAL_CORE",
-    zone: coreZone,
-    meta: { role: "CORE" },
-  });
-  connections.push({
-    from: coreId,
-    to: routerId,
-    type: "UTP_CAT6",
-    note: "Uplink core -> router",
   });
 
   const cpdSwId = "V_CPD_SW_POE";
@@ -2617,11 +2604,13 @@ function _localDesignFromSpec(spec) {
       icon_block: _strip(spec?.cpd?.switch_poe_block || ""),
     },
   });
+
+  // ✅ SIN VIRTUAL_CORE: CPD switch -> router
   connections.push({
     from: cpdSwId,
-    to: coreId,
+    to: routerId,
     type: "UTP_CAT6",
-    note: "CPD switch -> core",
+    note: "Uplink CPD switch -> router",
   });
 
   let totalSwitches = 1;
@@ -2694,11 +2683,12 @@ function _localDesignFromSpec(spec) {
         meta: { ports_estimated: ports, index: i },
       });
 
+      // ✅ SIN VIRTUAL_CORE: uplink de zona -> CPD switch (sin cascada)
       connections.push({
         from: swId,
-        to: coreId,
+        to: cpdSwId,
         type: "UTP_CAT6",
-        note: "Uplink zona -> core (sin cascada)",
+        note: "Uplink zona -> CPD switch (sin cascada)",
       });
 
       // ✅ SOLO conecta a este switch los placements asignados a este switch
@@ -2741,6 +2731,7 @@ function _localDesignFromSpec(spec) {
 
   return _augmentResultForSvg(base);
 }
+
 /* ======================================================
    IA (opcional) + parse robusto
  ====================================================== */
