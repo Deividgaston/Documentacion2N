@@ -873,6 +873,65 @@ function _isLockInfraNode(n) {
   const t = String(n?.type || "").toUpperCase();
   return t.includes("LOCK") || t.includes("GARAGE");
 }
+function _connKey(c) {
+  const t = String(c?.type || "").toUpperCase();
+  return `${String(c?.from || "")}__${String(c?.to || "")}__${t}`;
+}
+
+function _buildDegreeMap(connections) {
+  const degree = new Map();
+  for (const c of (Array.isArray(connections) ? connections : [])) {
+    const a = String(c?.from || "");
+    const b = String(c?.to || "");
+    if (a) degree.set(a, (degree.get(a) || 0) + 1);
+    if (b) degree.set(b, (degree.get(b) || 0) + 1);
+  }
+  return degree;
+}
+
+function _pruneDanglingNodesAndConnections(r) {
+  if (!r || typeof r !== "object") return r;
+
+  const placements = Array.isArray(r.placements) ? r.placements : [];
+  let infra = Array.isArray(r.infra) ? r.infra : [];
+  let connections = Array.isArray(r.connections) ? r.connections : [];
+
+  // 1) degree actual
+  const degree = _buildDegreeMap(connections);
+
+  // 2) eliminar infra switch sin conexiones
+  infra = infra.filter((n) => {
+    if (!_isSwitchInfraNode(n)) return true;
+    const id = String(n?.id || "");
+    return (degree.get(id) || 0) > 0;
+  });
+
+  // 3) eliminar placements que "parecen switch" y no tienen conexiones
+  const placementsKept = [];
+  for (const p of placements) {
+    const id = String(p?.id || "");
+    const isSwLike = _isSwitchLikePlacement(p);
+    if (isSwLike && (degree.get(id) || 0) === 0) continue;
+    placementsKept.push(p);
+  }
+
+  // 4) limpiar conexiones que apuntan a nodos ya borrados
+  const validIds = new Set([
+    ...placementsKept.map((p) => String(p.id)),
+    ...infra.map((n) => String(n.id)),
+  ]);
+
+  connections = connections.filter((c) => {
+    const a = String(c?.from || "");
+    const b = String(c?.to || "");
+    return validIds.has(a) && validIds.has(b);
+  });
+
+  r.placements = placementsKept;
+  r.infra = infra;
+  r.connections = connections;
+  return r;
+}
 
 /* ======================================================
    Preview SVG (coords)
