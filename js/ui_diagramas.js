@@ -1189,7 +1189,10 @@ function _renderPreviewSvg(result) {
   const connections = Array.isArray(r?.connections) ? r.connections : [];
 
   // ======================================================
-  // ✅ NUEVO: carril superior (uplinks) + carril inferior por zona (access)
+  // ✅ CARRILES (OPCIÓN 3)
+  // - TRUNK: uplinks switch <-> core/router (arriba)
+  // - BUS por zona: device <-> switch (cat6)
+  // - BUS 2H por zona: 2_WIRE aún más abajo
   // ======================================================
   const infraArr = Array.isArray(r?.infra) ? r.infra : [];
 
@@ -1205,14 +1208,13 @@ function _renderPreviewSvg(result) {
   function _isCoreId(id) {
     const n = _getInfraById(id);
     const t = String(n?.type || "").toUpperCase();
-    // CORE o ROUTER se consideran “cabecera” para el carril superior
     return !!n && (t.includes("CORE") || t.includes("ROUTER"));
   }
 
   // Carril superior fijo: uplinks switch <-> core/router
   const TRUNK_Y = 64;
 
-  // Carril inferior por zona: device <-> switch (debajo del switch más bajo de la zona)
+  // Carril inferior por zona (Cat6 access): debajo del switch más bajo de la zona
   const zoneBusY = (() => {
     const m = {};
     for (const z of zones) m[z.key] = 160;
@@ -1227,12 +1229,22 @@ function _renderPreviewSvg(result) {
     return m;
   })();
 
+  // Carril 2H por zona: aún más abajo que el bus de Cat6
+  const zone2hY = (() => {
+    const m = {};
+    for (const z of zones) {
+      const base = zoneBusY[z.key] || 160;
+      m[z.key] = base + 26; // separación clara respecto Cat6
+    }
+    return m;
+  })();
+
   function _lanePath(a, b, laneY, idx, type) {
     const st = _strokeForConnectionType(type);
     const dash = st.dash ? ` stroke-dasharray="${st.dash}"` : "";
 
-    // micro-separación para que “paralelos” no se pisen
-    const dy = ((idx % 7) - 3) * 2;
+    // ✅ más separación vertical para diferenciar cables paralelos
+    const dy = ((idx % 9) - 4) * 6; // antes era muy pequeño
     const y = laneY + dy;
 
     const d = `M ${a.x} ${a.y} L ${a.x} ${y} L ${b.x} ${y} L ${b.x} ${b.y}`;
@@ -1254,7 +1266,7 @@ function _renderPreviewSvg(result) {
     const dash = st.dash ? ` stroke-dasharray="${st.dash}"` : "";
     const pad = 10;
 
-    // ✅ más separación para que no se “junten” los cables
+    // separación para que no se “junten”
     const channel = (idx % 10) * 10;
 
     const x1 = a.x,
@@ -1282,17 +1294,33 @@ function _renderPreviewSvg(result) {
       const fromIsCore = _isCoreId(c.from);
       const toIsCore = _isCoreId(c.to);
 
-      // ✅ uplink: switch <-> core/router por carril superior
+      const typeU = String(c?.type || "").toUpperCase();
+
+      // uplink: switch <-> core/router
       const isUplink = (fromIsSw && toIsCore) || (toIsSw && fromIsCore);
 
-      // ✅ access: device <-> switch por carril inferior de la zona
+      // access: device <-> switch (cat6)
       const isAccess =
         (fromIsSw && !toIsSw && !toIsCore) ||
         (toIsSw && !fromIsSw && !fromIsCore);
 
+      // 2H: carril propio por zona (aunque sea device->lock, etc.)
+      const is2h = typeU === "2_WIRE" || typeU === "2H" || typeU === "2_HILOS";
+
       let path = "";
       if (isUplink) {
         path = _lanePath(a, b, TRUNK_Y, i, c.type);
+      } else if (is2h) {
+        // zone de referencia: intenta usar la del endpoint infra (lock) o del placement
+        // fallback: usa la zona del nodo 'a'
+        let zk = String(a.zone || "");
+        // si el destino es infra con zona, prioriza esa
+        try {
+          const nb = _getInfraById(String(c.to));
+          if (nb && nb.zone) zk = String(nb.zone);
+        } catch (_) {}
+        const laneY = zone2hY[zk] || (zoneBusY[zk] || 160) + 26;
+        path = _lanePath(a, b, laneY, i, c.type);
       } else if (isAccess) {
         const swId = fromIsSw ? String(c.from) : String(c.to);
         const swInfra = _getInfraById(swId);
@@ -1300,7 +1328,7 @@ function _renderPreviewSvg(result) {
         const busY = zoneBusY[zk] || 160;
         path = _lanePath(a, b, busY, i, c.type);
       } else {
-        // fallback para casos raros (no romper)
+        // fallback
         path = _orthPath(a, b, i, c.type);
       }
 
