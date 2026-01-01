@@ -1715,20 +1715,28 @@ function _bindPreviewWindowListeners(svg) {
   _unbindPreviewWindowListeners();
 
   function _commitAndStop() {
-    // commit último punto si existe
     if (s._previewPendingMove && s._previewPendingMove.nodeId) {
       const { nodeId, nx, ny } = s._previewPendingMove;
       s._previewPendingMove = null;
 
-      s.manualCoords = s.manualCoords || {};
-      s.manualCoords[nodeId] = { x: nx, y: ny };
+      // ✅ TEXT drag commit
+      if (String(nodeId).startsWith("TEXT:")) {
+        const textId = String(nodeId).slice("TEXT:".length);
+        const ed = _diagEnsureSvgEdits();
+        const it = (ed.texts || []).find((t) => String(t.id) === String(textId));
+        if (it) {
+          it.x = nx;
+          it.y = ny;
+        }
+      } else {
+        // ✅ NODE drag commit
+        s.manualCoords = s.manualCoords || {};
+        s.manualCoords[nodeId] = { x: nx, y: ny };
+      }
     }
 
-    // limpia transform visual
     if (_diagDrag && _diagDrag.nodeEl) {
-      try {
-        _diagDrag.nodeEl.removeAttribute("transform");
-      } catch (_) {}
+      try { _diagDrag.nodeEl.removeAttribute("transform"); } catch (_) {}
     }
 
     _diagDrag.active = false;
@@ -1738,7 +1746,7 @@ function _bindPreviewWindowListeners(svg) {
     _diagDrag.baseY = null;
 
     _saveManualCoords();
-    _renderResult(); // ✅ SOLO aquí (al soltar)
+    _renderResult();
   }
 
   s._previewPointerMoveHandler = (ev) => {
@@ -1750,20 +1758,15 @@ function _bindPreviewWindowListeners(svg) {
     const nx = p.x + _diagDrag.offsetX;
     const ny = p.y + _diagDrag.offsetY;
 
-    // guarda coords (pero NO render)
     s._previewPendingMove = { nodeId: _diagDrag.nodeId, nx, ny };
 
-    // ✅ mover visualmente el nodo sin re-render (Chrome-friendly)
     const dx = nx - (_diagDrag.baseX || 0);
     const dy = ny - (_diagDrag.baseY || 0);
     try {
       _diagDrag.nodeEl.setAttribute("transform", `translate(${dx} ${dy})`);
     } catch (_) {}
 
-    try {
-      ev.preventDefault();
-      ev.stopPropagation();
-    } catch (_) {}
+    try { ev.preventDefault(); ev.stopPropagation(); } catch (_) {}
   };
 
   s._previewPointerUpHandler = (ev) => {
@@ -1772,17 +1775,13 @@ function _bindPreviewWindowListeners(svg) {
 
     s._previewActivePointerId = null;
 
-    // suelta captura si existe
     try {
       if (svg && ev.pointerId != null) svg.releasePointerCapture(ev.pointerId);
     } catch (_) {}
 
     _commitAndStop();
 
-    try {
-      ev.preventDefault();
-      ev.stopPropagation();
-    } catch (_) {}
+    try { ev.preventDefault(); ev.stopPropagation(); } catch (_) {}
   };
 
   s._previewPointerTarget = svg;
