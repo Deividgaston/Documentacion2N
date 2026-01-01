@@ -946,6 +946,140 @@ function _pruneDanglingNodesAndConnections(r) {
   r.connections = connections;
   return r;
 }
+function _diagEnsureSvgEdits() {
+  const s = appState.diagramas;
+  if (!s.svgEdits || typeof s.svgEdits !== "object") {
+    s.svgEdits = { hiddenNodes: {}, hiddenConns: {}, connDy: {}, texts: [] };
+  }
+  s.svgEdits.hiddenNodes = s.svgEdits.hiddenNodes || {};
+  s.svgEdits.hiddenConns = s.svgEdits.hiddenConns || {};
+  s.svgEdits.connDy = s.svgEdits.connDy || {};
+  s.svgEdits.texts = Array.isArray(s.svgEdits.texts) ? s.svgEdits.texts : [];
+  return s.svgEdits;
+}
+
+function _diagClearSelection() {
+  appState.diagramas.svgSelection = null;
+}
+
+function _diagSelect(sel) {
+  appState.diagramas.svgSelection = sel && typeof sel === "object" ? sel : null;
+}
+
+function _diagConnKeyFromConnection(c) {
+  const t = String(c?.type || "").toUpperCase();
+  return `${String(c?.from || "")}__${String(c?.to || "")}__${t}`;
+}
+
+function _diagDeleteSelected() {
+  const s = appState.diagramas;
+  const ed = _diagEnsureSvgEdits();
+  const sel = s.svgSelection;
+  if (!sel) return;
+
+  if (sel.type === "node" && sel.id) {
+    ed.hiddenNodes[String(sel.id)] = true;
+    _diagClearSelection();
+    _renderResult();
+    return;
+  }
+
+  if (sel.type === "conn" && sel.key) {
+    ed.hiddenConns[String(sel.key)] = true;
+    _diagClearSelection();
+    _renderResult();
+    return;
+  }
+
+  if (sel.type === "text" && sel.id) {
+    const id = String(sel.id);
+    ed.texts = ed.texts.filter((t) => String(t.id) !== id);
+    _diagClearSelection();
+    _renderResult();
+    return;
+  }
+}
+
+function _diagAddTextAtDefault() {
+  const s = appState.diagramas;
+  const ed = _diagEnsureSvgEdits();
+
+  const txt = prompt("Texto a añadir:", "Nota");
+  if (!String(txt || "").trim()) return;
+
+  const id = `T_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
+  ed.texts.push({
+    id,
+    x: 120,
+    y: 90,
+    text: String(txt).trim(),
+  });
+
+  _diagSelect({ type: "text", id });
+  _renderResult();
+}
+
+function _diagAdjustSelectedConnDy(delta) {
+  const s = appState.diagramas;
+  const ed = _diagEnsureSvgEdits();
+  const sel = s.svgSelection;
+  if (!sel || sel.type !== "conn" || !sel.key) return;
+
+  const k = String(sel.key);
+  const cur = Number(ed.connDy[k] || 0) || 0;
+  let next = cur + Number(delta || 0);
+
+  // limita para que no se vaya a infinito
+  next = Math.max(-160, Math.min(160, next));
+
+  ed.connDy[k] = next;
+  _renderResult();
+}
+
+function _diagResetSvgEdits() {
+  appState.diagramas.svgEdits = {
+    hiddenNodes: {},
+    hiddenConns: {},
+    connDy: {},
+    texts: [],
+  };
+  _diagClearSelection();
+  _renderResult();
+}
+
+// Filtra nodos/conexiones según edits (se usa en render + export)
+function _diagApplySvgEditsToResult(r) {
+  const ed = _diagEnsureSvgEdits();
+  if (!r || typeof r !== "object") return r;
+
+  const hiddenNodes = ed.hiddenNodes || {};
+  const hiddenConns = ed.hiddenConns || {};
+
+  const placements = Array.isArray(r.placements) ? r.placements : [];
+  const infra = Array.isArray(r.infra) ? r.infra : [];
+  let connections = Array.isArray(r.connections) ? r.connections : [];
+
+  const keepNode = (id) => !hiddenNodes[String(id || "")];
+
+  const p2 = placements.filter((p) => keepNode(p.id));
+  const i2 = infra.filter((n) => keepNode(n.id));
+
+  const valid = new Set([...p2.map((p) => String(p.id)), ...i2.map((n) => String(n.id))]);
+
+  connections = connections.filter((c) => {
+    const k = _diagConnKeyFromConnection(c);
+    if (hiddenConns[String(k)]) return false;
+    const a = String(c?.from || "");
+    const b = String(c?.to || "");
+    return valid.has(a) && valid.has(b);
+  });
+
+  r.placements = p2;
+  r.infra = i2;
+  r.connections = connections;
+
+  return r;
+}
 
 /* ======================================================
    Preview SVG (coords)
