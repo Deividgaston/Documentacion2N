@@ -1806,6 +1806,7 @@ function _bindPreviewInteractions() {
   if (btnEdit) {
     btnEdit.onclick = () => {
       appState.diagramas.previewEditMode = !appState.diagramas.previewEditMode;
+      _diagClearSelection();
       _renderResult();
     };
   }
@@ -1815,9 +1816,19 @@ function _bindPreviewInteractions() {
     btnReset.onclick = () => {
       appState.diagramas.manualCoords = {};
       _saveManualCoords();
+      _diagClearSelection();
       _renderResult();
     };
   }
+
+  const btnAddText = _el("btnDiagAddText");
+  if (btnAddText) btnAddText.onclick = _diagAddTextAtDefault;
+
+  const btnDel = _el("btnDiagDeleteSel");
+  if (btnDel) btnDel.onclick = _diagDeleteSelected;
+
+  const btnResetEd = _el("btnDiagResetSvgEdits");
+  if (btnResetEd) btnResetEd.onclick = _diagResetSvgEdits;
 
   // anti-drag nativo / selección (Chrome)
   try {
@@ -1838,33 +1849,137 @@ function _bindPreviewInteractions() {
     );
   } catch (_) {}
 
+  // ✅ teclado (A/C)
+  if (!window._diagSvgKeyHandlerBound) {
+    window._diagSvgKeyHandlerBound = true;
+    window.addEventListener("keydown", (e) => {
+      if (!appState?.diagramas?.previewEditMode) return;
+
+      const k = e.key;
+
+      if (k === "Delete" || k === "Backspace") {
+        try { e.preventDefault(); } catch (_) {}
+        _diagDeleteSelected();
+        return;
+      }
+
+      if (k === "ArrowUp") {
+        try { e.preventDefault(); } catch (_) {}
+        _diagAdjustSelectedConnDy(-10);
+        return;
+      }
+      if (k === "ArrowDown") {
+        try { e.preventDefault(); } catch (_) {}
+        _diagAdjustSelectedConnDy(+10);
+        return;
+      }
+    }, true);
+  }
+
   if (!appState.diagramas.previewEditMode) {
     _unbindPreviewWindowListeners();
     svg.onpointerdown = null;
     svg.onmousedown = null;
+    svg.onclick = null;
     return;
   }
 
   const baseResult =
     appState.diagramas._previewResult || appState.diagramas.lastResult;
-  const r = _augmentResultForSvg(baseResult);
+
+  const r0 = _augmentResultForSvg(baseResult);
+  const r = _diagApplySvgEditsToResult(r0);
 
   _bindPreviewWindowListeners(svg);
 
+  // ✅ selección por click (nodo / cable / texto)
+  svg.onclick = (ev) => {
+    const t = ev.target;
+
+    // cable
+    const w = t && t.closest ? t.closest(".diag-wire[data-conn-key]") : null;
+    if (w) {
+      const key = w.getAttribute("data-conn-key");
+      if (key) {
+        _diagSelect({ type: "conn", key });
+        _renderResult();
+        return;
+      }
+    }
+
+    // texto
+    const gt = t && t.closest ? t.closest(".diag-text[data-text-id]") : null;
+    if (gt) {
+      const id = gt.getAttribute("data-text-id");
+      if (id) {
+        _diagSelect({ type: "text", id });
+        _renderResult();
+        return;
+      }
+    }
+
+    // nodo
+    const g = t && t.closest ? t.closest(".diag-node") : null;
+    if (g) {
+      const nodeId = g.getAttribute("data-node-id");
+      if (nodeId) {
+        _diagSelect({ type: "node", id: nodeId });
+        _renderResult();
+        return;
+      }
+    }
+
+    _diagClearSelection();
+    _renderResult();
+  };
+
+  // ✅ drag: nodos y textos (usa el mismo drag controller existente)
   svg.onpointerdown = (ev) => {
     const t = ev.target;
+
+    // --- TEXT drag (B)
+    const gt = t && t.closest ? t.closest(".diag-text[data-text-id]") : null;
+    if (gt) {
+      const textId = gt.getAttribute("data-text-id");
+      if (!textId) return;
+
+      // seleccionar
+      _diagSelect({ type: "text", id: textId });
+
+      // capturar puntero
+      try {
+        appState.diagramas._previewActivePointerId = ev.pointerId;
+        svg.setPointerCapture(ev.pointerId);
+      } catch (_) {}
+
+      const p = _svgPoint(svg, ev.clientX, ev.clientY);
+      const ed = _diagEnsureSvgEdits();
+      const it = (ed.texts || []).find((x) => String(x.id) === String(textId));
+      if (!it) return;
+
+      _diagDrag.active = true;
+      _diagDrag.nodeId = `TEXT:${textId}`; // marker
+      _diagDrag.nodeEl = gt;
+      _diagDrag.baseX = Number(it.x || 0) || 0;
+      _diagDrag.baseY = Number(it.y || 0) || 0;
+      _diagDrag.offsetX = _diagDrag.baseX - p.x;
+      _diagDrag.offsetY = _diagDrag.baseY - p.y;
+
+      try { ev.preventDefault(); ev.stopPropagation(); } catch (_) {}
+      return;
+    }
+
+    // --- NODE drag (tu lógica original)
     const g = t && t.closest ? t.closest(".diag-node") : null;
     if (!g) return;
 
     const nodeId = g.getAttribute("data-node-id");
     if (!nodeId) return;
 
-    // ✅ por si quedó transform colgado de un drag anterior
-    try {
-      g.removeAttribute("transform");
-    } catch (_) {}
+    _diagSelect({ type: "node", id: nodeId });
 
-    // capturar puntero (clave)
+    try { g.removeAttribute("transform"); } catch (_) {}
+
     try {
       appState.diagramas._previewActivePointerId = ev.pointerId;
       svg.setPointerCapture(ev.pointerId);
@@ -1878,24 +1993,25 @@ function _bindPreviewInteractions() {
 
     _diagDrag.active = true;
     _diagDrag.nodeId = nodeId;
-    _diagDrag.nodeEl = g; // ✅ referencia DOM
-    _diagDrag.baseX = cur.x; // ✅ base para translate
+    _diagDrag.nodeEl = g;
+    _diagDrag.baseX = cur.x;
     _diagDrag.baseY = cur.y;
     _diagDrag.offsetX = cur.x - p.x;
     _diagDrag.offsetY = cur.y - p.y;
 
-    try {
-      ev.preventDefault();
-      ev.stopPropagation();
-    } catch (_) {}
+    try { ev.preventDefault(); ev.stopPropagation(); } catch (_) {}
   };
 
   // compat (evita selección)
   svg.onmousedown = (ev) => {
-    try {
-      ev.preventDefault();
-    } catch (_) {}
+    try { ev.preventDefault(); } catch (_) {}
   };
+
+  // ✅ hook al commit del drag (en tu _commitAndStop ya se guarda manualCoords)
+  // Necesitamos también guardar textos si nodeId empieza por "TEXT:"
+  const s = appState.diagramas;
+  const oldPending = s._previewPendingMove;
+  // No tocamos aquí: lo resolvemos en _bindPreviewWindowListeners (ver abajo).
 }
 
 
