@@ -3026,7 +3026,7 @@ function diagExportSvg() {
     .join("");
 
   // ======================================================
-  // ✅ NUEVO: mismo routing “carril superior + bus por zona” en export SVG
+  // ✅ CARRILES (OPCIÓN 3) en EXPORT SVG
   // ======================================================
   function _getInfraByIdExp(id) {
     return infra.find((n) => String(n.id) === String(id)) || null;
@@ -3056,10 +3056,19 @@ function diagExportSvg() {
     return m;
   })();
 
+  const zone2hY = (() => {
+    const m = {};
+    for (const z of zones) {
+      const base = zoneBusY[z.key] || 160;
+      m[z.key] = base + 26;
+    }
+    return m;
+  })();
+
   function _lanePathExp(a, b, laneY, idx, type) {
     const st = _strokeForConnectionType(type);
     const dash = st.dash ? ` stroke-dasharray="${st.dash}"` : "";
-    const dy = ((idx % 7) - 3) * 2;
+    const dy = ((idx % 9) - 4) * 6; // más separación
     const y = laneY + dy;
     const d = `M ${a.x} ${a.y} L ${a.x} ${y} L ${b.x} ${y} L ${b.x} ${b.y}`;
     return `<path d="${d}" fill="none" stroke="${st.stroke}" stroke-width="${st.width}"${dash}/>`;
@@ -3086,15 +3095,27 @@ function diagExportSvg() {
       const fromIsCore = _isCoreIdExp(c.from);
       const toIsCore = _isCoreIdExp(c.to);
 
+      const typeU = String(c?.type || "").toUpperCase();
+
       const isUplink = (fromIsSw && toIsCore) || (toIsSw && fromIsCore);
 
       const isAccess =
         (fromIsSw && !toIsSw && !toIsCore) ||
         (toIsSw && !fromIsSw && !fromIsCore);
 
+      const is2h = typeU === "2_WIRE" || typeU === "2H" || typeU === "2_HILOS";
+
       let path = "";
       if (isUplink) {
         path = _lanePathExp(a, b, TRUNK_Y, i, c.type);
+      } else if (is2h) {
+        let zk = String(a.zone || "");
+        try {
+          const nb = _getInfraByIdExp(String(c.to));
+          if (nb && nb.zone) zk = String(nb.zone);
+        } catch (_) {}
+        const laneY = zone2hY[zk] || (zoneBusY[zk] || 160) + 26;
+        path = _lanePathExp(a, b, laneY, i, c.type);
       } else if (isAccess) {
         const swId = fromIsSw ? String(c.from) : String(c.to);
         const swInfra = _getInfraByIdExp(swId);
@@ -3102,7 +3123,7 @@ function diagExportSvg() {
         const busY = zoneBusY[zk] || 160;
         path = _lanePathExp(a, b, busY, i, c.type);
       } else {
-        // fallback recta (no romper)
+        // fallback recta
         const st = _strokeForConnectionType(c.type);
         const dash = st.dash ? ` stroke-dasharray="${st.dash}"` : "";
         path = `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${st.stroke}" stroke-width="${st.width}"${dash}/>`;
