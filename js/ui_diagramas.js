@@ -1283,7 +1283,11 @@ function _buildSchematicCoordsFromResult(result) {
 }
 
 function _renderPreviewSvg(result) {
-  const r = _augmentResultForSvg(result);
+  const ed = _diagEnsureSvgEdits();
+
+  // base + augment + apply edits
+  const r0 = _augmentResultForSvg(result);
+  const r = _diagApplySvgEditsToResult(r0);
 
   const coords = _buildSchematicCoordsFromResult(r);
   if (!coords.size) return `<div class="muted">Sin nodos para preview.</div>`;
@@ -1386,7 +1390,7 @@ function _renderPreviewSvg(result) {
     const m = {};
     for (const z of zones) {
       const base = zoneBusY[z.key] || 180;
-      m[z.key] = base + 46; // ✅ 2H MUY separado del Cat6
+      m[z.key] = base + 46;
     }
     return m;
   })();
@@ -1399,17 +1403,30 @@ function _renderPreviewSvg(result) {
     return buckets > 0 ? (v % buckets) : 0;
   }
 
-  function _lanePath(a, b, laneY, key, type) {
+  function _lanePath(a, b, laneY, key, type, connKey) {
     const st = _strokeForConnectionType(type);
     const dash = st.dash ? ` stroke-dasharray="${st.dash}"` : "";
 
-    // ✅ offset estable por conexión (no se pisan)
-    const bucket = _hashToBucket(key, 13); // 0..12
-    const dy = (bucket - 6) * 8;          // separación fuerte
-    const y = laneY + dy;
+    // base dy por hash
+    const bucket = _hashToBucket(key, 13);
+    const dyBase = (bucket - 6) * 8;
+
+    // ✅ override desde editor (C)
+    const dyOverride = Number(ed.connDy?.[String(connKey)] || 0) || 0;
+
+    const y = laneY + dyBase + dyOverride;
 
     const d = `M ${a.x} ${a.y} L ${a.x} ${y} L ${b.x} ${y} L ${b.x} ${b.y}`;
-    return `<path d="${d}" fill="none" stroke="${st.stroke}" stroke-width="${st.width}"${dash}/>`;
+
+    const sel = appState.diagramas.svgSelection;
+    const isSel = sel && sel.type === "conn" && String(sel.key) === String(connKey);
+    const selStroke = isSel ? ` stroke="rgba(220,38,38,.9)" stroke-width="${st.width + 1.2}"` : "";
+
+    return `<path class="diag-wire"
+                  data-conn-key="${_escapeHtmlAttr(connKey)}"
+                  d="${d}" fill="none"
+                  stroke="${st.stroke}" stroke-width="${st.width}"${dash}${selStroke}
+                  style="cursor:${appState.diagramas.previewEditMode ? "pointer" : "default"}; pointer-events:stroke;" />`;
   }
 
   function _wireLabel(a, b, type) {
@@ -1420,24 +1437,34 @@ function _renderPreviewSvg(result) {
     return `<text x="${lx}" y="${ly}" font-size="11" fill="rgba(17,24,39,.70)" pointer-events="none">${_escapeHtml(lab)}</text>`;
   }
 
-  function _orthPath(a, b, key, type) {
+  function _orthPath(a, b, key, type, connKey) {
     const st = _strokeForConnectionType(type);
     const dash = st.dash ? ` stroke-dasharray="${st.dash}"` : "";
     const pad = 10;
 
     const bucket = _hashToBucket(key, 11);
-    const channel = (bucket - 5) * 14;
+    const channel = (bucket - 5) * 14 + (Number(ed.connDy?.[String(connKey)] || 0) || 0);
 
     const x1 = a.x, y1 = a.y;
     const x2 = b.x, y2 = b.y;
 
+    const sel = appState.diagramas.svgSelection;
+    const isSel = sel && sel.type === "conn" && String(sel.key) === String(connKey);
+    const selStroke = isSel ? ` stroke="rgba(220,38,38,.9)" stroke-width="${st.width + 1.2}"` : "";
+
     if (Math.abs(x1 - x2) < 25 || Math.abs(y1 - y2) < 25) {
-      return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${st.stroke}" stroke-width="${st.width}"${dash}/>`;
+      return `<line class="diag-wire" data-conn-key="${_escapeHtmlAttr(connKey)}"
+                   x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"
+                   stroke="${st.stroke}" stroke-width="${st.width}"${dash}${selStroke}
+                   style="cursor:${appState.diagramas.previewEditMode ? "pointer" : "default"}; pointer-events:stroke;" />`;
     }
 
     const midX = (x1 + x2) / 2 + channel;
     const d = `M ${x1} ${y1} L ${midX - pad} ${y1} L ${midX - pad} ${y2} L ${x2} ${y2}`;
-    return `<path d="${d}" fill="none" stroke="${st.stroke}" stroke-width="${st.width}"${dash}/>`;
+    return `<path class="diag-wire" data-conn-key="${_escapeHtmlAttr(connKey)}"
+                  d="${d}" fill="none"
+                  stroke="${st.stroke}" stroke-width="${st.width}"${dash}${selStroke}
+                  style="cursor:${appState.diagramas.previewEditMode ? "pointer" : "default"}; pointer-events:stroke;" />`;
   }
 
   const lines = connections
@@ -1448,6 +1475,7 @@ function _renderPreviewSvg(result) {
 
       const typeU = String(c?.type || "").toUpperCase();
       const key = `${String(c.from)}__${String(c.to)}__${typeU}`;
+      const connKey = _diagConnKeyFromConnection(c);
 
       const fromIsSw = _isSwitchId(c.from);
       const toIsSw = _isSwitchId(c.to);
@@ -1463,7 +1491,7 @@ function _renderPreviewSvg(result) {
 
       let path = "";
       if (isUplink) {
-        path = _lanePath(a, b, TRUNK_Y, `TRUNK__${key}`, c.type);
+        path = _lanePath(a, b, TRUNK_Y, `TRUNK__${key}`, c.type, connKey);
       } else if (is2h) {
         let zk = String(a.zone || "");
         try {
@@ -1471,15 +1499,15 @@ function _renderPreviewSvg(result) {
           if (nb && nb.zone) zk = String(nb.zone);
         } catch (_) {}
         const laneY = zone2hY[zk] || ((zoneBusY[zk] || 180) + 46);
-        path = _lanePath(a, b, laneY, `2H__${zk}__${key}`, c.type);
+        path = _lanePath(a, b, laneY, `2H__${zk}__${key}`, c.type, connKey);
       } else if (isAccess) {
         const swId = fromIsSw ? String(c.from) : String(c.to);
         const swInfra = _getInfraById(swId);
         const zk = String(swInfra?.zone || "");
         const busY = zoneBusY[zk] || 180;
-        path = _lanePath(a, b, busY, `BUS__${zk}__${key}`, c.type);
+        path = _lanePath(a, b, busY, `BUS__${zk}__${key}`, c.type, connKey);
       } else {
-        path = _orthPath(a, b, `FALLBACK__${key}`, c.type);
+        path = _orthPath(a, b, `FALLBACK__${key}`, c.type, connKey);
       }
 
       return `${path}${_wireLabel(a, b, c.type)}`;
@@ -1496,6 +1524,12 @@ function _renderPreviewSvg(result) {
       const icon = _escapeHtml(_iconForNode(id, p));
       const qty = Math.max(1, Number(p.qty || 1) || 1);
 
+      const sel = appState.diagramas.svgSelection;
+      const isSel = sel && sel.type === "node" && String(sel.id) === String(id);
+      const ring = isSel
+        ? `<circle cx="${p.x}" cy="${p.y}" r="18" fill="rgba(220,38,38,.18)"></circle>`
+        : "";
+
       const qtyBadge =
         !isInfra && qty > 1
           ? `<g>
@@ -1508,6 +1542,7 @@ function _renderPreviewSvg(result) {
 
       return `
         <g class="diag-node" data-node-id="${_escapeHtmlAttr(id)}" style="${nodeStyle}">
+          ${ring}
           <circle class="diag-node-hit" cx="${p.x}" cy="${p.y}" r="18" fill="rgba(0,0,0,0)"></circle>
           <circle cx="${p.x}" cy="${p.y}" r="14" fill="${fill}" stroke="${stroke}" stroke-width="10"></circle>
           <text x="${p.x - 8}" y="${p.y + 7}" font-size="18" fill="white" pointer-events="none">${icon}</text>
@@ -1525,18 +1560,47 @@ function _renderPreviewSvg(result) {
     })
     .join("");
 
+  // ✅ textos del editor (B)
+  const texts = (ed.texts || [])
+    .map((t) => {
+      const id = String(t.id || "");
+      const x = Number(t.x || 0) || 0;
+      const y = Number(t.y || 0) || 0;
+      const text = _escapeHtml(String(t.text || ""));
+
+      const sel = appState.diagramas.svgSelection;
+      const isSel = sel && sel.type === "text" && String(sel.id) === id;
+
+      const box = isSel
+        ? `<rect x="${x - 6}" y="${y - 16}" width="${Math.max(60, (String(t.text || "").length * 7) + 14)}"
+                 height="22" rx="6" ry="6" fill="rgba(220,38,38,.10)"></rect>`
+        : "";
+
+      return `
+        <g class="diag-text" data-text-id="${_escapeHtmlAttr(id)}"
+           style="cursor:${appState.diagramas.previewEditMode ? "grab" : "default"};">
+          ${box}
+          <text x="${x}" y="${y}" font-size="13" fill="rgba(17,24,39,.92)" font-weight="600"
+                style="user-select:none;" pointer-events="none">${text}</text>
+        </g>
+      `;
+    })
+    .join("");
+
   return `
     <div class="card" style="padding:12px; overflow:hidden; max-width:100%; min-width:0;">
       <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap;">
         <div>
           <div style="font-weight:700;">Preview</div>
           <div class="muted" style="font-size:12px;">
-            Esquema por zonas (coords). Cat6 en azul · 2 hilos en discontinuo (carril propio).
-            ${appState.diagramas.previewEditMode ? "Arrastra los nodos para fijar posición." : ""}
+            Edita: selecciona nodo/cable/texto · DEL=borra · ↑/↓ separa cable · “Añadir texto”.
           </div>
         </div>
         <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
           <button id="btnDiagToggleEdit" class="btn btn-sm">${appState.diagramas.previewEditMode ? "Salir edición" : "Editar posiciones"}</button>
+          <button id="btnDiagAddText" class="btn btn-sm">Añadir texto</button>
+          <button id="btnDiagDeleteSel" class="btn btn-sm">Borrar sel</button>
+          <button id="btnDiagResetSvgEdits" class="btn btn-sm">Reset edits</button>
           <button id="btnDiagResetLayout" class="btn btn-sm">Reset layout</button>
           <span class="chip">SVG</span>
         </div>
@@ -1552,6 +1616,7 @@ function _renderPreviewSvg(result) {
           ${headers}
           ${lines}
           ${nodes}
+          ${texts}
         </svg>
       </div>
     </div>
