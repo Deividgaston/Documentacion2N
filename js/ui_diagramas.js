@@ -2639,7 +2639,7 @@ function _localDesignFromSpec(spec) {
     },
   });
 
-  // ✅ SIN VIRTUAL_CORE: CPD switch -> router
+  // CPD switch -> router
   connections.push({
     from: cpdSwId,
     to: routerId,
@@ -2649,10 +2649,8 @@ function _localDesignFromSpec(spec) {
 
   let totalSwitches = 1;
 
-  // helper: asigna cada placement a 1 switch (distribución por qty)
   function _assignPlacementsToSwitches(list, switchesNeeded) {
     const items = (Array.isArray(list) ? list : []).slice();
-    // opcional: ordena por qty desc para repartir mejor
     items.sort(
       (a, b) =>
         (Math.max(1, Number(b?.qty || 1) || 1) || 1) -
@@ -2666,7 +2664,6 @@ function _localDesignFromSpec(spec) {
 
     for (const p of items) {
       const w = Math.max(1, Number(p?.qty || 1) || 1);
-      // greedy: mete en el bucket con menos carga
       let best = 0;
       for (let i = 1; i < buckets.length; i++) {
         if (buckets[i].load < buckets[best].load) best = i;
@@ -2695,15 +2692,11 @@ function _localDesignFromSpec(spec) {
     }
 
     let ports = 0;
-    let needsPoe = false;
     for (const p of list) {
       ports += Math.max(1, Number(p.qty || 1) || 1);
-      if (_isPoeDevice(p)) needsPoe = true;
     }
 
     const switchesNeeded = ports > 24 ? 2 : 1;
-
-    // ✅ NUEVO: repartir placements entre switches (cada placement a 1 switch)
     const perSwitchLists = _assignPlacementsToSwitches(list, switchesNeeded);
 
     for (let i = 1; i <= switchesNeeded; i++) {
@@ -2712,12 +2705,12 @@ function _localDesignFromSpec(spec) {
       const swId = `V_SW_${z.key}_${i}`;
       infra.push({
         id: swId,
-        type: needsPoe ? "VIRTUAL_SWITCH_POE" : "VIRTUAL_SWITCH",
+        // ✅ SIEMPRE POE
+        type: "VIRTUAL_SWITCH_POE",
         zone: z.key,
         meta: { ports_estimated: ports, index: i },
       });
 
-      // ✅ SIN VIRTUAL_CORE: uplink de zona -> CPD switch (sin cascada)
       connections.push({
         from: swId,
         to: cpdSwId,
@@ -2725,7 +2718,6 @@ function _localDesignFromSpec(spec) {
         note: "Uplink zona -> CPD switch (sin cascada)",
       });
 
-      // ✅ SOLO conecta a este switch los placements asignados a este switch
       const assigned = perSwitchLists[i - 1] || [];
       for (const p of assigned) {
         connections.push({
