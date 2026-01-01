@@ -3294,6 +3294,8 @@ function diagExportSvg() {
   }
 
   const r = _augmentResultForSvg(base);
+     _diagApplySvgEditsToResult(r);
+
 
   const coords = _buildSchematicCoordsFromResult(r);
   if (!coords.size) {
