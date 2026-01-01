@@ -43,6 +43,15 @@ function _defaultDiagramasState() {
     previewEditMode: false,
     manualCoords: {},
 
+    // ✅ Editor SVG (A/B/C)
+    svgEdits: {
+      hiddenNodes: {}, // nodeId -> true
+      hiddenConns: {}, // connKey -> true
+      connDy: {},      // connKey -> dy override (px)
+      texts: [],       // [{id,x,y,text}]
+    },
+    svgSelection: null, // {type:'node'|'conn'|'text', id|key}
+
     _previewResult: null,
     lastResult: null,
     lastError: null,
