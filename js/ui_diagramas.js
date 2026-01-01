@@ -3293,9 +3293,11 @@ function diagExportSvg() {
     return;
   }
 
-  const r = _augmentResultForSvg(base);
-     _diagApplySvgEditsToResult(r);
+  const ed = _diagEnsureSvgEdits();
 
+  // ✅ exporta lo mismo que ves en preview: augment + apply edits
+  const r0 = _augmentResultForSvg(base);
+  const r = _diagApplySvgEditsToResult(r0);
 
   const coords = _buildSchematicCoordsFromResult(r);
   if (!coords.size) {
@@ -3373,12 +3375,18 @@ function diagExportSvg() {
     return buckets > 0 ? (v % buckets) : 0;
   }
 
-  function _lanePath(a, b, laneY, key, type) {
+  // ✅ lanePath ahora respeta connDy (editor)
+  function _lanePath(a, b, laneY, key, type, connKey) {
     const st = _strokeForConnectionType(type);
     const dash = st.dash ? ` stroke-dasharray="${st.dash}"` : "";
+
     const bucket = _hashToBucket(key, 13);
-    const dy = (bucket - 6) * 8;
-    const y = laneY + dy;
+    const dyBase = (bucket - 6) * 8;
+
+    const dyOverride = Number(ed.connDy?.[String(connKey)] || 0) || 0;
+
+    const y = laneY + dyBase + dyOverride;
+
     const d = `M ${a.x} ${a.y} L ${a.x} ${y} L ${b.x} ${y} L ${b.x} ${b.y}`;
     return `<path d="${d}" fill="none" stroke="${st.stroke}" stroke-width="${st.width}"${dash}/>`;
   }
@@ -3399,6 +3407,7 @@ function diagExportSvg() {
 
       const typeU = String(c?.type || "").toUpperCase();
       const key = `${String(c.from)}__${String(c.to)}__${typeU}`;
+      const connKey = _diagConnKeyFromConnection(c);
 
       const fromIsSw = _isSwitchId(c.from);
       const toIsSw = _isSwitchId(c.to);
@@ -3414,7 +3423,7 @@ function diagExportSvg() {
 
       let path = "";
       if (isUplink) {
-        path = _lanePath(a, b, (TRUNK_Y), `TRUNK__${key}`, c.type);
+        path = _lanePath(a, b, TRUNK_Y, `TRUNK__${key}`, c.type, connKey);
       } else if (is2h) {
         let zk = String(a.zone || "");
         try {
@@ -3422,15 +3431,14 @@ function diagExportSvg() {
           if (nb && nb.zone) zk = String(nb.zone);
         } catch (_) {}
         const laneY = zone2hY[zk] || ((zoneBusY[zk] || 180) + 46);
-        path = _lanePath(a, b, laneY, `2H__${zk}__${key}`, c.type);
+        path = _lanePath(a, b, laneY, `2H__${zk}__${key}`, c.type, connKey);
       } else if (isAccess) {
         const swId = fromIsSw ? String(c.from) : String(c.to);
         const swInfra = _getInfraById(swId);
         const zk = String(swInfra?.zone || "");
         const busY = zoneBusY[zk] || 180;
-        path = _lanePath(a, b, busY, `BUS__${zk}__${key}`, c.type);
+        path = _lanePath(a, b, busY, `BUS__${zk}__${key}`, c.type, connKey);
       } else {
-        // fallback
         const st = _strokeForConnectionType(c.type);
         const dash = st.dash ? ` stroke-dasharray="${st.dash}"` : "";
         path = `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${st.stroke}" stroke-width="${st.width}"${dash}/>`;
@@ -3475,7 +3483,13 @@ function diagExportSvg() {
       const isSw = tU.includes("SWITCH");
 
       const label = _escapeHtml(
-        isCpdSw ? "SWITCH POE (CPD)" : isLock ? "CERRADURA / GARAJE" : isSw ? "SWITCH POE" : (String(n.type || n.id || "").replace(/^VIRTUAL_/, "").replaceAll("_", " "))
+        isCpdSw
+          ? "SWITCH POE (CPD)"
+          : isLock
+            ? "CERRADURA / GARAJE"
+            : isSw
+              ? "SWITCH POE"
+              : (String(n.type || n.id || "").replace(/^VIRTUAL_/, "").replaceAll("_", " "))
       );
 
       return `
@@ -3487,13 +3501,23 @@ function diagExportSvg() {
     })
     .join("");
 
+  // ✅ Textos del editor (Añadir texto) también en export
+  const texts = (ed.texts || [])
+    .map((t) => {
+      const x = Number(t.x || 0) || 0;
+      const y = Number(t.y || 0) || 0;
+      const text = _escapeHtml(String(t.text || ""));
+      return `<text x="${x}" y="${y}" font-size="13" fill="#111827" font-family="Arial, sans-serif" font-weight="600">${text}</text>`;
+    })
+    .join("");
+
   const title = `<text x="80" y="20" font-size="14" fill="#111827" font-family="Arial, sans-serif" font-weight="700">DIAGRAMA RED (UTP CAT6${appState.diagramas.includeLocks ? " + 2H" : ""})</text>`;
 
   const svgText =
     `<?xml version="1.0" encoding="UTF-8"?>\n` +
     `<svg xmlns="http://www.w3.org/2000/svg" width="${vbW}" height="${vbH}" viewBox="0 0 ${vbW} ${vbH}">\n` +
     `<rect x="0" y="0" width="${vbW}" height="${vbH}" fill="#ffffff"/>\n` +
-    `${title}\n${headers}\n${lines}\n${placementNodes}\n${infraNodes}\n` +
+    `${title}\n${headers}\n${lines}\n${placementNodes}\n${infraNodes}\n${texts}\n` +
     `</svg>\n`;
 
   const nameBase = (appState.diagramas.dxfFileName || "diagrama").replace(/\.dxf$/i, "");
