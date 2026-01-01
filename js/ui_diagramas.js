@@ -1087,8 +1087,7 @@ function _renderPreviewSvg(result) {
 
   function _iconForNode(id, p) {
     if (p.kind === "infra") {
-      const rr = r || appState.diagramas.lastResult || {};
-      const infra = Array.isArray(rr.infra) ? rr.infra : [];
+      const infra = Array.isArray(r?.infra) ? r.infra : [];
       const it = infra.find((x) => String(x.id) === String(id));
       const t = String(it?.type || "").toUpperCase();
       const role = String(it?.meta?.role || "").toUpperCase();
@@ -1096,54 +1095,29 @@ function _renderPreviewSvg(result) {
       if (t.includes("LOCK") || t.includes("GARAGE")) return "🔒";
       if (role.includes("CPD") && t.includes("SWITCH")) return "🔀";
       if (t.includes("ROUTER")) return "🌐";
-      if (t.includes("CORE")) return "🧠";
       if (t.includes("SWITCH")) return "🔀";
       return "⬛";
     }
 
-    const rr = r || appState.diagramas.lastResult || {};
-    const placements = Array.isArray(rr.placements) ? rr.placements : [];
+    const placements = Array.isArray(r?.placements) ? r.placements : [];
     const it = placements.find((x) => String(x.id) === String(id));
     const blk = String(it?.icon_block || it?.iconBlock || "").toLowerCase();
     const ref = String(it?.ref || "").toLowerCase();
-
     const s = `${blk} ${ref} ${String(p.label || "").toLowerCase()}`;
 
-    if (
-      s.includes("ip style") ||
-      s.includes("ipstyle") ||
-      s.includes("ai_ip style") ||
-      s.includes("ai_ip_style")
-    )
-      return "📟";
+    if (s.includes("ip style") || s.includes("ipstyle")) return "📟";
     if (s.includes("verso")) return "📞";
     if (s.includes("ip one") || s.includes("ipone")) return "📞";
-    if (
-      s.includes("indoor") ||
-      s.includes("monitor") ||
-      s.includes("touch") ||
-      s.includes("clip")
-    )
-      return "🖥️";
-    if (
-      s.includes("access") ||
-      s.includes("unit") ||
-      s.includes("reader") ||
-      s.includes("rfid") ||
-      s.includes("ble")
-    )
-      return "🔑";
+    if (s.includes("indoor") || s.includes("monitor")) return "🖥️";
+    if (s.includes("access") || s.includes("reader") || s.includes("rfid") || s.includes("ble")) return "🔑";
     if (s.includes("switch") || s.includes("poe")) return "🔀";
     if (s.includes("router") || s.includes("gateway")) return "🌐";
-    if (s.includes("server") || s.includes("nvr")) return "🗄️";
-
     return "●";
   }
 
   function _nodePriority(id, p) {
-    const rr = r || {};
-    const infra = Array.isArray(rr.infra) ? rr.infra : [];
-    const placements = Array.isArray(rr.placements) ? rr.placements : [];
+    const infra = Array.isArray(r?.infra) ? r.infra : [];
+    const placements = Array.isArray(r?.placements) ? r.placements : [];
 
     if (p.kind === "infra") {
       const it = infra.find((x) => String(x.id) === String(id));
@@ -1162,75 +1136,69 @@ function _renderPreviewSvg(result) {
     return 60;
   }
 
-  let maxX = 0,
-    maxY = 0;
+  let maxX = 0, maxY = 0;
   for (const [, p] of coords.entries()) {
     if (p.x > maxX) maxX = p.x;
     if (p.y > maxY) maxY = p.y;
   }
-
-  const vbW = Math.max(900, maxX + 320);
-  const vbH = Math.max(420, maxY + 180);
+  const vbW = Math.max(900, maxX + 360);
+  const vbH = Math.max(480, maxY + 220);
 
   const connections = Array.isArray(r?.connections) ? r.connections : [];
-
-  // ======================================================
-  // ✅ CARRILES (OPCIÓN 3)
-  // - TRUNK: uplinks switch <-> core/router (arriba)
-  // - BUS por zona: device <-> switch (cat6)
-  // - BUS 2H por zona: 2_WIRE aún más abajo
-  // ======================================================
   const infraArr = Array.isArray(r?.infra) ? r.infra : [];
 
   function _getInfraById(id) {
     return infraArr.find((n) => String(n.id) === String(id)) || null;
   }
-
   function _isSwitchId(id) {
     const n = _getInfraById(id);
     return n ? _isSwitchInfraNode(n) : false;
   }
-
   function _isCoreId(id) {
     const n = _getInfraById(id);
     const t = String(n?.type || "").toUpperCase();
     return !!n && (t.includes("CORE") || t.includes("ROUTER"));
   }
 
-  // Carril superior fijo: uplinks switch <-> core/router
   const TRUNK_Y = 64;
 
-  // Carril inferior por zona (Cat6 access): debajo del switch más bajo de la zona
   const zoneBusY = (() => {
     const m = {};
-    for (const z of zones) m[z.key] = 160;
-
+    for (const z of zones) m[z.key] = 180;
     for (const n of infraArr) {
       if (!_isSwitchInfraNode(n)) continue;
       const p = coords.get(String(n.id));
       if (!p) continue;
       const zk = String(n.zone || "");
-      m[zk] = Math.max(m[zk] || 0, p.y + 30);
+      m[zk] = Math.max(m[zk] || 0, p.y + 40);
     }
     return m;
   })();
 
-  // Carril 2H por zona: aún más abajo que el bus de Cat6
   const zone2hY = (() => {
     const m = {};
     for (const z of zones) {
-      const base = zoneBusY[z.key] || 160;
-      m[z.key] = base + 26; // separación clara respecto Cat6
+      const base = zoneBusY[z.key] || 180;
+      m[z.key] = base + 46; // ✅ 2H MUY separado del Cat6
     }
     return m;
   })();
 
-  function _lanePath(a, b, laneY, idx, type) {
+  function _hashToBucket(str, buckets) {
+    const s = String(str || "");
+    let h = 0;
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+    const v = Math.abs(h);
+    return buckets > 0 ? (v % buckets) : 0;
+  }
+
+  function _lanePath(a, b, laneY, key, type) {
     const st = _strokeForConnectionType(type);
     const dash = st.dash ? ` stroke-dasharray="${st.dash}"` : "";
 
-    // ✅ más separación vertical para diferenciar cables paralelos
-    const dy = ((idx % 9) - 4) * 6; // antes era muy pequeño
+    // ✅ offset estable por conexión (no se pisan)
+    const bucket = _hashToBucket(key, 13); // 0..12
+    const dy = (bucket - 6) * 8;          // separación fuerte
     const y = laneY + dy;
 
     const d = `M ${a.x} ${a.y} L ${a.x} ${y} L ${b.x} ${y} L ${b.x} ${b.y}`;
@@ -1242,23 +1210,19 @@ function _renderPreviewSvg(result) {
     if (!lab) return "";
     const lx = (a.x + b.x) / 2 + 8;
     const ly = (a.y + b.y) / 2 - 10;
-    return `<text x="${lx}" y="${ly}" font-size="11" fill="rgba(17,24,39,.70)" pointer-events="none">${_escapeHtml(
-      lab
-    )}</text>`;
+    return `<text x="${lx}" y="${ly}" font-size="11" fill="rgba(17,24,39,.70)" pointer-events="none">${_escapeHtml(lab)}</text>`;
   }
 
-  function _orthPath(a, b, idx, type) {
+  function _orthPath(a, b, key, type) {
     const st = _strokeForConnectionType(type);
     const dash = st.dash ? ` stroke-dasharray="${st.dash}"` : "";
     const pad = 10;
 
-    // separación para que no se “junten”
-    const channel = (idx % 10) * 10;
+    const bucket = _hashToBucket(key, 11);
+    const channel = (bucket - 5) * 14;
 
-    const x1 = a.x,
-      y1 = a.y;
-    const x2 = b.x,
-      y2 = b.y;
+    const x1 = a.x, y1 = a.y;
+    const x2 = b.x, y2 = b.y;
 
     if (Math.abs(x1 - x2) < 25 || Math.abs(y1 - y2) < 25) {
       return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${st.stroke}" stroke-width="${st.width}"${dash}/>`;
@@ -1270,52 +1234,45 @@ function _renderPreviewSvg(result) {
   }
 
   const lines = connections
-    .map((c, i) => {
+    .map((c) => {
       const a = coords.get(c.from);
       const b = coords.get(c.to);
       if (!a || !b) return "";
+
+      const typeU = String(c?.type || "").toUpperCase();
+      const key = `${String(c.from)}__${String(c.to)}__${typeU}`;
 
       const fromIsSw = _isSwitchId(c.from);
       const toIsSw = _isSwitchId(c.to);
       const fromIsCore = _isCoreId(c.from);
       const toIsCore = _isCoreId(c.to);
 
-      const typeU = String(c?.type || "").toUpperCase();
-
-      // uplink: switch <-> core/router
       const isUplink = (fromIsSw && toIsCore) || (toIsSw && fromIsCore);
-
-      // access: device <-> switch (cat6)
       const isAccess =
         (fromIsSw && !toIsSw && !toIsCore) ||
         (toIsSw && !fromIsSw && !fromIsCore);
 
-      // 2H: carril propio por zona (aunque sea device->lock, etc.)
       const is2h = typeU === "2_WIRE" || typeU === "2H" || typeU === "2_HILOS";
 
       let path = "";
       if (isUplink) {
-        path = _lanePath(a, b, TRUNK_Y, i, c.type);
+        path = _lanePath(a, b, TRUNK_Y, `TRUNK__${key}`, c.type);
       } else if (is2h) {
-        // zone de referencia: intenta usar la del endpoint infra (lock) o del placement
-        // fallback: usa la zona del nodo 'a'
         let zk = String(a.zone || "");
-        // si el destino es infra con zona, prioriza esa
         try {
           const nb = _getInfraById(String(c.to));
           if (nb && nb.zone) zk = String(nb.zone);
         } catch (_) {}
-        const laneY = zone2hY[zk] || (zoneBusY[zk] || 160) + 26;
-        path = _lanePath(a, b, laneY, i, c.type);
+        const laneY = zone2hY[zk] || ((zoneBusY[zk] || 180) + 46);
+        path = _lanePath(a, b, laneY, `2H__${zk}__${key}`, c.type);
       } else if (isAccess) {
         const swId = fromIsSw ? String(c.from) : String(c.to);
         const swInfra = _getInfraById(swId);
         const zk = String(swInfra?.zone || "");
-        const busY = zoneBusY[zk] || 160;
-        path = _lanePath(a, b, busY, i, c.type);
+        const busY = zoneBusY[zk] || 180;
+        path = _lanePath(a, b, busY, `BUS__${zk}__${key}`, c.type);
       } else {
-        // fallback
-        path = _orthPath(a, b, i, c.type);
+        path = _orthPath(a, b, `FALLBACK__${key}`, c.type);
       }
 
       return `${path}${_wireLabel(a, b, c.type)}`;
@@ -1334,22 +1291,16 @@ function _renderPreviewSvg(result) {
 
       const qtyBadge =
         !isInfra && qty > 1
-          ? `
-            <g>
-              <rect x="${p.x - 6}" y="${p.y - 34}" width="28" height="16" rx="6" ry="6" fill="rgba(17,24,39,.90)"></rect>
-              <text x="${p.x - 2}" y="${p.y - 22}" font-size="11" fill="white" pointer-events="none">x${qty}</text>
-            </g>
-          `
+          ? `<g>
+               <rect x="${p.x - 6}" y="${p.y - 34}" width="28" height="16" rx="6" ry="6" fill="rgba(17,24,39,.90)"></rect>
+               <text x="${p.x - 2}" y="${p.y - 22}" font-size="11" fill="white" pointer-events="none">x${qty}</text>
+             </g>`
           : "";
 
-      const nodeStyle = `cursor:${
-        appState.diagramas.previewEditMode ? "grab" : "default"
-      }; user-select:none; -webkit-user-select:none; -ms-user-select:none; -webkit-user-drag:none;`;
+      const nodeStyle = `cursor:${appState.diagramas.previewEditMode ? "grab" : "default"}; user-select:none; -webkit-user-select:none; -ms-user-select:none; -webkit-user-drag:none;`;
 
       return `
-        <g class="diag-node" data-node-id="${_escapeHtmlAttr(
-          id
-        )}" style="${nodeStyle}">
+        <g class="diag-node" data-node-id="${_escapeHtmlAttr(id)}" style="${nodeStyle}">
           <circle class="diag-node-hit" cx="${p.x}" cy="${p.y}" r="18" fill="rgba(0,0,0,0)"></circle>
           <circle cx="${p.x}" cy="${p.y}" r="14" fill="${fill}" stroke="${stroke}" stroke-width="10"></circle>
           <text x="${p.x - 8}" y="${p.y + 7}" font-size="18" fill="white" pointer-events="none">${icon}</text>
@@ -1363,9 +1314,7 @@ function _renderPreviewSvg(result) {
   const headers = zones
     .map((z, i) => {
       const x = startX + i * colW;
-      return `<text x="${x}" y="36" font-size="13" fill="rgba(107,114,128,.95)" pointer-events="none">${_escapeHtml(
-        z.label
-      )}</text>`;
+      return `<text x="${x}" y="36" font-size="13" fill="rgba(107,114,128,.95)" pointer-events="none">${_escapeHtml(z.label)}</text>`;
     })
     .join("");
 
@@ -1375,18 +1324,12 @@ function _renderPreviewSvg(result) {
         <div>
           <div style="font-weight:700;">Preview</div>
           <div class="muted" style="font-size:12px;">
-            Esquema por zonas (coords). Cat6 en azul · 2 hilos (si activo) en discontinuo.
-            ${
-              appState.diagramas.previewEditMode
-                ? "Arrastra los nodos para fijar posición."
-                : ""
-            }
+            Esquema por zonas (coords). Cat6 en azul · 2 hilos en discontinuo (carril propio).
+            ${appState.diagramas.previewEditMode ? "Arrastra los nodos para fijar posición." : ""}
           </div>
         </div>
         <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-          <button id="btnDiagToggleEdit" class="btn btn-sm">${
-            appState.diagramas.previewEditMode ? "Salir edición" : "Editar posiciones"
-          }</button>
+          <button id="btnDiagToggleEdit" class="btn btn-sm">${appState.diagramas.previewEditMode ? "Salir edición" : "Editar posiciones"}</button>
           <button id="btnDiagResetLayout" class="btn btn-sm">Reset layout</button>
           <span class="chip">SVG</span>
         </div>
@@ -1403,10 +1346,6 @@ function _renderPreviewSvg(result) {
           ${lines}
           ${nodes}
         </svg>
-      </div>
-
-      <div class="muted mt-2" style="font-size:12px;">
-        Tip: mueve dispositivos y exporta <b>SVG</b> (formato maestro).
       </div>
     </div>
   `;
