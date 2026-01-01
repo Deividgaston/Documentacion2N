@@ -680,7 +680,6 @@ function _augmentResultForSvg(baseResult) {
 
   // --------------------------------------------------
   // ✅ 1) NO crear infra "fantasma" en previews vacíos
-  //     (p.ej. preview manual: placements sí, pero connections = [])
   // --------------------------------------------------
   const hasAnyConn = connections.length > 0;
   const hasAnyInfraCoreLike = infra.some((n) => {
@@ -701,8 +700,7 @@ function _augmentResultForSvg(baseResult) {
   );
 
   // --------------------------------------------------
-  // ✅ 2) CPD switch: solo si hay diseño real (hay conexiones o core/router)
-  //     Esto elimina el "switch suelto" en preview manual.
+  // ✅ 2) CPD switch: solo si hay diseño real
   // --------------------------------------------------
   const cpdCfg = _getZoneConfig("armario_cpd");
   const cpdSwId = "V_CPD_SW_POE";
@@ -815,8 +813,10 @@ function _augmentResultForSvg(baseResult) {
         const from = String(c?.from || "");
         const to = String(c?.to || "");
 
-        if (coreIds.includes(from)) return Object.assign({}, c, { from: cpdSwitch.id });
-        if (coreIds.includes(to)) return Object.assign({}, c, { to: cpdSwitch.id });
+        if (coreIds.includes(from))
+          return Object.assign({}, c, { from: cpdSwitch.id });
+        if (coreIds.includes(to))
+          return Object.assign({}, c, { to: cpdSwitch.id });
         return c;
       });
 
@@ -825,7 +825,7 @@ function _augmentResultForSvg(baseResult) {
   }
 
   // --------------------------------------------------
-  // ✅ 4) Eliminar switches NO conectados a nada
+  // ✅ 4) Eliminar switches NO conectados a nada (infra)
   // --------------------------------------------------
   const degree = new Map(); // id -> count
   for (const c of connections) {
@@ -841,13 +841,18 @@ function _augmentResultForSvg(baseResult) {
     return (degree.get(id) || 0) > 0;
   });
 
+  // ✅ aplicar cambios
   r.infra = infra;
   r.connections = connections;
   r.placements = placements;
 
+  // --------------------------------------------------
+  // ✅ 5) PODA FINAL: elimina placements switch-like sueltos + limpia conexiones colgantes
+  // --------------------------------------------------
+  _pruneDanglingNodesAndConnections(r);
+
   return r;
 }
-
 
 function _strokeForConnectionType(t) {
   const tt = String(t || "").toUpperCase();
