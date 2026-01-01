@@ -2916,14 +2916,13 @@ function diagExportSvg() {
     return;
   }
 
-  let maxX = 0,
-    maxY = 0;
+  let maxX = 0, maxY = 0;
   for (const [, p] of coords.entries()) {
     if (p.x > maxX) maxX = p.x;
     if (p.y > maxY) maxY = p.y;
   }
-  const vbW = Math.max(900, maxX + 320);
-  const vbH = Math.max(420, maxY + 180);
+  const vbW = Math.max(900, maxX + 360);
+  const vbH = Math.max(480, maxY + 220);
 
   const zones = appState.diagramas.zones || [];
   const colW = 280;
@@ -2936,24 +2935,19 @@ function diagExportSvg() {
   const headers = zones
     .map((z, i) => {
       const x = startX + i * colW;
-      return `<text x="${x}" y="36" font-size="13" fill="#6b7280" font-family="Arial, sans-serif">${_escapeHtml(
-        z.label
-      )}</text>`;
+      return `<text x="${x}" y="36" font-size="13" fill="#6b7280" font-family="Arial, sans-serif">${_escapeHtml(z.label)}</text>`;
     })
     .join("");
 
-  // ======================================================
-  // ✅ CARRILES (OPCIÓN 3) en EXPORT SVG
-  // ======================================================
-  function _getInfraByIdExp(id) {
+  function _getInfraById(id) {
     return infra.find((n) => String(n.id) === String(id)) || null;
   }
-  function _isSwitchIdExp(id) {
-    const n = _getInfraByIdExp(id);
+  function _isSwitchId(id) {
+    const n = _getInfraById(id);
     return n ? _isSwitchInfraNode(n) : false;
   }
-  function _isCoreIdExp(id) {
-    const n = _getInfraByIdExp(id);
+  function _isCoreId(id) {
+    const n = _getInfraById(id);
     const t = String(n?.type || "").toUpperCase();
     return !!n && (t.includes("CORE") || t.includes("ROUTER"));
   }
@@ -2962,13 +2956,13 @@ function diagExportSvg() {
 
   const zoneBusY = (() => {
     const m = {};
-    for (const z of zones) m[z.key] = 160;
+    for (const z of zones) m[z.key] = 180;
     for (const n of infra) {
       if (!_isSwitchInfraNode(n)) continue;
       const p = coords.get(String(n.id));
       if (!p) continue;
       const zk = String(n.zone || "");
-      m[zk] = Math.max(m[zk] || 0, p.y + 30);
+      m[zk] = Math.max(m[zk] || 0, p.y + 40);
     }
     return m;
   })();
@@ -2976,46 +2970,53 @@ function diagExportSvg() {
   const zone2hY = (() => {
     const m = {};
     for (const z of zones) {
-      const base = zoneBusY[z.key] || 160;
-      m[z.key] = base + 26;
+      const base = zoneBusY[z.key] || 180;
+      m[z.key] = base + 46;
     }
     return m;
   })();
 
-  function _lanePathExp(a, b, laneY, idx, type) {
+  function _hashToBucket(str, buckets) {
+    const s = String(str || "");
+    let h = 0;
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+    const v = Math.abs(h);
+    return buckets > 0 ? (v % buckets) : 0;
+  }
+
+  function _lanePath(a, b, laneY, key, type) {
     const st = _strokeForConnectionType(type);
     const dash = st.dash ? ` stroke-dasharray="${st.dash}"` : "";
-    const dy = ((idx % 9) - 4) * 6; // más separación
+    const bucket = _hashToBucket(key, 13);
+    const dy = (bucket - 6) * 8;
     const y = laneY + dy;
     const d = `M ${a.x} ${a.y} L ${a.x} ${y} L ${b.x} ${y} L ${b.x} ${b.y}`;
     return `<path d="${d}" fill="none" stroke="${st.stroke}" stroke-width="${st.width}"${dash}/>`;
   }
 
-  function _wireLabelExp(a, b, type) {
+  function _wireLabel(a, b, type) {
     const lab = _labelForConnectionType(type);
     if (!lab) return "";
     const lx = (a.x + b.x) / 2 + 8;
     const ly = (a.y + b.y) / 2 - 10;
-    return `<text x="${lx}" y="${ly}" font-size="11" fill="#6b7280" font-family="Arial, sans-serif">${_escapeHtml(
-      lab
-    )}</text>`;
+    return `<text x="${lx}" y="${ly}" font-size="11" fill="#6b7280" font-family="Arial, sans-serif">${_escapeHtml(lab)}</text>`;
   }
 
   const lines = connections
-    .map((c, i) => {
+    .map((c) => {
       const a = coords.get(c.from);
       const b = coords.get(c.to);
       if (!a || !b) return "";
 
-      const fromIsSw = _isSwitchIdExp(c.from);
-      const toIsSw = _isSwitchIdExp(c.to);
-      const fromIsCore = _isCoreIdExp(c.from);
-      const toIsCore = _isCoreIdExp(c.to);
-
       const typeU = String(c?.type || "").toUpperCase();
+      const key = `${String(c.from)}__${String(c.to)}__${typeU}`;
+
+      const fromIsSw = _isSwitchId(c.from);
+      const toIsSw = _isSwitchId(c.to);
+      const fromIsCore = _isCoreId(c.from);
+      const toIsCore = _isCoreId(c.to);
 
       const isUplink = (fromIsSw && toIsCore) || (toIsSw && fromIsCore);
-
       const isAccess =
         (fromIsSw && !toIsSw && !toIsCore) ||
         (toIsSw && !fromIsSw && !fromIsCore);
@@ -3024,29 +3025,29 @@ function diagExportSvg() {
 
       let path = "";
       if (isUplink) {
-        path = _lanePathExp(a, b, TRUNK_Y, i, c.type);
+        path = _lanePath(a, b, (TRUNK_Y), `TRUNK__${key}`, c.type);
       } else if (is2h) {
         let zk = String(a.zone || "");
         try {
-          const nb = _getInfraByIdExp(String(c.to));
+          const nb = _getInfraById(String(c.to));
           if (nb && nb.zone) zk = String(nb.zone);
         } catch (_) {}
-        const laneY = zone2hY[zk] || (zoneBusY[zk] || 160) + 26;
-        path = _lanePathExp(a, b, laneY, i, c.type);
+        const laneY = zone2hY[zk] || ((zoneBusY[zk] || 180) + 46);
+        path = _lanePath(a, b, laneY, `2H__${zk}__${key}`, c.type);
       } else if (isAccess) {
         const swId = fromIsSw ? String(c.from) : String(c.to);
-        const swInfra = _getInfraByIdExp(swId);
+        const swInfra = _getInfraById(swId);
         const zk = String(swInfra?.zone || "");
-        const busY = zoneBusY[zk] || 160;
-        path = _lanePathExp(a, b, busY, i, c.type);
+        const busY = zoneBusY[zk] || 180;
+        path = _lanePath(a, b, busY, `BUS__${zk}__${key}`, c.type);
       } else {
-        // fallback recta
+        // fallback
         const st = _strokeForConnectionType(c.type);
         const dash = st.dash ? ` stroke-dasharray="${st.dash}"` : "";
         path = `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${st.stroke}" stroke-width="${st.width}"${dash}/>`;
       }
 
-      return `${path}${_wireLabelExp(a, b, c.type)}`;
+      return `${path}${_wireLabel(a, b, c.type)}`;
     })
     .join("");
 
@@ -3077,15 +3078,17 @@ function diagExportSvg() {
     .map((n) => {
       const pos = coords.get(n.id);
       if (!pos) return "";
-      const t = String(n.type || n.id || "");
-      const role = String(n?.meta?.role || "");
-      const isLock =
-        t.toUpperCase().includes("LOCK") || t.toUpperCase().includes("GARAGE");
-      const isCpdSw =
-        t.toUpperCase().includes("SWITCH") && role.toUpperCase().includes("CPD");
+      const tU = String(n.type || n.id || "").toUpperCase();
+      const roleU = String(n?.meta?.role || "").toUpperCase();
+
+      const isLock = tU.includes("LOCK") || tU.includes("GARAGE");
+      const isCpdSw = tU.includes("SWITCH") && roleU.includes("CPD");
+      const isSw = tU.includes("SWITCH");
+
       const label = _escapeHtml(
-        isCpdSw ? "SWITCH POE (CPD)" : isLock ? "CERRADURA / GARAJE" : t
+        isCpdSw ? "SWITCH POE (CPD)" : isLock ? "CERRADURA / GARAJE" : isSw ? "SWITCH POE" : (String(n.type || n.id || "").replace(/^VIRTUAL_/, "").replaceAll("_", " "))
       );
+
       return `
       <g>
         <circle cx="${pos.x}" cy="${pos.y}" r="14" fill="#111827" opacity="0.95"></circle>
@@ -3095,9 +3098,7 @@ function diagExportSvg() {
     })
     .join("");
 
-  const title = `<text x="80" y="20" font-size="14" fill="#111827" font-family="Arial, sans-serif" font-weight="700">DIAGRAMA RED (UTP CAT6${
-    appState.diagramas.includeLocks ? " + 2H" : ""
-  })</text>`;
+  const title = `<text x="80" y="20" font-size="14" fill="#111827" font-family="Arial, sans-serif" font-weight="700">DIAGRAMA RED (UTP CAT6${appState.diagramas.includeLocks ? " + 2H" : ""})</text>`;
 
   const svgText =
     `<?xml version="1.0" encoding="UTF-8"?>\n` +
@@ -3106,13 +3107,8 @@ function diagExportSvg() {
     `${title}\n${headers}\n${lines}\n${placementNodes}\n${infraNodes}\n` +
     `</svg>\n`;
 
-  const nameBase = (appState.diagramas.dxfFileName || "diagrama").replace(
-    /\.dxf$/i,
-    ""
-  );
-  const fileName = `${nameBase}_red_cat6${
-    appState.diagramas.includeLocks ? "_2h" : ""
-  }.svg`;
+  const nameBase = (appState.diagramas.dxfFileName || "diagrama").replace(/\.dxf$/i, "");
+  const fileName = `${nameBase}_red_cat6${appState.diagramas.includeLocks ? "_2h" : ""}.svg`;
 
   try {
     const blob = new Blob([svgText], { type: "image/svg+xml;charset=utf-8" });
@@ -3128,18 +3124,13 @@ function diagExportSvg() {
     requestAnimationFrame(() => {
       a.click();
       setTimeout(() => {
-        try {
-          a.remove();
-        } catch (_) {}
-        try {
-          URL.revokeObjectURL(url);
-        } catch (_) {}
+        try { a.remove(); } catch (_) {}
+        try { URL.revokeObjectURL(url); } catch (_) {}
       }, 2000);
     });
   } catch (e) {
     console.error(e);
-    appState.diagramas.lastError =
-      "No se pudo descargar el SVG (bloqueado por el navegador).";
+    appState.diagramas.lastError = "No se pudo descargar el SVG (bloqueado por el navegador).";
     _renderResult();
   }
 }
