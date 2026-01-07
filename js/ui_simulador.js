@@ -117,21 +117,18 @@ const SIM_GROUP_PATTERNS = {
     "backplate",
     "frame",
 
-    // ✅ FIX: IP Phone / D7A/D7X / teléfonos (refs tipo 1120102, 1120105) => deben ser GRUPO_B (dist=0.25)
+    // ✅ FIX: IP Phone / D7A/D7X / teléfonos (refs tipo 1120102, 1120105) => GRUPO_B (dist=0.25)
     "ip phone",
     "d7a",
     "d7x",
     "desk phone",
     "hotel phone",
 
-    // FIX: típicos accesorios en proyectos
+    // ✅ FIX (más estricto): accesorios de cámara/USB (PERO NO "camera" genérico)
     "usb",
     "camera usb",
     "cámara usb",
     "camara usb",
-    "camera",
-    "cámara",
-    "camara",
   ],
   // GRUPO_A = resto
 };
@@ -139,6 +136,48 @@ const SIM_GROUP_PATTERNS = {
 function simuladorClasificarGrupoPorDescripcion(descripcionRaw) {
   const desc = (descripcionRaw || "").toString().toLowerCase();
   if (!desc) return "GRUPO_A";
+
+  // ✅ FIX MÍNIMO: IP Verso / IP Style / Access Unit SON main units (Grupo A)
+  // pero sus accesorios (frame/marco/caja/flush box/backplate/soporte/...) deben seguir siendo Grupo B.
+  const esAccesorioDe = (kwMain) => {
+    if (!desc.includes(kwMain)) return false;
+    const accKw = [
+      "accessory",
+      "accessories",
+      "accesorio",
+      "accesorios",
+      "installation accessory",
+      "installation accessories",
+      "mounting",
+      "mounting frame",
+      "frame",
+      "marco",
+      "backplate",
+      "flush box",
+      "box",
+      "caja",
+      "soporte",
+      "cover",
+      "hood",
+      "visor",
+      "rain",
+      "lluvia",
+      "bracket",
+      "surface box",
+      "flush",
+      "embed",
+      "empotrar",
+    ];
+    return accKw.some((k) => desc.includes(k));
+  };
+
+  // Verso: con o sin cámara => Grupo A salvo que sea accesorio
+  if (desc.includes("verso")) return esAccesorioDe("verso") ? "GRUPO_B" : "GRUPO_A";
+  // IP Style: Grupo A salvo accesorio
+  if (desc.includes("ip style")) return esAccesorioDe("ip style") ? "GRUPO_B" : "GRUPO_A";
+  // Access Unit: Grupo A salvo accesorio
+  if (desc.includes("access unit")) return esAccesorioDe("access unit") ? "GRUPO_B" : "GRUPO_A";
+
   for (const gid of ["GRUPO_D", "GRUPO_C", "GRUPO_B"]) {
     const patterns = SIM_GROUP_PATTERNS[gid] || [];
     if (patterns.some((p) => desc.includes(p))) return gid;
@@ -505,7 +544,6 @@ function renderSimuladorView() {
                     padding:0.25rem 0.75rem;
                     font-size:0.78rem;
                     border-radius:999px;
-                    border-radius:999px;
                     border:1px solid #d1d5db;
                     background:#ffffff;
                     color:#374151;
@@ -701,12 +739,10 @@ async function recalcularSimulador() {
     else dtoLinea = dtoGlobal;
 
     // ===== FIX: Grupo por descripción “buena” =====
-    // (antes muchas líneas venían con descripción corta del presupuesto, y caían en GRUPO_A)
     const descForGroup = simuladorGetBestDescripcionParaGrupo(infoTarifa, lBase);
     const gid = simuladorClasificarGrupoPorDescripcion(descForGroup);
 
     // Dto tarifa (NO lineal): depende del grupo de producto de la referencia
-    // Nota: el % mostrado sigue siendo % vs PVP (como querías)
     let dtoTarifa = 0;
     if (tarifaField === "msrp") {
       dtoTarifa = 0;
@@ -746,8 +782,8 @@ async function recalcularSimulador() {
       pvpFinalUd,
       subtotalTarifa,
       subtotalFinal,
-      __gid: gid,                 // (debug útil si quieres verlo luego)
-      __descGrupo: descForGroup,  // (debug útil)
+      __gid: gid,
+      __descGrupo: descForGroup,
     };
   });
 
